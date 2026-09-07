@@ -41,5 +41,18 @@ export type {GraphicLabels};
  */
 export type GraphicGeometryState = Pick<
     TacticalGraphicProperties,
-    'radius' | 'decorationSize' | 'width' | 'length' | 'rotation' | 'bend' | 'mirrored'
+    | 'radius'
+    | 'decorationSize'
+    | 'width'
+    | 'length'
+    | 'rotation'
+    | 'bend'
+    | 'mirrored'
+    // APP-06 200700's four numbers. Shape inputs like the rest — they are what the symbol is
+    // built from, and what a restore has to replay to get the same picture back.
+    // @see TacticalGraphicProperties.searchAxisAzimuthDeg
+    | 'searchAxisAzimuthDeg'
+    | 'startRange'
+    | 'stopRange'
+    | 'stopRelativeBearingDeg'
 >;

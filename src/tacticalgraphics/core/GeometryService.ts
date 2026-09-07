@@ -1622,6 +1622,12 @@ class GeometryService {
      */
     getCaneArrow = (base: Feature<LineString>, caneSize: number, arrowSize: number, mirrored = false) => {
         let baseCoords = base.geometry.coordinates;
+        // **A single click is a draw in progress, not a symbol.** Without this the seven cane
+        // arrows threw `coord is required` out of `turf.bearing` on the first click of every
+        // draw — invisible, because the renderer swallows it, but it meant "nothing is drawn
+        // yet" was an exception rather than an answer. 344000 returns an empty geometry there;
+        // this makes the family agree. (2026-09-06.)
+        if (baseCoords.length < 2) return turf.multiLineString([]);
         let start = baseCoords[0];
         let end = baseCoords[1];
 
@@ -1773,14 +1779,27 @@ class GeometryService {
         return turf.multiLineString([offsetBase, arrowHeadCoords]);
     }
 
-    getClearGraphic(base: Position[], size: number): Feature<MultiLineString> {
+    /**
+     * 340500's three arrows and the front line they reach.
+     *
+     * `size` is the **arrow spacing** — how far the outer two sit either side of the middle
+     * one. `halfHeight` is how far the front line runs either side of the axis, which APP-06
+     * states separately: points 1 and 2 give the height, and the spacing only has to "stay
+     * proportional" to it. Passing it lets the caller honour both.
+     *
+     * Omitted, the front line overhangs the outer arrows by `0.75 * size`, which is what this
+     * drew before 2026-09-06 and what a legacy two-point base still gets. 340500's own
+     * Template puts that overhang at 0.39 of the spacing, not 0.75. @see Clear
+     */
+    getClearGraphic(base: Position[], size: number, halfHeight?: number): Feature<MultiLineString> {
         let topArrow = this.getBypassArrow(base, -size);
         let bottomArrow = this.getBypassArrow(base, size);
 
         let middleArrow = this.computeArrowheadPoints(base[base.length - 2], base[base.length - 1], size / 2, 45);
         let bearing = turf.bearing(topArrow.geometry.coordinates[0][1], bottomArrow.geometry.coordinates[0][1]);
-        let top = turf.destination(topArrow.geometry.coordinates[0][1], size * .75, bearing - 180, {units: 'meters'})
-        let bottom = turf.destination(bottomArrow.geometry.coordinates[0][1], size * .75, bearing, {units: 'meters'})
+        const overhang = halfHeight === undefined ? size * .75 : Math.max(halfHeight - Math.abs(size), 0);
+        let top = turf.destination(topArrow.geometry.coordinates[0][1], overhang, bearing - 180, {units: 'meters'})
+        let bottom = turf.destination(bottomArrow.geometry.coordinates[0][1], overhang, bearing, {units: 'meters'})
 
         return turf.multiLineString([
             ...topArrow.geometry.coordinates,

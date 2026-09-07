@@ -17,6 +17,7 @@ import type {Geometry, Position} from 'geojson';
 import {
     centerOf,
     moveVertex,
+    setExtend,
     positionsOf,
     insertVertex,
     resize,
@@ -475,5 +476,86 @@ describe('insertVertex', () => {
         const inserted = insertVertex({geometry: LINE_BASE, properties: props()}, 1, [5, 0]);
         const moved = moveVertex(inserted, 1, [5, 8]);
         expect((moved.geometry as typeof LINE_BASE).coordinates).toEqual([[0, 0], [5, 8], [10, 0], [20, 0]]);
+    });
+});
+
+/**
+ * # 270504's grips, on this engine
+ *
+ * The four things a user reported wrong in edit mode on 2026-09-05. Asserted here rather
+ * than through a synthetic drag because these are the pure functions the drag calls, and a
+ * gesture that silently lands in the wrong *mode* would pass a pixel probe by moving the
+ * graphic plausibly. @see rotationPivot, setExtend
+ */
+describe('Turn edits about the points the plate names', () => {
+    /** `[tip, rear, bend]` — the anchors, laid out flat for readable arithmetic. */
+    const TURN: Geometry = {type: 'LineString', coordinates: [[2, 0], [-2, 0], [0, -1]]};
+    const turn = (extra: Partial<TacticalGraphicProperties> = {}) => ({
+        geometry: TURN,
+        properties: props({name: TacticalGraphicName.Turn, radius: 222_000, rotation: 0, bend: 0.5, ...extra}),
+    });
+
+    it('rotates about point 3, the bow', () => {
+        /*
+         * **The pivot is the one thing that must not move.** A rotate that turns about the
+         * chord's midpoint instead swings the bow away from the ground it was placed on,
+         * which is the gesture the user asked to change.
+         */
+        const turned = rotate(turn(), [2, 0], [0, 2]);
+        const moved = (turned.geometry as {coordinates: Position[]}).coordinates;
+        expect(moved[2][0]).toBeCloseTo(0, 9);
+        expect(moved[2][1]).toBeCloseTo(-1, 9);
+        // ...and it really did turn: the tip is somewhere else entirely.
+        expect(Math.hypot(moved[0][0] - 2, moved[0][1] - 0)).toBeGreaterThan(0.5);
+    });
+
+    it('still resizes about the frame origin, which is the chord midpoint', () => {
+        /*
+         * The half of the split that is easy to break: `rotationAnchor` is what a resize
+         * scales from, so moving *its* answer to the bow — the obvious way to make the
+         * rotate turn about point 3 — would have moved this too. `centerOf` is that reader.
+         */
+        const origin = centerOf(TURN, TacticalGraphicName.Turn);
+        expect(origin[0]).toBeCloseTo(0, 6);
+        expect(origin[1]).toBeCloseTo(0, 6);
+    });
+
+    it('extends from point 2 without moving point 1', () => {
+        // The rear goes to the cursor and the tip stays put, so the symbol gets longer
+        // rather than bigger in both directions. @see setExtend
+        const extended = setExtend(turn(), [-6, 0]);
+        const coords = (extended.geometry as {coordinates: Position[]}).coordinates;
+        expect(coords[0][0]).toBeCloseTo(2, 9);
+        expect(coords[0][1]).toBeCloseTo(0, 9);
+        expect(coords[1][0]).toBeCloseTo(-6, 9);
+        // The chord doubled, so the half-length the generator builds from has to have too.
+        expect(extended.properties.radius).toBeGreaterThan(turn().properties.radius! * 1.9);
+        // And the bow survives the two-point round trip rather than snapping to a default.
+        expect(extended.properties.bend).toBeCloseTo(0.5, 6);
+    });
+
+    it('pins the end the symbol says to pin, not always index 0', () => {
+        /*
+         * **343500 numbers its points the other way round.** Turn stores `[tip, rear, bend]`
+         * and its `extend` grip is the rear, so index 0 holds. Envelopment stores
+         * `[point 1, point 2, ...]` and its grip *is* point 1, so index 1 holds — and the
+         * rebuilt chord has to put each end back in its own slot, or the two points swap
+         * meaning on the way out. @see HandleContract.extendAnchor
+         */
+        const envelopment = {
+            geometry: {type: 'LineString', coordinates: [[-2, 0], [2, 0], [4, 0], [3, 1]]},
+            properties: {name: TacticalGraphicName.Envelopment, radius: 2, rotation: 0, bend: 0.5},
+        } as never;
+        const extended = setExtend(envelopment, [-6, 0], 1);
+        const coords = (extended.geometry as {coordinates: Position[]}).coordinates;
+        // Point 1 went to the cursor...
+        expect(coords[0][0]).toBeCloseTo(-6, 9);
+        // ...and point 2, the end of the run, did not move.
+        expect(coords[1][0]).toBeCloseTo(2, 9);
+        expect(coords[1][1]).toBeCloseTo(0, 9);
+    });
+
+    it('leaves a description it cannot read alone', () => {
+        expect(setExtend({geometry: POINT, properties: props()}, [1, 1]).geometry).toBe(POINT);
     });
 });

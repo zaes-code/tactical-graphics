@@ -81,7 +81,16 @@ export class ObstacleBypass extends TacticalGraphicsBase {
         return this.asMultiLineStringFeature([[rear1, tip1], [rear2, tip2], [rear1, rear2]]);
     }
 
-    /** The three drawn points. Handle 2 is the rear, which is what moves the whole shape. */
+    /**
+     * The three drawn points, each of them a grip.
+     *
+     * Point 3 is the **middle of the rear bar**, which is where the plate's PT.3 leader
+     * lands, and `normalizeDrawnBase` is what puts it there — the click's along-opening
+     * component has nowhere to go in a symbol whose rear is fixed square to points 1 and 2,
+     * so it is projected out on the way in rather than stored and ignored here. Dragging
+     * that grip is how the symbol's length is changed; nothing about it moves the whole
+     * shape. @see anchorsFromClicks, sideAnchors
+     */
     generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
         return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 3));
     }

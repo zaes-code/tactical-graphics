@@ -17,6 +17,8 @@
 import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
 import {drawsTipFirst} from './drawOrder';
+import {reservedLeadPx} from './decorationSizes';
+import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from '../graphics/SecurityOperation';
 
 /**
  * What dragging a handle does.
@@ -28,10 +30,17 @@ import {drawsTipFirst} from './drawOrder';
  * - `reach` — sets both size and bearing from one cursor position: the far end of
  *   a chord carries how long it is and which way it points.
  * - `band` — sets one range-fan band's range, by index.
+ * - `extend` — moves **one end of a two-ended symbol**, leaving the other where it is. The
+ *   grip is an anchor point and it follows the cursor; the far end is the anchor. Distinct
+ *   from `reach`, which measures from the centre and so moves *both* ends at once.
+ * - `opening` — sets a sector's half-angle, **symmetrically about its axis**. One grip for
+ *   one number, which is what 200700's *stop relative bearing* is: "an equal angle either
+ *   side of the search axis". Distinct from `band`, which moves a distance, and from the
+ *   weapon fan's per-band arc ends, which are two independent absolute bearings.
  * - `mirror` — turns the symbol over, without moving a vertex. Dragging it must not
  *   resize: it is a reflection, not a dimension. @see MIRROR_HANDLE_AT_0
  */
-export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'band' | 'mirror';
+export type HandleRole = 'shape' | 'offset' | 'bend' | 'reach' | 'extend' | 'band' | 'mirror' | 'opening';
 
 export interface HandleContract {
     /** Role of each handle, by index. */
@@ -58,6 +67,19 @@ export interface HandleContract {
      * vertices there are is however many the user drew. @see handleRole
      */
     offsetAfterVertices?: boolean;
+    /**
+     * Which anchor point an `extend` drag pins, by index. Defaults to 0.
+     *
+     * An `extend` grip lengthens the symbol from the *other* end of its chord, so a reader
+     * has to know which end that is — and the two graphics that carry the role number their
+     * points in opposite directions. Turn stores `[tip, rear, bend]`, so the grip is the rear
+     * and the tip (index 0) stays. Envelopment stores `[point 1, point 2, ...]` and its grip
+     * *is* point 1, so point 2 (index 1) stays.
+     *
+     * Stated here rather than by name in a renderer, because which end a drag holds still is
+     * a fact about the symbol. @see setExtend
+     */
+    extendAnchor?: number;
     /**
      * Which way a mirror drag is measured, for a point-anchored graphic.
      *
@@ -96,8 +118,14 @@ export interface HandleContract {
  */
 const MIRROR_HANDLE_AT_0: HandleContract = {roles: ['mirror', 'shape'], repeating: 'shape'};
 
-/** The graphics that wear it. @see MIRROR_HANDLE_AT_0 */
-const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+/**
+ * The seven tasks drawn as a straight line with a 180 degree cane on its back end.
+ *
+ * One APP-06 rule between them, quoted in full on the generator: point 1 the arrowhead tip,
+ * point 2 the end of the straight line, point 3 the arc's diameter and side. 342500 has no
+ * Draw Rules cell and inherits 342400's. @see RetrogradeTask
+ */
+const CANE_ARROW_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Delay,
     TacticalGraphicName.Withdraw,
     TacticalGraphicName.WithdrawUnderPressure,
@@ -105,11 +133,29 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Retirement,
     TacticalGraphicName.ForwardPassageOfLines,
     TacticalGraphicName.RearwardPassageOfLines,
-    // These three carry the handle elsewhere in their own contracts below, but they
-    // mirror just the same, and `supportsMirror` is the question a panel or a test asks.
+];
+
+/** The graphics that wear it. @see MIRROR_HANDLE_AT_0 */
+const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+    // The seven cane arrows left on 2026-09-06, for the reason 152800 left the day before:
+    // their point 3 states which side the arc falls on, so dragging it across the line *is*
+    // the flip, and a grip whose only job is to flip is no longer something they need.
+    // @see RetrogradeTask
+    // 344000 left on 2026-09-06, last of the family and for the identical reason: its own
+    // rule says *"Point 3 defines the diameter and orientation of the 180 degree circular
+    // arc"*, so dragging that point across the line **is** the flip. It kept the grip after
+    // its seven siblings and 152800 dropped theirs, which put a *mirror* handle at index 0
+    // where every sibling has a shape vertex — so the one gesture a user reaches for first,
+    // dragging the arc's end, did something entirely different on this symbol.
+    // (User's report: "pursuit point 3 drag still doesn't behave like other cane graphics
+    // […] I'm trying to have consistency across similar graphics".)
+    //
+    // This one carries the handle elsewhere in its own contract below, but it mirrors just
+    // the same, and `supportsMirror` is the question a panel or a test asks.
     TacticalGraphicName.Abatis,
-    TacticalGraphicName.Pursuit,
-    TacticalGraphicName.MobileDefense,
+    // 152800 left this list on 2026-09-06: its point 3 states which side the arc falls on,
+    // so the flip is a placed point rather than an amplifier and there is no mirror gesture
+    // left to advertise. @see MobileDefense.frame
 ];
 
 /**
@@ -130,7 +176,16 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
  * restore shim and a test all ask the same question.
  */
 const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Ambush,
+    // 271204 is dropped on one click and stores the three points its plate names, derived
+    // from the drop's centre and size. @see roadblockAnchors, drawnAnchors
+    TacticalGraphicName.RoadblockCompleteExecuted,
+    /*
+     * **141700 left on 2026-09-06**, the way 344000 pursuit did. This list routes the centre /
+     * size / rotation machinery a graphic needs when its points are read back as a *frame*,
+     * and that machinery is what made every edit drag a scale — so the arrow tip could not be
+     * lengthened without resizing the arc with it. Its three points are its shape now.
+     * @see squareOntoBisector
+     */
     TacticalGraphicName.Contain,
     // **The four points are the base; they are just not the user's to place.** The
     // demonstration is dropped on one click and points 2, 3 and 4 are derived from point
@@ -138,9 +193,17 @@ const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
     // the base carries and what a snapshot holds. Membership here is about the *shape of
     // the description*; whether a vertex can be dragged is a separate question, and the
     // answer for this one is no. @see DERIVED_ANCHOR_GRAPHICS
-    TacticalGraphicName.Demonstration,
+    //
+    // **343300 left on 2026-09-06.** Its four points are placed now, not derived, so it is an
+    // ordinary drawn line whose vertices are its shape — it needs none of the centre / size /
+    // rotation machinery this list exists to route. @see Demonstration
+    //
+    // **344000 left on 2026-09-06**, the same way and for the same reason. Its holder
+    // decomposed every drag into centre / size / rotation / mirrored / lineRatio and laid the
+    // three points back out from them, so dragging one point moved the other two — which is
+    // what made it feel unlike the seven cane arrows it draws the same picture as. Its points
+    // are its shape now. @see Pursuit.generateHandles
     TacticalGraphicName.Envelopment,
-    TacticalGraphicName.Pursuit,
     TacticalGraphicName.TacticalTurn,
     TacticalGraphicName.Turn,
 ];
@@ -149,6 +212,52 @@ const DRAWN_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
 export function usesDrawnAnchors(name: TacticalGraphicName): boolean {
     return DRAWN_ANCHOR_GRAPHICS.includes(name);
 }
+
+/**
+ * Two-anchor symbols whose points 1 and 2 are **corners**, so neither end is the pivot.
+ *
+ * The default rule below — a line turns and scales about its first vertex — reads that
+ * vertex as *"where the user started drawing, and where the symbol grows from"*. That is
+ * right for a path: an axis of advance stretches along its bearing from p0, and moving p0
+ * would slide it off the thing it was drawn against. It is wrong for a symbol the standard
+ * describes as a *shape between two corners*, because such a symbol has no growing end —
+ * anchoring on one makes a resize walk it sideways out of one corner, which is what a user
+ * reported for the mine cluster on 2026-09-05: the ratio was right and the symbol moved.
+ *
+ * **Membership is a plate reading, not a shape.** These are exactly the rows whose Anchor
+ * Points paragraph says *corners*, found by extracting that paragraph for all 309 coded
+ * graphics — three of them, and no near-misses:
+ *
+ * | Code | Graphic | The plate's words |
+ * |---|---|---|
+ * | 218400 | navigational line | *"Points 1 and 2 define the corner points of the symbol."* |
+ * | 290400 | mine cluster | *"Points 1 and 2 define the corners of the symbol."* |
+ * | 291000 | fortified position | *"Points 1 and 2 define the corners on the front of the symbol."* |
+ *
+ * **The neighbours that read almost the same and are deliberately out.** Ferry crossing and
+ * raft site *"define the tips"* — a tip is a feature, not a corner, though both ends carry
+ * the same one. Bearing line and linear target *"define the endpoints"*. Trip wire is the
+ * clearest exclusion of all: its points *"define the length and orientation"* and point 2
+ * sits **at the mine**, so one end is a real place and pivoting there is meaningful. The
+ * nineteen rectangular zones say points 1 and 2 *"will be located in the centre"* of their
+ * two ends and are already out of the stretch path entirely, having two gestures of their
+ * own. @see NO_EDIT_STRETCH
+ *
+ * `Contain` reaches the same midpoint by the other door, {@link DRAWN_ANCHOR_GRAPHICS},
+ * which carries per-name frames this list deliberately does not need: two corners have a
+ * midpoint and nothing else to work out.
+ */
+const CORNER_ANCHOR_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.NavigationalLine,
+    TacticalGraphicName.MineCluster,
+    TacticalGraphicName.FortifiedPosition,
+];
+
+/** @see CORNER_ANCHOR_GRAPHICS */
+export function usesCornerAnchors(name: TacticalGraphicName | undefined): boolean {
+    return name !== undefined && CORNER_ANCHOR_GRAPHICS.includes(name);
+}
+
 
 /**
  * Whether this graphic can be flipped to the other side of its own line.
@@ -168,6 +277,19 @@ const SHAPE_ONLY: HandleContract = {roles: [], repeating: 'shape'};
  * `[start, end, offset]`, and the third is present only on the graphics that have
  * a width to set.
  */
+/*
+ * **343800 infiltrate is not in this family, and was.** Its Draw Rules are word for word
+ * 343700 exfiltrate's — *"point 1 defines the end of the straight line portion of the
+ * graphic. Point 2 defines the centre of the two 90 degree circular arcs. Point 3 defines
+ * the tip of the arrowhead"* — so its three points are a **path**, not a centreline and a
+ * width. Both already share the `exfiltrate` controller and an S-curve generator; only this
+ * membership disagreed, and it is what `carriesSeparationInBase` reads.
+ *
+ * The consequence was a synthesised base: laid out as a front edge, point 3 landed below the
+ * middle of the run instead of at the arrowhead, so the S-curve doubled back and its arrow
+ * pointed at the line it had just left. (User's report, 2026-09-07: "infiltrate, arrowtip is
+ * pointing to the line instead of away/forward".) @see frontEdgeBase, synthesizedBase
+ */
 const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvance,
@@ -184,12 +306,20 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FrontalAttack,
     TacticalGraphicName.AdvanceToContact,
     TacticalGraphicName.TurningMovement,
-    TacticalGraphicName.Infiltration,
     // The demolition obstacles. APP-06 271201 builds them from a centerline and a
     // width, which is this contract exactly. @see ai/app-6.md "F2"
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    /*
+     * **Roadblock complete joined on 2026-09-05**, when it stopped being dropped on one
+     * point and took the same centreline-and-side contract as the three readiness states
+     * it shares 271201's rule with. It is drawn by `movement(3)` and held by
+     * `MovementGraphicBase`, so the family it belongs to is this one — and saying so is
+     * what stops a renderer stamping it a `width` its own third point already carries.
+     * @see carriesSeparationInBase, RoadblockComplete
+     */
+    TacticalGraphicName.RoadblockCompleteExecuted,
     // FlankAttack and DoubleEnvelopment are routed here by the controller registry
     // but are commented out of the enum — see ai/excluded-graphics.md. Listing them
     // would not compile, which is the enum doing its job.
@@ -201,19 +331,33 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
  * alone.
  */
 const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.TacticalBlock,
-    TacticalGraphicName.Breach,
-    TacticalGraphicName.Bypass,
-    TacticalGraphicName.Canalize,
-    TacticalGraphicName.Clear,
-    TacticalGraphicName.TacticalDisrupt,
-    TacticalGraphicName.Penetration,
+    /*
+     * Breach, bypass, canalize and clear left on 2026-09-06. Their APP-06 rules give them
+     * three placed anchor points — two for the opening and one for the rear — so there is no
+     * derived offset handle to put first, and their three grips are all `shape`.
+     * @see frontEdgeFrame
+     *
+     * **Block, disrupt and support by fire left the same day, for the same reason.** 270501
+     * and 340100 place the bar's two ends and the stem's far end; 270502 and 341000 place the
+     * bar and the longest arrow's tip; 152100 places the bar's ends *and* both arrow tips.
+     * In every case the perpendicular the offset handle used to drag is a point the operator
+     * states, so the family's leading `offset` grip has nothing left to set.
+     * @see Block, Disrupt, supportByFireFromAnchors
+     */
+    /*
+     * **341800 penetrate left on 2026-09-06**, for the reason the four brackets did the same
+     * day: its rule is 340500 clear's word for word — points 1 and 2 the vertical line's
+     * endpoints, point 3 the rear — so the perpendicular the offset handle used to drag is a
+     * pair of points the operator states. @see BRACKET_GRAPHICS, frontEdgeFrame
+     */
+    /*
+     * **152000 attack by fire left on 2026-09-06**, the last of the family. Its plate places
+     * the back line's two ends, so the bar that was a ratio of the shaft — and the offset
+     * grip that dragged it — are two anchor points now. @see firePositionAnchors
+     */
     TacticalGraphicName.Exploitation,
-    TacticalGraphicName.Block,
-    TacticalGraphicName.Disrupt,
-    TacticalGraphicName.AttackByFire,
-    TacticalGraphicName.SupportByFire,
-    // FollowAndAssume and FollowAndSupport are excluded the same way.
+    // Follow and assume / follow and support are deliberately absent: they are no
+    // longer block arrows and carry their own two-point handles. @see FollowTask
 ];
 
 /**
@@ -232,15 +376,30 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
  * symbol may take.
  */
 export const RATIO_LOCK: Partial<Record<TacticalGraphicName, number>> = {
-    [TacticalGraphicName.AttackByFire]: 0.4,
-    [TacticalGraphicName.SupportByFire]: 0.4,
-    [TacticalGraphicName.Breach]: 0.3,
-    [TacticalGraphicName.Bypass]: 0.3,
-    [TacticalGraphicName.Canalize]: 0.3,
-    [TacticalGraphicName.Clear]: 0.3,
-    [TacticalGraphicName.TacticalDisrupt]: 0.3,
-    // The table 5-19 twin behaves exactly as the mission task it copies.
-    [TacticalGraphicName.Disrupt]: 0.3,
+    /*
+     * **152000 left on 2026-09-06.** A lock says the aspect ratio is not the operator's to
+     * set, and its plate gives the two dimensions their own anchor points: *"Points 2 and 3
+     * determine the length of the straight line on the back side"*, with point 1 the tip.
+     * The 0.45 the symbol is drawn at survives as the *preview* proportion two clicks are
+     * read through, which is a default rather than a constraint. @see firePositionAnchors
+     */
+    /*
+     * **Breach, bypass, canalize and clear are no longer ratio-locked** (2026-09-06).
+     *
+     * A lock says the aspect ratio is not the user's to change. All four plates say the
+     * opposite, in the same sentence: *"Points 1 and 2 determine the symbol's height and
+     * point 3 determines its length."* Two dimensions, stated separately and placed
+     * separately — which is exactly what a fixed height/length ratio forbids. They took
+     * their height from 0.3 of the drawn length instead, so the third anchor point had
+     * nothing to do and the opening could not be sized at all. @see frontEdgeFrame
+     *
+     * **Disrupt and support by fire went with them**, on the same sentence. 270502 and 341000
+     * read *"Points 1 and 2 determine the height of the symbol and point 3 determines its
+     * length"*, and 152100 places all four of its points outright — a symbol whose height and
+     * length are both stated cannot also have them locked to each other. Disrupt took its
+     * height from 0.3 of the drawn length and support by fire its bar from 0.4, so in both the
+     * third and fourth anchor points had nothing to do. @see Disrupt, supportByFireFromAnchors
+     */
 };
 
 /** The locked perpendicular-size / base-length ratio, or undefined. @see RATIO_LOCK */
@@ -253,29 +412,13 @@ export function ratioLockOf(name: TacticalGraphicName): number | undefined {
  * sets. A handle drawn three widths out needs a third of the drag.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // The handle sits on the rail itself, one radius off the center line.
-    [TacticalGraphicName.InfiltrationLane]: 1,
     // The handle is the end of the front line, drawn at 3 × size.
     [TacticalGraphicName.Penetration]: 1 / 3,
-    // The handle is the end of the crossbar, drawn at 1 × size.
-    [TacticalGraphicName.TacticalBlock]: 1,
-    [TacticalGraphicName.Block]: 1,
+    // Block's crossbar handle left on 2026-09-06: the crossbar is points 1 and 2 now, so
+    // there is no derived width for an offset grip to drag. @see Block
     // The handle is an arrowhead wing, `size × sin 45°` off the base line.
     [TacticalGraphicName.Exploitation]: Math.SQRT2,
 };
-
-/** The two curve-and-arrow tasks: `[bend, tip]`. */
-const BENT_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.Turn,
-    TacticalGraphicName.TacticalTurn,
-    // **Envelopment is one of these after all.** Its registry entry looks like a plain
-    // mission task, which is what this list was briefly trimmed on — but
-    // `EnvelopmentGraphicBase.setBandRange` is the implementation, and it reads handle 0
-    // as a bend and handle 1 as a reach exactly as declared here. Trimming it made
-    // MapLibre resize freely from a handle OpenLayers bends with, so the same drag grew
-    // the graphic 4.6x in one engine and 1.5x in the other. @see envelopmentBendFrom
-    TacticalGraphicName.Envelopment,
-];
 
 /**
  * One handle per band, so the roles list has no fixed length.
@@ -317,10 +460,131 @@ const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.UnmannedAircraftCorridor,
 ];
 
+/**
+ * The four bracket mission tasks: three placed anchor points, every one of them a grip.
+ *
+ * 340200 breach, 340300 bypass, 340500 clear and 340400 canalize by inheritance each give
+ * points 1 and 2 to a front edge and point 3 to the rear. They were in `BLOCK_GRAPHICS`
+ * until 2026-09-06, whose contract puts a derived *offset* handle first — a width grip for a
+ * symbol whose width is now two of its own anchor points. @see frontEdgeFrame
+ */
+const BRACKET_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Breach,
+    TacticalGraphicName.Bypass,
+    TacticalGraphicName.Canalize,
+    TacticalGraphicName.Clear,
+    /*
+     * **341800 penetrate is a fifth, and its rule is clear's word for word.** *"Points 1 and
+     * 2 define the endpoints of the symbol's vertical line. Point 3 defines the rear of the
+     * symbol."* Only the drawing past that differs — one arrow rather than three — which is
+     * the generator's business and not this contract's. (User's call, 2026-09-06.)
+     */
+    TacticalGraphicName.Penetration,
+];
+
+/**
+ * Block, disrupt and support by fire: the rest of the block family whose anchor points are
+ * placed rather than derived, as of 2026-09-06.
+ *
+ * 270501 and 340100 give points 1 and 2 to the vertical line the enemy runs into and point 3
+ * to the stem; 270502 and 341000 give the same two to the vertical line and point 3 to the
+ * longest arrow's tip; 152100 places its bar's two ends *and* both arrowhead tips. In every
+ * one the perpendicular that used to be a derived `size` is a pair of anchor points, so
+ * there is no width to default and no offset grip to put first.
+ *
+ * Kept apart from `BRACKET_GRAPHICS` because the two groups are not the same shape — a
+ * bracket's point 3 is its rear, these three have no rear — and the reasons they left the
+ * block contract read differently even though the effect is the same.
+ */
+/**
+ * The crossings drawn as two parallel rails, whose separation is an anchor point.
+ *
+ * 271100 bridge, 271300 assault crossing, 271500 ford easy, 271600 ford difficult, and FM's
+ * gap, which shares the bridge's generator and its picture. @see parallelRailAnchors
+ */
+/**
+ * Whether this graphic is one of the two-rail crossings. @see RAIL_CROSSING_GRAPHICS
+ *
+ * Exported because a synthesised base has to know: their points 1 and 2 belong to the bar the
+ * operator drags and their point 3 to the far one, and which side that lands on is a fact of
+ * the plate rather than of whoever is laying the sample out. @see railCrossingBase
+ */
+export function drawsAsRailCrossing(name: TacticalGraphicName): boolean {
+    return RAIL_CROSSING_GRAPHICS.includes(name);
+}
+
+const RAIL_CROSSING_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Bridge,
+    TacticalGraphicName.Gap,
+    TacticalGraphicName.AssaultCrossing,
+    TacticalGraphicName.FordEasy,
+    TacticalGraphicName.FordDifficult,
+];
+
+const PLACED_BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
+    // 152000 joined on 2026-09-06: point 1 the arrowhead's tip, points 2 and 3 the back
+    // line's ends. Two clicks rather than three, because its own constraints construct the
+    // third — but every stored point is placed once they are. @see firePositionAnchors
+    TacticalGraphicName.AttackByFire,
+    TacticalGraphicName.Block,
+    TacticalGraphicName.TacticalBlock,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.TacticalDisrupt,
+    TacticalGraphicName.SupportByFire,
+];
+
 /** What each handle of `name` does. */
 export function handleContract(name: TacticalGraphicName): HandleContract {
     if (CORRIDOR_GRAPHICS.includes(name)) {
         return {roles: [], repeating: 'shape', offsetAfterVertices: true, offsetScale: 1};
+    }
+    if (BRACKET_GRAPHICS.includes(name)) {
+        return {roles: ['shape', 'shape', 'shape'], repeating: 'shape'};
+    }
+    /*
+     * **The two four-point hairpins: every grip is a placed anchor point.**
+     *
+     * 343300 and 341900 both name four, and both had none of them draggable — the
+     * demonstration was dropped whole and published `[edge, centre]`, and 341900 published a
+     * U-height offset grip plus its two base ends. Nothing either symbol is described by was
+     * grabbable. Each point moves on its own now, so there is no offset and no number beside
+     * the base to write. @see Demonstration, ReliefInPlace
+     */
+    if (name === TacticalGraphicName.Demonstration || name === TacticalGraphicName.ReliefInPlace) {
+        return {roles: ['shape', 'shape', 'shape', 'shape'], repeating: 'shape'};
+    }
+    /*
+     * **Three shape handles where the third point is a vertex, not an offset.**
+     *
+     * The movement family's third handle is a *derived* width grip, so it is an `offset`:
+     * dragging it writes a number beside the base. The demolition block's third point is a
+     * placed vertex as of 2026-09-05 and there is no number to write — dragging it moves
+     * the point, and the generator measures the separation from where it lands.
+     *
+     * MapLibre is what this reaches. It routes a handle drag by its role, so calling the
+     * side grip an `offset` sent the drag to a width that no longer exists and the handle
+     * did nothing at all — while OpenLayers, which drags vertices through its own
+     * `dragsVertices` path, worked. Reported as "sideline/width dragging works on
+     * openlayers but not maplibre" (user, 2026-09-05), and it is the same shape of defect
+     * `handleRole`'s own note describes for the corridors. @see carriesSeparationInBase
+     */
+    /*
+     * **The seven cane arrows answer here too.** All three of their grips are placed anchor
+     * points, so all three are `shape`. They published `[mirror, shape]` until 2026-09-06:
+     * one grip that only turned the symbol over and one for the arrowhead, with the arc's
+     * own diameter reachable from neither, though APP-06 gives all seven a third anchor
+     * point that states it. @see RetrogradeTask
+     *
+     * **152800 answers here too, and its history is worth keeping.** It published
+     * `[end, mirror]` until 2026-09-06 — one grip that resized and one whose only job was to
+     * flip the symbol across its own axis, because the side of the arc was a hidden
+     * `mirrored` amplifier with no point to state it. The plate states it: point 3 gives the
+     * arc its diameter *and* which side it falls on, so dragging that point across the line
+     * *is* the flip, and a grip that exists only to flip is not a thing the symbol needs. Its
+     * own branch returned this same triple and has been folded in. @see MobileDefense.frame
+     */
+    if (carriesSeparationInBase(name)) {
+        return {roles: ['shape', 'shape', 'shape'], repeating: 'shape'};
     }
     if (MOVEMENT_GRAPHICS.includes(name)) {
         return {roles: ['shape', 'shape', 'offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
@@ -337,23 +601,42 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (name === TacticalGraphicName.Abatis) {
         return {roles: ['shape', 'shape', 'mirror'], repeating: 'shape'};
     }
-    // **First, like the retrograde tasks.** A pursuit's hook is its cane: the part that
-    // hangs off the line and swaps sides when the graphic reflects. Its generator emits
-    // that end first, so the mirror handle is index 0 here for the same reason it is
-    // there, and a user reaches for the same place on every graphic that flips.
-    // @see Pursuit.generateHandles
-    if (name === TacticalGraphicName.Pursuit) {
-        return {roles: ['mirror', 'shape'], repeating: 'shape'};
-    }
-    // `[end, mirror]`, the second added for this. @see MobileDefense.generateHandles
-    if (name === TacticalGraphicName.MobileDefense) {
-        return {roles: ['shape', 'mirror'], repeating: 'shape'};
-    }
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
         return MIRROR_HANDLE_AT_0;
     }
-    if (BENT_GRAPHICS.includes(name)) {
-        return {roles: ['bend', 'reach']};
+    /**
+     * **Turn's three grips are APP-06 270504's three anchor points**: `[tip, rear, bend]`.
+     *
+     * Separate from Envelopment's contract below, which publishes `[bend, reach, extend]` —
+     * the same three jobs in a different order, because the two generators emit their grips
+     * in a different order. That is why they cannot share a line.
+     *
+     * Point 2 had no role at all until 2026-09-05 because it had no handle: the generator
+     * emitted `[control, tip, centre]` and the rear of the symbol was simply not grabbable.
+     * `extend` is what it wants rather than `reach` — grabbing the back of an arrow and
+     * pulling should lengthen it from the front, not scale it about its middle.
+     * (User's report.) @see Turn.generateHandles
+     */
+    if (name === TacticalGraphicName.Turn || name === TacticalGraphicName.TacticalTurn) {
+        return {roles: ['reach', 'extend', 'bend']};
+    }
+    /**
+     * **343500's three grips: the arc, the run's end, and the run's beginning.**
+     *
+     * `[bend, reach, extend]`, in the order `Envelopment.generateHandles` emits them.
+     * Handle 0 bends the semicircle and handle 1 sets the approach's length and aim — that
+     * pairing is `EnvelopmentGraphicBase.setBandRange`'s implementation and predates this.
+     * Trimming Envelopment out of this contract once made MapLibre resize freely from a
+     * handle OpenLayers bends with, so the same drag grew the symbol 4.6x on one engine and
+     * 1.5x on the other. @see envelopmentBendFrom
+     *
+     * Handle 2 is new: point 1, *"the beginning of the straight line"*, which had no grip
+     * while a dot that does nothing sat on the frame's centre. `extend` rather than `reach`
+     * for the same reason Turn's rear takes it — pulling the back of an arrow should lengthen
+     * it from the front rather than scale it about its middle. (User's call, 2026-09-05.)
+     */
+    if (name === TacticalGraphicName.Envelopment) {
+        return {roles: ['bend', 'reach', 'extend'], extendAnchor: 1};
     }
     /*
      * **A rectangle's two anchor points, then its width.**
@@ -387,6 +670,23 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     }
     if (RANGE_FANS.includes(name)) {
         return {roles: [], repeating: 'band'};
+    }
+    /**
+     * **200700: the radar, its two ranges, and the opening.**
+     *
+     * Not in `RANGE_FANS` — those publish a rim per band and nothing else, and this publishes
+     * a fixed four with a different last one. Index 0 is the radar, which is inert; 1 and 2
+     * are the start and stop ranges, which is the `band` role at the same
+     * `RANGE_FAN_BAND_OFFSET` the fans use; 3 is the *stop relative bearing*.
+     *
+     * Stated here because it is what MapLibre routes drags by. Left out, all four grips
+     * resolved to the default `shape`, which that switch drops on the floor — so 200700 could
+     * be drawn on MapLibre and then not edited at all, while OpenLayers, which dispatches its
+     * rims through the holder instead, worked. (User's report, 2026-09-05.)
+     * @see RadarSearchDoctrine.generateHandles, setSectorOpening
+     */
+    if (name === TacticalGraphicName.RadarSearchDoctrine) {
+        return {roles: ['band', 'band', 'band', 'opening']};
     }
     return SHAPE_ONLY;
 }
@@ -449,6 +749,22 @@ export function isMovementGraphic(name: TacticalGraphicName): boolean {
  * near-match for OpenLayers' `Polygon.getInteriorPoint`, not a reimplementation of
  * it; the two agree to well under a pixel on the shapes this library draws.
  */
+/**
+ * Graphics that pivot on their **last** vertex without being tip-first.
+ *
+ * `drawsTipFirst` answers two questions at once — which order the points are stored in, and
+ * which end the symbol turns about — and for the two blocks those parted company on
+ * 2026-09-06. 270501 and 340100 number the bar first, so the stored order is the plate's and
+ * the generator reads it straight; but the end a T should swing about is still the free end
+ * of its stem, which is where it swung before and is now simply the last of three points
+ * rather than the last of two. Listing them keeps the gesture exactly as it was while the
+ * reversal that used to imply it is gone. @see Block, drawOrder.ts
+ */
+const PIVOTS_ON_LAST_VERTEX: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Block,
+    TacticalGraphicName.TacticalBlock,
+];
+
 export function rotationAnchor(
     geometry: {type: string; coordinates: unknown},
     /**
@@ -473,9 +789,59 @@ export function rotationAnchor(
      * pivoted them about the centre — `MissionTaskController.getCenter` says so in as many
      * words — and this is that rule, in the half both engines read.
      */
+    /*
+     * **Ambush turns about point 2**, not about its centre. (User's call, 2026-09-05.)
+     *
+     * 141700's point 2 is one end of the curved back, and the back "encompasses the ambush
+     * position" while "the arrowhead typically points at the target" — so what an operator
+     * turns is the aim, about the position, and the position is where the arc sits rather
+     * than where the frame's centre falls. Turning about the centre swung the ambush
+     * itself off the ground it was placed on.
+     */
+    if (name === TacticalGraphicName.Ambush && positions.length >= 2) return positions[1];
+    /*
+     * **271204 scales about point 3** — the crossing, which is the thing on the ground the
+     * symbol marks. Its points 1 and 2 are the extremes of its own axis, so their midpoint is
+     * the figure's centre, and scaling about that would slide the crossing off the road it was
+     * placed against. The same point its rotation pivots on. @see rotationPivot
+     */
+    if (name === TacticalGraphicName.RoadblockCompleteExecuted && positions.length >= 3) return positions[2];
+
+    /*
+     * **Cover, guard and screen turn and scale about their middle.**
+     *
+     * Their base is one drawn arm — point 1 the arrowhead, point 2 its inner end — and the
+     * second arm is mirrored about the gap, so the *symbol* runs on past point 2 while the
+     * rule below would pivot on point 1. That put the axis of rotation out at one arrowhead,
+     * at the far end of a symbol 410 px across, and made a resize scale from there too: the
+     * whole graphic swung and grew about a corner of itself instead of about the unit symbol
+     * in its middle. (User's call, 2026-09-06 - "the axis of rotation and resize [...] need
+     * to go off the center of the graphic where the symbol may or may not be".)
+     *
+     * The middle is `HALF_GAP_RATIO` of an arm beyond point 2, which is the generator's own
+     * arithmetic and is called rather than repeated. @see securityOperationBaseCentre
+     */
+    if (name !== undefined && SECURITY_OPERATION_GRAPHICS.includes(name)) {
+        const centre = securityOperationBaseCentre(positions);
+        if (centre) return [centre[0], centre[1]];
+    }
+
     if (name !== undefined && usesDrawnAnchors(name)) {
         const centre = drawnAnchorFrame(name, positions)?.center;
         if (centre) return [centre[0], centre[1]];
+    }
+    /*
+     * **A corner-anchored symbol turns about the midpoint of its two corners.**
+     *
+     * Taken in the **Mercator frame**, not in degrees, for the reason the polygon case
+     * below spells out: the pivot has to be the point OpenLayers computes from the same
+     * base in projected metres, and the midpoint of 0 deg and 60 deg is 33 deg on screen
+     * against 30 deg in degrees. @see CORNER_ANCHOR_GRAPHICS
+     */
+    if (usesCornerAnchors(name) && (geometry.type === 'LineString' || geometry.type === 'MultiLineString')) {
+        const [aLon, aLat] = positions[0];
+        const [bLon, bLat] = positions[positions.length - 1];
+        return [(aLon + bLon) / 2, latitudeOf((mercatorY(aLat) + mercatorY(bLat)) / 2)];
     }
     /*
      * **A tip-first graphic turns about its rear, which is its *last* vertex.**
@@ -488,7 +854,10 @@ export function rotationAnchor(
      * same coordinate these pivoted on before the renumbering, so the gesture is
      * unchanged — only the index it lives at moved. @see drawOrder.ts
      */
-    if (drawsTipFirst(name) && (geometry.type === 'LineString' || geometry.type === 'MultiLineString')) {
+    if (
+        (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) &&
+        (geometry.type === 'LineString' || geometry.type === 'MultiLineString')
+    ) {
         return positions[positions.length - 1];
     }
     if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
@@ -510,6 +879,69 @@ export function rotationAnchor(
     }
     const midpoint: [number, number] = [(minX + maxX) / 2, latitudeOf((minY + maxY) / 2)];
     return pointInRing(positions, midpoint) ? midpoint : averageOf(positions);
+}
+
+/**
+ * The point a **rotate gesture** turns the symbol about.
+ *
+ * Almost always {@link rotationAnchor}, and this delegates to it. The two are separated
+ * because that function answers a broader question than its name suggests: every renderer
+ * uses it as the symbol's *frame origin* — the point a resize scales from, and the point
+ * `setBend` and `setReach` measure their cursor offsets against. So it cannot also be the
+ * place to say "but this one turns about something else": moving Turn's answer to its bend
+ * point would have measured its bend, its reach and its resize from there too, which is
+ * three broken gestures to fix one.
+ *
+ * Turn is the case that forced the split. 270504's point 3 is the bow, and an operator
+ * swinging a turn is aiming it about the curve rather than about the chord's midpoint.
+ * (User's call, 2026-09-05.)
+ *
+ * **Ambush is deliberately not here.** Its "turn about point 2" rule lives in
+ * `rotationAnchor` itself, where it also moves that symbol's frame origin — which is what
+ * it wants, and it has been signed off drawn that way. Left alone rather than tidied into
+ * this function on the way past.
+ */
+export function rotationPivot(
+    geometry: {type: string; coordinates: unknown},
+    name?: TacticalGraphicName,
+): [number, number] {
+    if (name === TacticalGraphicName.Turn || name === TacticalGraphicName.TacticalTurn) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 3) return positions[2];
+    }
+    /*
+     * **271204 turns and scales about point 3**, the crossing.
+     *
+     * Its points 1 and 2 are the two extremes of the symbol's own axis, so their midpoint is
+     * the figure's centre — but the crossing is the thing on the ground the symbol marks, and
+     * it is the one anchor an operator would place against a road. Scaling about the centre
+     * would slide the crossing off it. (User's call, 2026-09-07: "resize and rotate icons can
+     * use point 3 as pivot".) @see roadblockAnchors
+     */
+    if (name === TacticalGraphicName.RoadblockCompleteExecuted) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 3) return positions[2];
+    }
+    /*
+     * **343500 turns about point 1**, the beginning of the straight line — the end the
+     * operator placed first and the one the symbol is anchored to on the ground. Turning it
+     * about the run's midpoint swung the start of the approach off the position it was drawn
+     * from. Point 1 is anchor 0. (User's call, 2026-09-05.) @see anchorsForRunAndArc
+     */
+    if (name === TacticalGraphicName.Envelopment) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 1) return positions[0];
+    }
+    /*
+     * **343300 and 341900 turn about point 1**, the arrowhead tip — the end the operator
+     * places first and the one the symbol is read from. Turning about the frame's centre
+     * swung the tip off the ground it was drawn on. (User's call, 2026-09-06.)
+     */
+    if (name === TacticalGraphicName.Demonstration || name === TacticalGraphicName.ReliefInPlace) {
+        const positions = flattenPositions(geometry.coordinates);
+        if (positions.length >= 1) return positions[0];
+    }
+    return rotationAnchor(geometry, name);
 }
 
 /** Mercator y for a latitude in degrees, in radians-worth of units. */
@@ -559,6 +991,26 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.FireSupportAreaRectangular,
     TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
     TacticalGraphicName.PsyOpsZoneRectangular,
+    /*
+     * APP-06 240804. It belongs here and **not** with `TargetAreaRectangular`, despite the
+     * shared words in the name: its plate says "this symbol requires two anchor points and
+     * a width (defined in metres) to define the boundary of the area. Points 1 and 2 will
+     * be located on the opposite sides of the area" -- which is this family's construction
+     * exactly. 240802 builds its box from typed amplifiers off a single anchor point and is
+     * a different symbol. @see TargetAreaSingleTargetAegis
+     */
+    TacticalGraphicName.TargetAreaSingleTargetAegis,
+    /*
+     * APP-06 200202 and 200402. Same rule again, word for word: "requires two anchor points
+     * and a width, defined in metres, to define the boundary of the area. Points 1 and 2
+     * will be located in the centre of two opposing sides of the rectangle."
+     *
+     * They are the second and third exception to `drawnBase.test.ts`'s naming rule -- built
+     * like the family and not called `...Rectangular`, because APP-06 spells these two
+     * `Rectangle`. Named there rather than renamed here: a display name follows the plate.
+     */
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
 ];
 
 /**
@@ -581,15 +1033,53 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Two segments, three points. The only graphic here that is not two points.
     [TacticalGraphicName.FieldsOfFire]: 3,
 
+    /*
+     * **The four placed point by point, from 2026-09-05.** These are the anchor counts the
+     * plates state, and they are what the *base stores* — not what the operator clicks.
+     * Ambush spends two clicks and envelopment three, because in each the last point the
+     * standard names carries no decision and is constructed. MapLibre's draw asks whether
+     * `normalizeDrawnBase(name, sketch).length` has reached the number here, so the two
+     * disagreeing is exactly how a derived point is expressed. @see anchorsFromClicks
+     */
+    [TacticalGraphicName.Ambush]: 3,
+    [TacticalGraphicName.Turn]: 3,
+    [TacticalGraphicName.TacticalTurn]: 3,
+    [TacticalGraphicName.Envelopment]: 4,
+    [TacticalGraphicName.Pursuit]: 3,
+
     // Two points: a start and an end, and the symbol is built between them.
     //
-    // **Abatis joined on 2026-08-21.** Its path is `[start, apex, ...tail]`, so a
-    // two-point base draws exactly the three segments the symbol has — the two sides of
-    // the chevron and the long run behind it. Left free-form, every extra vertex the user
-    // dropped added another segment to the tail and the obstacle stopped being one
-    // chevron on one line.
-    [TacticalGraphicName.Abatis]: 2,
+    /*
+     * **Abatis left again on 2026-09-05**, and the standard is why: 280100 reads *"at
+     * least two anchor points, points 1 and 2, to define the line. Additional points can
+     * be defined to extend the line."* It was capped at two on 2026-08-21 on the reading
+     * that extra vertices "added another segment to the tail and the obstacle stopped
+     * being one chevron on one line" — but that *is* the symbol. The Example draws abatis
+     * marks on roads that bend, and the generator was already built for it: `path` slices
+     * the tail with `lineSliceAlong`, which keeps the intermediate vertices so the
+     * obstacle follows the road instead of straightening to its endpoints. One chevron
+     * near the start, then the route. @see Abatis.path
+     */
     [TacticalGraphicName.FerryCrossing]: 2,
+    /*
+     * 140800: *"requires three anchor points. Points 1 and 2 define the endpoints of the
+     * infiltration lane and point 3 defines one side of the lane."*
+     *
+     * **Three, because the third point is one of them.** This was 2 on the reading that
+     * points 1 and 2 are "the whole of what is drawn" and the third is a width handle — but
+     * the standard calls it an anchor point, and the demolition block, whose rule 271201
+     * states in the same words, has stored it as a vertex since 2026-09-05. Holding it at 2
+     * kept the separation in a `width` amplifier beside a base that already described it,
+     * which is the second copy `carriesSeparationInBase` exists to prevent, and ended the
+     * draw on the second click with the width never asked for. (User's call, 2026-09-05.)
+     */
+    [TacticalGraphicName.InfiltrationLane]: 3,
+    /*
+     * **152800's three anchor points**, as of 2026-09-06. It was a two-point ellipse whose
+     * only asymmetry was a hidden `mirrored` flag; the plate gives it a tip, a line end and
+     * a point stating the arc's diameter and side. @see MobileDefense
+     */
+    [TacticalGraphicName.MobileDefense]: 3,
     [TacticalGraphicName.PassageLane]: 2,
     // 290600: "Point 1 defines the entry point and Point 2 defines the exit point."
     [TacticalGraphicName.SafeLaneOrGap]: 2,
@@ -600,28 +1090,71 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.LinearSmokeTarget]: 2,
 
     // The block family: the bar is drawn across the line the user gives it.
-    [TacticalGraphicName.TacticalBlock]: 2,
-    [TacticalGraphicName.Breach]: 2,
-    [TacticalGraphicName.Bypass]: 2,
-    [TacticalGraphicName.Canalize]: 2,
-    [TacticalGraphicName.Clear]: 2,
-    [TacticalGraphicName.TacticalDisrupt]: 2,
+    /*
+     * **Three, as 340100 and 270501 both state**: "Points 1 and 2 define the endpoints of the
+     * symbol's vertical line. Point 3 defines the endpoint of the symbol's horizontal line."
+     * Held at two until 2026-09-06, and the two it had were the *stem* — so the bar was a
+     * screen constant laid across the far end and neither its length nor its position was the
+     * operator's to state. @see Block, blockAnchors
+     */
+    [TacticalGraphicName.TacticalBlock]: 3,
+    /*
+     * 340200, 340300, 340500 and 340400-by-inheritance each state three: two for the front
+     * opening and one for the rear. @see frontEdgeFrame
+     */
+    [TacticalGraphicName.Breach]: 3,
+    [TacticalGraphicName.Bypass]: 3,
+    [TacticalGraphicName.Canalize]: 3,
+    [TacticalGraphicName.Clear]: 3,
+    /*
+     * **Three, as 341000 and 270502 both state**: points 1 and 2 the vertical line's ends,
+     * point 3 the tip of the longest arrow. Held at two along the arrows, which left the bar
+     * derived from `size`. @see Disrupt, disruptAnchors
+     */
+    [TacticalGraphicName.TacticalDisrupt]: 3,
     [TacticalGraphicName.Penetration]: 2,
     [TacticalGraphicName.Exploitation]: 2,
-    [TacticalGraphicName.Block]: 2,
-    [TacticalGraphicName.Disrupt]: 2,
+    [TacticalGraphicName.Block]: 3,
+    [TacticalGraphicName.Disrupt]: 3,
     [TacticalGraphicName.AttackByFire]: 2,
-    [TacticalGraphicName.SupportByFire]: 2,
+    /*
+     * **Four, which is what 152100 asks for**: "Points 1 and 2 define the endpoints of the
+     * straight line on the back side of the symbol. Points 3 and 4 define the tips of the
+     * arrowheads." It was two — a shaft — off which the bar, both arrows and their spread were
+     * all computed by ratio, so the "left and right limits of coverage" the arrowheads are
+     * supposed to indicate were limits nobody stated. @see supportByFireFromAnchors
+     */
+    [TacticalGraphicName.SupportByFire]: 4,
 
-    // The retrograde tasks: an axis from where the force is to where it goes.
-    [TacticalGraphicName.Delay]: 2,
-    [TacticalGraphicName.Withdraw]: 2,
-    [TacticalGraphicName.WithdrawUnderPressure]: 2,
-    [TacticalGraphicName.Disengage]: 2,
-    [TacticalGraphicName.Retirement]: 2,
-    [TacticalGraphicName.ForwardPassageOfLines]: 2,
-    [TacticalGraphicName.RearwardPassageOfLines]: 2,
-    [TacticalGraphicName.ReliefInPlace]: 2,
+    /*
+     * **The seven cane arrows: three, not two.** APP-06 gives each of them "three anchor
+     * points... Point 1 defines the tip of the arrowhead. Point 2 defines the end of the
+     * straight line portion of the symbol. Point 3 defines the diameter and orientation of
+     * the 180 degree circular arc." Held at 2, the third had nowhere to live and the arc came
+     * from a `size` amplifier with a `mirrored` flag for its side - a hidden boolean where the
+     * standard names a place. (User's call, 2026-09-06.) @see RetrogradeTask
+     */
+    [TacticalGraphicName.Delay]: 3,
+    [TacticalGraphicName.Withdraw]: 3,
+    [TacticalGraphicName.WithdrawUnderPressure]: 3,
+    [TacticalGraphicName.Disengage]: 3,
+    [TacticalGraphicName.Retirement]: 3,
+    [TacticalGraphicName.ForwardPassageOfLines]: 3,
+    [TacticalGraphicName.RearwardPassageOfLines]: 3,
+    /*
+     * **341900 takes four**, one per anchor point its rule names: the two arrowhead tips and
+     * the two arrow ends. It was 2 plus a `size` amplifier that set the U's height, which
+     * forced the two arrows parallel and equal-length and left points 3 and 4 with nowhere
+     * to live. (User's call, 2026-09-06.) @see ReliefInPlace
+     */
+    [TacticalGraphicName.ReliefInPlace]: 4,
+    /*
+     * **343300 takes four too**, for the same reason and by the same rule's wording: point 1
+     * the arrowhead tip, point 2 the end of the first arrow's straight portion, points 3 and
+     * 4 the second straight line. It was a one-click drop whose four points were laid out
+     * from one centre, so the operator stated position and nothing else. @see Demonstration
+     */
+    [TacticalGraphicName.Demonstration]: 4,
 
     // Two anchor points, the symbol built between them. These were capped in the
     // OpenLayers registry and nowhere else until 2026-08-15, which is the exact failure
@@ -632,15 +1165,62 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Gap]: 2,
     [TacticalGraphicName.FordEasy]: 2,
     [TacticalGraphicName.FordDifficult]: 2,
-    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 2,
-    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 2,
-    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 2,
+    /*
+     * **The demolition block places all three of its points, from 2026-09-05.** 271201
+     * states them and 271204 inherits the rule: *"Points 1 and 2 define the endpoints of
+     * the symbol and point 3 defines the location of one side of the symbol"*, with
+     * *"points 1 and 2 determine the centreline of the symbol and point 3 determines its
+     * width."*
+     *
+     * Point 3 was a derived offset handle, and the separation it set was carried as a
+     * `width` amplifier beside the base. It is a stored vertex now, so the separation comes
+     * out of the coordinates and there is nothing to keep in step with them. (User's call.)
+     */
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 3,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 3,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: 3,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 3,
     [TacticalGraphicName.MineCluster]: 2,
     [TacticalGraphicName.TripWire]: 2,
     [TacticalGraphicName.RaftSite]: 2,
     [TacticalGraphicName.FortifiedPosition]: 2,
 
+    /*
+     * APP-06 §8.11, the maritime control lines. Every one of their draw rules says the same
+     * thing -- "requires two anchor points. Points 1 and 2 define the endpoints" -- and
+     * 220100 adds that the symbol "varies only in length".
+     *
+     * The count has to be stated *here* and not only in the OpenLayers factory, which is
+     * what `drawLimitParity` caught: registering them as `line(2)` capped the draw on one
+     * engine and left the library saying "no limit", so MapLibre would have gone on
+     * accepting vertices for a symbol defined by exactly two. It also feeds
+     * `editStretches`, which reads a fixed vertex count as its condition.
+     */
+    [TacticalGraphicName.BearingLine]: 2,
+    [TacticalGraphicName.BearingLineElectronic]: 2,
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: 2,
+    [TacticalGraphicName.BearingLineAcoustic]: 2,
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: 2,
+    [TacticalGraphicName.BearingLineTorpedo]: 2,
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: 2,
+    [TacticalGraphicName.BearingLineJammer]: 2,
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: 2,
+    [TacticalGraphicName.NavigationalRhumbLine]: 2,
+    // 218400: "requires two anchor points. Points 1 and 2 define the corner points".
+    [TacticalGraphicName.NavigationalLine]: 2,
+
+    /*
+     * The convoys. Both plates read "this symbol requires two anchor points. Point 1
+     * defines the tip of the arrowhead and point 2 defines the rear", and both add that the
+     * symbol "varies only in length" -- so two points, exactly, on either engine.
+     */
+    [TacticalGraphicName.MovingConvoy]: 2,
+    [TacticalGraphicName.HaltedConvoy]: 2,
+
     // Three: two arrow tips and a rear, or a centre and two ends.
+    // APP-06 152200: "requires three anchor points. Point 1 defines the vertex of the
+    // graphic. Points 2 and 3 define the tips of the arrowheads." @see SearchArea
+    [TacticalGraphicName.SearchArea]: 3,
     [TacticalGraphicName.ObstacleBypassEasy]: 3,
     [TacticalGraphicName.ObstacleBypassDifficult]: 3,
     [TacticalGraphicName.ObstacleBypassImpossible]: 3,
@@ -665,12 +1245,38 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Four, each meaning something different. @see SweptArcTask, EscortAndDemonstration
     [TacticalGraphicName.Capture]: 4,
     [TacticalGraphicName.Seize]: 4,
-    // Cover, guard and screen: point 1 at an arrowhead and point 2 at that arrow's inner
-    // end. The second arrow is derived from them, so the base is two points however many
-    // anchor points APP-06 numbers. @see SecurityOperation
-    [TacticalGraphicName.Cover]: 2,
-    [TacticalGraphicName.Guard]: 2,
-    [TacticalGraphicName.Screen]: 2,
+    /*
+     * **Cover, guard and screen: the four anchor points 342201 numbers, all placed.**
+     *
+     * Two until 2026-09-06 — point 1 at an arrowhead, point 2 at that arrow's inner end,
+     * and the second arrow mirrored from them. That made the two arrows always equal and
+     * always collinear, which the plate's Size/Shape cell explicitly does not ask for:
+     * *"The length and orientation of the arrows can vary independently."*
+     * @see securityOperationAnchors
+     */
+    // 341800's three, on 340500 clear's rule. @see BRACKET_GRAPHICS
+    [TacticalGraphicName.Penetration]: 3,
+    // 152000's three: the tip and the back line's two ends. Drawn in two clicks, like the
+    // ambush whose constraints it shares. @see firePositionAnchors, DRAW_CLICKS
+    [TacticalGraphicName.AttackByFire]: 3,
+    /*
+     * **The two-rail crossings, in the counts their own plates use.**
+     *
+     * 271100 bridge and 271300 assault crossing say four outright — *"points 1 and 2 define
+     * one side of the gap and points 3 and 4 define the opposite side"* — while 271500 ford
+     * easy and 271600 ford difficult letter only three on their Templates, `PT 1` and `PT 2`
+     * on one bar and `PT 3` on the other. All four are drawn with three clicks; only what
+     * they store differs. FM's gap shares the bridge's generator and its picture, so it
+     * follows it. @see parallelRailAnchors
+     */
+    [TacticalGraphicName.Bridge]: 4,
+    [TacticalGraphicName.Gap]: 4,
+    [TacticalGraphicName.AssaultCrossing]: 4,
+    [TacticalGraphicName.FordEasy]: 3,
+    [TacticalGraphicName.FordDifficult]: 3,
+    [TacticalGraphicName.Cover]: 4,
+    [TacticalGraphicName.Guard]: 4,
+    [TacticalGraphicName.Screen]: 4,
 
     [TacticalGraphicName.FollowAndAssume]: 2,
     [TacticalGraphicName.FollowAndSupport]: 2,
@@ -702,6 +1308,49 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
  */
 const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FieldsOfFire]: 0,
+    /*
+     * The search area's vertex, for the same reason and at the same index: 152200 numbers
+     * it point 1 and the arms' tips points 2 and 3, so the base stores `[end, apex, end]`
+     * and is swapped into that numbering. Dragging the vertex under a reshape would bend
+     * the whole symbol about the point the operator thinks of as its origin.
+     */
+    [TacticalGraphicName.SearchArea]: 0,
+    /*
+     * **343300 and 341900's fourth point is derived, so it gets a dot rather than a grip.**
+     *
+     * The operator places three; point 4 is wherever "parallel and the same length" puts it.
+     * A draggable grip on it would offer a freedom the shape does not have, and taking it
+     * would break the parallel the symbol is. @see hairpinAnchors
+     */
+    [TacticalGraphicName.Demonstration]: 3,
+    [TacticalGraphicName.ReliefInPlace]: 3,
+    /*
+     * **Six graphics whose point 1 is the centre their figure is built about.**
+     *
+     * Their plates say so outright — 343000 capture, 342300 seize, 344500 evacuate and
+     * 344600 recover all read *"Point 1 defines the centre of the circle. Point 2 defines
+     * the radius of the circle"*; 343600 escort, *"Point 1 defines the centre of the
+     * graphic"*; and 272100's, *"the centre point defines the centre of the symbol. Points
+     * 1 and 2 define the radii"*. A reshape that dragged the origin would bend the symbol
+     * about the point the operator thinks of as its middle, which is `FieldsOfFire`'s
+     * reason exactly.
+     *
+     * **They were stated in the OpenLayers registry instead**, as a third argument to
+     * `vertexLine`, and this table has never listed them — so MapLibre, which reads nothing
+     * else, let all six drag their centre while OpenLayers refused. Same shape of defect as
+     * the obstacle bypasses on 2026-09-06, opposite direction.
+     *
+     * 272101's multiple-strike zone declared one there too and is deliberately absent here:
+     * its rule numbers no centre at all — *"add as many pairs of points as needed […] points
+     * 1 through N/2 define"* one polygon — so its point 1 is a ring vertex like any other.
+     * @see anchorVertex, ai/conventions.md "A symbology fact never lives in a holder"
+     */
+    [TacticalGraphicName.Capture]: 0,
+    [TacticalGraphicName.Seize]: 0,
+    [TacticalGraphicName.Evacuate]: 0,
+    [TacticalGraphicName.Recover]: 0,
+    [TacticalGraphicName.Escort]: 0,
+    [TacticalGraphicName.MinimumSafeDistanceZone]: 0,
 };
 
 /**
@@ -864,7 +1513,6 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaCircular,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.FieldsOfFire,
-    TacticalGraphicName.FightingPosition,
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
     TacticalGraphicName.Isolate,
@@ -882,6 +1530,30 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Turn,
     TacticalGraphicName.WeaponSensorRangeFanCircular,
     TacticalGraphicName.WeaponSensorRangeFanSector,
+    /*
+     * The seven point-anchored maritime control areas -- APP-06 §8.10.
+     *
+     * Two circles sized by a rim drag, three ellipses and a rotated rectangle sized the
+     * way `TargetAreaRectangular` is, and one sector fan. Every one is placed by a single
+     * anchor point and sized by dragging away from it, which is what this list describes;
+     * the OpenLayers factories (`circularArea`, `rectangularTarget`, `rangeFan`) all set
+     * `editStretches` unconditionally, so leaving them out here would have MapLibre
+     * translating where OpenLayers resizes. @see editStretchParity.test.ts, which caught it
+     */
+    TacticalGraphicName.NoAttackZone,
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+    /*
+     * **The radar search doctrine came back on 2026-09-05**, by becoming point-anchored
+     * again rather than by changing its mind: 200700 gives it one anchor point and states
+     * its ranges as numbers, so there are no vertices to drag and an edit drag scales the
+     * sector. It had left this list on 2026-09-04, when it was briefly three drawn points.
+     * @see RadarSearchDoctrine
+     */
+    TacticalGraphicName.RadarSearchDoctrine,
 ];
 
 /**
@@ -902,6 +1574,23 @@ const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
      * zone put 400 km on the width as well. (User's call, 2026-08-27.)
      */
     ...RECTANGULAR_GRAPHICS,
+    /*
+     * **The demolition block, for the same reason, from 2026-09-05.** Its three points are
+     * two jobs: dragging an end sets the symbol's length and dragging the side point sets
+     * how far apart the rails sit. Letting a stray drag scale the whole graphic moved both
+     * at once — reported as "the middle-outer drag changes the width but also resizes the
+     * whole graphic". The resize affordance still scales it, which is the control that
+     * means to. @see carriesSeparationInBase
+     */
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    // Excluded — see ai/excluded-graphics.md
+    // TacticalGraphicName.RoadblockCompleteExecuted,
+    // 140800 joined the same contract on 2026-09-05 and needs the same protection: its
+    // ends set the lane's length and its side point sets the width, and a stray drag that
+    // scaled the whole graphic would move both. @see carriesSeparationInBase
+    TacticalGraphicName.InfiltrationLane,
     TacticalGraphicName.MobileDefense,
     TacticalGraphicName.Clear,
     TacticalGraphicName.TacticalDisrupt,
@@ -937,9 +1626,181 @@ export function editStretches(name: TacticalGraphicName): boolean {
     return EDIT_STRETCHES.includes(name) || baseVertexCount(name) !== undefined;
 }
 
+/**
+ * Whether a new base vertex may be inserted where the cursor is.
+ *
+ * **Reported as "abatis should not accept vertices within the triangle opening"** (user,
+ * 2026-09-06), and it did, on both engines: a drag anywhere on the drawn route inserted a
+ * point, the head of the route is the chevron's own opening, and a point placed in there
+ * destroys the tooth. `Abatis.path` builds the mark by walking the *first `size` metres of
+ * the base* — apex over the midpoint, foot at the far end, the tail sliced off after it —
+ * so a vertex inside that stretch bends the line the tooth is measured along and the
+ * symbol comes out as a kink with a stray tick beside it.
+ *
+ * It is refused rather than corrected because there is nothing to correct to: 280100's
+ * extra anchor points *"extend the line"*, and the line does not exist yet where the
+ * chevron is. Everything past the tooth still takes as many vertices as the road needs.
+ *
+ * **In the map-agnostic half because both renderers gate on it.** OpenLayers asks through
+ * `Modify`'s `insertVertexCondition`, MapLibre through `grabSegment`; each already had its
+ * own answer to "may this graphic take a vertex at all" and neither could have had this one
+ * without writing `name === Abatis` in a renderer.
+ * @see ai/conventions.md, "A symbology fact never lives in a holder"
+ *
+ * **Screen pixels, in whatever planar space the caller measures.** The reserved stretch is
+ * a screen constant — the tooth holds its size as the obstacle lengthens — so the two
+ * engines pass their own projected pixels rather than a ground distance, and the same
+ * gesture is refused at the same place at every zoom. `at` is where the new vertex would
+ * land, which both renderers already compute to draw the hint that offers it.
+ *
+ * Graphics that reserve nothing answer `true` for every point, which is all but one.
+ */
+export function acceptsInsertedVertex(
+    name: TacticalGraphicName,
+    basePixels: readonly (readonly [number, number])[],
+    at: readonly [number, number],
+): boolean {
+    const lead = reservedLeadPx(name);
+    if (lead === undefined || basePixels.length < 2) return true;
+
+    // How far along the run the candidate sits, and how long the run is — one walk, because
+    // the cap below needs both. The nearest segment is found here rather than trusted from
+    // the caller: OpenLayers has no segment index to hand, only a coordinate.
+    let travelled = 0;
+    let along = -1;
+    let nearest = Infinity;
+    for (let i = 1; i < basePixels.length; i++) {
+        const [ax, ay] = basePixels[i - 1];
+        const [bx, by] = basePixels[i];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const span = Math.hypot(dx, dy);
+        if (span > 0) {
+            const t = Math.min(1, Math.max(0, ((at[0] - ax) * dx + (at[1] - ay) * dy) / (span * span)));
+            const distance = Math.hypot(at[0] - (ax + t * dx), at[1] - (ay + t * dy));
+            if (distance < nearest) {
+                nearest = distance;
+                along = travelled + t * span;
+            }
+        }
+        travelled += span;
+    }
+    if (along < 0) return true;
+
+    // **Capped at half the run, exactly as the generator caps it.** `Abatis.path` never lets
+    // the tooth eat more than half the obstacle, so on a route drawn barely longer than the
+    // chevron the reserved stretch shrinks with it rather than swallowing the whole line.
+    return along > Math.min(lead, travelled / 2);
+}
+
+/**
+ * Graphics whose handles are **shown but not individually draggable**.
+ *
+ * Every point is stored and published, so the operator can see where the symbol's anchors
+ * are and a file carries them — but none of them may be dragged on its own. The whole
+ * graphic still moves, turns and scales.
+ *
+ * 271204 is the case this exists for. Its construction is unsettled — an empty Draw Rules
+ * cell that inherits 271201's centreline-and-width rule, and a Template read three ways in
+ * one session — so offering a grip on each point would promise a shape the reading does not
+ * yet support. Storing the points and showing them inert says what is known without
+ * inviting an edit that would have to be redone. (User's call, 2026-09-07: "we always store
+ * the points and show them as inert since the user can't really modify them directly. They
+ * can only resize/rotate/move the graphic wholesomely (for now)".)
+ *
+ * Distinct from `anchorVertex`, which makes **one** vertex of an otherwise editable path
+ * inert, and from `publishesAnchorHandleOnly`, which is about how many handles a graphic
+ * publishes rather than whether they answer a drag. @see createInertHandleFeature
+ */
+const INERT_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.RoadblockCompleteExecuted,
+];
+
+/** Whether every handle this graphic publishes is inert. @see INERT_HANDLE_GRAPHICS */
+export function handlesAreInert(name: TacticalGraphicName): boolean {
+    return INERT_HANDLE_GRAPHICS.includes(name);
+}
+
 /** The base vertex that is inert under a reshape, or `undefined`. @see ANCHOR_VERTEX */
 export function anchorVertex(name: TacticalGraphicName): number | undefined {
     return ANCHOR_VERTEX[name];
+}
+
+/**
+ * Whether this graphic's **separation lives in its base** rather than beside it as a width.
+ *
+ * The movement family carries a `width` amplifier because its base is a centreline and
+ * nothing in it says how far the rails sit apart. The demolition block stopped being like
+ * that on 2026-09-05: 271201 gives point 3 that job — *"point 3 defines the location of one
+ * side of the symbol"* — and it is a stored vertex, so the distance is measured from the
+ * coordinates. A renderer that stamps a width beside them is keeping a second copy of a
+ * number the base already carries, and the two drift. (User's call.)
+ *
+ * Derived from the vertex count rather than listed: a graphic of this shape with three base
+ * points has nowhere else for the third to be. @see halfWidthFromSide
+ *
+ * **The seven cane arrows joined on 2026-09-06.** Their point 3 states the diameter of the
+ * 180 degree arc and which side of the line it falls on - a distance measured across the
+ * drawn line, which is what this predicate is about, even though the thing it separates is
+ * an arc rather than a pair of rails. Without them MapLibre went on defaulting a `width`
+ * their generator ignores, while OpenLayers wrote none: the two engines saved the same
+ * symbol differently. @see RetrogradeTask
+ *
+ * **152800 is named rather than derived**, because it is the one member that is not a
+ * movement graphic — `isMovementGraphic` is false for it, so the derivation alone missed it
+ * and it went on stamping a `width` its generator ignores. Its point 3 states exactly what
+ * the block's does: the distance across the drawn line, and which side. (User's call,
+ * 2026-09-06.) @see MobileDefense.frame
+ */
+export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
+    if ((baseVertexCount(name) ?? 2) < 3) return false;
+    return (
+        isMovementGraphic(name) ||
+        name === TacticalGraphicName.MobileDefense ||
+        CANE_ARROW_GRAPHICS.includes(name) ||
+        /*
+         * **344000 is named rather than derived, for 152800's reason.** It draws the same
+         * picture as the seven cane arrows and its point 3 states the same fact — the
+         * distance across the drawn line and which side — but it is not in
+         * `CANE_ARROW_GRAPHICS`, because that list is one shared APP-06 rule and pursuit's
+         * numbers the points the other way round: *"Point 1 defines the beginning of the
+         * straight line"* where the seven make point 1 the arrowhead's tip. Same shape,
+         * opposite numbering, so it is named here instead of joining a list whose doc it
+         * would falsify. @see Pursuit, usesFrontEdgeBase
+         */
+        name === TacticalGraphicName.Pursuit ||
+        /*
+         * **The two-rail crossings carry their separation in the base as of 2026-09-06.** It
+         * was a `radius` amplifier — the gap between the rails as a number with nowhere to
+         * place it — and their plates give it an anchor point. A `width` filed beside those
+         * points would be the same second copy this predicate exists to prevent.
+         * @see parallelRailAnchors
+         */
+        RAIL_CROSSING_GRAPHICS.includes(name) ||
+        /*
+         * **The four bracket mission tasks state it in points 1 and 2, not in point 3.**
+         *
+         * The separation still lives in the base, which is what this predicate is for — it is
+         * the *opening*, and 340200/340300/340500 give its two ends their own anchor points
+         * ("points 1 and 2 determine the symbol's height"). Point 3 gives the length instead.
+         * Different points, same fact: a `width` stamped beside them is a second copy.
+         *
+         * Left out, MapLibre defaulted one — 97,839 m on a breach — where OpenLayers wrote
+         * none, so the same symbol saved differently on the two engines. It had been masked
+         * by `ratioLockedSize`, which cleared the width as a side effect and stopped doing so
+         * when these four left `RATIO_LOCK`. @see frontEdgeFrame
+         */
+        BRACKET_GRAPHICS.includes(name) ||
+        /*
+         * **Block, disrupt and support by fire, for the same reason and with the same
+         * symptom.** Their vertical line — support by fire's back line — is points 1 and 2,
+         * so the perpendicular is stated and a `width` beside it is a second copy. Disrupt
+         * and support by fire had it masked by `RATIO_LOCK` in exactly the way the four
+         * brackets did, and block never defaulted one only because it was never locked.
+         * @see PLACED_BLOCK_GRAPHICS
+         */
+        PLACED_BLOCK_GRAPHICS.includes(name)
+    );
 }
 
 /** How many points this graphic's base takes, or `undefined` for no limit. */

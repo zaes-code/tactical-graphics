@@ -106,33 +106,82 @@ describe('APP-06 290400 — mine cluster', () => {
 
     const meters = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
 
-    it('stands its planned ring off the dome rather than on it', () => {
-        // Concentric with the dome and ten pixels clear of it: drawn exactly on the arc
-        // the two dash patterns interleave into a ragged edge, and floating on a bounding
-        // box the ring read as a second symbol. (User's call, 2026-08-27.)
-        const chord: ProjectedPosition[] = [[0, 0], [40_000, 0]];
-        const dome: ProjectedPosition[] = Array.from({length: 19}, (_p, i) => {
-            const a = (i / 18) * Math.PI;
-            return [20_000 + Math.cos(a) * 20_000, Math.sin(a) * 20_000] as ProjectedPosition;
-        });
-        const planned: PaintFeature = {
-            geometry: {type: 'MultiLineString', coordinates: [chord, dome]},
-            properties: {
-                name: TacticalGraphicName.MineCluster,
-                status: TacticalGraphicStatus.planned,
-            },
-        };
+    /** A planned cluster of the given dome radius, chord running due east from the origin. */
+    const plannedCluster = (radius: number): PaintFeature => ({
+        geometry: {
+            type: 'MultiLineString',
+            coordinates: [
+                [[0, 0], [radius * 2, 0]],
+                Array.from({length: 19}, (_p, i) => {
+                    const a = (i / 18) * Math.PI;
+                    return [radius + Math.cos(a) * radius, Math.sin(a) * radius] as ProjectedPosition;
+                }),
+            ],
+        },
+        properties: {
+            name: TacticalGraphicName.MineCluster,
+            status: TacticalGraphicStatus.planned,
+        },
+    });
 
-        for (const resolution of [10, 40, 400]) {
-            const ring = mineClusterPaint()(planned, context(resolution))
-                .find(p => p.stroke?.dashPx && p.geometry.type === 'LineString');
-            expect(ring).toBeDefined();
+    /** The planned ring's radius about the chord's midpoint, and how round it is. */
+    const ringRadii = (radius: number, resolution: number): number[] => {
+        const ring = mineClusterPaint()(plannedCluster(radius), context(resolution))
+            .find(p => p.stroke?.dashPx && p.geometry.type === 'LineString');
+        expect(ring).toBeDefined();
+        return (ring!.geometry as {coordinates: ProjectedPosition[]}).coordinates
+            .map(p => Math.hypot(p[0] - radius, p[1]));
+    };
 
-            for (const p of (ring!.geometry as {coordinates: ProjectedPosition[]}).coordinates) {
-                const r = Math.hypot(p[0] - 20_000, p[1]);
-                expect((r - 20_000) / resolution).toBeCloseTo(10, 3);
-            }
+    it('stands its planned ring off the dome in proportion, so a resize cannot close the gap', () => {
+        // Concentric with the dome and clear of it by a share of its own radius, measured
+        // off 290400's Planned Example (a fit of the ring against the dome gives 1.16).
+        // A fixed screen standoff let the ring graze the arc as soon as the graphic was
+        // drawn large: at 10 px the gap was a tenth of the dome at one size and a fortieth
+        // at four times that. (User's call, 2026-09-05.)
+        for (const radius of [40_000, 160_000]) {
+            for (const r of ringRadii(radius, 40)) expect(r / radius).toBeCloseTo(1.15, 3);
         }
+    });
+
+    it('follows the dome the projection actually produced, rather than drawing a circle round it', () => {
+        // The dome is generated geodesically and Mercator does not carry a geodesic circle
+        // to a circle: at a continental chord it projects a tenth squashed. A true circle
+        // drawn around it reads as a second symbol, so the ring is the dome's own points
+        // pushed outward. (User's call, 2026-09-05.)
+        const squashed = plannedCluster(40_000);
+        const dome = (squashed.geometry as {coordinates: ProjectedPosition[][]}).coordinates[1];
+        // Flatten the arc to 80% in y, which is what the projection does to it up north.
+        dome.forEach(p => { p[1] *= 0.8; });
+
+        const ring = mineClusterPaint()(squashed, context(40))
+            .find(p => p.stroke?.dashPx && p.geometry.type === 'LineString');
+        const path = (ring!.geometry as {coordinates: ProjectedPosition[]}).coordinates;
+
+        // Every dome point has a ring point exactly 1.15 of its own radius out — which a
+        // circle of one radius could not manage on a curve of two.
+        for (const p of dome) {
+            const r = Math.hypot(p[0] - 40_000, p[1]);
+            const want: ProjectedPosition = [40_000 + (p[0] - 40_000) * 1.15, p[1] * 1.15];
+            const nearest = Math.min(...path.map(q => Math.hypot(q[0] - want[0], q[1] - want[1])));
+            expect(nearest).toBeLessThan(r * 1e-6);
+        }
+        // And the ring is closed and symmetric about the chord, so it still reads as a ring.
+        expect(path[0]).toEqual(path[path.length - 1]);
+        const ys = path.map(p => p[1]);
+        expect(Math.max(...ys)).toBeCloseTo(-Math.min(...ys), 6);
+    });
+
+    it('holds the ring a legible distance off a small dome, where the share alone would not', () => {
+        // The floor, and only the floor: two dash patterns a pixel apart read as one
+        // ragged arc. It binds below a 67-pixel dome and nowhere above it.
+        const resolution = 400;
+        const radius = 20_000; // 50 px of dome — inside the floor.
+        for (const r of ringRadii(radius, resolution)) {
+            expect((r - radius) / resolution).toBeCloseTo(10, 3);
+        }
+        // And a dome twice that is governed by the share instead, not by the floor.
+        for (const r of ringRadii(radius * 4, resolution)) expect(r / (radius * 4)).toBeCloseTo(1.15, 3);
     });
 
     it('raises the dome to half the chord, so it is a true semicircle', () => {

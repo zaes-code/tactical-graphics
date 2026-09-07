@@ -32,6 +32,7 @@ import {
     clampEnvelopmentBend,
     envelopmentBendFrom,
     clampTurnBend,
+    turnBendFrom,
     RANGE_FAN_BAND_OFFSET,
     handleContract,
     handleRole,
@@ -40,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {anchorVertex, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, levelRectangleAxis, dropSizePx, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, drawnAnchorFrame, drawnAnchors, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -49,6 +50,8 @@ import {
     resize,
     rotate,
     setBandRange,
+    setExtend,
+    setSectorOpening,
     setBend,
     setMirror,
     setOffset,
@@ -196,6 +199,75 @@ function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
  * differ by 22% at this latitude: rescaling put the end of the line nowhere near the rim
  * the user was dragging. The handle *is* the rim, so use it.
  */
+/** A band's stated range, or undefined when the graphic has no such band. */
+function bandRangeOf(graphic: MapLibreTacticalGraphic, index: number): number | undefined {
+    // 200700 has two named ranges rather than a stack of rings. @see radarRanges
+    const named = radarRanges(graphic.properties);
+    if (named) return named[index];
+    const bands = graphic.properties.rangeFan?.bands;
+    if (!bands || index < 0 || index >= bands.length) return undefined;
+    return [...bands].sort((a, b) => a.range - b.range)[index]?.range;
+}
+
+/**
+ * 200700's two ranges, near first, or nothing when this is not a radar search doctrine.
+ *
+ * The one place the read-out and the change-detector both ask "which distances does this
+ * symbol have", so the two cannot disagree about whether a drag moved one.
+ */
+function radarRanges(props: TacticalGraphicProperties): (number | undefined)[] | undefined {
+    if (props.stopRange === undefined && props.searchAxisAzimuthDeg === undefined) return undefined;
+    return [props.startRange, props.stopRange];
+}
+
+/**
+ * Which band a gesture just changed, or undefined when it changed none.
+ *
+ * Compared by sorted range, because that is the order the rim handles are published in and
+ * the order `setBandRange` indexes into — an unsorted comparison would name a different ring
+ * from the one under the cursor the moment two ranges crossed.
+ */
+function changedBand(before: GraphicDescription, after: GraphicDescription): number | undefined {
+    // 200700 states its two as named fields; the fans carry a sorted stack.
+    const namedBefore = radarRanges(before.properties);
+    const namedAfter = radarRanges(after.properties);
+    if (namedBefore && namedAfter) {
+        for (let i = 0; i < namedAfter.length; i++) if (namedBefore[i] !== namedAfter[i]) return i;
+        return undefined;
+    }
+    const was = [...(before.properties.rangeFan?.bands ?? [])].sort((a, b) => a.range - b.range);
+    const now = [...(after.properties.rangeFan?.bands ?? [])].sort((a, b) => a.range - b.range);
+    if (!was.length || was.length !== now.length) return undefined;
+    for (let i = 0; i < now.length; i++) if (was[i].range !== now[i].range) return i;
+    return undefined;
+}
+
+/**
+ * The word naming the ring, or nothing.
+ *
+ * 200700's two rings are named individually by its plate — a start range and a stop range —
+ * so an unlabelled figure beside one of them does not say which the drag is changing. A
+ * weapon fan's rings are an arbitrary stack with no doctrinal names, so it keeps the bare
+ * figure. The same split `RangeFanGraphicBase.measureCaption` makes.
+ */
+function bandCaption(graphic: MapLibreTacticalGraphic, bandIndex: number | undefined): string | undefined {
+    if (bandIndex === undefined || graphic.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
+    return ['Start', 'Stop'][bandIndex];
+}
+
+/** `reach` metres from `center` along the direction of `towards`, in projected metres. */
+function projectOnto(center: ProjectedPosition, towards: ProjectedPosition, reach: number): ProjectedPosition {
+    const dx = towards[0] - center[0];
+    const dy = towards[1] - center[1];
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) return towards;
+    // `reach` is a ground distance and these are EPSG:3857 metres, inflated by
+    // 1/cos(latitude) — laid out raw the line stops short of the ring it is measuring.
+    // @see MissionTaskGraphicBase.measureEdge, which states the same correction.
+    const projected = projectedLength(reach, latitudeFromMercatorY(center[1]));
+    return [center[0] + (dx / len) * projected, center[1] + (dy / len) * projected] as ProjectedPosition;
+}
+
 function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition): ProjectedPosition | undefined {
     let best: ProjectedPosition | undefined;
     let bestDistance = 0;
@@ -675,8 +747,38 @@ export class MapLibreInteractions {
             return;
         }
 
+        /*
+         * **And the same distinction one step along: a centre-to-edge draw ends on the
+         * second click whatever its base is.** The six anchor graphics store a `LineString`
+         * of derived points, so they fell past the `Point` branch below into the multi-click
+         * path and waited for a double-click — while OpenLayers drew each of them with a
+         * `Circle` interaction that ends itself, and the panel promised "2 points (center →
+         * edge)". Two clicks put nothing on the map at all.
+         *
+         * **It asks `drawsInTwoClicks`, not `drawsCentreToEdge`**, and the difference is not
+         * cosmetic: contain moved to an end-to-end draw on 2026-09-04, left the
+         * centre-to-edge list, and immediately stopped drawing here while OpenLayers went on
+         * drawing it — because what this branch needs to know is *how long the draw runs*,
+         * and that predicate had been answering *what the clicks mean*. @see drawsInTwoClicks
+         */
+        if (drawsInTwoClicks(name)) {
+            if (!this.sketch.length) {
+                this.sketch.push(position);
+                return;
+            }
+            this.finishDraw([this.sketch[0], position]);
+            return;
+        }
+
         const wants = baseGeometryFor(name);
-        if (wants === 'Point') {
+        /*
+         * **A `Point` base does not mean a short draw.** 200700 stores one anchor point and
+         * four numbers, and is placed with three clicks that state them — so it has to fall
+         * through to the multi-click path below, which closes it at `drawClickCount`. Read
+         * off `wants` alone it finished on the second click with the stop range unstated.
+         * @see drawsByRangeClicks, radarSearchFromClicks
+         */
+        if (wants === 'Point' && !drawsByRangeClicks(name)) {
             // **A graphic that can be resized is otherwise sized by the draw**, in two
             // clicks: the first plants the anchor, the second sets how far out it reaches
             // and which way it faces. Finishing on the first click instead dropped these at
@@ -713,7 +815,10 @@ export class MapLibreInteractions {
         // the double-click a free-form line ends on, so waiting for one meant a
         // fields-of-fire could not be drawn here at all: five clicks, no graphic.
         // @see baseVertexCount
-        const wanted = baseVertexCount(name);
+        // **The clicks, which are not always the points.** Ambush stores three anchors and
+        // is drawn with two; comparing the sketch against the stored count waited for a
+        // third click that never comes. @see drawClickCount
+        const wanted = drawClickCount(name) ?? baseVertexCount(name);
         if (wanted !== undefined && this.sketch.length >= wanted) {
             this.finishDraw(this.sketch.slice(0, wanted));
             return;
@@ -777,7 +882,7 @@ export class MapLibreInteractions {
         name: TacticalGraphicName,
         wants: string | undefined,
         vertices: Position[],
-    ): {radius?: number; rotation: number} {
+    ): {radius?: number; length?: number; width?: number; rotation: number} {
         // **A graphic whose size *is* its decoration gets no radius at all.** For the
         // direction-of-attack family and the crossings, `size` means "how big is the
         // chevron", which the renderer derives from the zoom — so a placeholder radius
@@ -829,10 +934,30 @@ export class MapLibreInteractions {
         // builds from geodesically; these are mercator metres, 1.56x too long at 50
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
-        return {
-            radius: this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]),
-            rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
-        };
+        const drawn = this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]);
+        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+        /*
+         * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
+         *
+         * 240802 and the four maritime areas built like it take *two* dimensions off one
+         * anchor point. A drag gives one number, so the other has to be derived — the
+         * OpenLayers holder has always done that, in a private constant of its own, and
+         * this engine had no way to know. The result was a box 2 km long (the generator's
+         * flat default) and as wide as the drag, which renders as a vertical stroke: what
+         * 240802 has looked like here since 3.2.0 and what the three maritime ellipses
+         * inherited on the day they were added.
+         *
+         * `axisAndWidth` is that derivation, stated once for both engines. @see
+         * hasAxisAndWidth, and the OpenLayers twin in `RectangularTargetGraphicBase`.
+         */
+        const axis = axisAndWidth(name, drawn);
+        // `{length, width}`, not `{length, radius}`: a **public** `radius` is the graphic's
+        // size and reaches the generator as `size`, where this family's half-width comes in
+        // as the public `width` halved. Stamping a `radius` here would have set a field the
+        // generator does not read and changed nothing. @see toGraphicOptions
+        if (axis) return {length: axis.length, width: axis.width, rotation};
+
+        return {radius: drawn, rotation};
     }
 
     private readonly onDoubleClick = (event: MapMouseEvent): void => {
@@ -865,12 +990,25 @@ export class MapLibreInteractions {
     private sketchIsComplete(): boolean {
         const name = this.drawing;
         if (!name) return false;
+        /*
+         * **How many clicks the draw asks for, where the library says so.**
+         *
+         * `DRAW_CLICKS` exists to state exactly this, and asking it directly is both simpler
+         * and safer than inferring it. The rule below infers: it normalizes the sketch and
+         * calls the draw finished once the base is *implied* — right for a fields of fire,
+         * whose two points are a whole V because the second leg follows from them, and wrong
+         * for any graphic whose normalizer also **upgrades an older base**. 342201's does:
+         * two points are an old save that lays out as four, so an inferred rule ended its
+         * draw on the second of four clicks.
+         *
+         * Equivalent wherever `drawClickCount` is already defined — ambush 2 of 3, envelop 3
+         * of 4, the hairpins 3 of 4 — since each of those normalizes exactly its click count
+         * up to its vertex count. It only changes the answer where the two disagree, which
+         * is the case this is for. @see drawClickCount, normalizeDrawnBase
+         */
+        const clicks = drawClickCount(name);
+        if (clicks !== undefined) return this.sketch.length >= clicks;
         const wanted = baseVertexCount(name);
-        // Asked of the **normalized** sketch, not the raw one, so a graphic that defines
-        // part of its own base counts as finished once the rest is implied: two points
-        // of a fields-of-fire are a whole V, because the second leg follows from them.
-        // Deriving it here rather than listing the exceptions keeps one source for what
-        // a complete base is. @see normalizeDrawnBase
         return wanted === undefined ? this.sketch.length >= 2 : normalizeDrawnBase(name, this.sketch).length === wanted;
     }
 
@@ -943,21 +1081,24 @@ export class MapLibreInteractions {
      * polygon, one point of a line. The caller shows nothing rather than a half symbol.
      */
     private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
+        const ranged = this.rangeClickDraw(name, vertices);
+        if (ranged) return buildTacticalGraphic(name, ranged.geometry, ranged.properties, resolutionOf(this.map));
+
         const drawn = this.anchorDraw(name, vertices);
-        if (drawn) return buildTacticalGraphic(name, drawn.geometry, drawn.properties, resolutionOf(this.map));
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties), resolutionOf(this.map));
 
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        // A rectangular zone is drawn level and turned afterwards, and this is the draw:
-        // `previewDraw` and the commit both come through here, so the preview cannot
-        // disagree with what the last click produces. Levelling in `normalizeDrawnBase`
-        // instead squared the axis up again on every rebuild, which undid each rotate.
-        // @see levelRectangleAxis
+        // What the user clicked becomes what is stored, for a rectangle too: the drawn
+        // axis is the rectangle's axis as of 2026-09-04, the way the rectangular target has
+        // always behaved. They used to be squared up here and turned by a later gesture.
+        // `previewDraw` and the commit both come through this function, so the preview
+        // cannot disagree with what the last click produces.
         const tidied = wants === 'LineString'
             ? this.minimumFirstSegment(name, normalizeDrawnBase(name, vertices, resolutionOf(this.map)))
             : vertices;
-        const geometry = buildBase(wants, isRectangular(name) ? levelRectangleAxis(tidied) : tidied);
+        const geometry = buildBase(wants, tidied);
         if (!geometry) return undefined;
 
         const properties: TacticalGraphicProperties = {
@@ -968,7 +1109,25 @@ export class MapLibreInteractions {
             ...this.sizeFromDraw(name, wants, vertices),
         };
 
-        return buildTacticalGraphic(name, geometry, properties, resolutionOf(this.map));
+        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties), resolutionOf(this.map));
+    }
+
+    /**
+     * Opens a newly drawn standoff-width graphic with a gap, and leaves every other build
+     * alone.
+     *
+     * **Here rather than in `sizeDefaults`, because only this function means "new".** That
+     * one runs on a restore and a rebuild too, and for the multiple-strike zone an absent
+     * width is not a gap to fill — it is the legacy two-ring description saying its base
+     * carries both rings. Seeding one there made the generator read those points as a
+     * single traced ring and the symbol came back as a self-crossing star, on both engines.
+     * OpenLayers gates the same seed on `shapingFromGesture`; this is that gate here.
+     * @see usesStandoffWidth, LineGraphicBase.standoff
+     */
+    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties): TacticalGraphicProperties {
+        if (!usesStandoffWidth(name) || properties.width !== undefined) return properties;
+        const standoff = defaultStandoffMetres(name, resolutionOf(this.map));
+        return standoff === undefined ? properties : {...properties, width: standoff};
     }
 
     /**
@@ -986,10 +1145,62 @@ export class MapLibreInteractions {
      * same symbol differently. Returns undefined for everything else, and for a first
      * click with nothing to measure yet.
      */
+    /**
+     * 200700's three clicks, read into the four numbers its plate names.
+     *
+     * The sibling of `anchorDraw` for the one graphic whose clicks are **values rather than
+     * anchor points**: the base stays a single `Point` and what the clicks state travels in
+     * the amplifiers. The reading is `radarSearchFromClicks`, which is also what the
+     * OpenLayers controller calls, so the third click cannot mean one thing here and another
+     * there. Returns undefined for every other graphic, and before there is an axis to state.
+     *
+     * **The axis rides `rotation`, not `centerAzimuthDeg`**, for the same reason it does on
+     * the other engine: `centerAzimuthDeg` outranks it, so an axis filed there would pin the
+     * symbol against every later rotate. @see RangeFanGraphicBase.applyRadarSearchFrame
+     */
+    private rangeClickDraw(
+        name: TacticalGraphicName,
+        vertices: Position[],
+    ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        if (!drawsByRangeClicks(name)) return undefined;
+        const frame = radarSearchFromClicks(vertices);
+        if (!frame) return undefined;
+        const stop = frame.ranges[frame.ranges.length - 1];
+        return {
+            geometry: {type: 'Point', coordinates: frame.center},
+            properties: {
+                name,
+                /*
+                 * **The four the plate names, and nothing else.** This wrote a `rotation`, a
+                 * `radius` and a pair of `rangeFan` bands — a range fan's description of a
+                 * different symbol, in which two of 200700's four values did not appear under
+                 * their own names at all. (User's report, 2026-09-05.) The OpenLayers holder
+                 * writes exactly these, so a graphic drawn on either engine saves identically.
+                 * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+                 */
+                searchAxisAzimuthDeg: ((frame.centerAzimuthDeg % 360) + 360) % 360,
+                // Absent until the third click settles which of the two ranges is which,
+                // which is what the generator reads as "half drawn".
+                startRange: frame.ranges.length > 1 ? frame.ranges[0] : undefined,
+                stopRange: stop,
+                stopRelativeBearingDeg: RSD_DEFAULT_RELATIVE_BEARING_DEG,
+            },
+        };
+    }
+
     private anchorDraw(
         name: TacticalGraphicName,
         vertices: Position[],
     ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        /*
+         * **The four placed point by point never come through here.** `anchorDraw` reads a
+         * two-click drag as a centre and a rim; ambush, turn, envelopment and pursuit are
+         * drawn by clicking the plate's own anchor points as of 2026-09-05, so they take
+         * the ordinary vertex path and `normalizeDrawnBase` turns those clicks into the
+         * stored anchors — the same function OpenLayers runs at its own door.
+         * @see drawsByAnchorClicks, anchorsFromClicks
+         */
+        if (drawsByAnchorClicks(name)) return undefined;
         if (!usesDrawnAnchors(name) || !vertices.length) return undefined;
 
         // A drop has one vertex and states its own size, so there is no second point to
@@ -1006,17 +1217,33 @@ export class MapLibreInteractions {
             };
         }
 
-        const center = toMercator([vertices[0][0], vertices[0][1]]);
+        const center0 = toMercator([vertices[0][0], vertices[0][1]]);
         const edge = toMercator([vertices[1][0], vertices[1][1]]);
-        const dx = edge[0] - center[0];
-        const dy = edge[1] - center[1];
+        const dx = edge[0] - center0[0];
+        const dy = edge[1] - center0[1];
         // A real distance, like every other drawn size. @see mercator.ts
         const radius = groundLength(Math.hypot(dx, dy), vertices[0][1]);
         if (!(radius > 0)) return undefined;
 
-        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const size = this.legibleRadius(name, radius, vertices[0][1]);
-        const anchors = drawnAnchors(name, {center: vertices[0], size, rotation});
+        const rotationDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+        /*
+         * **Not every one of the six is drawn centre-to-edge**, and which are is the
+         * library's answer rather than this file's. Contain's plate marks its two clicks as
+         * the ends of the semicircle's opening, so its frame sits half way along the drag at
+         * half the reach, a quarter turn round. @see frameFromDrag
+         */
+        const drag = frameFromDrag(name, radius, rotationDeg);
+        const size = this.legibleRadius(name, drag.size, vertices[0][1]);
+        // Walked in projected metres and converted back, which is the space this file
+        // measured the drag in -- the same two lines OpenLayers' controller runs, because
+        // each renderer walks its own coordinates and only the *rule* is shared.
+        const bearing = (drag.bearingDeg * Math.PI) / 180;
+        const reach = projectedLength(drag.reach, vertices[0][1]);
+        const center = drag.reach
+            ? toLonLat([center0[0] + reach * Math.cos(bearing), center0[1] + reach * Math.sin(bearing)])
+            : vertices[0];
+        const rotation = drag.rotation;
+        const anchors = drawnAnchors(name, {center, size, rotation});
         if (!anchors) return undefined;
 
         return {
@@ -1062,6 +1289,15 @@ export class MapLibreInteractions {
         const selectedId = this.renderer.selection;
         const graphic = grabbed?.graphic ?? (selectedId ? this.renderer.find(selectedId) : undefined);
         if (!graphic) return;
+
+        /*
+         * **Some graphics publish points nobody may drag.** They are stored and shown so the
+         * operator can see the symbol's anchors and a file carries them, but the shape they
+         * describe is not editable point by point — the whole graphic moves, turns and scales
+         * instead. OpenLayers refuses the same grab through the handle feature's `inert`
+         * flag; this is where that fact reaches this engine. @see handlesAreInert
+         */
+        if (grabbed !== undefined && handlesAreInert(graphic.name)) return;
 
         // A handle carrying a role of its own works in **view** mode too: its meaning
         // comes from the handle, not from a mode button, so requiring the user to pick
@@ -1270,6 +1506,15 @@ export class MapLibreInteractions {
         // nobody is changing. The read-out then follows the drag, reporting the radius
         // the user is dragging *to*, which is the whole point of showing it.
         if (after.properties.radius !== before.properties.radius) this.showMeasure(next);
+        /*
+         * **A band drag changes a range, and that is a size too.** The test above is
+         * `radius`, which for a fan is the *outermost* range — so dragging 200700's start
+         * arc changed a number the read-out was not watching and reported nothing at all,
+         * while the stop arc reported. (User's report, 2026-09-05.) OpenLayers arms its own
+         * on the same gesture. @see RangeFanGraphicBase.setBandRange
+         */
+        const moved = changedBand(before, after);
+        if (moved !== undefined) this.showMeasure(next, moved);
     }
 
     /**
@@ -1408,16 +1653,27 @@ export class MapLibreInteractions {
                 // brings its own rule. @see envelopmentBendFrom
                 return byRole(name === TacticalGraphicName.Envelopment
                     ? setBend(before, to, clampEnvelopmentBend, envelopmentBendFrom)
-                    : setBend(before, to, clampTurnBend));
+                    // **Turn reads its own bend too, now that its handle is the curve's
+                    // apex rather than the Bezier's control point.** The offset is half the
+                    // bend's own depth, and the doubling belongs beside the geometry that
+                    // causes it. @see turnBendFrom
+                    : setBend(before, to, clampTurnBend, turnBendFrom));
             case 'mirror':
                 // Side only — no width, no vertex. @see setMirror
                 return byRole(setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis));
             case 'reach':
                 return byRole(setReach(before, to));
+            case 'extend':
+                // The other end of the chord, pinned. @see setExtend
+                return byRole(setExtend(before, to, handleContract(name).extendAnchor));
             case 'band':
                 // The fans put their center first, so the handle index is one ahead of
                 // the band it drives. @see RANGE_FAN_BAND_OFFSET
                 return setBandRange(before, drag.handle - RANGE_FAN_BAND_OFFSET, to);
+            case 'opening':
+                // One grip, one number, both edges — 200700's stop relative bearing.
+                // @see setSectorOpening, RangeFanGraphicBase.setRadarHalfAngle
+                return setSectorOpening(before, to);
             default:
                 return null;
         }
@@ -1434,9 +1690,15 @@ export class MapLibreInteractions {
      * holder reads the same predicate, so a graphic
      * cannot report a radius in one place and not the other.
      */
-    private showMeasure(graphic: MapLibreTacticalGraphic): void {
+    private showMeasure(graphic: MapLibreTacticalGraphic, bandIndex?: number): void {
         if (!showsSizeReadout(graphic.name)) return;
-        const radius = graphic.properties.radius;
+        /*
+         * **The ring being dragged, not the outermost one.** A fan has a range per ring, so
+         * "the size" is not one number: measuring to `radius` while the hand is on the inner
+         * arc reports a figure that is not moving. `MissionTaskGraphicBase.measureStated` is
+         * the same rule on the other engine. @see bandRangeOf
+         */
+        const radius = bandIndex === undefined ? graphic.properties.radius : bandRangeOf(graphic, bandIndex);
         if (!radius || radius <= 0) return;
 
         const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name) as [number, number]);
@@ -1455,8 +1717,12 @@ export class MapLibreInteractions {
          * radius long. The handle is the anchor here, and its own bearing is whatever
          * `rotation` put it at — which is precisely what makes the two engines agree.
          */
-        const edge = rimHandleOf(graphic, center) ?? ([center[0] + radius, center[1]] as ProjectedPosition);
-        this.renderer.setMeasure([center, edge]);
+        const rim = rimHandleOf(graphic, center) ?? ([center[0] + radius, center[1]] as ProjectedPosition);
+        // For a named band the line stops **on that ring**, projected along centre → rim, so
+        // the label — which MapLibre derives from the line's own length — states the range
+        // the hand is changing rather than the outermost one.
+        const edge = bandIndex === undefined ? rim : projectOnto(center, rim, radius);
+        this.renderer.setMeasure([center, edge], bandCaption(graphic, bandIndex));
     }
 
     private readonly onPointerUp = (): void => {
@@ -1474,6 +1740,13 @@ export class MapLibreInteractions {
      * OpenLayers, which inserts on a phase line and an assembly area and refuses on a
      * fields-of-fire; this reproduces that split from the same two library facts rather
      * than from a list. @see baseVertexCount, editStretches
+     *
+     * **A graphic that takes vertices need not take one *here*.** An abatis's route runs
+     * through its own chevron, so the head of the line is inside the symbol and a point
+     * dropped in there breaks the tooth. `acceptsInsertedVertex` is that third fact, asked
+     * of the place the vertex would actually land. Refusing here also takes the hint marker
+     * away with it, so nothing offers an insertion that would be refused.
+     * @see updateVertexHint
      */
     private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
         if (baseVertexCount(graphic.name) !== undefined || editStretches(graphic.name)) return -1;
@@ -1484,7 +1757,15 @@ export class MapLibreInteractions {
         const positions = positionsOf(graphic.base.geometry);
         if (positions.length < 2) return -1;
 
-        return this.nearestSegment(graphic, point)?.index ?? -1;
+        const near = this.nearestSegment(graphic, point);
+        if (!near) return -1;
+
+        const toPixel = (position: Position): [number, number] => {
+            const projected = this.map.project([position[0], position[1]]);
+            return [projected.x, projected.y];
+        };
+        if (!acceptsInsertedVertex(graphic.name, positions.map(toPixel), toPixel(near.position))) return -1;
+        return near.index;
     }
 
     /**

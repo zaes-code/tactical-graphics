@@ -75,8 +75,10 @@ const groundWidth = (controller: any): number => {
 };
 
 describe('rectangular zones carry their width in meters', () => {
-    it('covers all seventeen rectangular zones', () => {
-        expect(RECTANGULAR).toHaveLength(17);
+    it('covers all twenty rectangular zones', () => {
+        // Eighteen since APP-06 240804 joined on 2026-09-03; twenty since the two maritime
+        // ones, 200202 and 200402, joined on 2026-09-04. @see isRectangular
+        expect(RECTANGULAR).toHaveLength(20);
     });
 
     it.each(RECTANGULAR)('%s offers a width field in the dialog', name => {
@@ -202,17 +204,25 @@ describe('the live width read-out', () => {
         expect(controller.graphic.measure.getGeometry()).toBeUndefined();
     });
 
-    it('previews level, so the shape does not jump at the last click', () => {
-        // The holder is also the preview: `LineGraphicController` republishes the base on
-        // every pointer move. It followed the mouse in any direction while the committed
-        // geometry came out level. (User's report, 2026-08-27.)
+    it('keeps the axis it was drawn on, so a rectangle can be turned from the first click', () => {
+        /*
+         * **Reversed on 2026-09-04.** These were squared up on the draw — point 2 kept its
+         * longitude and took point 1's latitude — so a zone came out level however it was
+         * clicked and had to be turned by a separate gesture afterwards (user's call,
+         * 2026-08-27). The rectangular target never behaved that way: its drag sets
+         * `rotation` directly. One family of rectangles took its orientation from the draw
+         * and the other nineteen refused to; all twenty take it now.
+         *
+         * The preview is the same code path — `LineGraphicController` republishes the base
+         * on every pointer move — so the shape still cannot jump at the last click.
+         */
         const controller: any = getController(TacticalGraphicName.FreeFireAreaRectangular, RESOLUTION);
         controller.graphic.drawing = true;
-        controller.setBaseFeature(new Feature({
-            geometry: new LineString([fromLonLat([-0.2, 51.5]), fromLonLat([0.2, 51.62])]),
-        }));
+        const askew = [fromLonLat([-0.2, 51.5]), fromLonLat([0.2, 51.62])];
+        controller.setBaseFeature(new Feature({geometry: new LineString(askew)}));
         const drawn = (controller.graphic.base.getGeometry() as LineString).getCoordinates();
-        expect(drawn[1][1]).toBeCloseTo(drawn[0][1], 6);
+        expect(drawn[1][1]).toBeCloseTo(askew[1][1], 6);
+        expect(drawn[1][1]).not.toBeCloseTo(drawn[0][1], 3);
     });
 
     it('runs across the rectangle, in from one short side and clear of the label', () => {

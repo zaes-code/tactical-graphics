@@ -106,16 +106,38 @@ describe('isRectangular', () => {
          * to be named to pass. @see RectangularTarget
          */
         const flagged = names.filter(isRectangular);
-        const named = names.filter(name => String(name).endsWith('Rectangular') && name !== TacticalGraphicName.TargetAreaRectangular);
+        const named = names.filter(
+            name =>
+                (String(name).endsWith('Rectangular') && name !== TacticalGraphicName.TargetAreaRectangular) ||
+                // The second place the name and the rule part company, and it runs the other
+                // way: APP-06 240804 is built exactly like the family -- "two anchor points
+                // and a width (defined in metres) to define the boundary of the area" -- and
+                // simply is not called `...Rectangular`, because `TargetAreaRectangular` is
+                // already taken by 240802, which is a different symbol.
+                name === TacticalGraphicName.TargetAreaSingleTargetAegis ||
+                /*
+                 * And the third and fourth, for the same reason with a twist of spelling:
+                 * APP-06 200202 and 200402 are "two anchor points and a width, defined in
+                 * metres" word for word, and the standard calls them `Rectangle` rather
+                 * than `Rectangular`. A display name follows the plate, so the exception is
+                 * named here rather than the graphics being renamed to satisfy a suffix.
+                 */
+                name === TacticalGraphicName.DefendedAreaRectangle ||
+                name === TacticalGraphicName.ShipAreaOfInterestRectangle,
+        );
         expect([...flagged].sort()).toEqual([...named].sort());
     });
 
-    it('covers the seventeen the registry draws as boxes', () => {
-        // Seventeen, not eighteen: the rectangular target left this set in 3.2.0. Its plate
-        // takes one anchor point and builds the box from its length, width and attitude, so
-        // it is not "two anchor points and a width" like the rest. @see RectangularTarget
-        expect(names.filter(isRectangular)).toHaveLength(17);
+    it('covers the twenty the registry draws as boxes', () => {
+        // Eighteen since 240804 joined on 2026-09-03, twenty since APP-06 200202 and 200402
+        // joined on 2026-09-04. The *rectangular target* is still not
+        // one of them: it left this set in 3.2.0 because its plate takes one anchor point
+        // and builds the box from its length, width and attitude, rather than "two anchor
+        // points and a width" like the rest. The two are different symbols with similar
+        // names, which is the trap. @see RectangularTarget, TargetAreaSingleTargetAegis
+        expect(names.filter(isRectangular)).toHaveLength(20);
         expect(isRectangular(TacticalGraphicName.TargetAreaRectangular)).toBe(false);
+        expect(isRectangular(TacticalGraphicName.TargetAreaSingleTargetAegis)).toBe(true);
     });
 
     it('does not catch the irregular or circular variants of the same areas', () => {

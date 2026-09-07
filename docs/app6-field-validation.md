@@ -51,7 +51,10 @@ below"*, so its amplifiers have to be read from that table instead.
 
 ## Status
 
-**All six defects are fixed**, on `feature/app6-field-conformance`, targeting 4.0.0. The
+**All six defects are fixed and shipped in 3.2.0** (2026-09-01), on
+`feature/app6-field-conformance`. The branch was written against a 4.0.0 that the release
+was later retargeted away from; read every "4.0.0" below as **3.2.0**, which is the version
+`CHANGELOG.md` files these changes under and the one a consumer upgrades across. The
 decisions that shaped the fixes were the user's, 2026-08-31, and are recorded inline below.
 The sections that follow describe each defect as found; what shipped is noted under it.
 
@@ -114,7 +117,7 @@ plate and is fine.
 
 ### 4. Range fan ranges are kilometres; APP-06 says metres
 
-**Fixed — metres, with no migration.** The user's call: a fan saved before 4.0.0 carries a
+**Fixed — metres, with no migration.** The user's call: a fan saved before 3.2.0 carries a
 kilometre number and will draw a thousand times too small, taken deliberately rather than
 carrying a schema version for one field. The label groups thousands (`5,000`), which answers
 the argument the old comment made for kilometres. Four call sites carried the conversion — the

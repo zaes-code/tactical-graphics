@@ -118,19 +118,26 @@ describe('the two statements of a graphic\'s gestures agree', () => {
         });
         expect(refusing.length).toBeGreaterThan(5);
 
-        // The refusal that remains, named so a change to it is deliberate.
+        // The refusals that remain, named so a change to any of them is deliberate.
         //
         // The security operations used to be the other kind — turned but not scaled,
         // because a badge has no extent to scale. They are drawn from two points as of
-        // 2026-08-29 and take both gestures like any other drawn graphic; the library has
-        // no fixed-size symbol left. Every crossed mission task left that group on
-        // 2026-08-17.
+        // 2026-08-29 and take both gestures like any other drawn graphic.
         for (const name of [TacticalGraphicName.Cover, TacticalGraphicName.Guard, TacticalGraphicName.Screen]) {
             expect(allowedGestures(name).resize).toBe(true);
         }
+        // Scaled but not turned: each covers ground, and each has one doctrinal
+        // orientation. @see RESIZE_ONLY_SYMBOLS
+        // **Roadblock complete left this group on 2026-09-05.** It refused rotation while
+        // it was dropped whole at a fixed 45-degree bearing — a symbol with no orientation
+        // of its own has nothing to turn. Drawn from a centreline it has one, and turns
+        // like the three demolition states it shares a rule with. @see RoadblockComplete
         for (const name of [
             TacticalGraphicName.Airfield,
+            TacticalGraphicName.Defeat,
             TacticalGraphicName.Destroy,
+            TacticalGraphicName.Interdict,
+            TacticalGraphicName.Neutralize,
             TacticalGraphicName.Suppress,
         ]) {
             expect(allowedGestures(name).resize).toBe(true);

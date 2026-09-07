@@ -1,12 +1,11 @@
 import Feature from 'ol/Feature';
 import MultiLineString from 'ol/geom/MultiLineString';
 import Point from 'ol/geom/Point';
-import {TacticalGraphicName, renderTacticalGraphic} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, baseVertexCount, carriesSeparationInBase, editStretches, renderTacticalGraphic} from '@zaes/tactical-graphics';
 import {barSymbolStyleFunc} from './openlayerStyles';
 import {getGraphicFields} from './graphicFieldRegistry';
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
-import {PointDropController} from './controllers/MissionTaskController';
 
 const PLANNED = TacticalGraphicName.ExplosivesPlannedStateOfReadiness;
 const SAFE = TacticalGraphicName.ExplosivesStateOfReadiness1Safe;
@@ -125,81 +124,220 @@ describe('explosives states of readiness', () => {
         }
     });
 
-    // Drawn as a two-point line now, not dropped by one click.
-    it.each(NAMES.map(n => [String(n), n] as const))('%s is drawn as a two-point line', (_l, name) => {
+    /**
+     * **Three placed points as of 2026-09-05**, not two and a derived offset.
+     *
+     * 271201 names them and the third does a job of its own: *"point 3 defines the location
+     * of one side of the symbol"*. It was a width amplifier the offset handle set; it is a
+     * stored vertex now, so the separation is measured from the coordinates and every one of
+     * the three is grabbable. @see carriesSeparationInBase
+     */
+    it.each(NAMES.map(n => [String(n), n] as const))('%s is drawn from three placed points', (_l, name) => {
         const controller: any = getController(name, 20);
         expect(controller).toBeInstanceOf(LineGraphicController);
-        expect(controller.maxPoints).toBe(2);
+        expect(controller.maxPoints).toBe(3);
+        expect(baseVertexCount(name)).toBe(3);
+        // All three move independently: an end lengthens the symbol, the side widens it.
+        expect(controller.dragsVertices).toBe(true);
+        // ...and a drag that grabs none of them does not quietly scale the whole graphic,
+        // which would move the length and the width at once. @see NO_EDIT_STRETCH
+        expect(editStretches(name)).toBe(false);
+    });
+
+    it.each(NAMES.map(n => [String(n), n] as const))('%s keeps no width beside its base', (_l, name) => {
+        // The coordinates carry the separation, so a stamped width would be a second copy.
+        expect(carriesSeparationInBase(name)).toBe(true);
     });
 });
 
-describe('roadblock complete (executed)', () => {
-    const NAME = TacticalGraphicName.RoadblockCompleteExecuted;
-    const geom = (): number[][][] => {
-        const out: any = renderTacticalGraphic({
-            type: 'Feature',
-            geometry: {type: 'Point', coordinates: [0, 0]},
-            properties: {tacticalGraphic: {name: NAME, radius: 1000}},
-        } as any);
-        return out.graphic.geometry.coordinates;
-    };
-
-    it('draws two overlapping crosses - four bars, a leaning pair each way', () => {
-        const bars = geom();
-        expect(bars.length).toBe(4);
-        const lean = (b: number[][]) => Math.sign(b[1][1] - b[0][1]) * Math.sign(b[1][0] - b[0][0]);
-        // Two bars lean one way, two the other. A symbol whose bars all lean together is
-        // two parallel pairs, not a pair of crosses.
-        const leans = bars.map(lean);
-        expect(leans.filter(l => l > 0).length).toBe(2);
-        expect(leans.filter(l => l < 0).length).toBe(2);
-    });
-
-    it('keeps the crosses level and side by side', () => {
-        const bars = geom();
-        // Within each lean, the pair shares its Y range - displaced east/west, not
-        // perpendicular, which would set one cross diagonally above the other.
-        for (const [i, j] of [[0, 1], [2, 3]]) {
-            expect(bars[i][0][1]).toBeCloseTo(bars[j][0][1], 9);
-            expect(bars[i][1][1]).toBeCloseTo(bars[j][1][1], 9);
-            expect(bars[i][0][0]).toBeLessThan(bars[j][0][0]);
-        }
-    });
-
-    // Read off the plate: `1 + SEPARATION_RATIO / cos45`. Too wide and it stops reading as
-    // one overlapping symbol and becomes two separate X's, which is what 0.42 gave.
-    it('matches the plate proportions', () => {
-        const all = geom().flat();
-        const xs = all.map(c => c[0]);
-        const ys = all.map(c => c[1]);
-        const aspect = (Math.max(...xs) - Math.min(...xs)) / (Math.max(...ys) - Math.min(...ys));
-        expect(aspect).toBeGreaterThan(1.2);
-        expect(aspect).toBeLessThan(1.36);
-    });
-
-    it('draws every bar solid', () => {
-        const bars = geom();
-        const styles = barSymbolStyleFunc(NAME)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
-        expect(styles.length).toBe(4);
-        for (const st of styles) expect(st.getStroke().getLineDash()).toBeFalsy();
-    });
-
-    it('is dropped by a single click, resizable, never rotated', () => {
-        const controller: any = getController(NAME, 20);
-        expect(controller).toBeInstanceOf(PointDropController);
-        expect(controller.type).toBe('Point');
-        const size = controller.graphic.size;
-        controller.handleResize(400);
-        expect(controller.graphic.size).not.toBe(size);
-        const rotation = controller.graphic.rotation;
-        controller.handleRotate(45);
-        expect(controller.graphic.rotation).toBe(rotation);
-    });
-
-    it('carries affiliation and nothing else', () => {
-        const fields = getGraphicFields(NAME);
-        expect(fields.hostility).toBe(true);
-        expect(fields.identifier1).toBe(false);
-        expect(fields.status).toBe(false);
-    });
-});
+/*
+ * # 271204 is switched off — see ai/excluded-graphics.md
+ *
+ * Its Draw Rules cell is empty and the row inherits 271201's, so the Template is the only
+ * statement of how three points lay four strokes out — and three readings of it produced
+ * three different pictures. The graphic was commented out rather than shipped as a guess
+ * (user's call, 2026-09-05), so these assertions have no enum member to name.
+ *
+ * **Kept, commented, next to the block they belong to.** They are the measurements the next
+ * attempt has to satisfy, and re-deriving them from the plate is the expensive part. Uncomment
+ * with the enum member.
+ */
+// describe('roadblock complete (executed)', () => {
+//     const NAME = TacticalGraphicName.RoadblockCompleteExecuted;
+//
+//     /**
+//      * A drawn centreline running due east, plus a half-width.
+//      *
+//      * **271204 is drawn, not dropped, as of 2026-09-05.** Its own Draw Rules cell is empty
+//      * and the row inherits 271201's — the centreline-and-width rule that governs the whole
+//      * demolition block — and its Template letters PT 1, PT 2 and PT 3 against the crosses.
+//      * @see RoadblockComplete
+//      */
+//     const geom = (width = 2000): number[][][] => {
+//         const out: any = renderTacticalGraphic({
+//             type: 'Feature',
+//             geometry: {type: 'LineString', coordinates: [[0, 0], [0.09, 0]]},
+//             properties: {tacticalGraphic: {name: NAME, width}},
+//         } as any);
+//         return out.graphic.geometry.coordinates;
+//     };
+//
+//     it('draws two overlapping crosses - four bars, a leaning pair each way', () => {
+//         const bars = geom();
+//         expect(bars.length).toBe(4);
+//         const lean = (b: number[][]) => Math.sign(b[1][1] - b[0][1]) * Math.sign(b[1][0] - b[0][0]);
+//         // Two bars lean one way, two the other. A symbol whose bars all lean together is
+//         // two parallel pairs, not a pair of crosses.
+//         const leans = bars.map(lean);
+//         expect(leans.filter(l => l > 0).length).toBe(2);
+//         expect(leans.filter(l => l < 0).length).toBe(2);
+//     });
+//
+//     it('spans the box points 1, 2 and 3 describe, so every handle lands on the figure', () => {
+//         /*
+//          * **The defect a user reported, stated as a measurement.** The four strokes used to be
+//          * laid out from the *centre* at a fixed 45-degree lean, half a span long each way — so
+//          * the figure's extent had nothing to do with where the three points were. Both end
+//          * grips sat outside the drawing and the side grip floated beside it.
+//          *
+//          * They are the diagonals of the same box the readiness states fill with rails, so the
+//          * symbol reaches points 1 and 2 the way an explosives rail does. (User's call,
+//          * 2026-09-05.) @see ExplosivesReadiness.rails
+//          */
+//         const out: any = renderTacticalGraphic({
+//             type: 'Feature',
+//             geometry: {type: 'LineString', coordinates: [[0, 0], [0.09, 0], [0.045, 0.02]]},
+//             properties: {tacticalGraphic: {name: NAME}},
+//         } as any);
+//         const bars: number[][][] = out.graphic.geometry.coordinates;
+//         const handles: number[][] = out.handles.geometry.coordinates;
+//
+//         const lons = bars.flat().map(c => c[0]);
+//         const lats = bars.flat().map(c => c[1]);
+//         // Points 1 and 2 lie within the figure's own span rather than outside it, and the
+//         // side grip is inside its height. The old layout failed all three.
+//         for (const grip of handles) {
+//             expect(grip[0]).toBeGreaterThanOrEqual(Math.min(...lons) - 1e-9);
+//             expect(grip[0]).toBeLessThanOrEqual(Math.max(...lons) + 1e-9);
+//             expect(grip[1]).toBeGreaterThanOrEqual(Math.min(...lats) - 1e-9);
+//             expect(grip[1]).toBeLessThanOrEqual(Math.max(...lats) + 1e-9);
+//         }
+//         // ...and the box's own corners are reached: the figure is as wide as point 3 says.
+//         expect(Math.max(...lats)).toBeGreaterThan(0.015);
+//     });
+//
+//     it('doubles each arm, so the four strokes are two parallel pairs', () => {
+//         // The plate draws an X with each arm doubled, which is two crossings rather than one.
+//         // A pair whose members are not parallel is a different picture entirely.
+//         const bars = geom();
+//         const bearing = (b: number[][]) => Math.atan2(b[1][1] - b[0][1], b[1][0] - b[0][0]);
+//         expect(bearing(bars[0])).toBeCloseTo(bearing(bars[1]), 3);
+//         expect(bearing(bars[2])).toBeCloseTo(bearing(bars[3]), 3);
+//         /*
+//          * ...and the two pairs are not parallel to each other, or there is no cross at all.
+//          *
+//          * **How wide the X opens is now a consequence of the box, not a constant.** The
+//          * strokes used to lean a fixed 45 degrees off the axis whatever was drawn; as the
+//          * box's diagonals they open with its aspect ratio, so a long thin roadblock draws a
+//          * flat X and a short wide one a steep cross. That follows from taking points 1, 2 and
+//          * 3 seriously as the figure's extent, which is what put the handles back on the
+//          * symbol — so the floor here is "the pairs genuinely cross", not a fixed angle.
+//          */
+//         expect(Math.abs(bearing(bars[0]) - bearing(bars[2]))).toBeGreaterThan(0.1);
+//     });
+//
+//     it('offsets the doubled arm ALONG the axis, because it cannot be done inside the box', () => {
+//         /*
+//          * **Why the doubling moves the whole X rather than sliding one stroke sideways.**
+//          *
+//          * A stroke parallel to a box diagonal keeps *both* ends on the two end edges only
+//          * when it is that diagonal: with the ends at `p1 + a·n` and `p2 - b·n`, staying
+//          * parallel needs `a + b = 2·half`, which inside the box (`a, b <= half`) has the
+//          * single solution `a = b = half`. So the second arm has to be the first X displaced,
+//          * and the displacement runs along the drawn axis. (User's call, 2026-09-05.)
+//          */
+//         const bars = geom();
+//         const mid = (b: number[][]) => [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+//         // The centreline runs due east, so along it is east-west: within each lean the two
+//         // strokes share a latitude and differ in longitude. Across would be the reverse.
+//         for (const [back, front] of [[0, 1], [2, 3]]) {
+//             expect(mid(bars[back])[1]).toBeCloseTo(mid(bars[front])[1], 9);
+//             expect(mid(bars[front])[0]).toBeGreaterThan(mid(bars[back])[0]);
+//         }
+//     });
+//
+//     it('keeps the two crossings on the centreline, symmetric about its middle', () => {
+//         // The figure is centred on the line the operator drew: displacing the X along the
+//         // axis moves the crossings along it and nowhere else, so the symbol cannot drift to
+//         // one side of the road it is laid across.
+//         const bars = geom();
+//         const mid = (b: number[][]) => [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+//         const centres = bars.map(mid);
+//         for (const c of centres) expect(c[1]).toBeCloseTo(0, 9);
+//         const centre = 0.045;
+//         const offsets = centres.map(c => c[0] - centre);
+//         expect(Math.max(...offsets)).toBeCloseTo(-Math.min(...offsets), 9);
+//     });
+//
+//     it('turns with the line it was drawn along', () => {
+//         /*
+//          * The whole point of leaving the point-drop: a roadblock could only ever be laid
+//          * across a road running the default way. Drawn north-east, the symbol goes with it.
+//          */
+//         const out: any = renderTacticalGraphic({
+//             type: 'Feature',
+//             geometry: {type: 'LineString', coordinates: [[0, 0], [0.06, 0.06]]},
+//             properties: {tacticalGraphic: {name: NAME, width: 2000}},
+//         } as any);
+//         const bars: number[][][] = out.graphic.geometry.coordinates;
+//         /*
+//          * Drawn north-east, the doubling runs north-east too: the second X is the first
+//          * displaced **along** the axis. Asserted as a dot product, which is the statement
+//          * itself — an offset square to the axis would put the two crossings either side of
+//          * the road rather than along it.
+//          */
+//         const mid = (b: number[][]) => [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+//         const [a, c] = [mid(bars[0]), mid(bars[1])];
+//         const offset = [c[0] - a[0], c[1] - a[1]];
+//         const axis = [0.06, 0.06];
+//         const along = offset[0] * axis[0] + offset[1] * axis[1];
+//         const across = offset[0] * axis[1] - offset[1] * axis[0];
+//         expect(Math.abs(across)).toBeLessThan(Math.abs(along) * 1e-6);
+//     });
+//
+//     it('spreads the crosses by the width, not by a locked ratio', () => {
+//         // Point 3 sets the separation. It used to be pinned at the plate's own proportion,
+//         // which is now only the default a freshly drawn symbol opens at.
+//         const spread = (bars: number[][][]) => {
+//             // Across the centreline now, so the separation is a distance rather than a
+//             // difference in longitude. @see RoadblockComplete.bars
+//             const mid = (b: number[][]) => [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+//             const [a, c] = [mid(bars[0]), mid(bars[1])];
+//             return Math.hypot(c[0] - a[0], c[1] - a[1]);
+//         };
+//         expect(spread(geom(6000))).toBeGreaterThan(spread(geom(2000)) * 2);
+//     });
+//
+//     it('draws every bar solid', () => {
+//         const bars = geom();
+//         const styles = barSymbolStyleFunc(NAME)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
+//         expect(styles.length).toBe(4);
+//         for (const st of styles) expect(st.getStroke().getLineDash()).toBeFalsy();
+//     });
+//
+//     it('is drawn from three placed points, and turns', () => {
+//         const controller: any = getController(NAME, 20);
+//         expect(controller.maxPoints).toBe(3);
+//         expect(controller.type).toBe('LineString');
+//         expect(baseVertexCount(NAME)).toBe(3);
+//         expect(controller.dragsVertices).toBe(true);
+//         expect(carriesSeparationInBase(NAME)).toBe(true);
+//     });
+//
+//     it('carries affiliation and nothing else', () => {
+//         const fields = getGraphicFields(NAME);
+//         expect(fields.hostility).toBe(true);
+//         expect(fields.identifier1).toBe(false);
+//         expect(fields.status).toBe(false);
+//     });
+// });

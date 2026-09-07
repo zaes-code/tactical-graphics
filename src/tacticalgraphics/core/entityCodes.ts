@@ -116,6 +116,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.Control]:                                     '343200',  // Control
     [TacticalGraphicName.CordonAndKnock]:                              '342600',  // Cordon and Knock
     [TacticalGraphicName.MinefieldDynamicDepiction]:                   '270707',  // Minefield, Dynamic Depiction
+    [TacticalGraphicName.MinedArea]:                                   '270800',  // Mined Area
     [TacticalGraphicName.MinedAreaFenced]:                             '270801',  // Mined Area, Fenced
     [TacticalGraphicName.PsyOpsZoneIrregular]:                         '242701',  // PsyOps Zone, Irregular
     [TacticalGraphicName.PsyOpsZoneRectangular]:                       '242702',  // PsyOps Zone, Rectangular
@@ -193,6 +194,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.FireSupportAreaCircular]:                     '241003',  // Circular
     [TacticalGraphicName.TargetAreaIrregular]:                         '240801',  // Area Target
     [TacticalGraphicName.TargetAreaRectangular]:                       '240802',  // Rectangular Target
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:                 '240804',  // Rectangular Target - Single Target (AEGIS only)
     [TacticalGraphicName.TargetAreaCircular]:                          '240803',  // Circular Target
     [TacticalGraphicName.HighDensityAirspaceControlZone]:              '170900',  // High-Density Airspace Control Zone
     [TacticalGraphicName.RestrictedOperationsZone]:                    '171000',  // Restricted Operations Zone (ROZ)
@@ -233,6 +235,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:           '271201',  // Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:             '271202',  // Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: '271203',  // Explosives, State of Readiness 2 (Armed but Passable)
+    // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]:                   '271204',  // Roadblock Complete (Executed)
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:              '290201',  // Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                      '290202',  // Antitank Ditch Completed
@@ -300,13 +303,39 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                  '242200',  // Weapon/Sensor Range Fan, Sector
     [TacticalGraphicName.LineOfContact]:                               '141100',  // Line of Departure/Line of Contact
     [TacticalGraphicName.AttackByFire]:                                '152000',  // Attack by Fire
+    [TacticalGraphicName.Defeat]:                                      '344300',  // Defeat
     [TacticalGraphicName.Destroy]:                                     '340900',  // Destroy
     [TacticalGraphicName.Exfiltrate]:                                  '343700',  // Exfiltrate
     [TacticalGraphicName.Interdict]:                                   '341400',  // Interdict
     [TacticalGraphicName.Neutralize]:                                  '341600',  // Neutralize
     [TacticalGraphicName.SupportByFire]:                               '152100',  // Support by Fire
     [TacticalGraphicName.Suppress]:                                    '342800',  // Suppress
-    [TacticalGraphicName.FightingPosition]:                            null,
+    [TacticalGraphicName.BearingLine]:                                       '220100',  // Bearing Line
+    [TacticalGraphicName.BearingLineElectronic]:                             '220101',  // Bearing Line, Electronic
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]:                 '220102',  // Bearing Line, Electromagnetic Warfare (EW)
+    [TacticalGraphicName.BearingLineAcoustic]:                               '220103',  // Bearing Line, Acoustic
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]:                      '220104',  // Bearing Line, Acoustic (Ambiguous)
+    [TacticalGraphicName.BearingLineTorpedo]:                                '220105',  // Bearing Line, Torpedo
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]:                '220106',  // Bearing Line, Electro-Optical Intercept
+    [TacticalGraphicName.BearingLineJammer]:                                 '220107',  // Bearing Line, Jammer
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]:                   '220108',  // Bearing Line, Radio Direction Finder (RDF)
+    [TacticalGraphicName.NavigationalRhumbLine]:                             '220109',  // Navigational Rhumb Line
+    // APP-06 §8.10 Table 8-12 -- the maritime control areas, entity group 20.
+    [TacticalGraphicName.LaunchAreaEllipse]:                           '200101',  // Launch Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaEllipse]:                         '200201',  // Defended Area, Ellipse/Circle
+    [TacticalGraphicName.DefendedAreaRectangle]:                       '200202',  // Defended Area, Rectangle
+    [TacticalGraphicName.NoAttackZone]:                                '200300',  // No Attack (NOTACK) Zone
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]:                   '200401',  // Ship Area of Interest, Ellipse/Circle
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]:                 '200402',  // Ship Area of Interest, Rectangle
+    [TacticalGraphicName.ActiveManeuverArea]:                          '200500',  // Active Manoeuvre Area
+    [TacticalGraphicName.CuedAcquisitionDoctrine]:                     '200600',  // Cued Acquisition Doctrine
+    [TacticalGraphicName.RadarSearchDoctrine]:                         '200700',  // Radar Search Doctrine
+    // Entity group 21 is "Maritime Control Points"; this one leaf of it is drawn line
+    // work. @see NavigationalLine
+    [TacticalGraphicName.NavigationalLine]:                            '218400',  // Navigational
+    [TacticalGraphicName.SearchArea]:                                  '152200',  // Search Area/Reconnaissance Area
+    [TacticalGraphicName.MovingConvoy]:                                '330100',  // Moving Convoy
+    [TacticalGraphicName.HaltedConvoy]:                                '330200',  // Halted Convoy
     [TacticalGraphicName.LightLine]:                                   '110200',  // Light Line
     [TacticalGraphicName.LineGeneric]:                                 '110400',  // Line, Generic
     [TacticalGraphicName.HandoverLine]:                                '141800',  // Handover Line (HOL)
