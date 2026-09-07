@@ -86,7 +86,7 @@ export function drawnAnchors(name: TacticalGraphicName, frame: DrawnAnchorFrame)
          * rather than the dropped centre. `size` is the span of a bar. @see roadblockAnchors
          */
         case TacticalGraphicName.RoadblockCompleteExecuted:
-            return roadblockAnchors(center, size);
+            return roadblockAnchors(center, size, rotation);
 
         case TacticalGraphicName.Turn:
         case TacticalGraphicName.TacticalTurn:
