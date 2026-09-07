@@ -747,11 +747,12 @@ export function applyBaseGeometry(
         }
 
         const pts = handler.maxPoints ?? 3; // multi-segment → 3 points (2 segments)
-        // **Drawn in the order the graphic files its points, so every sample still reads
-        // left to right.** Thirty-two graphics store the arrowhead first, and a west-to-east
-        // line handed to one of those puts its head on the *west* end — a sheet of arrows
-        // pointing back the way the standard's own plates draw them coming. @see storedOrder
-        const path = storedOrder(name, lineCoords(cx, cy, pts, LINE_HALF * grow, name)) as Coordinate[];
+        // **The conversion belongs to the layouts this file lays out itself**, and it is
+        // applied inside `lineCoords` for exactly those. Wrapping the result of that call
+        // converted the library's own answer a second time, which reverses a base
+        // `synthesizedBase` already returns in stored order — the eight tip-first members of
+        // that family drew from the wrong end. @see lineCoords
+        const path = lineCoords(cx, cy, pts, LINE_HALF * grow, name);
         /*
          * **The base a draw would have produced, not a hand-laid imitation of one.**
          *
@@ -805,7 +806,20 @@ const BYPASS_POINTS = new Set<TacticalGraphicName>([
  * 2-segment V. Drawn at LINE_HALF, not HALF — see LINE_SCALE.
  */
 function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?: TacticalGraphicName): Coordinate[] {
-    if (pts <= 2) return [[cx - half, cy], [cx + half, cy]];
+    /**
+     * **Drawn in the order the graphic files its points, so every sample still reads left to
+     * right.** Thirty-two graphics store the arrowhead first, and a west-to-east line handed
+     * to one of those puts its head on the *west* end — a sheet of arrows pointing back the
+     * way the standard's own plates draw them coming.
+     *
+     * Applied to the layouts *this function* lays out and to nothing else: a layout that came
+     * from `synthesizedBase` is already in stored order and converting it again reverses it.
+     * @see storedOrder
+     */
+    const filed = (coords: Coordinate[]): Coordinate[] =>
+        (name ? (storedOrder(name, coords) as Coordinate[]) : coords);
+
+    if (pts <= 2) return filed([[cx - half, cy], [cx + half, cy]]);
     /*
      * **Whatever the library says this graphic's points are**, rather than a chain of `if`s
      * over its predicates — which is what stood here, and what drifted from the MapLibre
@@ -818,11 +832,11 @@ function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?
     const stated = name && synthesizedBase(name, [cx, cy], half, pts);
     if (stated) return stated as Coordinate[];
     if (pts === 3) {
-        return [
+        return filed([
             [cx - half, cy + half * 0.2],
             [cx, cy - half * 0.2],
             [cx + half, cy + half * 0.2],
-        ];
+        ]);
     }
     /*
      * **Four or more get four**, not the three-point V truncated.
@@ -836,12 +850,12 @@ function lineCoords(cx: number, cy: number, pts: number, half = LINE_HALF, name?
      * A shallow open quadrilateral, so the two halves of a hairpin symbol read as two
      * distinguishable sides rather than folding onto one line.
      */
-    return [
+    return filed([
         [cx - half, cy + half * 0.45],
         [cx - half * 0.2, cy - half * 0.35],
         [cx + half * 0.2, cy - half * 0.35],
         [cx + half, cy + half * 0.45],
-    ];
+    ]);
 }
 
 /** Closed 5-sided ring (point-up pentagon) inscribed in the cell. */

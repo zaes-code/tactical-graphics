@@ -293,11 +293,21 @@ describe('pursuit is laid out as the cane arrow it is', () => {
      * length, and the third point's distance across it as a share of that run.
      */
     const shapeOf = (name: TacticalGraphicName, stored: number[][]) => {
-        // **Through the generator's own order**, not the stored one. Thirty-two graphics
-        // store their points tip-first and the canes are among them; pursuit is not, so a
-        // positional read compares point 1 of one against point 3 of the other and reports
-        // two identical layouts as different. @see generatorOrder, TIP_FIRST_GRAPHICS
-        const base = generatorOrder(name, stored as Position[]) as number[][];
+        /*
+         * **Read positionally, off the stored base.**
+         *
+         * This used to re-read each base through `generatorOrder` on the grounds that the
+         * canes are tip-first and pursuit is not, so point 1 of one is point 3 of the other.
+         * That was true while the sheets converted `synthesizedBase`'s answer a second time
+         * with `storedOrder` — which reverses it, since the library already returns each
+         * layout in the order the graphic stores its points. Both sheets store that answer
+         * verbatim now, so all eight hold the same three positions and a positional read
+         * compares like with like; normalising again would reverse seven of the eight and
+         * report one layout as two. Measured: the reversed base renders 1.42 wide to its
+         * height where the family renders about 3, with half its ink in the wrong half of
+         * the cell. @see synthesizedBase, and the sample-sheet parity suite
+         */
+        const base = stored;
         const [p1, p2, p3] = base;
         const scale = Math.cos((p1[1] * Math.PI) / 180);
         const run = Math.hypot((p2[0] - p1[0]) * scale, p2[1] - p1[1]);
