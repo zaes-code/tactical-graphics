@@ -1,5 +1,9 @@
 module.exports = {
     root: true,
+    // Build output, not source. `eslint .` walked into `dist/` — 1,047 emitted files
+    // including the `.d.ts` the library publishes — and crashed the unused-imports rule on
+    // a declaration file. Nothing in here is authored, so nothing in here is lintable.
+    ignorePatterns: ['dist/', 'build/', 'node_modules/', 'coverage/'],
     parser: '@typescript-eslint/parser',
     parserOptions: {
         ecmaVersion: 2022,
