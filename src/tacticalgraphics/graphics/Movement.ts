@@ -450,6 +450,16 @@ export class Counterattack extends MovementGraphicBase {
 }
 
 /**
+ * The by-fire bracket's dimensions, as multiples of the arrow's half-width, measured off
+ * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
+ * runs about one, and the head is a third of that.
+ */
+const BY_FIRE_STANDOFF = 0.8;
+const BY_FIRE_SHAFT = 1.05;
+const BY_FIRE_BAR_HALF = 2.0;
+const BY_FIRE_HEAD = 0.3;
+
+/**
  * Counter-attack by fire (APP-06 340700) — the counterattack arrow with the *by fire*
  * bracket standing beyond its tip.
  *
@@ -465,6 +475,30 @@ export class Counterattack extends MovementGraphicBase {
  */
 export class CounterattackByFire extends Counterattack {
     name: string = TacticalGraphicName.CounterattackByFire;
+
+    /**
+     * **The bracket stands inside point 1, not beyond it.**
+     *
+     * 340700's Template letters `PT. 1` on the head of the little by-fire arrow — the
+     * rightmost mark in the symbol — where 340600's, one row above, letters it on the
+     * counterattack arrow's own `>`. The two rows share every word of their Draw Rules, so
+     * the drawing is the only place that distinction is made, and it is made clearly: the
+     * leader passes the bar and lands on the small solid head.
+     *
+     * Inheriting the counterattack's overhang put the operator's own click on the arrow's
+     * point and hung the whole bracket 1.85 half-widths off the end of it &mdash; so point 1
+     * was neither the tip of anything nor the end of the symbol, and a click placed against
+     * an enemy position drew a mark past it. Trimming the body by the bracket's own reach as
+     * well slides the figure back along its axis until the head lands on the click, which is
+     * exactly what the inherited 1.5 does for the arrow alone. (User's report, 2026-09-06,
+     * with the wanted position drawn on a screenshot; confirmed against the plate first.)
+     *
+     * **Stated as the sum, because it is the sum.** Both terms are the ones
+     * `generateGraphics` steps along the axis with, so the head cannot drift off the click
+     * if the bracket is ever redrawn. 340600 keeps the inherited value and is untouched.
+     * @see MovementGraphicBase.tipOverhang
+     */
+    protected tipOverhang: number = 1.5 + BY_FIRE_STANDOFF + BY_FIRE_SHAFT;
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;
@@ -498,13 +532,3 @@ export class CounterattackByFire extends Counterattack {
         ]);
     }
 }
-
-/**
- * The by-fire bracket's dimensions, as multiples of the arrow's half-width, measured off
- * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
- * runs about one, and the head is a third of that.
- */
-const BY_FIRE_STANDOFF = 0.8;
-const BY_FIRE_SHAFT = 1.05;
-const BY_FIRE_BAR_HALF = 2.0;
-const BY_FIRE_HEAD = 0.3;
