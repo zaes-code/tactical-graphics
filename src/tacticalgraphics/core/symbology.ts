@@ -904,6 +904,9 @@ const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
 
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
+    // 271204 never rotates — an X turned is a different mark — and its points do not answer
+    // a drag, so scaling the whole symbol is the only shaping gesture it has.
+    TacticalGraphicName.RoadblockCompleteExecuted,
     // **Roadblock complete left on 2026-09-05.** It refused rotation because it was
     // dropped whole at a fixed 45-degree bearing, so turning it meant turning a symbol
     // that had no orientation of its own. It is drawn from a centreline now, and its
@@ -1167,6 +1170,10 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // inherited rule gives it a centreline, so the draw waits for the second click rather
     // than finishing on the first. It sat here at 100 px — twice the crossed tasks', which
     // was only the number it was specified from rather than a size it landed on.
+    // Twice the crossed tasks', which was only the number these were specified from
+    // rather than the size they landed on. 271204 is dropped on one click and expands to
+    // the three anchor points its plate names. @see roadblockAnchors
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
     // The security operations are **not dropped** as of 2026-08-29: the operator draws one
     // arrow and the other is derived, so there is no one-click size to state. Removing
     // them from here is what tells a renderer to wait for the second point instead of
@@ -1329,6 +1336,9 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * (User's call, 2026-09-06.) @see firePositionAnchors
      */
     [TacticalGraphicName.AttackByFire]: 3,
+    // 271204 is dropped whole on one click and expands to the three points it stores.
+    // @see roadblockAnchors
+    [TacticalGraphicName.RoadblockCompleteExecuted]: 1,
     /*
      * **Named even though it equals its stored count**, which this table usually omits. The
      * reader previews a two-click sketch as four points now, and MapLibre asks the

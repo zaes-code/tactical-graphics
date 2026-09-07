@@ -849,18 +849,25 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      */
     // Excluded — see ai/excluded-graphics.md
     /*
-     * **Three placed points, none of them draggable.**
+     * **One click, three stored points, none of them draggable.**
      *
-     * 271204 stores `[start, end, side]` like the readiness states it shares a generator
-     * with, so a file carries the anchors and the operator can see them — but its own
-     * construction is unsettled, so offering a grip on each would promise a shape the
-     * reading does not yet support. `demolition`'s holder without `enableVertexDragging`:
-     * the points publish, the handle feature is the inert one, and translate, rotate and
-     * resize still act on the whole symbol.
-     * (User's call, 2026-09-07.) @see handlesAreInert, ai/excluded-graphics.md
+     * Dropped whole at a default size exactly as 3.4.0 shipped it — same picture — but the
+     * base it writes is the three anchor points 271204 names rather than the dropped centre.
+     * `writeBase` already does that for a `usesDrawnAnchors` graphic; this entry only has to
+     * be the drop. The points publish as inert: 271204's construction is unsettled, so a grip
+     * on each would promise a shape the reading does not support, and the operator moves and
+     * scales the whole symbol instead. (User's call, 2026-09-07.)
+     * @see roadblockAnchors, handlesAreInert, drawnAnchors
      */
-    [TacticalGraphicName.RoadblockCompleteExecuted]: (name, res, sizing) =>
-        new LineGraphicController(new MovementGraphicBase(name, 20 * sizing, res), 3, name),
+    [TacticalGraphicName.RoadblockCompleteExecuted]: (name, res, sizing) => {
+        const controller = pointDrop(name, res, sizing);
+        // An edit-mode drag resizes it rather than panning the map, which is the only
+        // shaping gesture it has now that its points do not answer one. The library says so
+        // — `editStretches` is true for anything storing vertices — and this is the engine
+        // agreeing. @see editStretches
+        controller.editStretches = true;
+        return controller;
+    },
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),

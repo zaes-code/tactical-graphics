@@ -109,12 +109,21 @@ not be read correctly by 3.4.0.
   271201's centreline-and-width rule and the Template is the only statement of how three
   points lay four strokes out — read three ways in one session, three different pictures.
 
-  That reading is still open, so the symbol is restored with the contract that says what is
-  known without inviting an edit that would have to be redone: it **stores** the three anchor
-  points its family uses, `[start, end, side]`, and **publishes** them so the operator can
-  see where they are — but none answers a drag. Translate, rotate and resize act on the whole
-  graphic. `handlesAreInert(name)` is the new export that says so, and both engines read it:
-  OpenLayers through the handle feature's `inert` flag, MapLibre by refusing the grab.
+  That reading is still open, so **the picture is 3.4.0's exactly** — dropped whole on one
+  click, byte for byte the same four strokes — and what changed is only what gets stored. It
+  used to file the dropped centre alone; it now writes the three anchor points the standard
+  names. Points 1 and 2 are the two extremes of the symbol's own 45-degree axis, the line
+  running *between* the two parallel bars, so their midpoint is the centre and the distance
+  between them is the span; point 3 is one of the crossings. That is enough to rebuild the
+  figure, and it matches the plate reading recorded before the symbol was switched off — *PT
+  3 at a crossing 48.5 px off the PT1–PT2 midpoint* — since that offset is the
+  half-separation.
+
+  **None of the three answers a drag.** `handlesAreInert(name)` is the new export that says
+  so, and both engines read it: OpenLayers routes the whole set to the inert handle feature,
+  MapLibre refuses the grab. Translate, rotate and resize act on the whole graphic, and they
+  pivot on **point 3** — the crossing is what the symbol marks on the ground, so scaling
+  about the centre would slide it off the road it was placed against.
 
   It is a third thing, distinct from the two that existed: `anchorVertex` makes *one* vertex
   of an editable path inert, and `publishesAnchorHandleOnly` is about *how many* handles a

@@ -17,7 +17,7 @@
  * the catalog renders them from a generic line. This test is the guard that was missing.
  */
 
-import {baseVertexCount, drawClickCount, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {baseVertexCount, drawClickCount, dropSizePx, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 
 /** The `maxPoints` a graphic's OpenLayers controller enforces, if it enforces one. */
@@ -47,6 +47,19 @@ describe('the two draw limits agree', () => {
      * @see anchorsFromClicks
      */
     it.each(names)('%s caps its draw the same way in both halves', name => {
+        /*
+         * **A dropped graphic caps by the drop, not by `maxPoints`.** Its OpenLayers draw is a
+         * `Point` interaction, which finishes on the click and has no limit to state — so the
+         * two halves agree by the graphic never reaching the vertex path at all.
+         *
+         * It only became a distinction when 271204 started *storing* three points while still
+         * being dropped on one click: every other dropped graphic has no vertex count either,
+         * so both sides read `undefined` and the rule looked universal. @see dropSizePx
+         */
+        if (dropSizePx(name) !== undefined) {
+            expect(openLayersLimit(name)).toBeUndefined();
+            return;
+        }
         expect(openLayersLimit(name)).toBe(drawClickCount(name) ?? baseVertexCount(name));
     });
 

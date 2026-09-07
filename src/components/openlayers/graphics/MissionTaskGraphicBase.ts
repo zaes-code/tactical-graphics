@@ -1,13 +1,14 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import { anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import {handlesAreInert, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
     DEFENDED_AREA_FILL,
     LAUNCH_AREA_COLOR,
     LAUNCH_AREA_FILL,
+    drawnAnchorFrame,
     drawnAnchors,
     groundLength,
     minimumDrawnRadiusPx,
@@ -392,6 +393,17 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      */
     protected publishHandles(handles: MultiPoint): void {
         const coords = handles.getCoordinates();
+        /*
+         * **Every point inert, for the graphics that publish points nobody may drag.** The
+         * split below is "is this handle on the centre"; for a graphic whose anchors are all
+         * off-centre that would make all of them live. Routing the whole set to the inert
+         * feature is what makes them show without answering a drag. @see handlesAreInert
+         */
+        if (handlesAreInert(this.name)) {
+            this.handles.setGeometry(new MultiPoint([]));
+            this.centerHandle.setGeometry(new MultiPoint(coords));
+            return;
+        }
         const center = this.centerCoordinate();
         if (!center) {
             this.handles.setGeometry(handles);
@@ -778,6 +790,21 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * ratio, an arrow reach — that only the holder has.
      */
     protected anchorPoints(): Position[] {
+        /*
+         * **The library's own layout, where it states one for this graphic.** The overrides
+         * below already delegate to `drawnAnchors`; asking it here as well means a graphic
+         * whose layout is stated portably needs no override at all — which is how 271204
+         * writes the three points it stores from a one-click drop, without a holder of its
+         * own. Falls through to the generic run-with-an-offset for everything else.
+         * @see drawnAnchors, roadblockAnchors
+         */
+        const stated = drawnAnchors(this.name, {
+            center: toLonLat(this.center) as Position,
+            size: this.size,
+            rotation: this.rotation,
+        });
+        if (stated) return stated;
+
         const {offset, side} = this.anchorReach();
         return anchorsFromFrame(toLonLat(this.center) as Position, this.size, this.rotation, offset, side);
     }
@@ -788,6 +815,20 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * leave the holder alone rather than snap it to a degenerate shape.
      */
     protected adoptAnchors(coords: Position[]): boolean {
+        /*
+         * **The library's own reader, where it has one — the exact inverse of what
+         * `anchorPoints` wrote.** `frameFromAnchors` reads the generic run-with-an-offset
+         * layout, so a graphic whose points mean something else came back at the wrong size:
+         * 271204's are the two ends of its 45-degree axis plus a crossing, and read as a run
+         * they gave a span a fifth of the one that was saved. The two halves have to be
+         * inverses or a restore resizes the symbol. @see drawnAnchorFrame, roadblockFrame
+         */
+        const stated = drawnAnchorFrame(this.name, coords);
+        if (stated) {
+            this.adoptFrame({center: stated.center, size: stated.size, angle: ((stated.rotation ?? 0) * Math.PI) / 180, side: 1});
+            return true;
+        }
+
         const frame = frameFromAnchors(coords);
         if (!frame) return false;
         this.adoptFrame(frame);
