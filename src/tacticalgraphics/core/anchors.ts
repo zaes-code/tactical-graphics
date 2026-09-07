@@ -804,6 +804,71 @@ export function hairpinFourthPoint(p1: Position, p2: Position, p3: Position): Po
 }
 
 /**
+ * How far a half-drawn 152100 previews its arrows, as a share of the back line it has.
+ *
+ * A preview convention and nothing else: the plate gives the arrow tips their own anchor
+ * points, so the third and fourth clicks state this outright and nothing here survives them.
+ * Two thirds keeps the figure recognisably the plate's — arrows a little shorter than the
+ * bar they rise from — without the preview claiming a reach the operator has not chosen.
+ * @see supportByFireAnchors
+ */
+export const SUPPORT_BY_FIRE_PREVIEW_REACH = 2 / 3;
+
+/**
+ * 152100 support by fire's four points, from however many clicks have been placed.
+ *
+ * > This symbol requires four anchor points. **Points 1 and 2 define the endpoints of the
+ * > straight line on the back side of the symbol. Points 3 and 4 define the tips of the
+ * > arrowheads.** […] The rear of the arrows should connect to points 1 and 2.
+ *
+ * So the operator places the firing position's back line and then each limit of coverage, and
+ * a preview between those clicks has to be **the symbol they are drawing** rather than a
+ * differently-shaped stand-in. It was the stand-in: below four points the generator fell back
+ * to the pre-2026-09-06 description — a shaft with the bar derived as a ratio of it — which
+ * reads the placed points as something else entirely, so the half-drawn figure neither
+ * matched the clicks nor followed the cursor. (User's report, 2026-09-06: "the drawing
+ * preview needs to follow the correct points/handles".)
+ *
+ * What each count means:
+ *
+ * - **Four or more** — every point is placed; the first four are returned untouched, so the
+ *   reader is idempotent and an edit cannot walk the symbol.
+ * - **Three** — the back line and one tip. The fourth is derived by giving point 2 the same
+ *   reach and bearing off itself that point 3 has off point 1, so the two arrows stay a pair
+ *   while the operator is still choosing the first one. The fourth click replaces it.
+ * - **Two** — the back line alone. Both tips are previewed square off their own ends, on the
+ *   side the Template draws them: **left of point 1 → point 2**, which is where its arrows
+ *   rise from a bar lettered `PT 1` on the left and `PT 2` on the right. Nothing in the Draw
+ *   Rules fixes that side — *"orientation is determined by the anchor points"* — so it is the
+ *   Template's default and the third click is what actually decides.
+ * - **Fewer** — `undefined`. One point is a draw that has only just started; it has no back
+ *   line yet, and a symbol built on a zero-length one is a degenerate shape, not a preview.
+ *
+ * Geodesic throughout, like `hairpinFourthPoint`: displacements travel as a distance and a
+ * bearing rather than as a coordinate difference, which would stretch by `1 / cos(latitude)`.
+ */
+export function supportByFireAnchors(clicks: Position[] | undefined): Position[] | undefined {
+    if (!clicks || clicks.length < 2) return undefined;
+    if (clicks.length >= 4) return clicks.slice(0, 4);
+
+    const [one, two] = clicks;
+    const back = meters(one, two);
+    if (!(back > 0)) return undefined;
+
+    if (clicks.length === 3) {
+        const three = clicks[2];
+        return [one, two, three, hairpinFourthPoint(three, one, two)];
+    }
+
+    // Square off each end, to the left of point 1 → point 2 — the Template's own side.
+    const across = turf.bearing(turf.point(one), turf.point(two)) - 90;
+    const reach = back * SUPPORT_BY_FIRE_PREVIEW_REACH;
+    const out = (from: Position) =>
+        turf.destination(turf.point(from), reach, across, {units: 'meters'}).geometry.coordinates as Position;
+    return [one, two, out(one), out(two)];
+}
+
+/**
  * The hairpin's four canonical points from the three that carry a decision.
  *
  * Two readings happen here, and both are the reading the generator was going to perform

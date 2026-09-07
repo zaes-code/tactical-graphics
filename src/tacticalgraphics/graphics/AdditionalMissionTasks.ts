@@ -3,7 +3,7 @@ import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import * as turf from '../core/turf';
-import {squareOntoBisector} from '../core/anchors';
+import {squareOntoBisector, supportByFireAnchors} from '../core/anchors';
 
 /**
  * The bar half-height of a fire-position symbol, as a fraction of the shaft the
@@ -241,20 +241,41 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
         }
         if (this.name === TacticalGraphicName.SupportByFire) {
             const coords = base.geometry.coordinates;
-            // Four placed points as of 2026-09-06. A base saved before that describes a shaft
-            // and nothing else, and the ratio-built symbol is what it still draws as.
-            if (coords.length >= 4) return this.asMultiLineStringFeature(supportByFireFromAnchors(coords));
+            /*
+             * **Through the resolver, so a half-drawn symbol is the symbol being drawn.**
+             *
+             * This used to take the anchor-driven branch only at four points and fall back to
+             * the pre-2026-09-06 description below — a shaft with the bar sized as a ratio of
+             * it — for anything shorter. That reading takes the placed points to mean
+             * something else, so between the second and fourth clicks the preview was a
+             * differently-shaped figure that neither matched the clicks nor followed the
+             * cursor. @see supportByFireAnchors
+             */
+            const points = supportByFireAnchors(coords);
+            if (points) return this.asMultiLineStringFeature(supportByFireFromAnchors(points));
+            // A base saved before the conversion describes a shaft and nothing else, and the
+            // ratio-built symbol is what it still draws as. One click lands here too, and a
+            // symbol on a zero-length back line is what it has to draw.
             return geometryService.getSupportByFireSymbol(coords, this.barHalf(base));
         }
         return geometryService.getBlockArrow(base, opts.size);
     }
 
     generateHandles(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
-        if (this.name === TacticalGraphicName.SupportByFire && base.geometry.coordinates.length >= 4) {
-            // `[point 1, point 2, point 3, point 4]` — the bar's two ends and both arrow tips,
-            // every one placed. There is no width to drag any more: the bar was a ratio of the
-            // shaft and it is two anchor points now. @see handleContract
-            return this.asMultiPointFeature(base.geometry.coordinates.slice(0, 4));
+        if (this.name === TacticalGraphicName.SupportByFire) {
+            /*
+             * `[point 1, point 2, point 3, point 4]` — the bar's two ends and both arrow tips,
+             * every one placed. There is no width to drag any more: the bar was a ratio of the
+             * shaft and it is two anchor points now. @see handleContract
+             *
+             * **Read through the same resolver the drawing uses**, so a half-drawn base
+             * publishes a grip on the point the operator is placing. Without it the fallback
+             * below answered `[coords[0], coords[0], coords[last]]` for every count under
+             * four, which piled three grips on point 1 and gave the point being placed none.
+             * @see supportByFireAnchors
+             */
+            const points = supportByFireAnchors(base.geometry.coordinates);
+            if (points) return this.asMultiPointFeature(points);
         }
         if (this.name === TacticalGraphicName.AttackByFire) {
             /*

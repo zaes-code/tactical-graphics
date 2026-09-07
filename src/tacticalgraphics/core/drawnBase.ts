@@ -38,6 +38,7 @@ import {
     hairpinAnchors,
     parallelRailAnchors,
     RAIL_PREVIEW_GAP_PX,
+    supportByFireAnchors,
     runAndArcFromAnchors,
 } from './anchors';
 import {securityOperationAnchors} from '../graphics/SecurityOperation';
@@ -256,8 +257,33 @@ export function synthesizedBase(name: TacticalGraphicName, center: Position, hal
     // Its bar sits under the far one, which is the opposite side from every other graphic
     // `frontEdgeBase` serves. @see railCrossingBase
     if (drawsAsRailCrossing(name)) return railCrossingBase(center, half, points);
+    // Its two arrows stand square off their own ends of the back line, on the other side.
+    // @see supportByFireBase
+    if (name === TacticalGraphicName.SupportByFire) return supportByFireBase(center, half);
     if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5);
     return undefined;
+}
+
+/**
+ * The base 152100 support by fire expects, for anything that has to synthesise one.
+ *
+ * `frontEdgeBase`'s four-point form is the wrong figure for it twice over. It insets the far
+ * pair to three quarters of the run, so the two arrows lean inward where the plate says "the
+ * rear of the arrows should connect to points 1 and 2" and letters `PT 3` directly above
+ * `PT 1`; and it puts them south of the edge, where the Template draws both arrows rising from
+ * a bar lettered `PT 1` on the left and `PT 2` on the right — the **left** of point 1 → point
+ * 2. So the sheet drew the mirror of what the tool previews, with its arrows splayed.
+ *
+ * Neither side is wrong as a *symbol* — "orientation is determined by the anchor points" — but
+ * a catalogue picture that disagrees with the Template and with the drawing default is a
+ * picture of nothing anyone would draw. @see supportByFireAnchors, railCrossingBase
+ */
+export function supportByFireBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    // Shorter than the reach a two-click preview invents, because a sample has a cell to sit
+    // in; the shape is the same figure either way, and the two tips are placed points in both.
+    const across = half * 0.55;
+    return [[cx - half, cy], [cx + half, cy], [cx - half, cy + across], [cx + half, cy + across]];
 }
 
 /**
@@ -698,6 +724,18 @@ function anchorsFromClicks(
          */
         case TacticalGraphicName.AttackByFire:
             return firePositionAnchors(clicks);
+
+        /*
+         * **152100 — four placed points: the back line's two ends, then each arrow's tip.**
+         *
+         * "Points 1 and 2 define the endpoints of the straight line on the back side of the
+         * symbol. Points 3 and 4 define the tips of the arrowheads." Every one is a decision
+         * — the two tips are the limits of coverage the firing position supports — so none is
+         * derived once they are placed, and the reader's whole job is the half-drawn cases.
+         * @see supportByFireAnchors
+         */
+        case TacticalGraphicName.SupportByFire:
+            return supportByFireAnchors(clicks);
 
         /*
          * **The two-rail crossings: one rail placed end to end, the other set across it.**

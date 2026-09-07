@@ -127,6 +127,8 @@ const {
     carriesSeparationInBase,
     frontEdgeBase,
     storedOrder,
+    synthesizedBase,
+    drawsTipFirst,
     getDisplayName,
     GRAPHIC_CATEGORIES,
     isRectangular,
@@ -436,6 +438,31 @@ function makeBase(name) {
      * Fields of fire and the search area are not in it and keep the arc, which is right: their
      * points really do describe a vee.
      */
+    /*
+     * **The library's own layout, where it states one.** `synthesizedBase` is the single
+     * answer both sample sheets ask; this file used to carry a *third* copy of the chain of
+     * predicates behind it, which is how a clause added to one synthesiser goes missing from
+     * another — §19's defect, and the reason pursuit stayed a shallow V on one sheet after
+     * the other was fixed.
+     *
+     * Ten graphics have a dedicated layout this file could not express at all: the five
+     * two-rail crossings, whose bars it drew on the mirror side; 152000 attack by fire, whose
+     * point 1 is an arrowhead tip and was being drawn as an edge end, collapsing the symbol;
+     * and 152100 support by fire, whose arrows it splayed inward and put on the wrong side.
+     *
+     * **Restricted to the graphics that are not tip-first**, which is exactly where the two
+     * synthesisers agree about ordering. For the eight cane arrows they do not: this file
+     * builds rear-to-tip and converts with `storedOrder`, as the convention says a catalog
+     * should, and `synthesizedBase` returns its layout unconverted. Both surfaces are drawn
+     * from those and both have been checked by eye, so the difference is recorded as an open
+     * question rather than settled by guessing here.
+     * @see ai/current-task.md, synthesizedBase, storedOrder
+     */
+    const stated = synthesizedBase && !(drawsTipFirst && drawsTipFirst(name))
+        ? synthesizedBase(name, [LON, LAT], D * 1.4, n)
+        : undefined;
+    if (stated) return {type: 'LineString', coordinates: stated};
+
     if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
         const anchors = frontEdgeBase([LON, LAT], D * 1.4, n, acrossPointAtEnd && acrossPointAtEnd(name) ? 1 : 0.5);
         return {type: 'LineString', coordinates: storedOrder ? storedOrder(name, anchors) : anchors};

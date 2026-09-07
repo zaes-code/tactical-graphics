@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, drawsTipFirst, editStretches, normalizeDrawnBase, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, drawsTipFirst, editStretches, normalizeDrawnBase, usesCornerAnchors} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -446,10 +446,19 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * assigning the method here rather than always declaring it is what lets the manager
      * route on presence and leave every other line graphic exactly as it was.
      */
-    enableVertexDragging(minimumVertices = 2, anchorVertex?: number): this {
+    enableVertexDragging(minimumVertices = 2): this {
         this.dragsVertices = true;
         this.minimumVertices = minimumVertices;
-        this.anchorVertex = anchorVertex;
+        /*
+         * **Which vertex is inert is the library's answer, not a number passed in here.**
+         *
+         * It used to be a third argument, and ten registry entries supplied one while the
+         * portable table listed four names — so seven graphics refused to drag a vertex on
+         * this engine and dragged it on MapLibre, which reads only the table, and 341900
+         * did the reverse. Reading it here makes the two engines agree by construction
+         * rather than by assertion. @see anchorVertex
+         */
+        this.anchorVertex = this.name === undefined ? undefined : anchorVertex(this.name);
         /*
          * **Both ends get a grip once both ends can be dragged.**
          *
