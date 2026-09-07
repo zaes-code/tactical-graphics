@@ -7,7 +7,9 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, drawsTipFirst, editStretches} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, drawsTipFirst, editStretches, normalizeDrawnBase, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
 
 export interface LineGraphic extends TacticalGraphic {
@@ -32,6 +34,38 @@ export interface LineGraphic extends TacticalGraphic {
  * 3857 → 4326 → 3857 round trip, which lands far inside that.
  */
 export const SAME_POINT_EPSILON_M = 1e-3;
+
+/**
+ * A dragged base put back through the library's own reading of its points.
+ *
+ * **A vertex drag authors a base, so it comes in by the same door a draw does.** MapLibre
+ * has always run `normalizeDrawnBase` on every *build* — draw, restore, import, and after
+ * every gesture — while this engine ran it on `drawend` and on restore only. So a point the
+ * library projects onto the symbol stayed projected until the operator touched it, and then
+ * kept whatever the cursor left behind: drag an obstacle bypass's rear grip sideways and it
+ * walked off the middle of the rear bar, where APP-06 270601's PT.3 leader puts it, while
+ * the same drag on the other engine held it there. Measured on the running app, 2026-09-06:
+ * 1,454,816 m of along-bar drift here against 0 on MapLibre, for one 150 px drag.
+ *
+ * The same asymmetry reaches every graphic whose third point is a projection — the bracket
+ * tasks, block and disrupt, the cane arrows, the demolition block, the infiltration lane —
+ * so it is fixed for the family rather than for the one that was reported.
+ *
+ * **Through 4326 and back, because the library speaks degrees.** These are projected metres;
+ * handed metres, the normalizer's distance and bearing guards fail and it returns the path
+ * untouched — which looks exactly like a base that needed no tidying. The manager's
+ * `normalizeDrawnGeometry` and the sample sweep convert for the same reason.
+ *
+ * **No resolution**, which is deliberate and is what MapLibre passes on a build: the one
+ * rule that reads one — the S pair's pixel-range clamp on point 2 — belongs to the draw,
+ * and re-imposing it on every pointer move would fight the drag. A graphic the library has
+ * nothing to say about comes back exactly as it arrived.
+ */
+function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Coordinate[] {
+    if (!name || coords.length < 2) return coords;
+    const settled = normalizeDrawnBase(name, coords.map(c => toLonLat(c)) as Position[]);
+    return settled.map(c => fromLonLat(c as Coordinate));
+}
 
 /**
  * The path handles a one-segment graphic should actually show — every one except
@@ -197,10 +231,36 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     getCenter() {
-        // The pivot end, which is p0 for a plain line and the last vertex for a graphic
-        // whose points are stored tip-first. @see pivotCoordinate
         const coords = this.graphic.base.getGeometry()!.getCoordinates();
-        return pivotCoordinate(this.resolvedName(), coords) ?? coords[0];
+        const name = this.resolvedName();
+
+        /*
+         * **A corner-anchored symbol turns and scales about the middle of its two corners.**
+         *
+         * Read from the library rather than restated, because MapLibre reads the same rule
+         * out of `rotationAnchor` and a pivot stated twice is a pivot that drifts — a
+         * fields-of-fire once rotated about its middle on one engine and its left leg on
+         * the other, from the same drag. @see usesCornerAnchors
+         *
+         * A plain average is right here and a Mercator midpoint is right in the library,
+         * because these coordinates are **already** projected metres. The two agree by
+         * construction; that is the point of doing it in the projected frame there.
+         *
+         * **`pivotCoordinate` is deliberately left alone.** Its other job is telling
+         * `visiblePathHandles` which handle sits on the pivot and is therefore redundant,
+         * and a two-vertex graphic hides one that way. Whether both corners should be
+         * grabbable is a real question and a separate one — how many handles a graphic
+         * publishes is not the same switch as what a gesture turns about.
+         */
+        if (usesCornerAnchors(name) && coords.length >= 2) {
+            const a = coords[0];
+            const b = coords[coords.length - 1];
+            return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as Coordinate;
+        }
+
+        // Otherwise the pivot end, which is p0 for a plain line and the last vertex for a
+        // graphic whose points are stored tip-first. @see pivotCoordinate
+        return pivotCoordinate(name, coords) ?? coords[0];
     }
 
     getBaseGeometry(): number[] | number[][] | number[][][] {
@@ -386,10 +446,37 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * assigning the method here rather than always declaring it is what lets the manager
      * route on presence and leave every other line graphic exactly as it was.
      */
-    enableVertexDragging(minimumVertices = 2, anchorVertex?: number): this {
+    enableVertexDragging(minimumVertices = 2): this {
         this.dragsVertices = true;
         this.minimumVertices = minimumVertices;
-        this.anchorVertex = anchorVertex;
+        /*
+         * **Which vertex is inert is the library's answer, not a number passed in here.**
+         *
+         * It used to be a third argument, and ten registry entries supplied one while the
+         * portable table listed four names — so seven graphics refused to drag a vertex on
+         * this engine and dragged it on MapLibre, which reads only the table, and 341900
+         * did the reverse. Reading it here makes the two engines agree by construction
+         * rather than by assertion. @see anchorVertex
+         */
+        this.anchorVertex = this.name === undefined ? undefined : anchorVertex(this.name);
+        /*
+         * **Both ends get a grip once both ends can be dragged.**
+         *
+         * The constructor sets `hidesStartHandle` for any two-point line — "two vertices is
+         * one segment: show only the handle on the far end" — which is right while the only
+         * gesture is a stretch anchored on the near end, because the near handle would then
+         * do nothing. It is wrong the moment the graphic drags vertices: the near end is a
+         * point the user can move, and a point you can move needs something to grab.
+         *
+         * MapLibre publishes both and has all along, so this was a **cross-engine
+         * difference on every `vertexLine(2, …)` graphic** — the convoys, the navigational
+         * line, `Fix`, the follow tasks. Reported on the convoys: *"maplibre has two red
+         * handles (correct) and openlayers has only 1"* (user, 2026-09-04).
+         *
+         * Cleared here rather than in the constructor because this is the builder that
+         * decides: a two-point line that does *not* drag vertices keeps the single handle.
+         */
+        this.graphic.hidesStartHandle = false;
         this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
             const geom = this.graphic.base.getGeometry();
             if (!geom) return;
@@ -405,7 +492,7 @@ export class LineGraphicController implements TacticalGraphicHandler {
             const moved = coords.map((c, i) =>
                 isAnchor ? [c[0] + dx, c[1] + dy] : i === index ? [coordinate[0], coordinate[1]] : c,
             );
-            const next = new Feature(new LineString(moved));
+            const next = new Feature(new LineString(settle(this.resolvedName(), moved)));
             // Dragging a vertex *is* authoring the shape, so the floors apply here.
             this.shapeFromGesture(true);
             try {

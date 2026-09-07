@@ -10,6 +10,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {paintFilledRings} from '../core/paint';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
 import {
     CAP_HEIGHT_FRACTION,
@@ -192,7 +193,36 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
     };
 }
 
-/** The one-letter label of a crossed mission task, at its constant scale. */
+/**
+ * APP-06 344300 defeat — the four converging arrows, filled.
+ *
+ * **Filled and not also stroked.** A stroke straddles the edge it draws, so it would
+ * inflate every arrow by half a line width all round and blunt the tip the shape is read
+ * by. The same rule the obstacle bypasses' heads follow. @see solidArrowHead
+ *
+ * The shape is all in the geometry — this walks the rings the generator built and fills
+ * them in the graphic's own colour, so a hostile defeat comes out red like the rest of its
+ * line work. @see Defeat
+ */
+export function defeatPaint(): MissionTaskPaint {
+    return feature => {
+        const rings = paintFilledRings(feature.geometry);
+        if (!rings.length) return [];
+        return [{
+            geometry: {type: 'MultiPolygon', coordinates: rings},
+            fill: {color: lineColorOf(feature)},
+        }];
+    };
+}
+
+/**
+ * The one-letter label of a crossed mission task, at its constant scale.
+ *
+ * Defeat borrows it. Its `D` sits in a gap the *generator* leaves rather than one this
+ * layer cuts, but the letter itself is sized by the same rule — capped at the drop size
+ * going up, tracking the symbol going down — and a second rule for one graphic is how two
+ * `D`s the same size on screen would stop being the same size. @see defeatPaint
+ */
 export function crossedMissionTaskLabelPaint(name: TacticalGraphicName): MissionTaskPaint {
     const label = getLabel(name);
     return (feature, context) => {

@@ -1,10 +1,12 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
 import * as turf from './turf';
-import {Feature, MultiLineString, Position} from 'geojson';
-import {anchorsForBow} from './anchors';
+import {Feature, MultiLineString, MultiPoint, Position} from 'geojson';
+import {anchorsForBow, anchorsForRunAndArc} from './anchors';
+import {ENVELOPMENT_MIN_BEND, envelopmentBendFrom} from '../graphics/FormsOfManeuver';
 import {TURN_DEFAULT_BEND} from '../graphics/Turn';
 import {
+    baseGeometryFor,
     isTacticalGraphicFeature,
     listTacticalGraphicNames,
     readTacticalGraphicProperties,
@@ -12,6 +14,7 @@ import {
     TacticalGraphicError,
     toFeatureCollection,
 } from './render';
+import {allowedGestures, publishesAnchorHandleOnly} from './symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 
 const axisFeature = (): Feature => ({
@@ -199,17 +202,58 @@ describe('crossed mission tasks', () => {
     ];
 
     /**
-     * All four, as of 2026-08-17. They were fixed-size badges pinned to a constant 100 px,
-     * so the centre was the only handle worth publishing — an edge handle would have
-     * offered a dimension that could not change. They now cover ground and scale with it.
+     * **One handle, at the centre**, since 2026-09-03.
+     *
+     * Each of these plates reads "This symbol requires one anchor point. The centre point
+     * defines the centre of the symbol", and one anchor point is one handle. The centre is
+     * what the operator grabs and the only thing there is to grab.
+     *
+     * It went the other way twice, and both readings had something right. Before
+     * 2026-08-17 they were fixed-size badges pinned to a constant 100 px, so a stored size
+     * was divided straight back out and they did not scale with the ground — a real defect,
+     * fixed by giving them a real size. But the fix also gave them an edge handle, and
+     * `publishHandles` promotes anything off-centre to the live red grip and demotes the
+     * centre to a grey inert dot — so the grab point ended up beside a symbol described by
+     * its middle. @see publishesAnchorHandleOnly
      */
-    it.each(CROSSED)('%s publishes [edge, center], so the edge can be dragged', name => {
+    it.each([...CROSSED, TacticalGraphicName.Defeat])('%s publishes the centre alone', name => {
         const {handles} = renderTacticalGraphic(pointTask(name));
         const coords = (handles.geometry as any).coordinates;
-        expect(coords).toHaveLength(2);
-        // Edge first — the order the controllers depend on. The centre is the anchor.
-        expect(coords[1]).toEqual([-77.0, 38.9]);
-        expect(coords[0]).not.toEqual([-77.0, 38.9]);
+        expect(coords).toEqual([[-77.0, 38.9]]);
+    });
+
+    /**
+     * **And they still resize**, which is the other half and a separate fact.
+     *
+     * The two were one switch — `generateHandles` read `allowedGestures().resize` — so the
+     * only way to move the handle to the centre was to take the gesture away. They are
+     * independent now, and this pins the independence: the selection box's resize button
+     * comes from `allowedGestures`, and the drag runs through `beginGesture` rather than
+     * through a handle, so a symbol can offer the gesture and publish one grab point.
+     * Collapse them again and one of these two assertions fails.
+     */
+    it.each([...CROSSED, TacticalGraphicName.Defeat])('%s still offers move and resize, and refuses rotate', name => {
+        expect(allowedGestures(name)).toEqual({translate: true, rotate: false, resize: true, modify: false});
+        expect(publishesAnchorHandleOnly(name)).toBe(true);
+    });
+
+    /**
+     * The size is still real, which is the half of the 2026-08-17 change that stays.
+     *
+     * Losing the drag must not put them back to being pinned to a screen constant: a task
+     * drawn at 1 km has to be twice the one drawn at 500 m, or it is a badge again.
+     */
+    it.each(CROSSED)('%s still scales with the radius it was given', name => {
+        const spanOf = (radius: number) => {
+            const {graphic} = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [-77.0, 38.9]},
+                properties: {tacticalGraphic: {name, radius, rotation: 0}},
+            });
+            const xs = ((graphic.geometry as any).coordinates as number[][][]).flat().map(c => c[0]);
+            return Math.max(...xs) - Math.min(...xs);
+        };
+        expect(spanOf(2000) / spanOf(1000)).toBeCloseTo(2, 2);
     });
 
     it.each(CROSSED)('%s emits both arms whole, centered on the base point', name => {
@@ -236,6 +280,106 @@ describe('crossed mission tasks', () => {
     });
 });
 
+describe('Envelopment', () => {
+    const CENTRE: Position = [-77.0, 38.9];
+    const SIZE = 1000;
+    const RADIUS = 500;
+    const envelopment = () =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: anchorsForRunAndArc(CENTRE, SIZE, RADIUS, 0, 1)},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment}},
+        });
+
+    it('never draws an arrowhead larger than the arc it sits on', () => {
+        /*
+         * `headSize` is a screen size converted to metres at the drawing zoom, while the arc
+         * is a distance the operator set with point 3 — nothing ties the two together, so a
+         * small envelopment asks for a head bigger than its own hook and reads as an
+         * arrowhead with a curve stuck to it. (User's report, 2026-09-06.)
+         *
+         * A ceiling, not a size: a modest head passes through untouched.
+         */
+        const arm = (decorationSize: number): number => {
+            const out = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchorsForRunAndArc(CENTRE, SIZE, RADIUS, 0, 1)},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Envelopment, decorationSize}},
+            });
+            const head = (out.graphic as Feature<MultiLineString>).geometry.coordinates[2];
+            return turf.distance(turf.point(head[0]), turf.point(head[1]), {units: 'meters'});
+        };
+        const small = arm(RADIUS * 0.2);
+        const huge = arm(RADIUS * 8);
+        // The small one is not clamped...
+        expect(small).toBeLessThan(huge);
+        // ...and the huge one is, to the same figure an even huger one gives.
+        expect(arm(RADIUS * 40)).toBeCloseTo(huge, 3);
+        expect(huge).toBeLessThan(RADIUS * 2);
+    });
+
+    it('grips point 3, the arrowhead tip, and reads the bend along the axis', () => {
+        /*
+         * **The jumpy handle, as a measurement — and the wrong half fixed first.**
+         *
+         * `envelopmentBendFrom` took the cursor's *perpendicular* offset for the radius while
+         * the grip sat at `size + 2 * radius` along the axis, where the perpendicular is zero.
+         * Dragging along the run therefore changed nothing (eight 15 px steps, 0 px of
+         * movement, `bend` stuck at 0.12) and the first pixel across it took the perpendicular
+         * from 0 to a full radius, so the hook snapped open.
+         *
+         * Moving the grip off the axis "fixed" that and broke something worse: point 3 is a
+         * placed anchor point — `anchorsForRunAndArc` puts it at the arrowhead tip, on the
+         * axis — so the grip floated above the run touching nothing while point 3 had none.
+         * (User's reports, 2026-09-06.) The reader was the half to change.
+         */
+        const handles = (envelopment().handles as Feature<MultiPoint>).geometry.coordinates;
+        const anchors = anchorsForRunAndArc(CENTRE, SIZE, RADIUS, 0, 1);
+
+        // Grip 0 is point 3 itself, not a point near it and not the derived apex (point 4).
+        expect(turf.distance(turf.point(handles[0]), turf.point(anchors[2]), {units: 'meters'})).toBeLessThan(1);
+        expect(turf.distance(turf.point(handles[0]), turf.point(anchors[3]), {units: 'meters'})).toBeGreaterThan(1);
+
+        /*
+         * And the reader answers to movement **along** the axis, linearly: the tip sits at
+         * `size + 2 * radius`, so the radius is half the reach past the run's end. A reading
+         * that ignored `along` returned the same bend for every one of these.
+         */
+        const bendAt = (along: number) => envelopmentBendFrom(along, 0, SIZE, 0.5);
+        expect(bendAt(SIZE + 2 * RADIUS)).toBeCloseTo(RADIUS / SIZE, 6);
+        expect(bendAt(SIZE + 4 * RADIUS)).toBeCloseTo((2 * RADIUS) / SIZE, 6);
+        // Dragged back through the run's end the arc collapses rather than inverting.
+        expect(bendAt(SIZE - 1000)).toBeCloseTo(ENVELOPMENT_MIN_BEND, 6);
+    });
+
+    it('flips the flank when the tip is dragged across the run, and not on jitter', () => {
+        // The perpendicular still carries the side — that is the half of the old rule worth
+        // keeping, and a grip resting on the axis must not turn the hook over on noise.
+        expect(envelopmentBendFrom(SIZE + 2 * RADIUS, SIZE, SIZE, 0.5)).toBeGreaterThan(0);
+        expect(envelopmentBendFrom(SIZE + 2 * RADIUS, -SIZE, SIZE, 0.5)).toBeLessThan(0);
+        expect(envelopmentBendFrom(SIZE + 2 * RADIUS, 1, SIZE, -0.5)).toBeLessThan(0);
+    });
+
+    it('grips point 1 instead of putting an inert dot on the centre', () => {
+        /*
+         * **Every mark on the symbol should do something.** The third handle used to be the
+         * frame's centre, which `publishHandles` demotes to the grey dot you cannot drag —
+         * while point 1, *"the beginning of the straight line"*, had no grip at all. So the
+         * end an operator reaches for to lengthen the approach was not grabbable and a dead
+         * mark sat in the middle of the run. (User's call, 2026-09-05.)
+         */
+        const anchors = anchorsForRunAndArc(CENTRE, SIZE, RADIUS, 0, 1);
+        const handles = (envelopment().handles.geometry as {coordinates: Position[]}).coordinates;
+        expect(handles).toHaveLength(3);
+
+        const metres = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
+        // Handle 2 is anchor point 1, not the centre — and those are SIZE apart, so a test
+        // that confused them could not pass by accident.
+        expect(metres(handles[2], anchors[0])).toBeLessThan(1);
+        expect(metres(handles[2], CENTRE)).toBeGreaterThan(SIZE / 2);
+    });
+});
+
 describe('Turn', () => {
     // Since the APP-06 conversion the base is 270504's three anchor points rather than a
     // dropped center. Built from the same center, size and bend the dropped form used,
@@ -248,37 +392,88 @@ describe('Turn', () => {
             properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn}},
         });
 
-    it('publishes [bend, arrowTip, center] — the center last, per the point convention', () => {
+    it('publishes exactly the three anchor points 270504 names, and no centre dot', () => {
+        /*
+         * **Three grips, and each one is an anchor point.** It used to publish
+         * `[control, tip, centre]`: a bend grip at the Bézier's *control* point — twice as
+         * far out as the curve — the tip, and a centre that `publishHandles` then demoted to
+         * an inert dot. So the rear of the symbol, which is the end an operator reaches for
+         * to make a turn longer, had no grip at all, while a dot that does nothing had one.
+         * (User's report, 2026-09-05.)
+         */
         const coords = (turn().handles.geometry as any).coordinates as number[][];
         expect(coords).toHaveLength(3);
-        expect(coords[2][0]).toBeCloseTo(TURN_CENTER[0], 9);
-        expect(coords[2][1]).toBeCloseTo(TURN_CENTER[1], 9);
+        // Compared to a metre rather than exactly: the base is written by `anchorsForBow`
+        // and read back by `bowFromAnchors`, and that geodesic round trip lands about six
+        // centimetres off. Metre precision is four orders of magnitude inside the thing
+        // being asserted — the bend grip moved 1384 km.
+        const expected = anchorsForBow(TURN_CENTER, 1000, 0, TURN_DEFAULT_BEND);
+        coords.forEach((c, i) => {
+            expect(c[0]).toBeCloseTo(expected[i][0], 5);
+            expect(c[1]).toBeCloseTo(expected[i][1], 5);
+        });
+        // Nothing sits on the chord's midpoint any more.
+        for (const c of coords) {
+            expect(Math.hypot(c[0] - TURN_CENTER[0], c[1] - TURN_CENTER[1])).toBeGreaterThan(1e-4);
+        }
     });
 
     it('puts the arrow-tip handle on the point of the arrowhead', () => {
         const {handles, graphic} = turn();
-        const tip = ((handles.geometry as any).coordinates as number[][])[1];
+        const tip = ((handles.geometry as any).coordinates as number[][])[0];
         const [curve] = (graphic.geometry as any).geometries;
         const curveEnd = (curve.coordinates[1] as number[][]).slice(-1)[0];
         expect(tip[0]).toBeCloseTo(curveEnd[0], 6);
         expect(tip[1]).toBeCloseTo(curveEnd[1], 6);
     });
 
-    it('puts the bend handle off the curve, on the perpendicular through the center', () => {
-        const {handles, graphic} = turn();
-        const coords = (handles.geometry as any).coordinates as number[][];
-        const bendHandle = coords[0];
-        const center = coords[2];
+    it('puts the rear handle on the other end of the chord, opposite the tip', () => {
+        // Point 2. Rotation is 0, so the chord runs east–west: the rear is due west of the
+        // centre by exactly the half-length, and the tip due east by the same.
+        const coords = (turn().handles.geometry as any).coordinates as number[][];
+        const [tip, rear] = coords;
+        expect(rear[1]).toBeCloseTo(TURN_CENTER[1], 5);
+        expect(rear[0]).toBeLessThan(TURN_CENTER[0]);
+        expect(tip[0]).toBeGreaterThan(TURN_CENTER[0]);
+        expect(TURN_CENTER[0] - rear[0]).toBeCloseTo(tip[0] - TURN_CENTER[0], 5);
+    });
+
+    it('puts the bend handle on the curve, which is where its anchor point is', () => {
+        /*
+         * **The apex, not the control point.** The handle used to sit at `|bend| x size` —
+         * the Bézier's control — while the *stored* anchor point 3 sat at half that, on the
+         * curve. Two statements of one point, and the user saw the difference: "point 3 is
+         * on the line but not while editing". The generator now emits the stored anchors, so
+         * there is only the one statement left to be right. @see anchorsForBow
+         */
+        const coords = (turn().handles.geometry as any).coordinates as number[][];
+        const bendHandle = coords[2];
         // Rotation is 0, so the chord runs east–west and the handle must be
         // due north or south of the center — never along the chord.
-        expect(bendHandle[0]).toBeCloseTo(center[0], 6);
-        expect(bendHandle[1]).not.toBeCloseTo(center[1], 6);
-        // It is the Bézier control point, so it sits twice as far out as the
-        // curve's apex — that is what keeps it clear of the "T".
-        const [curve] = (graphic.geometry as any).geometries;
-        const apex = (curve.coordinates[1] as number[][])[0];
-        const apexOffset = Math.abs(apex[1] - center[1]);
-        expect(Math.abs(bendHandle[1] - center[1])).toBeGreaterThan(apexOffset);
+        expect(bendHandle[0]).toBeCloseTo(TURN_CENTER[0], 5);
+        expect(bendHandle[1]).not.toBeCloseTo(TURN_CENTER[1], 5);
+
+        /*
+         * **Measured against the curve with its label gap closed.** The mission task breaks
+         * its curve to make room for the "T", and the break is centred on the apex — so the
+         * deepest *drawn* vertex is the far lip of the gap, 2.7% shallower than the apex
+         * itself. Re-rendered at `labelGap: 0` the apex is a real vertex and the comparison
+         * is exact rather than approximately right for a reason the test would have to
+         * explain away. @see Turn.halfGap
+         */
+        const unbroken = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: anchorsForBow(TURN_CENTER, 1000, 0, TURN_DEFAULT_BEND)},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.TacticalTurn, labelGap: 0}},
+        });
+        const [curve] = (unbroken.graphic.geometry as any).geometries;
+        const vertices = (curve.coordinates as number[][][]).flat();
+        const deepest = Math.max(...vertices.map(v => Math.abs(v[1] - TURN_CENTER[1])));
+        const offset = Math.abs(bendHandle[1] - TURN_CENTER[1]);
+        expect(offset).toBeCloseTo(deepest, 6);
+        // ...and emphatically not the Bézier's control point, which is twice as far out and
+        // is where this grip used to sit.
+        expect(offset).not.toBeCloseTo(2 * deepest, 4);
     });
 
     it('bends more sharply for a larger bend, and the other way for a negative one', () => {
@@ -431,6 +626,43 @@ describe('README stays honest about the registry', () => {
         const quoted = readme.match(/see\s+the\s+(\d+)\s+supported names/s);
         expect(quoted).not.toBeNull();
         expect(Number(quoted![1])).toBe(listTacticalGraphicNames().length);
+    });
+
+    /**
+     * A base of the shape the graphic asks for, and nothing else — the state the README's
+     * two remaining numbers are both about.
+     */
+    const bareBase = (name: TacticalGraphicName): Feature => {
+        const wants = baseGeometryFor(name);
+        const geometry: Feature['geometry'] = wants === 'Point'
+            ? {type: 'Point', coordinates: [0, 0]}
+            : wants === 'Polygon'
+                ? {type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+                : {type: 'LineString', coordinates: [[0, 0], [1, 0], [2, 0.5]]};
+        return {type: 'Feature', geometry, properties: {tacticalGraphic: {name}}};
+    };
+
+    /*
+     * **The two numbers that had no check, and had both drifted.** The geometry-input
+     * figure read 53 against a real 54 and the label figure 106 against 119, on a
+     * denominator that was two releases old. Neither is derivable from a count of the
+     * registry, so each is measured here the way the sentence around it describes.
+     */
+    it('quotes the real number of graphics that need a geometry input', () => {
+        // "Without them you get a turf error rather than a default" — so the measure is
+        // exactly which names throw on a bare base.
+        const needsInput = (listTacticalGraphicNames() as TacticalGraphicName[]).filter(name => {
+            try {
+                renderTacticalGraphic(bareBase(name));
+                return false;
+            } catch {
+                return true;
+            }
+        });
+        const quoted = readme.match(/\*\*(\d+) of the (\d+) graphics need a geometry input/);
+        expect(quoted).not.toBeNull();
+        expect(Number(quoted![1])).toBe(needsInput.length);
+        expect(Number(quoted![2])).toBe(listTacticalGraphicNames().length);
     });
 });
 

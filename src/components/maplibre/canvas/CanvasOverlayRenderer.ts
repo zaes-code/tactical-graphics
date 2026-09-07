@@ -1,5 +1,6 @@
 import type {FeatureCollection} from 'geojson';
 import type {Map as MapLibreMap} from 'maplibre-gl';
+import {toSnapshot} from '@zaes/tactical-graphics';
 import type {Paint, PaintContext} from '@zaes/tactical-graphics';
 import {viewTransformOf} from '../projection';
 import {paintToCanvas} from './paintToCanvas';
@@ -114,13 +115,16 @@ export class CanvasOverlayRenderer {
      * a graphic.
      */
     snapshot(): FeatureCollection {
-        return {
-            type: 'FeatureCollection',
-            features: this.graphics.map(g => ({
-                ...g.base,
-                properties: {...(g.base.properties ?? {}), role: 'base', symbolId: g.id, graphicName: g.name},
-            })),
-        };
+        /*
+         * **Through `toSnapshot`, so the version stamp cannot be forgotten.** It was: this
+         * renderer wrote a bare `FeatureCollection` while OpenLayers wrote one with
+         * `tacticalGraphicsVersion` on it, so the two engines produced files that were
+         * interchangeable in memory and not on disk. @see core/snapshot.ts
+         */
+        return toSnapshot(this.graphics.map(g => ({
+            ...g.base,
+            properties: {...(g.base.properties ?? {}), role: 'base', symbolId: g.id, graphicName: g.name},
+        })));
     }
 
     /**

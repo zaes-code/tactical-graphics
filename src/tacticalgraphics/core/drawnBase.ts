@@ -27,7 +27,23 @@ import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
+import {baseVertexCount, carriesSeparationInBase, drawsAsRailCrossing} from './handles';
 import geometryService from './GeometryService';
+import {
+    anchorsForBow,
+    anchorsForRunAndArc,
+    bowFromAnchors,
+    hookAnchorsFromClicks,
+    arcAndArrowAnchorsFromClicks,
+    hairpinAnchors,
+    parallelRailAnchors,
+    RAIL_PREVIEW_GAP_PX,
+    supportByFireAnchors,
+    runAndArcFromAnchors,
+} from './anchors';
+import {securityOperationAnchors} from '../graphics/SecurityOperation';
+import {firePositionAnchors} from '../graphics/AdditionalMissionTasks';
+import * as turf from './turf';
 
 /**
  * Two positions that are the same position.
@@ -142,6 +158,834 @@ export function normalizeDrawnBase(
         return storedOrder(name, asVee(generatorOrder(name, deduped)));
     }
 
+    const placed = anchorsFromClicks(name, deduped, resolution);
+    if (placed) return placed;
 
     return deduped;
+}
+
+/**
+ * The base a graphic whose points are a **front edge and a point across it** expects, for
+ * anything that has to synthesise one — a sample sweep, a thumbnail, a round-trip fixture.
+ *
+ * Points 1 and 2 are the ends of a straight edge; the remaining point states a distance
+ * across it, and a fourth (152100's) makes that two tips rather than one. `center` is the
+ * middle of the drawn figure and `half` its half-length, both in the caller's own units, so
+ * this works in lon/lat and in projected metres alike.
+ *
+ * **Stated here because it is a fact about the base, and it was being guessed three times.**
+ * The in-app sweep laid three points along a shallow V, the catalog thumbnails laid them
+ * along a gentle arc, and MapLibre's `candidateGeometries` handed out a plain two-point line
+ * — each of which *builds* for these graphics, so each drew the legacy fallback rather than
+ * the shape the plate describes. Thirteen graphics were squat in the sweep, squat in the
+ * picker, and asserted against the wrong shape in five round-trip suites, all at once.
+ * (User's report, 2026-09-06: "the sweep is still drawing an older format".)
+ *
+ * Ask `carriesSeparationInBase(name)` whether a graphic wants this. Fields of fire and the
+ * search area are not in it and want a vee, which is a different shape and stays theirs.
+ */
+export function frontEdgeBase(center: Position, half: number, points = 3, acrossAt = 0.5, acrossRatio = FRONT_EDGE_ACROSS): Position[] {
+    const [cx, cy] = center;
+    const across = half * acrossRatio;
+    const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
+    if (points >= 4) {
+        return [...edge, [cx - half * 0.75, cy - across], [cx + half * 0.75, cy - across]];
+    }
+    // `acrossAt` slides the third point along the edge, 0 at point 1 and 1 at point 2. It is
+    // 0.5 for the graphics whose third point states a rear or a width — the distance is all
+    // that is read, so the middle is the tidiest place to show it — and 1 for the ones whose
+    // plate puts that point at an *end*: 270502's is "the tip of the longest arrow", which is
+    // the arrow at point 2. Put in the middle, its grip drew half a symbol away from the tip
+    // it holds. @see acrossPointAtEnd
+    return [...edge, [cx - half + 2 * half * acrossAt, cy - across]];
+}
+
+/**
+ * The base a **hairpin** graphic expects, for anything that has to synthesise one.
+ *
+ * 343300 demonstration and 341900 relief in place are two parallel legs closed by a half
+ * turn. Their three clicks are the first leg's tip, the first leg's bend, and a point across
+ * it that sizes the turn and picks its side — so a synthesised base states the legs along
+ * the full run and offsets the third point across, and `hairpinAnchors` fills in the fourth.
+ *
+ * **Stated here for the reason `frontEdgeBase` is.** Handed the generic four-point
+ * quadrilateral the sample sheet lays out, the normalisation squared it into a symbol half
+ * the intended width — correct, and unreadable next to its neighbours. The turn is `across`
+ * deep, so the legs are drawn a little short of the cell to leave it room.
+ *
+ * @param center the middle of the drawn figure, in the caller's own units
+ * @param half   its half-length, likewise — so this works in lon/lat and in metres alike
+ */
+export function hairpinBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const across = half * 0.5;
+    // Tip at the left, bend at the right, and the turn hanging below it: the run reads left
+    // to right like every other line sample, and the arrowheads land where the eye starts.
+    // The legs take the cell's full width — the turn's bulge overshoots it by a quarter,
+    // which is what an arrowhead does on every other line sample too.
+    return [[cx - half, cy + across / 2], [cx + half, cy + across / 2], [cx + half, cy - across / 2]];
+}
+
+/**
+ * The base a synthesiser owes this graphic — a sample sweep, a thumbnail, a fixture.
+ *
+ * **The single answer, because the question was being answered three times and drifted.**
+ * The OpenLayers sweep, MapLibre's `candidateGeometries` and the catalog generator each
+ * carried their own chain of `if`s over the same library predicates, and a clause added to
+ * one was simply absent from the others. 344000 pursuit is what that cost: it is a cane
+ * arrow like the seven retrograde graphics, MapLibre was given an inline
+ * `name === Pursuit` to put it on the front edge with them, and the OpenLayers sweep never
+ * got the clause at all — so it kept drawing pursuit as a shallow V, unlike every sibling
+ * it shares a shape with, through three separate reports. (User, 2026-09-06: "Pursuit, use
+ * the same cane base for this 3 point graphic. I've asked for that several times now.")
+ *
+ * A renderer must not decide this. `undefined` means "nothing here describes a layout for
+ * it" and the caller keeps its own default, which is the ordinary case.
+ *
+ * @param center the middle of the drawn figure, in the caller's own units
+ * @param half   its half-length, likewise — so this works in lon/lat and in metres alike
+ * @param points how many the base stores, where the caller knows. @see baseVertexCount
+ */
+/**
+ * How far across the edge a synthesised third point sits, as a share of the half-run.
+ *
+ * A presentation number, not a doctrinal one — the plates give the point an anchor and say
+ * nothing about how deep it should be drawn. A caller with a tile to fill may state its own:
+ * the catalog does, because at this default the block family's stem is short enough that the
+ * symbol reads as a bar with a nub. @see frontEdgeBase
+ */
+export const FRONT_EDGE_ACROSS = 0.55;
+
+export function synthesizedBase(name: TacticalGraphicName, center: Position, half: number, points = 3, acrossRatio = FRONT_EDGE_ACROSS): Position[] | undefined {
+    if (drawsAsHairpin(name)) return hairpinBase(center, half);
+    // Its point 1 is an arrowhead where the rest of its family's is an edge end, so the front
+    // edge's order is wrong for it however right the positions are. @see firePositionBase
+    if (name === TacticalGraphicName.AttackByFire) return firePositionBase(center, half);
+    // Its three points are a tip and an arc's two ends, which no other layout here describes.
+    // @see arcAndArrowBase
+    if (name === TacticalGraphicName.Ambush) return arcAndArrowBase(center, half);
+    // Its bar sits under the far one, which is the opposite side from every other graphic
+    // `frontEdgeBase` serves. @see railCrossingBase
+    if (drawsAsRailCrossing(name)) return railCrossingBase(center, half, points);
+    // Its two arrows stand square off their own ends of the back line, on the other side.
+    // @see supportByFireBase
+    if (name === TacticalGraphicName.SupportByFire) return supportByFireBase(center, half);
+    // A circle with an arrow swinging out of it, sized the way its plate draws one.
+    // @see circleAndArrowBase
+    if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
+    if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5, acrossRatio);
+    return undefined;
+}
+
+/**
+ * The four tasks drawn as **a circle with an arrow swinging out of it**.
+ *
+ * 343000 capture, 342300 seize, 344500 evacuate and 344600 recover share one rule word for
+ * word: *"Point 1 defines the centre of the circle. Point 2 defines the radius of the circle.
+ * Point 3 defines the middle of the arc. Point 4 defines the end of the arrow."*
+ * @see circleAndArrowBase
+ */
+const CIRCLE_AND_ARROW: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Seize,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
+];
+
+/**
+ * The base a **circle-and-arrow** task expects, for anything that has to synthesise one.
+ *
+ * Four points and no layout of their own meant the generic path: four positions spread evenly
+ * along the run, which puts point 2 half a symbol from point 1 and leaves the arrow whatever
+ * is left. The result is a circle filling most of the tile with a stub hanging off it — where
+ * the plate draws a **small circle and a long arrow**, the circle about a sixth of the reach.
+ * (User's report, 2026-09-07, against a drawing of the wanted proportions.)
+ *
+ * So the circle sits at the near end at that size, the arrow's tip reaches the far end, and
+ * the arc's middle sits between them and a little off the axis — which is the swing the plate
+ * shows and what stops the arrow reading as a straight tail.
+ */
+export function circleAndArrowBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    /** The circle's radius as a share of the half-run — a sixth of the full reach. */
+    const RADIUS = 0.32;
+    const centre: Position = [cx - half * 0.68, cy];
+    return [
+        centre,
+        [centre[0] + half * RADIUS, cy],
+        [cx + half * 0.15, cy + half * 0.22],
+        [cx + half, cy - half * 0.28],
+    ];
+}
+
+/**
+ * The base 152100 support by fire expects, for anything that has to synthesise one.
+ *
+ * `frontEdgeBase`'s four-point form is the wrong figure for it twice over. It insets the far
+ * pair to three quarters of the run, so the two arrows lean inward where the plate says "the
+ * rear of the arrows should connect to points 1 and 2" and letters `PT 3` directly above
+ * `PT 1`; and it puts them south of the edge, where the Template draws both arrows rising from
+ * a bar lettered `PT 1` on the left and `PT 2` on the right — the **left** of point 1 → point
+ * 2. So the sheet drew the mirror of what the tool previews, with its arrows splayed.
+ *
+ * Neither side is wrong as a *symbol* — "orientation is determined by the anchor points" — but
+ * a catalogue picture that disagrees with the Template and with the drawing default is a
+ * picture of nothing anyone would draw. @see supportByFireAnchors, railCrossingBase
+ */
+export function supportByFireBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    // Shorter than the reach a two-click preview invents, because a sample has a cell to sit
+    // in; the shape is the same figure either way, and the two tips are placed points in both.
+    const across = half * 0.55;
+    return [[cx - half, cy], [cx + half, cy], [cx - half, cy + across], [cx + half, cy + across]];
+}
+
+/**
+ * The base a **two-rail crossing** expects, for anything that has to synthesise one.
+ *
+ * The same two bars `frontEdgeBase` lays out, **mirrored across the run** — because for these
+ * five the drawn bar is the *lower* one. Their Templates letter `PT 1` and `PT 2` at the ends
+ * of the bottom rail and `PT 3` on the top, so a west-to-east drag leaves the bar under the
+ * cursor and previews the other above it, and `parallelRailAnchors` reads a two-click sketch
+ * that way. `frontEdgeBase` puts its across-point south, which is right for the graphics whose
+ * point 3 is a rear or a depth and wrong here — so the sweep drew every crossing as the
+ * vertical mirror of a hand-drawn one. Invisible on the bridge and the assault crossing, whose
+ * two crowbars are the same mark twice; plain on the fords, where the grips are the only thing
+ * telling the bars apart. (User's report, 2026-09-06: "fix the ford graphics on the sweep. The
+ * handles seem flipped there".)
+ *
+ * The two that number four points get a full-width far rail rather than the inset one
+ * `frontEdgeBase` draws: the reader makes the second bar parallel **and the same length**, so
+ * an inset fourth point is one the sheet states and the normalisation immediately overrides —
+ * and a base a reader disagrees with is a symbol drawn somewhere other than where the cell put
+ * it. @see parallelRailAnchors
+ */
+export function railCrossingBase(center: Position, half: number, points = 3): Position[] {
+    const [cx, cy] = center;
+    const across = half * 0.55;
+    const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
+    if (points >= 4) {
+        return [...edge, [cx + half, cy + across], [cx - half, cy + across]];
+    }
+    // Beside point 2, which is where the reader squares it to anyway — so the synthesised base
+    // and the settled one are the same points, and the sheet is idempotent.
+    return [...edge, [cx + half, cy + across]];
+}
+
+/**
+ * Whether this graphic's points are a **front edge and a distance across it**.
+ *
+ * `carriesSeparationInBase` is the library's own statement of that shape and is now the
+ * whole answer. It briefly was not: 344000 pursuit had to be named here, because it drew
+ * the cane arrows' picture while reading its own frame rather than a stored separation. It
+ * joined that predicate on 2026-09-06 when its editing was made to match its siblings', and
+ * the exception went with it. @see synthesizedBase, acrossPointAtEnd
+ */
+export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
+    return carriesSeparationInBase(name);
+}
+
+/**
+ * The base 152000 attack by fire expects, for anything that has to synthesise one.
+ *
+ * **Its point roles are the reverse of the block family's it otherwise sits with.** Block and
+ * disrupt give points 1 and 2 to the vertical line the enemy runs into and point 3 to the
+ * stem; 152000 gives point 1 to the *arrowhead's tip* and points 2 and 3 to the back line. So
+ * `frontEdgeBase` lays out the right three positions in the wrong order for it — the sheet
+ * read an edge end as the tip, and squaring point 1 onto the back line's own bisector then
+ * collapsed the symbol to half its width.
+ *
+ * The tip is placed at the far end of the run so the arrow reads left to right like every
+ * other line sample, and the back line is set at the ratio the symbol draws at, so the swept
+ * graphic is the shape a hand-drawn one settles into. @see firePositionAnchors
+ */
+export function firePositionBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const back = half * FIRE_POSITION_SAMPLE_BAR_RATIO;
+    return [[cx - half, cy], [cx + half, cy - back], [cx + half, cy + back]];
+}
+
+/**
+ * The base 141700 ambush expects, for anything that has to synthesise one.
+ *
+ * Its three points are the arrowhead's tip and the curved back's two endpoints, and the arc
+ * spans a known 120 degrees — so the chord fixes the radius and the whole figure follows from
+ * two numbers: where the tip is and how wide the arc is. Laid out at the dropped form's own
+ * reach of two radii, so the swept symbol is the shape a hand-drawn one settles into, and
+ * across the full run so it reads at the same size as its neighbours.
+ *
+ * The arithmetic: with the tip `reach * r` from the centre and the arc ending `r * cos(60)`
+ * beyond it, the figure spans `(reach + cos 60) * r`. Setting that to the run gives the
+ * radius, and the endpoints sit `r * sin(60)` either side of the axis. @see ambushAnchors
+ */
+export function arcAndArrowBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const reach = 2;
+    const cos60 = Math.cos((60 * Math.PI) / 180);
+    const sin60 = Math.sin((60 * Math.PI) / 180);
+    const radius = (2 * half) / (reach + cos60);
+    const arcX = cx - half + reach * radius + radius * cos60;
+    return [[cx - half, cy], [arcX, cy + radius * sin60], [arcX, cy - radius * sin60]];
+}
+
+/**
+ * The back line's half-height in a synthesised sample, as a share of the run.
+ *
+ * The same 0.45 the symbol has always been drawn at — kept here rather than imported so this
+ * module states a *layout*, not a dependency on the generator's own proportions, which are
+ * free to change without moving the sheet. @see FIRE_POSITION_BAR_RATIO
+ */
+const FIRE_POSITION_SAMPLE_BAR_RATIO = 0.45;
+
+/** Whether this graphic is drawn as a hairpin. @see hairpinBase, hairpinAnchors */
+export function drawsAsHairpin(name: TacticalGraphicName): boolean {
+    return HAIRPIN_GRAPHICS.includes(name);
+}
+
+/**
+ * The two graphics whose three clicks describe a hairpin. @see hairpinAnchors
+ *
+ * Both plates number four anchor points, and both store four — but the fourth carries no
+ * decision, since the legs must stay parallel and the same length. @see drawsAsHairpin
+ */
+const HAIRPIN_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Demonstration,
+    TacticalGraphicName.ReliefInPlace,
+];
+
+/**
+ * Whether this graphic's across-the-edge point belongs at the **point-2 end** rather than
+ * the middle, for anything synthesising a base. @see frontEdgeBase
+ *
+ * 270502 disrupt states it outright — point 3 is "the tip of the longest arrow", and the
+ * longest arrow is the one at point 2. Handed a mid-edge third point the symbol still draws
+ * correctly, because the generator reads only the distance across; but the *grip* is
+ * published on the arrowhead the picture actually has, so base and handle sat half a symbol
+ * apart in every sample. (User's report, 2026-09-06: "sweep shows handles out of place".)
+ */
+export function acrossPointAtEnd(name: TacticalGraphicName): boolean {
+    return ACROSS_POINT_AT_END.includes(name);
+}
+
+/**
+ * The graphics whose across-the-edge point sits at the **point-2 end**. @see acrossPointAtEnd
+ *
+ * Two shapes, one consequence. 270502 disrupt puts point 3 at "the tip of the longest arrow",
+ * and that arrow is the one at point 2. The cane arrows, mobile defence and pursuit put it at
+ * the far end of the arc's **diameter**, and the arc hooks off point 2 — so for all of them
+ * the third point belongs beside point 2, not half way along the run.
+ *
+ * Put in the middle, the generator still draws the symbol correctly, because it reads only
+ * the distance across. But the *grip* is published where the arc actually is, so one handle
+ * per graphic sat about half a symbol away from any stored point — and a handle that is not
+ * on a point cannot drag it. Measured on the cane arrows: one grip 0.482 off the nearest base
+ * point with the mid-edge base, 0 with this one. That is why every sample-drawn cane could
+ * not be dragged from point 3 while a hand-drawn one was fine — a hand-drawn base puts the
+ * point where the arc is, because that is where the operator clicked. (User's report,
+ * 2026-09-06.)
+ */
+const ACROSS_POINT_AT_END: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.TacticalDisrupt,
+    // The eight cane arrows: a straight run with a half circle hooked off point 2.
+    TacticalGraphicName.Delay,
+    TacticalGraphicName.Retirement,
+    TacticalGraphicName.Withdraw,
+    TacticalGraphicName.WithdrawUnderPressure,
+    TacticalGraphicName.ForwardPassageOfLines,
+    TacticalGraphicName.RearwardPassageOfLines,
+    TacticalGraphicName.Disengage,
+    TacticalGraphicName.MobileDefense,
+    // Pursuit's own grips are re-derived so it reads correctly either way, but it is the same
+    // symbol as the seven above and a user reading the sheet should not be able to tell which
+    // of them was laid out differently. @see Pursuit
+    TacticalGraphicName.Pursuit,
+];
+
+/** Degrees CCW from east, which is the unit `anchorsFor*` take. */
+const degrees = (radians: number): number => (radians * 180) / Math.PI;
+
+/**
+ * The anchor points a click sequence describes, for the four graphics an operator places
+ * **point by point** rather than by dragging out from a centre.
+ *
+ * ## Why these four stopped being centre-to-edge (2026-09-05)
+ *
+ * All four are `DRAWN_ANCHOR_GRAPHICS`: the standard describes them by numbered points,
+ * and the base has always stored those points. What it did *not* do was let the operator
+ * place them — the draw was two clicks, a centre and a rim, and every anchor was derived
+ * from that frame. Contain left that model on 2026-09-04 because a user following the
+ * Draw Rules clicked the two ends of the opening and got a symbol twice the size they
+ * asked for; `symbology.ts` recorded that the other five each needed their own plate read
+ * before they followed. This is that read, for four of them. (User's call.)
+ *
+ * ## What is placed and what is derived
+ *
+ * A point the standard names but leaves no freedom in is **derived, not clicked** — there
+ * is nothing for an operator to decide and a handle on it would only be a way to draw the
+ * symbol wrong:
+ *
+ * | Code | Clicks | Stored | The derivation |
+ * |---|---|---|---|
+ * | 141700 ambush | 2 | 3 | point 3 keeps the arc's own 120 degrees, so the symbol resizes rather than deforms |
+ * | 270504 turn | 3 | 3 | point 3 is pulled onto the chord's perpendicular bisector |
+ * | 343500 envelopment | 3 | 4 | point 4 is the arc's apex, which is what states the side |
+ * | 344000 pursuit | 3 | 3 | point 3 is pulled onto the perpendicular at point 2 |
+ *
+ * **Every one of these is a projection or a construction the readers already performed.**
+ * `bowFromAnchors` has always taken only the across-chord component of turn's point 3;
+ * `runAndArcFromAnchors` has always projected envelopment's point 3 onto the run. Doing it
+ * here as well is not a second rule — it is storing the point where the reader was already
+ * going to read it, so the handle sits on the symbol instead of wherever the click landed.
+ * The same fix the radar search doctrine's grips needed. @see anchors.ts
+ *
+ * Returns `undefined` for every other graphic, and for a sketch too short to describe one.
+ */
+function anchorsFromClicks(
+    name: TacticalGraphicName,
+    clicks: Position[],
+    /**
+     * Ground metres per screen pixel, where the caller knows it. Only a reader whose
+     * *preview* is a screen size needs it, and a settled base never reaches one.
+     * @see RAIL_PREVIEW_GAP_PX
+     */
+    resolution?: number,
+): Position[] | undefined {
+    switch (name) {
+        case TacticalGraphicName.Ambush:
+            return ambushAnchors(clicks);
+
+        /*
+         * **270504 / 344700 — three clicks: tip, rear, bend.**
+         *
+         * The plate letters PT 1, PT 2 and PT 3, whatever the "requires two anchor points"
+         * sentence above them says. Point 3 *"indicates on which side of the line the arc is
+         * placed"*, and how deep — so its along-chord component means nothing, and storing
+         * it is what put the third handle out beside the symbol rather than on it.
+         */
+        case TacticalGraphicName.Turn:
+        case TacticalGraphicName.TacticalTurn: {
+            if (clicks.length < 3) return undefined;
+            const frame = bowFromAnchors(clicks);
+            if (!frame) return undefined;
+            return anchorsForBow(frame.center, frame.size, degrees(frame.angle), frame.bend ?? 0);
+        }
+
+        /*
+         * **343500 — three clicks: start, end of the run, then the diameter.**
+         *
+         * Point 4 *"defines which side of the line the arc is on"*, and point 3 already
+         * says that: the reader takes the side from its across-axis sign when no fourth
+         * point exists. So the fourth is emitted at the arc's apex — on the drawn shape,
+         * on the bulge side — and carries no decision of its own.
+         */
+        case TacticalGraphicName.Envelopment: {
+            if (clicks.length < 3) return undefined;
+            const frame = runAndArcFromAnchors(clicks);
+            if (!frame?.radius) return undefined;
+            return anchorsForRunAndArc(frame.center, frame.size, frame.radius, degrees(frame.angle), frame.side);
+        }
+
+        /*
+         * **344000 — three clicks: start, end of the run, then the hook.**
+         *
+         * *"The 180 degree circular arc is always perpendicular to the line"*, so point 3 is
+         * one end of a diameter that leaves point 2 at a right angle. The click is taken for
+         * its distance and its side and put on that perpendicular; a point off it would
+         * describe a hook the standard does not draw. @see hookFromAnchors
+         */
+        case TacticalGraphicName.Pursuit:
+            return pursuitAnchors(clicks);
+
+        /*
+         * **343300 and 341900 — three clicks: the arrowhead tip, the turn, the far leg.**
+         *
+         * Point 4 is derived so the two straights are parallel and equal by construction, and
+         * point 3 is squared onto the perpendicular at point 2 for the same reason 152800's
+         * is: the half circle is tangent to both legs, so its diameter has to leave point 2 at
+         * a right angle. @see hairpinAnchors
+         */
+        case TacticalGraphicName.Demonstration:
+        case TacticalGraphicName.ReliefInPlace:
+            return hairpinAnchors(clicks);
+
+        /*
+         * **342201/2/3 place all four, and a two-point base is an old save.**
+         *
+         * The upgrade lays the second arm out as the mirror the generator used to derive, so
+         * a saved graphic comes back the shape it was saved as and gains two grips it never
+         * had. It runs on restore and on every rebuild, not only at draw end — which is why
+         * `DRAW_CLICKS` names four for these: a two-click sketch normalizes to four points
+         * and would otherwise read as a finished draw. @see securityOperationAnchors
+         */
+        case TacticalGraphicName.Cover:
+        case TacticalGraphicName.Guard:
+        case TacticalGraphicName.Screen:
+            return securityOperationAnchors(clicks);
+
+        /*
+         * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**
+         *
+         * The same constraint pursuit's third click carries, for the same geometric reason:
+         * 152800's arc is tangent to *both* of its parallel straights, so its diameter has to
+         * leave point 2 at a right angle. The click is read for how far across the line it is
+         * and which side it fell on, and placed on that perpendicular — a point off it
+         * describes a hairpin that does not close.
+         *
+         * The one difference from 344000 is which end is numbered first: mobile defence's
+         * point 1 is the arrowhead tip, pursuit's is the line's beginning. That is a matter
+         * for `TIP_FIRST_GRAPHICS`, which already lists 152800, and not for the arithmetic
+         * here — the clicks arrive in the standard's own order either way, and the
+         * perpendicular is measured at point 2 in both. @see MobileDefense.frame
+         */
+        /*
+         * **152800 — three clicks: the arrowhead, the end of the straight line, then the arc.**
+         *
+         * The same constraint pursuit's third click carries, for the same geometric reason:
+         * 152800's arc is tangent to *both* of its parallel straights, so its diameter has to
+         * leave point 2 at a right angle. @see mobileDefenceAnchors
+         */
+        /*
+         * **The seven cane arrows read their clicks the same way**, because APP-06 states
+         * their Anchor Points and Size/Shape in the same words as 152800's, minus the barbs
+         * clause: point 1 the arrowhead tip, point 2 the end of the straight line, point 3
+         * the diameter and side of the 180 degree arc. 342500 has no cell of its own and
+         * inherits 342400's. @see RetrogradeTask, which quotes the paragraph in full
+         *
+         * The arc is perpendicular to the line for these too, so the third click keeps only
+         * its across-axis component — the same projection, at the same point 2.
+         */
+        /*
+         * **270501 / 340100 block — three clicks: the vertical line's two ends, then the
+         * horizontal line's free end.**
+         *
+         * *"Points 1 and 2 define the endpoints of the symbol's vertical line. Point 3
+         * defines the endpoint of the symbol's horizontal line."* The projection is stated
+         * outright, and 340100 states it twice over: the horizontal line's length is found
+         * *"by plotting point 3 on a plane extending perpendicularly from the midpoint of the
+         * vertical line"*, and *"will project perpendicularly from the midpoint"*.
+         *
+         * So the click's component **along** the bar is discarded and only its distance
+         * across it survives — the same reading pursuit's third click gets, and for the same
+         * reason: the symbol is a T, and a stem that met the bar at any other angle would not
+         * be one. @see Block
+         */
+        case TacticalGraphicName.Block:
+        case TacticalGraphicName.TacticalBlock:
+            return blockAnchors(clicks);
+
+        /*
+         * **270502 / 341000 disrupt — three clicks: the vertical line's two ends, then the
+         * tip of the longest arrow.**
+         *
+         * *"Points 1 and 2 define the end points of the symbol's vertical line. Point 3
+         * defines the tip of the longest arrow."*
+         *
+         * **The projection is an interpretation here, where block states it.** Disrupt's own
+         * cell says only that point 3 *"determines its length"*; it is the Template that
+         * draws all three arrows square to the bar, and its sibling 270501 — one row above,
+         * same table, same vertical-line-plus-stem construction — that says in words to plot
+         * point 3 on the perpendicular. Read any other way the three arrows would splay, and
+         * the plate draws them parallel. @see Disrupt
+         *
+         * Measured at point 2 rather than at the midpoint, because the longest arrow is the
+         * one point 3 tips and the Template springs it from the point 2 end of the bar.
+         */
+        case TacticalGraphicName.Disrupt:
+        case TacticalGraphicName.TacticalDisrupt:
+            return disruptAnchors(clicks);
+
+        case TacticalGraphicName.Delay:
+        case TacticalGraphicName.Retirement:
+        case TacticalGraphicName.Withdraw:
+        case TacticalGraphicName.WithdrawUnderPressure:
+        case TacticalGraphicName.Disengage:
+        case TacticalGraphicName.ForwardPassageOfLines:
+        case TacticalGraphicName.RearwardPassageOfLines:
+        case TacticalGraphicName.MobileDefense:
+            return mobileDefenceAnchors(clicks);
+
+        /*
+         * **The demolition block — three clicks: the two ends, then the separation.**
+         *
+         * 271201, and 271204 by inheritance: *"Points 1 and 2 define the endpoints of the
+         * symbol and point 3 defines the location of one side of the symbol"*, with points
+         * 1 and 2 the centreline and point 3 its width. Only how far point 3 lies *across*
+         * the centreline means anything — its component along it would slide the handle up
+         * and down a rail without changing the symbol — so it is put on the perpendicular
+         * at the centreline's midpoint, which is the middle of the side it names.
+         */
+        case TacticalGraphicName.ExplosivesPlannedStateOfReadiness:
+        case TacticalGraphicName.ExplosivesStateOfReadiness1Safe:
+        case TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable:
+        case TacticalGraphicName.RoadblockCompleteExecuted:
+        // 140800 states the same rule in the same words — *"points 1 and 2 define the
+        // endpoints of the infiltration lane and point 3 defines one side of the lane"* —
+        // so it reads its clicks the same way. (User's call, 2026-09-05.)
+        case TacticalGraphicName.InfiltrationLane:
+        /*
+         * **The four bracket mission tasks read their clicks the same way.** 340200 breach,
+         * 340300 bypass and 340500 clear each give points 1 and 2 to a front edge — the
+         * opening, the arrowhead tips, the vertical line — and point 3 to the rear; 340400
+         * canalize has an empty Draw Rules cell and inherits 340300's. Only how far point 3
+         * lies *across* that edge means anything, because all three state that the rear line
+         * is "the same height as the opening and parallel to it", so nothing in the symbol
+         * can express an along-edge offset. That is the projection `sideAnchors` performs.
+         * @see frontEdgeFrame, Canalize for the inheritance reading
+         */
+        case TacticalGraphicName.Breach:
+        case TacticalGraphicName.Bypass:
+        case TacticalGraphicName.Canalize:
+        case TacticalGraphicName.Clear:
+        /*
+         * **341800 penetrate reads them the same way**, on the same sentence: *"The arrow
+         * will project perpendicularly from the midpoint of the vertical line."* An
+         * along-edge offset in point 3 has nowhere to go in a symbol whose arrow leaves the
+         * midpoint square, so it is projected out here rather than stored and ignored.
+         * (User's call, 2026-09-06.) @see BRACKET_GRAPHICS
+         */
+        case TacticalGraphicName.Penetration:
+        /*
+         * **The three obstacle bypasses carry the bracket tasks' sentence word for word.**
+         *
+         * 270601: *"Points 1 and 2 define the tips of the arrowheads and point 3 defines the
+         * rear of the symbol"*, and *"Points 1 and 2 determine the symbol's height and point
+         * 3 determines its length. The vertical line at the rear of the symbol shall be the
+         * same length as the opening and shall be perpendicular to the parallel lines"*.
+         * 270602 and 270603 inherit it; only the rear bar's form differs between the three.
+         *
+         * So the same projection, for the same reason: the rear bar is fixed square to the
+         * opening and the same length as it, which leaves point 3 with nothing to say except
+         * how far back the rear sits. An along-edge component in the click cannot reach the
+         * picture — `ObstacleBypass.generateGraphics` already drops it with a `cos(skew)` —
+         * so storing it only put the grip out beside the symbol instead of on the middle of
+         * the rear bar, where the plate's PT.3 leader lands. (User's report, 2026-09-06:
+         * "obstacle center handle (point 3) [...] is not centered on that line but rather
+         * where user clicked".) @see ObstacleBypass
+         */
+        case TacticalGraphicName.ObstacleBypassEasy:
+        case TacticalGraphicName.ObstacleBypassDifficult:
+        case TacticalGraphicName.ObstacleBypassImpossible:
+            return sideAnchors(clicks);
+
+        /*
+         * **152000 attack by fire: two clicks, three points** — the tip, then one end of the
+         * back line, with the other end its mirror. Its Size/Shape cell carries 141700
+         * ambush's two constraints word for word, so it has ambush's remaining freedom and
+         * closes it the same way: the shape is held and the click sets only the size.
+         * (User's call, 2026-09-06.) @see firePositionAnchors
+         */
+        case TacticalGraphicName.AttackByFire:
+            return firePositionAnchors(clicks);
+
+        /*
+         * **152100 — four placed points: the back line's two ends, then each arrow's tip.**
+         *
+         * "Points 1 and 2 define the endpoints of the straight line on the back side of the
+         * symbol. Points 3 and 4 define the tips of the arrowheads." Every one is a decision
+         * — the two tips are the limits of coverage the firing position supports — so none is
+         * derived once they are placed, and the reader's whole job is the half-drawn cases.
+         * @see supportByFireAnchors
+         */
+        case TacticalGraphicName.SupportByFire:
+            return supportByFireAnchors(clicks);
+
+        /*
+         * **The two-rail crossings: one rail placed end to end, the other set across it.**
+         *
+         * 271100 and 271300 number four points, two per side, and the fourth carries no
+         * decision — the rails are parallel and the same length, so it is wherever that puts
+         * it. 271500 and 271600 letter only three on their Template, the third on the far
+         * bar. Same reading either way; only how many the base stores differs, which
+         * `baseVertexCount` already says. @see parallelRailAnchors
+         */
+        case TacticalGraphicName.Bridge:
+        case TacticalGraphicName.Gap:
+        case TacticalGraphicName.AssaultCrossing:
+        case TacticalGraphicName.FordEasy:
+        case TacticalGraphicName.FordDifficult:
+            return parallelRailAnchors(
+                clicks,
+                baseVertexCount(name) ?? 4,
+                // **The half-drawn gap, locked to a pixel count.** A caller that knows the zoom
+                // gets it; one that does not falls back to a share of the bar. This is the
+                // engine-agnostic half of the lock — MapLibre normalises its sketch on every
+                // preview move, so the gap reaches its draw through here, where OpenLayers'
+                // reaches its generator through the holder's own offset. @see RAIL_PREVIEW_GAP_PX
+                resolution === undefined ? undefined : RAIL_PREVIEW_GAP_PX * resolution,
+            );
+
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * 141700's three points, stated once. @see arcAndArrowAnchorsFromClicks
+ *
+ * The body moved to `core/anchors.ts` on 2026-09-06 so the *generator* could read it too:
+ * this runs at draw end, and mid-draw the generator was falling through to the dropped form
+ * rather than previewing the symbol being drawn.
+ */
+function ambushAnchors(clicks: Position[]): Position[] | undefined {
+    return arcAndArrowAnchorsFromClicks(clicks);
+}
+
+/**
+ * The demolition block's three points, with the third pulled square off the centreline.
+ *
+ * The click is read for how far it lies across the line joining points 1 and 2, and for
+ * which side it fell on; its component along that line is discarded. Placed at the
+ * centreline's midpoint so the handle sits at the middle of the side it defines, rather
+ * than wherever along the rail the operator happened to click.
+ */
+function sideAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [start, end, click] = clicks;
+
+    const axis = turf.bearing(turf.point(start), turf.point(end));
+    const span = turf.distance(turf.point(start), turf.point(end), {units: 'meters'});
+    if (!isFinite(span) || span <= 0) return undefined;
+    const middle = turf.destination(turf.point(start), span / 2, axis, {units: 'meters'});
+
+    const reach = turf.distance(middle, turf.point(click), {units: 'meters'});
+    const toClick = turf.bearing(middle, turf.point(click));
+    const across = reach * Math.sin(((toClick - axis) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    const side = turf.destination(middle, Math.abs(across), axis + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [start, end, side];
+}
+
+/**
+ * 152800's three points, with the third pulled onto the perpendicular at point 2.
+ *
+ * **Not `pursuitAnchors`, and the difference is not cosmetic.** The two symbols carry the
+ * same constraint but number their points from opposite ends: pursuit's point 1 is the
+ * line's *beginning*, mobile defence's is the arrowhead *tip*. So pursuit measures its run
+ * as `bearing(point 1 → point 2)` and this one as `bearing(point 2 → point 1)` — and those
+ * are not the same reference. On a sphere they differ by the convergence of the meridians,
+ * four degrees over a 660 km run at 20°N, which put the click reader's perpendicular 24 km
+ * away from the generator's. The symbol still drew, because the generator projects again on
+ * every render; what it drew simply was not where the stored point said. Measured, not
+ * reasoned about: the arc's far end landed 23,674 m from point 3.
+ *
+ * Written to match `MobileDefense.frame` bearing for bearing, so the point that is stored
+ * and the point that is drawn are the same point.
+ *
+ * **Shared with the seven cane arrows** as of 2026-09-06 — delay, retirement, withdraw,
+ * withdraw under pressure, disengage and the two passages of lines all state this rule in
+ * the same words, and `RetrogradeTask.frame` reads its three the same way round. Nothing
+ * here is 152800-specific; the name is kept because that is the plate the reading was
+ * derived from. @see RetrogradeTask
+ *
+ * **Three clicks only.** A two-point base is left exactly as it is: the only ones in
+ * existence are the ellipses saved before 2026-09-06, and the side their arc fell on is in
+ * their `mirrored` amplifier, which `normalizeDrawnBase` cannot see. Constructing a third
+ * point here put every mirrored one back on the wrong side, silently. Left short, the base
+ * reaches the generator, whose own two-point fallback reads `mirrored` and draws the side it
+ * was saved on; it grows its third point the first time someone edits it, which is the
+ * moment they choose that side themselves.
+ */
+/**
+ * The distance from `from` to `at`, measured **across** `axis` only.
+ *
+ * Signed: the magnitude is how far off the line the point fell and the sign is which side.
+ * The component along the axis is dropped, which is what "plot point 3 on a plane extending
+ * perpendicularly" asks for. Shared by the two graphics whose stem leaves a bar at a right
+ * angle. @see blockAnchors, disruptAnchors
+ */
+function acrossAxis(from: Position, at: Position, axis: number): number {
+    const reach = turf.distance(turf.point(from), turf.point(at), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return 0;
+    const toPoint = turf.bearing(turf.point(from), turf.point(at));
+    const across = reach * Math.sin(((toPoint - axis) * Math.PI) / 180);
+    return isFinite(across) ? across : 0;
+}
+
+/**
+ * 270501 / 340100's three points, with the third pulled onto the perpendicular at the
+ * vertical line's **midpoint**.
+ *
+ * The head of the T is points 1 and 2; the stem runs from the middle of that bar out to
+ * point 3. Only the stem's *length* and *side* are the operator's to state, so the click is
+ * read for those two things and placed square to the bar.
+ */
+function blockAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [top, bottom, click] = clicks;
+
+    const bar = turf.bearing(turf.point(top), turf.point(bottom));
+    const middle = turf.midpoint(turf.point(top), turf.point(bottom)).geometry.coordinates as Position;
+    const across = acrossAxis(middle, click, bar);
+    if (across === 0) return undefined;
+
+    const stem = turf.destination(turf.point(middle), Math.abs(across), bar + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [top, bottom, stem];
+}
+
+/**
+ * 270502 / 341000's three points, with the third pulled onto the perpendicular at **point 2**.
+ *
+ * Point 3 tips the longest arrow, and the Template springs that arrow from the point 2 end of
+ * the vertical line — so the perpendicular is taken there rather than at the middle, and the
+ * stored point lands exactly where the arrowhead is drawn.
+ */
+function disruptAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [first, second, click] = clicks;
+
+    const bar = turf.bearing(turf.point(first), turf.point(second));
+    const across = acrossAxis(second, click, bar);
+    if (across === 0) return undefined;
+
+    const tip = turf.destination(turf.point(second), Math.abs(across), bar + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [first, second, tip];
+}
+
+function mobileDefenceAnchors(clicks: Position[]): Position[] | undefined {
+    if (clicks.length < 3) return undefined;
+    const [tip, join, click] = clicks;
+
+    // The line's own direction, pointing at the arrowhead — the generator's `axis`.
+    const axis = turf.bearing(turf.point(join), turf.point(tip));
+    const reach = turf.distance(turf.point(join), turf.point(click), {units: 'meters'});
+    if (!isFinite(reach) || reach <= 0) return undefined;
+
+    // The component across the line, signed: its magnitude is the arc's diameter and its
+    // sign is the side the arc falls on. The component *along* is the freedom 152800 does
+    // not have — the arc is tangent to both straights, so the diameter is square to them.
+    const toClick = turf.bearing(turf.point(join), turf.point(click));
+    const across = reach * Math.sin(((toClick - axis) * Math.PI) / 180);
+    if (!isFinite(across) || across === 0) return undefined;
+
+    const far = turf.destination(turf.point(join), Math.abs(across), axis + Math.sign(across) * 90, {
+        units: 'meters',
+    }).geometry.coordinates as Position;
+    return [tip, join, far];
+}
+
+/**
+ * 344000's three points, with the third pulled onto the perpendicular at point 2.
+ *
+ * The click is read for two things and only two: how far it is across the run, which is
+ * the arc's diameter, and which side of the run it fell on. Its component *along* the run
+ * is discarded — that is the degree of freedom the standard does not give this symbol,
+ * and honouring it bent the hook off square. @see hookFromAnchors
+ */
+/**
+ * 344000's three points, stated once. @see hookAnchorsFromClicks
+ *
+ * The body moved to `core/anchors.ts` on 2026-09-06 so the *generator* could read it too:
+ * this runs at draw end, and mid-draw the generator was inventing a whole symbol from one
+ * click rather than drawing nothing.
+ */
+function pursuitAnchors(clicks: Position[]): Position[] | undefined {
+    return hookAnchorsFromClicks(clicks);
 }

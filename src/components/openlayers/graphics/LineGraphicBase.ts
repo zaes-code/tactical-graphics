@@ -9,12 +9,18 @@ import {
     createBaseFeature,
     createFeature,
     createHandleFeature,
+    createInertHandleFeature,
     defaultLineStyle,
     directionArrowStyleFunc,
     endGlyphLineStyleFunc,
     engineerWorkLineStyle,
     escortOrDemonstrationStyleFunc,
+    bearingLineStyleFunc,
+    navigationalLineStyleFunc,
+    convoyStyleFunc,
+    searchAreaStyleFunc,
     ferryCrossingStyleFunc,
+    rhumbLineStyleFunc,
     fieldOfFireStyleFunc,
     finalProtectiveFireStyleFunc,
     followTaskStyleFunc,
@@ -39,7 +45,7 @@ import {
     tacticalFixStyleFunc,
     wireObstacleStyleFunc,
 } from '../openlayerStyles';
-import {defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert,defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
@@ -48,6 +54,14 @@ import {decorationMeters} from './decorationPx';
 export class LineGraphicBase implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
     graphics: Feature = createFeature();
+    /**
+     * The handle set — **inert for the graphics that publish points nobody may drag.**
+     *
+     * Swapped in the constructor rather than chosen here, because a field initializer cannot
+     * see the name. `createInertHandleFeature` paints grey and sets the `inert` flag the
+     * manager reads to refuse a grab, which together are what "shown but not editable" means.
+     * @see handlesAreInert
+     */
     handles: Feature<MultiPoint> = <Feature<MultiPoint>>createHandleFeature();
     symbolId: string = '';
     graphicName: TacticalGraphicName;
@@ -68,6 +82,8 @@ export class LineGraphicBase implements LineGraphic {
     private standoffInUse: number | undefined;
 
     constructor(name: TacticalGraphicName, resolution?: number) {
+        // Points this graphic stores and shows but nobody may drag. @see handlesAreInert
+        if (handlesAreInert(name)) this.handles = <Feature<MultiPoint>>createInertHandleFeature();
         if (resolution !== undefined) {
             this.graphics.set('drawingResolution', resolution);
         }
@@ -101,6 +117,39 @@ export class LineGraphicBase implements LineGraphic {
                     return tacticalFixStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.FerryCrossing:
                     return ferryCrossingStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.BearingLine:
+                case TacticalGraphicName.BearingLineElectronic:
+                case TacticalGraphicName.BearingLineElectromagneticWarfare:
+                case TacticalGraphicName.BearingLineAcoustic:
+                case TacticalGraphicName.BearingLineAcousticAmbiguous:
+                case TacticalGraphicName.BearingLineTorpedo:
+                case TacticalGraphicName.BearingLineElectroOpticalIntercept:
+                case TacticalGraphicName.BearingLineJammer:
+                case TacticalGraphicName.BearingLineRadioDirectionFinder:
+                    // The letter comes from `getLabel(name)` inside the paint, so the nine
+                    // share one arm. @see BEARING_LINES, which is the same list in the
+                    // symbology half -- and the reason this arm exists at all: registering
+                    // the paint in `symbology/registry.ts` gets MapLibre, the thumbnails and
+                    // the catalog, and leaves OpenLayers drawing a bare line. Every picture
+                    // generated off `dist/` was already correct while the app was not.
+                    return bearingLineStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.NavigationalRhumbLine:
+                    return rhumbLineStyleFunc()(feature, resolution);
+                case TacticalGraphicName.NavigationalLine:
+                    return navigationalLineStyleFunc()(feature, resolution);
+                /*
+                 * The convoys and the search area -- **the second of the two edits again**.
+                 * The block arrow, the open triangle and the stepped V with its solid heads
+                 * are all synthesized in screen space by their paints; without these arms
+                 * OpenLayers draws the bare two-point run and the bare arms, which is what
+                 * the convoys looked like for the whole time they were switched off.
+                 * @see convoyPaints, searchAreaPaints, paintParity.test.ts
+                 */
+                case TacticalGraphicName.MovingConvoy:
+                case TacticalGraphicName.HaltedConvoy:
+                    return convoyStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.SearchArea:
+                    return searchAreaStyleFunc()(feature, resolution);
                 case TacticalGraphicName.DirectionOfMainAttack:
                 case TacticalGraphicName.DirectionOfSupportingAttack:
                 case TacticalGraphicName.AviationDirectionOfAttack:
@@ -338,7 +387,8 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
-     * The standoff between the multiple-strike zone's two rings, in metres.
+     * The standoff between the multiple-strike zone's two rings, in metres, or `undefined`
+     * when the graphic files none.
      *
      * Three sources, in order: a distance replayed by a restore, one the operator typed in
      * the dialog, and failing both a seed of half a screen inch at the resolution the
@@ -346,13 +396,27 @@ export class LineGraphicBase implements LineGraphic {
      * carries it and this returns it unchanged — so the gap is a real distance from the
      * first render and does not move when the operator zooms.
      *
+     * **And only while the operator is authoring the shape.** A restore that carries no
+     * width is the *legacy two-ring description*, whose base holds both rings end to end,
+     * and seeding a standoff into it makes the generator read those points as a single
+     * traced ring — the symbol comes back as a self-crossing star with a second star
+     * offset around it. `SafeDistanceZone` promises that such a graphic "still renders
+     * exactly as it did"; this is the line that has to keep that promise, and it did not
+     * until 2026-09-05. `shapingFromGesture` is the same flag the minimum-length floors
+     * use, and for the same reason: the seed belongs to the gesture that authors geometry.
+     *
+     * Returning `undefined` rather than `0` matters — `updateGraphic` stamps whatever this
+     * gives it, and a filed `width: 0` would show up in the dialog and make the next call
+     * take the `filed` branch on a number that means "none".
+     *
      * `groundLength`, not the bare resolution: a pixel size times the raw number is a
      * projected length and comes out 1/cos(latitude) too large. @see graphicSize
      */
-    private standoff(filed: number | undefined): number {
+    private standoff(filed: number | undefined): number | undefined {
         if (this.standoffOverride !== undefined) return this.standoffOverride;
         if (filed !== undefined) return filed;
-        return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude())) ?? 0;
+        if (!this.shapingFromGesture) return undefined;
+        return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude()));
     }
 
     /**

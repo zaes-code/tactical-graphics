@@ -90,27 +90,41 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // -- Mission tasks drawn as a route into a front --
     TacticalGraphicName.Fix,                              // 270503 obstacle effect
     TacticalGraphicName.TacticalFix,                      // 341100 mission task
-    // The block family's three-point rule names the front feature first and the rear
-    // last: "Points 1 and 2 define the tips of the arrowheads and point 3 defines the
-    // rear" (Bypass), and the same shape for the opening, the vertical line and the
-    // arrows. We carry the front's width as an amplifier rather than as a second point,
-    // so what reverses here is which end of the drawn line the front sits on.
-    TacticalGraphicName.Bypass,                           // 340300
-    TacticalGraphicName.Canalize,                         // 340400
-    TacticalGraphicName.Clear,                            // 340500
-    TacticalGraphicName.Breach,                           // 340200
-    // **The two blocks have no arrowhead and belong here anyway.** 270501 and 340100 read
-    // "Points 1 and 2 define the endpoints of the symbol's vertical line. Point 3 defines
-    // the endpoint of the symbol's horizontal line" -- the bar the enemy runs into is
-    // numbered first and the tail last, and we drew the bar on the last vertex. Found by
-    // widening the sweep past the word "arrowhead", which is how their four siblings in
-    // the same holder were found. Disrupt is *not* here: its vertical line is the rear of
-    // its trident and 270502 numbers the longest arrow's tip third, which is where ours
-    // already is.
-    TacticalGraphicName.Block,                            // 270501 obstacle effect
-    TacticalGraphicName.TacticalBlock,                    // 340100 mission task
-    TacticalGraphicName.Penetration,                      // 341800 Penetrate
-    TacticalGraphicName.ReliefInPlace,                    // 341900 "Point 1 defines the tip of the first arrowhead"
+    /*
+     * **Bypass, canalize, clear and breach left on 2026-09-06**, when they stopped carrying
+     * the front's width as an amplifier and started storing the three anchor points their
+     * rules name. The reversal existed for the two-point base: the rule numbers the front
+     * feature first and the rear last, while the generators build the front at the *last*
+     * vertex, so the line had to be turned around on the way in. With points 1, 2 and 3
+     * stored in the plate's own order there is nothing left to reconcile — and reversing a
+     * three-point base actively breaks it, since it hands the reader point 3 and point 2 as
+     * the front edge. A legacy two-point save still needs the flip, and gets it in
+     * `frontEdgeFrame`, which is the one place that can tell the two shapes apart.
+     * @see frontEdgeFrame
+     */
+    // **The two blocks left on 2026-09-06.** They were here because 270501 and 340100 number
+    // the bar first -- "Points 1 and 2 define the endpoints of the symbol's vertical line" --
+    // while the old two-point generator drew that bar on the *last* vertex, so the stored
+    // order had to be reversed on the way in. The bar is points 1 and 2 now and the generator
+    // reads them in the standard's own order, so a reversal would hand it `[point 3, point 2,
+    // point 1]` and build the T inside out. Disrupt was never here, for the matching reason:
+    // 270502 numbers the longest arrow's tip third, which is where ours already was.
+    // @see Block, blockAnchors
+    // **341800 left on 2026-09-06**, with the four brackets and for their reason: a
+    // three-point base hands the reader points 3 and 2 as its front edge if it is reversed
+    // on the way in. A two-point save still needs the flip and gets it in `legacyAxis`,
+    // which is the one place that can tell the two base shapes apart. @see frontEdgeFrame
+    // **341900 left on 2026-09-06**, for the same reason the two blocks did. It was here
+    // because the standard numbers the first arrowhead's tip as point 1 while the old
+    // two-point generator drew that arrow on the *last* vertex. The base carries all four
+    // points in the standard's own order now, so a reversal hands the generator
+    // `[P4, P3, P2, P1]` and draws the hairpin backwards -- reported as "RIP is drawing
+    // points in the wrong order based on template". A legacy two-point save still needs the
+    // flip and gets it in `ReliefInPlace.points`, the one place that can tell the two base
+    // shapes apart. @see ReliefInPlace
+    //
+    // 343300 demonstration was never here: its point 1 is an arrowhead tip too, but its
+    // four points were derived rather than placed until 2026-09-06 and no reversal applied.
 
     // -- The V --
     // 140500 is the one that does not read "tip first": "Point 1 defines the **vertex**
@@ -118,20 +132,30 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // drawn second and sits *between* the two legs, so a reversal would only swap the
     // legs and leave the vertex in the middle. It gets a swap instead. @see SWAP_FIRST_TWO
     TacticalGraphicName.FieldsOfFire,                     // 140500
+    // 152200 reads the same way -- "Point 1 defines the vertex of the graphic. Points 2
+    // and 3 define the tips of the arrowheads" -- and is built the same way, apex in the
+    // middle. So it joins fields of fire in `SWAP_FIRST_TWO` rather than being reversed.
+    TacticalGraphicName.SearchArea,                       // 152200
+
+    // -- The convoys --
+    // "Point 1 defines the tip of the arrowhead and point 2 defines the rear of the
+    // symbol." A plain two-point reversal; there is no middle vertex to swap.
+    TacticalGraphicName.MovingConvoy,                     // 330100
+    TacticalGraphicName.HaltedConvoy,                     // 330200
 ];
 
 /**
  * The graphics whose points are reordered by something other than a reversal.
  *
- * Only fields of fire so far, and only because its apex is the **middle** vertex of a
- * three-point base: `[end, apex, end]` is what the generator reads, `[apex, end, end]` is
+ * Fields of fire and the search area, and only because each one's apex is the **middle**
+ * vertex of a three-point base: `[end, apex, end]` is what the generator reads, `[apex, end, end]` is
  * APP-06's numbering, and swapping the first two carries one into the other -- for the
  * two-point sketch a user has drawn halfway through, as well as for the finished V.
  *
  * Swapping two elements is its own inverse, exactly as reversal is, so the same function
  * serves both directions here too.
  */
-const SWAP_FIRST_TWO = new Set<string>([TacticalGraphicName.FieldsOfFire]);
+const SWAP_FIRST_TWO = new Set<string>([TacticalGraphicName.FieldsOfFire, TacticalGraphicName.SearchArea]);
 
 const TIP_FIRST = new Set<string>(TIP_FIRST_GRAPHICS);
 

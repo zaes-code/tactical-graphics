@@ -10,7 +10,7 @@ import type {Feature, MultiLineString, Position} from 'geojson';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import * as turf from '../core/turf';
 import {baseGeometryFor, renderTacticalGraphic} from '../core/render';
-import {allowedGestures, dropSizePx, hasDerivedAnchors} from '../core/symbology';
+import {allowedGestures, drawClickCount, dropSizePx, hasDerivedAnchors} from '../core/symbology';
 import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {anchorsForParallelLegs} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
@@ -123,9 +123,18 @@ describe('APP-06 343300 — demonstration', () => {
         expect(parts[1].length).toBeGreaterThan(3);
     });
 
-    it('carries four anchor points, and the base is where they live', () => {
+    it('carries four anchor points, placed rather than derived', () => {
+        /*
+         * 343300 names four — *"Point 1 defines the tip of the arrowhead. Point 2 defines the
+         * end of the straight line portion of the first arrow. Points 3 and 4 define the
+         * length of the second straight line"* — and all four are the operator's as of
+         * 2026-09-06. It left `DRAWN_ANCHOR_GRAPHICS` with them: that list routes the centre /
+         * size / rotation machinery a *derived* layout needs, and there is no layout left.
+         */
         expect(baseGeometryFor(TacticalGraphicName.Demonstration)).toBe('LineString');
-        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(true);
+        expect(usesDrawnAnchors(TacticalGraphicName.Demonstration)).toBe(false);
+        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBe(4);
+        // The old layout survives as the reader for files written before the change.
         expect(anchorsForParallelLegs(ANCHOR, SIZE, 0)).toHaveLength(4);
     });
 
@@ -141,18 +150,57 @@ describe('APP-06 343300 — demonstration', () => {
         expect(meters(parts[0][1], parts[2][0]) / SIZE).toBeCloseTo(0.7, 2);
     });
 
-    it('recomputes points 3 and 4 rather than reading them', () => {
-        // A base written while the four were placed freehand — legs splayed, opening
-        // wrong — resolves to the canonical shape rather than to what it had drifted
-        // into. This is what "auto-calculated" has to mean if it is to mean anything.
-        const drifted: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
-        const parts = (drop(0, drifted).graphic.geometry as MultiLineString).coordinates;
+    it('normalizes a splayed four-point base into parallel legs of one length', () => {
+        /*
+         * **The operator states three things, and the fourth follows.** An earlier pass read
+         * all four points freehand, on the reading that *"Points 1 and 2 and points 3 and 4
+         * determine the length of each side"* is two independent lengths. It draws a symbol
+         * nobody recognises: the legs splay, the turn goes oval, and the Template shows one
+         * figure. The shape is held to the user's rule instead (2026-09-06): *"the lines
+         * across from each other must be parallel and same size at all times"*.
+         *
+         * So points 1 and 2 are the operator's exactly, point 3 is read for its distance
+         * across the first leg and squared onto the perpendicular at point 2, and point 4 is
+         * point 3 displaced by point 2 → point 1. @see hairpinAnchors
+         */
+        const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const parts = (drop(0, placed).graphic.geometry as MultiLineString).coordinates;
+        // The first leg is the operator's, end to end.
+        expect(meters(parts[0][0], placed[0])).toBeLessThan(1);
+        expect(meters(parts[0][1], placed[1])).toBeLessThan(1);
+        // The second is the same length, and opposed — which is what the picture is.
+        expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(meters(parts[0][0], parts[0][1]), -1);
+        const out = turf.bearing(turf.point(parts[0][0]), turf.point(parts[0][1]));
+        const back = turf.bearing(turf.point(parts[2][0]), turf.point(parts[2][1]));
+        expect(Math.abs(((out - back + 360) % 360) - 180)).toBeLessThan(1);
+        // The turn's diameter leaves point 2 square to the leg, so the arc is tangent to both.
+        const across = turf.bearing(turf.point(parts[0][1]), turf.point(parts[2][0]));
+        expect(Math.abs((((across - out + 360) % 360) - 90) % 180)).toBeLessThan(1);
+    });
+
+    it('is idempotent — normalizing an already-normal base changes nothing', () => {
+        // The base is re-derived on every render, so a save, a restore and a redraw all run
+        // it again. A normalization that moved the shape a little each time would walk it
+        // away from where it was drawn over a session of edits.
+        const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const corners = (base: Position[]): Position[] => {
+            const parts = (drop(0, base).graphic.geometry as MultiLineString).coordinates;
+            return [parts[0][0], parts[0][1], parts[2][0], parts[2][1]];
+        };
+        const settled = corners(placed);
+        corners(settled).forEach((point, i) => expect(meters(point, settled[i])).toBeLessThan(1));
+    });
+
+    it('still resolves a base written before the four were placed', () => {
+        // Two points and a size is a file from before 2026-09-06 — a dropped demonstration
+        // saved as its derived four, or a mid-draw sketch. Those keep rendering through the
+        // old layout rather than failing to draw. @see anchorsForParallelLegs
+        const legacy: Position[] = [[-77.0, 38.7], [-76.0, 38.7]];
+        const parts = (drop(0, legacy).graphic.geometry as MultiLineString).coordinates;
+        expect(parts).toHaveLength(3);
         const leg1 = meters(parts[0][0], parts[0][1]);
         expect(meters(parts[2][0], parts[2][1])).toBeCloseTo(leg1, -1);
         expect(meters(parts[0][1], parts[2][0]) / leg1).toBeCloseTo(0.7, 2);
-        // Points 1 and 2 are the ones that *are* read, so they are untouched.
-        expect(meters(parts[0][0], drifted[0])).toBeLessThan(1);
-        expect(meters(parts[0][1], drifted[1])).toBeLessThan(1);
     });
 
     it('holds the two legs parallel and opposed at every rotation', () => {
@@ -161,6 +209,34 @@ describe('APP-06 343300 — demonstration', () => {
             const out = turf.bearing(turf.point(parts[0][0]), turf.point(parts[0][1]));
             const back = turf.bearing(turf.point(parts[2][0]), turf.point(parts[2][1]));
             expect(Math.abs(((out - back + 360) % 360) - 180)).toBeLessThan(1);
+        }
+    });
+
+    it('bulges the turn away from the arrowheads on BOTH sides of the first leg', () => {
+        /*
+         * **The side the turn falls on is the operator's, and the side it bulges to is not.**
+         * Point 3 can be dragged across the first leg, which mirrors the whole symbol; the
+         * turn still has to close the two legs from outside. Both generators passed a
+         * hardcoded flip to `createSemicircle`, so one of the two handednesses came out with
+         * the arc folded back between the legs — a flattened Z where the plate draws a U.
+         * (User's report, 2026-09-06: "demonstration is turning the arch inwards when dragged
+         * across".) @see turnBulgesLeft
+         *
+         * Mirrored point 3s, so the two runs differ in nothing but the side.
+         */
+        for (const third of [[-75.4, 39.6], [-75.4, 37.8]] as Position[]) {
+            const parts = (drop(0, [[-77.0, 38.7], [-76.0, 38.7], third]).graphic.geometry as MultiLineString).coordinates;
+            const [tip1, bend1] = parts[0];
+            const bend2 = parts[2][0];
+            const apex = parts[1][Math.floor(parts[1].length / 2)];
+            // Along the legs' own axis the apex is past both bends, never behind them.
+            const axis = turf.bearing(turf.point(tip1), turf.point(bend1));
+            const along = (point: Position) =>
+                meters(tip1, point) * Math.cos(((turf.bearing(turf.point(tip1), turf.point(point)) - axis) * Math.PI) / 180);
+            expect(along(apex)).toBeGreaterThan(Math.max(along(bend1), along(bend2)));
+            // …and by half the opening, which is what makes it a half circle rather than a
+            // chord with a nudge: an arc on the wrong side clears the bends by nothing.
+            expect(along(apex) - along(bend1)).toBeCloseTo(meters(bend1, bend2) / 2, -2);
         }
     });
 
@@ -181,32 +257,49 @@ describe('APP-06 343300 — demonstration', () => {
         }
     });
 
-    it('puts the edge handle on point 2 and the move handle on the anchor', () => {
-        // `[edge, centre]` — the point-anchored contract. The edge is the far end of the
-        // first leg, which is the one anchor point a resize has any reason to grab.
-        const rendered = drop();
-        const parts = (rendered.graphic.geometry as MultiLineString).coordinates;
+    it('puts a grip on each of the three placed points, and none on the derived fourth', () => {
+        /*
+         * It published `[edge, centre]` — the point-anchored contract — while the symbol was
+         * dropped whole, so the only draggable mark scaled a shape the operator could not
+         * otherwise change. Three points are placed now and each is grabbable; point 4 is
+         * where "parallel and the same length" puts it, and a grip on a derived point is a
+         * grip that cannot move it. That is 343500 envelopment's contract too.
+         * @see hairpinFourthPoint, ANCHOR_VERTEX
+         */
+        const placed: Position[] = [[-77.0, 38.7], [-76.0, 38.7], [-75.4, 39.6], [-77.6, 39.2]];
+        const rendered = drop(0, placed);
         const handles = (rendered.handles.geometry as {coordinates: Position[]}).coordinates;
-        expect(handles).toHaveLength(2);
-        expect(meters(handles[0], parts[0][1])).toBeLessThan(1);
-        expect(meters(handles[1], ANCHOR)).toBeLessThan(1);
+        expect(handles).toHaveLength(3);
+        const parts = (rendered.graphic.geometry as MultiLineString).coordinates;
+        // Grips 1 and 2 are the operator's own points; grip 3 is the squared bend, which is
+        // where the second leg actually starts — not the raw click, which drifted along it.
+        expect(meters(handles[0], placed[0])).toBeLessThan(1);
+        expect(meters(handles[1], placed[1])).toBeLessThan(1);
+        expect(meters(handles[2], parts[2][0])).toBeLessThan(1);
     });
 
-    it('is dropped, not drawn — one click, and it turns and resizes afterwards', () => {
-        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeGreaterThan(0);
-        // A four-point base normally means four things to drag. Not this one: the other
-        // three follow from the first, so the whole symbol moves, turns and scales
-        // together and there is no vertex to modify. @see hasDerivedAnchors
-        expect(hasDerivedAnchors(TacticalGraphicName.Demonstration)).toBe(true);
+    it('is drawn in three clicks and stored as four, with every placed point modifiable', () => {
+        /*
+         * **It was a one-click drop.** `dropSizePx` gave it a leg length from which the U's
+         * opening and all three other points followed, so the operator stated position and
+         * nothing else — and `modify` was off, because there was no vertex whose movement
+         * meant anything.
+         *
+         * 343300 names four anchor points and the base still stores four, which is what
+         * `baseVertexCount` is for. The **draw** asks for three: point 4 carries no decision,
+         * so asking for it is asking the operator to hit a point that is already determined.
+         * (User's call, 2026-09-06: "Only 3 clicks, we'll auto-calculate the 4th point".)
+         */
+        expect(dropSizePx(TacticalGraphicName.Demonstration)).toBeUndefined();
+        expect(hasDerivedAnchors(TacticalGraphicName.Demonstration)).toBe(false);
+        expect(drawClickCount(TacticalGraphicName.Demonstration)).toBe(3);
+        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBe(4);
         expect(allowedGestures(TacticalGraphicName.Demonstration)).toEqual({
             translate: true,
             rotate: true,
             resize: true,
-            modify: false,
+            modify: true,
         });
-        // …and the draw still ends on the first click, which is a rule about clicks and
-        // not about how many points the base ends up holding.
-        expect(baseVertexCount(TacticalGraphicName.Demonstration)).toBeUndefined();
     });
 
     it('holds DEM inside the leg it is set in, at every zoom', () => {

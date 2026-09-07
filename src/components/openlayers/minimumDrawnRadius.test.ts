@@ -82,3 +82,48 @@ describe('when the floor applies', () => {
         expect(Math.round(holder.size / RES)).toBe(5);
     });
 });
+
+/**
+ * # Which gesture the floor is armed for
+ *
+ * The floor is a *draw* affordance, and the two draws arm it differently because they are
+ * shaped differently. A circle draw sizes the symbol once, on release. A click-placed draw
+ * rebuilds the symbol on every pointer move — so arming the floor there pins `size` at the
+ * floor while the cursor keeps going, and the symbol sits still until the drag outgrows it
+ * and then lurches into tracking.
+ *
+ * Measured through the app on a turn: `size` held at 478 km across the first 120 px of drag
+ * while the cursor slid from 0.70 to 1.14 of the symbol's own bounding box, then locked. On
+ * MapLibre, which applies no floor on this path, the cursor sat at a constant 1.00 of the
+ * box from the first pixel. "The cursor seems to be in the middle of the graphic making it
+ * seem jumpy and not smooth." (User's report, 2026-09-05.)
+ */
+describe('which draw arms the floor', () => {
+    /** Enough of a `DrawEvent` for `onDrawStartFunc`, which only reads `feature`. */
+    const drawStart = () => ({feature: undefined}) as never;
+
+    it('leaves a click-placed draw unfloored, so the preview follows the cursor', () => {
+        const controller = getController(TacticalGraphicName.Turn, RES) as unknown as {
+            graphic: {sizingFromDraw?: boolean};
+            onDrawStartFunc(e: never): void;
+        };
+        controller.onDrawStartFunc(drawStart());
+        expect(controller.graphic.sizingFromDraw).toBeFalsy();
+    });
+
+    /**
+     * **The circle draw still arms it**, which is why this is stated as a difference between
+     * the two draws rather than as the floor being switched off. A drop-and-drag sizes the
+     * symbol once, so flooring it cannot fight a cursor.
+     */
+    it('still arms it for a centre-to-edge draw, which sizes once', () => {
+        const controller = getController(TacticalGraphicName.Secure, RES) as unknown as {
+            graphic: {sizingFromDraw?: boolean};
+            onDrawStartFunc(e: never): void;
+        };
+        // A circle draw subscribes to its sketch geometry, so the stub carries `on` too.
+        const geometry = {getCenter: () => [0, 0], getRadius: () => 1, on: () => undefined};
+        controller.onDrawStartFunc({feature: {getGeometry: () => geometry}} as never);
+        expect(controller.graphic.sizingFromDraw).toBe(true);
+    });
+});

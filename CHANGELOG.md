@@ -15,6 +15,219 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+**Thirty-eight graphics were rebuilt on the anchor points their plates number, and APP-06
+line and area coverage closed.** The registry goes 293 → 317. The headline is not the new
+symbols but the old ones: a graphic whose dimension used to be a `size` or `radius`
+amplifier — a number nobody could see and nowhere to put it — now has the operator place
+the point APP-06 gives it.
+
+**This is a major release for two reasons**, listed under *Removed* and *Changed* below:
+one enum member is gone, and one exported method lost a parameter. A fourth thing is not
+a breaking change but is why the major matters — **54 graphics changed how many points
+their base stores**, so this version writes a different file than 3.4.0 did. Files written
+by 3.4.0 open correctly here and that is pinned by a new suite; files written *here* will
+not be read correctly by 3.4.0.
+
+### Removed
+
+- **`TacticalGraphicName.FightingPosition`** — a duplicate. FM 1-02.2 table 5-22 and APP-06
+  291000 draw the *same* open three-sided bracket, beside the same trench line and with the
+  same note about facing the enemy, so two identical pictures with two captions were one
+  control measure. `FortifiedPosition` is the survivor — its draw model is the one 291000's
+  plate specifies — and it is displayed under **both** names and recorded as being in both
+  publications, so a user searching for "fighting position" still finds it.
+
+  **A consumer referencing the removed member will not compile.** Saved data, however, is
+  migrated: `migrateRetiredGraphic` rewrites a file naming it, and both engines apply it on
+  restore. The rename alone would not be enough — the retired graphic was dropped on a point
+  and locked at 2:1, where the survivor's base is the two front corners — so the geometry is
+  rewritten too, from the saved `radius` and `rotation`, and those two amplifiers are dropped
+  because they described a shape that no longer exists.
+
+### Changed
+
+- **`LineGraphicController.enableVertexDragging(minimumVertices, anchorVertex)` no longer
+  takes the second argument.** *Breaking* — the class is exported from the
+  `/openlayers` entry point, so a call passing two arguments stops compiling; drop the
+  second and nothing else changes.
+
+  Which base vertex a reshape refuses to move was stated twice: once in the portable table
+  MapLibre reads, once as a literal here. The two sets barely overlapped, so **eight
+  graphics edited differently depending on which renderer a host loaded** — 343000 capture,
+  342300 seize, 344500 evacuate, 344600 recover, 343600 escort and 272100's zone refused a
+  drag on OpenLayers that MapLibre allowed, while 341900 did the reverse. Six of those have
+  plates that say *"point 1 defines the centre"*, so the answer was right and its address
+  was wrong; they are in the portable table now. Two had an answer their plates do not
+  support and lost it: 272101 numbers no centre at all, and 343700 exfiltrate's point 1 is
+  *"the end of the straight line portion of the graphic"*, so making it inert removed the
+  only grip that sets the run it defines.
+
+- **Fifty-four graphics changed how many points their base stores.** Not breaking — a file
+  written by 3.4.0 opens here — but it changes what the library writes. The two-rail
+  crossings (271100 bridge, 271300 assault crossing, FM's gap) go to four points, the fords
+  to three; 152100 support by fire and the security operations to four; ambush, attack by
+  fire, penetrate, block, disrupt, breach, bypass, canalize, clear, the seven cane arrows,
+  mobile defence, the infiltration lane and both turns to three; both hairpins and
+  envelopment to four.
+
+  Two mechanisms carry the back-compat and both are deliberate: some bases are upgraded on
+  the way in by `normalizeDrawnBase`, the rest keep drawing through their generator's
+  short-base branch. `legacyFormatRestore.test.ts` is new and puts a 3.4.0-shaped record —
+  two points plus the amplifiers that version filed — through the public API, the MapLibre
+  build and OpenLayers' restore for all 317 names.
+
+- **Defeat, Destroy, Interdict, Neutralize and Suppress publish one handle, at the centre.**
+  Each plate reads "requires one anchor point. The centre point defines the centre of the
+  symbol", and one anchor point is one handle. They had emitted `[edge, centre]`, which made
+  the edge the live grip and left the centre showing as a grey inert dot — a grab point
+  beside a symbol the standard describes by its middle.
+
+  **Nothing else changes: all five still move and resize**, and `allowedGestures` still
+  reports `{translate: true, rotate: false, resize: true}` for each. The handle set and the
+  gesture set had been one switch — `generateHandles` read `allowedGestures().resize` — and
+  are now separate, which is what lets the grip move to the centre without taking a
+  capability away. New export: `publishesAnchorHandleOnly(name)`, for a host drawing its own
+  handles. Saved graphics are unaffected.
+
+- **The arrowhead on `Fix` and `TacticalFix` is capped against the symbol's reach, not the
+  length of its zigzag.** `screenSizedArrowHead` limits a solid head to a share of the line
+  it terminates, and it was measuring how far the pen travels. A zigzag traverses about
+  twice its own run, so the head reached the absolute ceiling on a symbol half that wide —
+  15 px of head on 49.9 px of reach, against ferry crossing's proportionate 7.8 on 31.2.
+  Both are 0.25 of their own reach now. The helper takes a `measure` argument and defaults
+  to the old behaviour, so a route — where the drawn path *is* the symbol — is unchanged.
+
+- **`npm run check:docs`** runs the three freshness checks that guard generated artifacts —
+  picker thumbnails, the field matrix and the README's typed samples. Each had a `--check`
+  already; nothing ran any of them, which is how the field matrix went stale unnoticed.
+  `npm run gen:field-matrix` and `npm run check:field-matrix` are the two new scripts.
+
+### Added
+
+- **`RoadblockCompleteExecuted` is back, storing three points that nobody may drag.** It had
+  been switched off mid-branch: 271204's Draw Rules cell is empty, so the row inherits
+  271201's centreline-and-width rule and the Template is the only statement of how three
+  points lay four strokes out — read three ways in one session, three different pictures.
+
+  That reading is still open, so **the picture is 3.4.0's exactly** — dropped whole on one
+  click, byte for byte the same four strokes — and what changed is only what gets stored. It
+  used to file the dropped centre alone; it now writes the three anchor points the standard
+  names. Points 1 and 2 are the two extremes of the symbol's own 45-degree axis, the line
+  running *between* the two parallel bars, so their midpoint is the centre and the distance
+  between them is the span; point 3 is one of the crossings. That is enough to rebuild the
+  figure, and it matches the plate reading recorded before the symbol was switched off — *PT
+  3 at a crossing 48.5 px off the PT1–PT2 midpoint* — since that offset is the
+  half-separation.
+
+  **None of the three answers a drag.** `handlesAreInert(name)` is the new export that says
+  so, and both engines read it: OpenLayers routes the whole set to the inert handle feature,
+  MapLibre refuses the grab.
+
+  **Inert points are not a fixed symbol**, though: it moves, turns and scales as a whole, and
+  it turns for real — the bars lean off the symbol's own axis rather than off north, and the
+  rotation is read back out of the anchor points rather than carried beside them. Both
+  gestures pivot on **point 3**: the crossing is what the symbol marks on the ground, so
+  scaling about the centre points 1 and 2 straddle would slide it off the road it was placed
+  against. 3.4.0 shipped this graphic as resize-only, and unturned it draws exactly what that
+  version drew.
+
+  It is a third thing, distinct from the two that existed: `anchorVertex` makes *one* vertex
+  of an editable path inert, and `publishesAnchorHandleOnly` is about *how many* handles a
+  graphic publishes. Its tracker row still reads `N` for shape and handles, so it is listed
+  **upcoming** rather than counted as capability. (User's call, 2026-09-07.)
+
+- **APP-06 line and area coverage is closed** — every group at 100%. Twenty-six graphics
+  join the registry: the nine bearing lines and both navigational lines, nine maritime areas
+  (the launch, defended and ship-area ellipses and rectangles, the no-attack and active
+  manoeuvre zones, the AEGIS single target), the two convoys, `SearchArea` 152200,
+  `RadarSearchDoctrine` 200700, `CuedAcquisitionDoctrine` 200600, `MinedArea` 270800 and
+  `Defeat` 344300.
+
+  Three of those had been recorded as deliberate exclusions, and **the record was wrong** —
+  "excluded on purpose" had never been a reading of the plate.
+
+- **`MinedArea` (APP-06 270800, FM 1-02.2 table 5-20)** — a drawn area with `M` markers on
+  its boundary and the mine row inside, the unfenced sibling of `MinedAreaFenced`. The wire
+  is the whole of the difference between them, so one paint draws both and a `fenced` flag
+  picks; `minedAreaPaint` is exported alongside `minedAreaFencedPaint`.
+
+  It had been missed because Table A-32 lists 270801 *under* it, so a "parent rows are
+  headers" filter hid it — but 270800 carries its own Anchor Points block, and a header
+  does not.
+
+- **`Defeat` (APP-06 344300)** — four solid arrows converging on a `D`. Its proportions are
+  measured off the Template at 600 dpi rather than chosen: the tip stands 0.192 of the reach
+  off centre, the head is 0.222 long and 0.12 half-wide, the shaft 0.048. APP-06 only; FM
+  1-02.2 does not name the task.
+
+  Its Draw Rules cell is word for word Destroy's, so it takes Destroy's whole contract —
+  point-anchored, dropped at the crossed tasks' size, no rotation.
+
+- **New readers for the rebuilt point contracts**, all exported from the root:
+  `supportByFireAnchors`, `hairpinAnchors`, `arcAndArrowAnchorsFromClicks`,
+  `squareOntoBisector`, `railCrossingBase`, `supportByFireBase`, `RAIL_PREVIEW_GAP_PX` and
+  `SUPPORT_BY_FIRE_PREVIEW_REACH`. The two-rail crossings' own reader stays internal — the
+  generators and `normalizeDrawnBase` are the supported way in. Eighty names were added to the root entry point, two to
+  `/openlayers` and three to `/maplibre`; **none were removed from any of the three.**
+
+### Fixed
+
+- **A count is not a reading, and four defects proved it** — each in a graphic that matched
+  the number of anchor points its plate states:
+
+  - the movement family's width grip sat on the corner of the arrowhead its Template leaves
+    unlettered, on all eight arrows
+  - 340700 counter-attack by fire's bracket stood 1.85 half-widths *outside* point 1, so the
+    anchor the operator placed was neither the tip of anything nor the end of the symbol
+  - 152100 support by fire drew a differently-shaped stand-in for every click before its
+    last, touching neither of the two points already placed
+  - eighteen picker thumbnails were built by a third synthesiser carrying its own copy of
+    the layout chain; nine drew a reversed base, so the cane arrows shipped as bare arches
+
+- **200600's white border is visible in the generated tiles.** It paints white because its
+  Note says so; on a white page that is an invisible symbol. Its own Note 2 reads *"Gray
+  background is used to show white border and is not part of the symbol"*, and the generator
+  now does what the plate does.
+
+- **Eight graphics were tagged `APP-06` only and are in FM 1-02.2 as well.** The four CBRN
+  contaminated areas (`BiologicalContaminatedArea` 271700, `ChemicalContaminatedArea`
+  271800, `NuclearContaminatedArea` 271900, `RadiologicalContaminatedArea` 272000) are FM
+  table 5-28; `MinefieldDynamicDepiction` 270707, `MinedAreaFenced` 270801 and `TripWire`
+  290500 are FM table 5-20; `Demonstration` 343300 is FM table 5-15, where the plate draws
+  the same `DEM` hook this library draws.
+
+  Every one had been classified on a text search of the manual that came back empty, and
+  **the search was the defect.** FM tables name a symbol by its position under a heading:
+  table 5-28's rows read `biological`, `chemical`, `nuclear` and `radiological` beneath a
+  heading `Contaminated area`, so the phrase "biological contaminated area" appears nowhere
+  in the document. `getSpecifications` and `listNamesBySpecification` now return these
+  eight under FM 1-02.2 as well, which is additive — nothing that was returned before has
+  stopped being returned. Across the release the split moves from 214 both / 69 APP-06-only
+  / 8 FM-only to **224 both / 85 APP-06-only / 8 FM-only**, and 309 graphics carry a
+  six-digit entity code. Pinned per graphic, by the table that carries it, in
+  `specifications.test.ts`.
+
+- **`docs/graphic-field-matrix.csv` / `.md` were four releases stale** and still listed
+  `axis of attack`, removed in 3.2.0. Regenerated; `npm run check:field-matrix` is new and
+  fails when they drift again.
+
+- **The README's `prepareFeatures` note** gave a stale count for the graphics that keep
+  every glyph on the graphic feature. Measured against the paint registry it is **127 of
+  317**; the denominator had been updated when the registry grew and the numerator had not.
+
+- **`docs/app6-field-validation.md` attributed the 3.2.0 amplifier changes to 4.0.0**, a
+  version that did not exist at the time. That included the range-fan kilometres-to-metres
+  change, which has no migration path, so the document named the wrong release for the one
+  thing a consumer most needs the right release number for.
+
+### Testing
+
+- **`engineRoundTrip`** takes every registered graphic out of one engine and into the other
+  and back, at two zooms, asserting the coordinates — the part a consumer reads as doctrine.
+  Nothing covered that trip before: the existing suites round-trip within one engine.
+- **`anchorVertexParity`** asserts the inert-vertex index against the library for all 317.
+- **`legacyFormatRestore`** opens a 3.4.0-shaped file on both engines, for all 317.
+
 ## [3.4.0] — 2026-09-02
 
 **Three CBRN graphics finished, and the STRIKWARN zone redesigned around how it is

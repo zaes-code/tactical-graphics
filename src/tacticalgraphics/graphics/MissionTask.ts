@@ -14,6 +14,14 @@ import {frameFromAnchors} from "../core/anchors";
 const OPENING_QUARTER_TURN = 90;
 
 /**
+ * How many radial tics 151204 draws: **ten full length plus one short beside the `C`**.
+ *
+ * Counted off the Template by the user (2026-09-04). @see Contain.tics for why the count is
+ * a reading rather than a measurement.
+ */
+const CONTAIN_TIC_COUNT = 11;
+
+/**
  * Half the gap the arc-and-arrowhead circles leave for their one-letter label,
  * in degrees, when the caller supplies no `labelGapDegrees`. 15° each side of
  * the label axis — a 30° hole, which is what these graphics have always drawn.
@@ -274,46 +282,74 @@ export class Contain extends MissionTask {
         const gap = labelGapDegrees(opts);
         const upperArch = geometryService.createCircularArc(center, rotation, size, 90, 180 - gap, 100);
         const lowerArch = geometryService.createCircularArc(center, rotation, size, 180 + gap, 270, 100);
-        let radialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 75, 285, -size * ARC_TIC_FRACTION, arcTicCount(210));
-
-        // The center radial sits at ~180° (due-west of center) — exactly where
-        // the C label is anchored. Pull its outer endpoint inward so the line
-        // is half its original length and no longer touches the label.
-        const middleIdx = Math.floor(radialLineStrings.length / 2);
-        const middle = radialLineStrings[middleIdx];
-        if (middle && middle.length === 2) {
-            const [tip, mid] = middle;
-            radialLineStrings[middleIdx] = [
-                tip,
-                [tip[0] + (mid[0] - tip[0]) * 0.5, tip[1] + (mid[1] - tip[1]) * 0.5],
-            ];
-        }
-
+        const radialLineStrings = this.tics(center, rotation, size);
         return this.asMultiLineStringFeature([upperArch, lowerArch, ...radialLineStrings]);
     }
 
-    /** `[edge, center]` — the family's order, now read off the drawn opening. */
     /**
-     * `[point 2, centre]`, and for contain point 2 is a **drawn anchor** rather than a
-     * position derived from a radius.
+     * The eleven radial tics: **ten full length and one short, and all of them inside the
+     * half circle.**
      *
-     * 151204's Template annotates `PT. 1` against the upper end of the semicircle's
-     * opening and `PT. 2` against the lower one, so the second stored coordinate *is* the
-     * handle's place and there is nothing to compute. A base that is still a bare point —
-     * a save written before the anchor-point conversion — has no second coordinate, so
-     * that path falls back to the lower end of the opening in the rotated frame, which is
-     * the same position by construction.
+     * `generateRadialLineStrings` was drawing these across 75 to 285 degrees — fifteen
+     * degrees past each end of an arc that runs 90 to 270 — so two tics hung off the open
+     * side with no rim behind them. It also derived the count from the letter-height
+     * spacing rule, which produced a few too many. (User's count off the Template,
+     * 2026-09-04.)
      *
-     * It used to sit at 205 degrees, which on a half circle running 90 to 270 is neither
-     * end of the opening nor anywhere the plate marks.
+     * **The count is the user's reading, not a measurement**, and deliberately so: a tic
+     * census taken off the Template at 500 dpi could not be made to agree with itself —
+     * fitting the arc's centre moved by enough to split single tics into three runs and to
+     * report sixteen. An admitted count from someone reading the plate is worth more than a
+     * number a script produced twice and differently. @see RSD_DEFAULT_START_SHARE, the same
+     * call made the same way
+     *
+     * Evenly spaced **inclusive of both ends**, so a tic sits on each end of the opening
+     * exactly where the Template letters `PT. 1` and `PT. 2`. The middle one falls at 180
+     * degrees, which is where the `C` is anchored on the rim, so it is drawn as the inner
+     * half of a full tic: short, and standing off the label rather than running into it.
+     */
+    private tics(center: Position, rotation: number, size: number): Position[][] {
+        const spokes = CONTAIN_TIC_COUNT;
+        const step = (270 - 90) / (spokes - 1);
+        const inner = size * (1 - ARC_TIC_FRACTION);
+        const at = (radius: number, degrees: number): Position =>
+            geometryService.translateCoordinates(center, radius, toRadians(rotation + degrees)) as Position;
+
+        return Array.from({length: spokes}, (_, i) => {
+            const degrees = 90 + i * step;
+            // The short one keeps the inner end and gives up the half nearest the rim,
+            // which is the end the label is on.
+            const outer = i === (spokes - 1) / 2 ? size - (size - inner) / 2 : size;
+            return [at(outer, degrees), at(inner, degrees)];
+        });
+    }
+
+    /**
+     * `[point 1, point 2]` — **both ends of the semicircle's opening, and nothing else.**
+     *
+     * 151204's Template annotates `PT. 1` against the upper end of the opening and `PT. 2`
+     * against the lower one. Those two are the whole of what the plate marks: there is no
+     * annotation on the centre, because the centre is not a point the user places — it is
+     * the midpoint of the two that are.
+     *
+     * This published `[point 2, centre]`, so one of the two marked points had a grip, the
+     * other had none, and the graphic offered a handle on a place the plate does not name.
+     * (User's report, 2026-09-04.) Before that it sat at 205 degrees, which on a half
+     * circle running 90 to 270 is neither end of the opening nor anywhere at all.
+     *
+     * A base that is still a bare point — a save written before the anchor-point
+     * conversion — has no stored anchors, so both ends are rebuilt in the rotated frame,
+     * which puts them in the same places by construction.
      */
     generateHandles(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiPoint> {
         const {center, rotation, size} = this.frame(base, opts);
         const coords = base.geometry?.coordinates;
-        const drawn = Array.isArray(coords?.[0]) ? (coords as Position[])[1] : undefined;
-        const openingEnd = drawn
-            ?? geometryService.translateCoordinates(center, size, toRadians(rotation + 270));
-        return this.asMultiPointFeature([openingEnd, center]);
+        const drawn = Array.isArray(coords?.[0]) ? (coords as Position[]) : undefined;
+        if (drawn && drawn.length >= 2) return this.asMultiPointFeature([drawn[0], drawn[1]]);
+        return this.asMultiPointFeature([
+            geometryService.translateCoordinates(center, size, toRadians(rotation + 90)),
+            geometryService.translateCoordinates(center, size, toRadians(rotation + 270)),
+        ]);
     }
 
     generateLabels(base: Feature<any>, opts: PointGraphicOptions): Feature<Point> {

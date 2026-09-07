@@ -193,7 +193,20 @@ export function blockPaint(label: string): BlockPaint {
         const baseDx = end[0] - start[0];
         const baseDy = end[1] - start[1];
         const baseLen = Math.hypot(baseDx, baseDy);
-        if (baseLen === 0) return [];
+        /*
+         * **A shaft of no length silences the shaft, not the symbol.** There is nothing to
+         * measure a midpoint along and so nowhere to cut the letter gap, but the sub-lines
+         * after it are whole lines that were placed and must still be drawn. This used to
+         * `return []`, which made a block whose point 3 lands on the bar's own axis — no
+         * perpendicular offset, so no horizontal line — disappear entirely, bar included,
+         * on both engines. The bar is points 1 and 2; it does not stop existing because the
+         * stem collapsed. @see Block.lines
+         */
+        if (baseLen === 0) {
+            return outline.length
+                ? [{geometry: {type: 'MultiLineString', coordinates: outline}, stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()}}]
+                : [];
+        }
 
         const projected = coords.map(([x, y]) => ((x - start[0]) * baseDx + (y - start[1]) * baseDy) / baseLen);
         const minProj = Math.min(...projected);

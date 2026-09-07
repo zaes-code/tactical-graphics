@@ -120,8 +120,14 @@ export {securityOperationStyleFunc} from './openlayerStyles';
 // the base — and `restoreTacticalGraphics` rebuilds them editable. A record carries one
 // object, `tacticalGraphic`: the portable description any renderer understands, and
 // everything needed to rebuild. No viewport state travels with it; see persistence.ts.
+/*
+ * The saved-file format is the library's now, so a consumer gets the same names from either
+ * subpath — which is what the façade rule asks for, and what it was not while
+ * `SNAPSHOT_VERSION` was an OpenLayers-only name. @see core/snapshot.ts
+ */
+export {SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from '@zaes/tactical-graphics';
+export type {TacticalGraphicsSnapshot} from '@zaes/tactical-graphics';
 export {
-    SNAPSHOT_VERSION,
     applyRestoredGeometry,
     restoreTacticalGraphics,
     serializeTacticalGraphics,
@@ -130,7 +136,6 @@ export type {
     RestoreFailure,
     RestoreReport,
     SerializeOptions,
-    TacticalGraphicsSnapshot,
 } from './persistence';
 
 // Feature-property helpers for hosts that build or inspect graphics themselves.

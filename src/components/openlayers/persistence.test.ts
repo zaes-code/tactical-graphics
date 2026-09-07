@@ -19,7 +19,7 @@ import {MissionTaskController} from './controllers/MissionTaskController';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {applyBaseGeometry} from './sampleGallery';
 import {readGraphicLabels} from './graphicProperties';
-import {restoreTacticalGraphics, serializeTacticalGraphics, SNAPSHOT_VERSION} from './persistence';
+import {GEOMETRY_KEYS, readGeometryState, restoreTacticalGraphics, serializeTacticalGraphics, SNAPSHOT_VERSION} from './persistence';
 
 /** The resolution graphics are "drawn" at. Baked into every decoration size. */
 const RES = 1200;
@@ -522,7 +522,8 @@ describe('an empty map', () => {
 
         const to = fakeManager();
         const report = restoreTacticalGraphics(to, snapshot);
-        expect(report).toEqual({restored: 0, failed: []});
+        // The version a file declares, or the current one where it declares none.
+        expect(report).toEqual({restored: 0, failed: [], version: SNAPSHOT_VERSION});
     });
 });
 
@@ -590,12 +591,12 @@ describe('a graphic saved before the anchor-point conversion', () => {
     });
 
     /**
-     * The demonstration is in the family for a different reason: its four points are
-     * derived from the first rather than placed. A file written while they were drawn
-     * freehand still loads, and comes back as the canonical shape — which is what
+     * The demonstration is in the family for a different reason: only three of its four
+     * points are placed, and the fourth is constructed. A file written while all four were
+     * read freehand still loads, and comes back as the canonical shape — which is what
      * "auto-calculated" means once the ratios stop being an input.
      */
-    it('snaps a freehand demonstration onto the ratios it is now fixed at', () => {
+    it('restores a four-point demonstration, squaring a splayed one as it goes', () => {
         const to = fakeManager();
         // A U drawn tip-first: point 1 the arrowhead, point 2 the first bend due east.
         const drawn = {
@@ -630,18 +631,34 @@ describe('a graphic saved before the anchor-point conversion', () => {
         expect(base).toBeInstanceOf(LineString);
         const anchors = (base as LineString).getCoordinates().map(c => toLonLat(c));
         expect(anchors).toHaveLength(4);
-        // Points 1 and 2 are the two that are read, and they have not moved.
-        expect(anchors[0][0]).toBeCloseTo(-0.6, 6);
-        expect(anchors[0][1]).toBeCloseTo(51.5, 6);
+        /*
+         * **The first two come back where they were put, and the shape squares up around
+         * them.** A splayed file is one written while all four points were read freehand, or
+         * hand-authored GeoJSON, or a drag on the other engine that got away — and a
+         * demonstration whose legs splay is not the symbol. It is re-derived on load rather
+         * than drawn as filed, which is the same treatment 343500 gives its fourth point.
+         * @see hairpinAnchors
+         */
+        expect(anchors[0][0]).toBeCloseTo(-0.6, 4);
+        expect(anchors[0][1]).toBeCloseTo(51.5, 4);
         expect(anchors[1][0]).toBeCloseTo(0.2, 4);
-        // Points 3 and 4 were rewritten from them, so the legs come back equal. Within a
-        // percent, and as a ratio: these are *projected* metres, and the second leg sits a
-        // quarter of a degree further north, where Mercator's scale factor is 0.8% larger.
-        // Asserting equality here would be asserting the projection.
+        expect(anchors[1][1]).toBeCloseTo(51.5, 4);
+        // ...and the two legs come back parallel and the same length.
         const rebuilt = holder.getFeatures().find(f => f.get('role') === 'graphic')?.getGeometry();
         const parts = (rebuilt as MultiLineString).getCoordinates();
-        const legLength = (part: number[][]) => Math.hypot(part[1][0] - part[0][0], part[1][1] - part[0][1]);
-        expect(legLength(parts[2]) / legLength(parts[0])).toBeCloseTo(1, 1);
+        // **Measured back in degrees, because EPSG:3857 is not a length.** Mercator inflates
+        // by 1/cos(latitude), and the two legs sit at different latitudes — so equal legs
+        // measure 0.9% apart in projected metres, which is enough to fail an assertion the
+        // geometry actually satisfies. @see ai/conventions.md, the projected-coords rule
+        const legLength = (part: number[][]) => {
+            const [a, b] = part.map(c => toLonLat(c));
+            const scale = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
+            return Math.hypot((b[0] - a[0]) * scale, b[1] - a[1]);
+        };
+        expect(legLength(parts[2]) / legLength(parts[0])).toBeCloseTo(1, 2);
+        const heading = (part: number[][]) => Math.atan2(part[1][1] - part[0][1], part[1][0] - part[0][0]);
+        const opposed = Math.abs(Math.abs(heading(parts[2]) - heading(parts[0])) - Math.PI);
+        expect(opposed).toBeLessThan(0.02);
     });
 
     it('upgrades a pursuit too, to its own three-point layout', () => {
@@ -694,5 +711,79 @@ describe('a graphic saved before the anchor-point conversion', () => {
         const {to} = roundTrip(first);
         expectMetersClose(baseCoords(to.graphicControllers[0]), before);
         expect((to.graphicControllers[0].graphic as unknown as {bend: number}).bend).toBeCloseTo(0.6, 10);
+    });
+});
+
+describe('the geometry inputs a restore reads back', () => {
+    /**
+     * A bag with a distinct, recognisable value under every key the write side stamps.
+     * `mirrored` is a boolean, so it gets `true`; everything else gets its own number.
+     */
+    const stamped = Object.fromEntries(
+        GEOMETRY_KEYS.map((key, i) => [key, key === 'mirrored' ? true : (i + 1) * 1000]),
+    ) as Record<string, unknown>;
+
+    it('reads every key the write side stamps', () => {
+        /*
+         * **The assertion that was missing, and the defect it would have caught.**
+         *
+         * The restore built its state as an object literal and quietly omitted `length`.
+         * Nothing objected: `GraphicGeometryState` is a `Pick` of *optional* fields, so a
+         * missing key is a valid value of the type and the compiler has no opinion at all.
+         *
+         * The point-anchored branch reads `state.length !== undefined ? state.length / 2 :
+         * state.radius`, so it always fell to `radius` — right for a file OpenLayers wrote,
+         * which stamps both, and wrong for one MapLibre wrote, which stamps `length` and no
+         * `radius`. A rectangular target drawn on MapLibre came back on OpenLayers at the
+         * *view resolution* rather than its own size: 1,949 km of length restored as 19.6.
+         * (User's export, 2026-09-04.)
+         *
+         * Walking the key list is what makes this hold for the next key too.
+         */
+        const state = readGeometryState(stamped) as Record<string, unknown>;
+        for (const key of GEOMETRY_KEYS) {
+            expect(state[key]).toBe(stamped[key]);
+        }
+    });
+
+    it('leaves a key absent from the bag undefined rather than guessing', () => {
+        const state = readGeometryState({}) as Record<string, unknown>;
+        for (const key of GEOMETRY_KEYS) expect(state[key]).toBeUndefined();
+    });
+
+    it('restores a MapLibre-shaped bag: a length, and no radius at all', () => {
+        /*
+         * The two engines stamp different keys for the same fact, and this is the shape
+         * that broke. Asserted end to end rather than only through `readGeometryState`,
+         * because the reader alone cannot show that the size reaches the geometry.
+         */
+        const to = fakeManager();
+        const restored = restoreTacticalGraphics(to, {
+            type: 'FeatureCollection',
+            tacticalGraphicsVersion: SNAPSHOT_VERSION,
+            features: [{
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [-123.5, 32.3]},
+                properties: {
+                    graphicName: TacticalGraphicName.TargetAreaRectangular,
+                    symbolId: 'mlb-253',
+                    role: 'base',
+                    tacticalGraphic: {
+                        name: TacticalGraphicName.TargetAreaRectangular,
+                        length: 585_928,
+                        width: 386_712,
+                        rotation: -17.7,
+                        decorationSize: 59_381,
+                    },
+                },
+            }],
+        } as never);
+        expect(restored.failed).toHaveLength(0);
+        const bag = readGraphicLabels(
+            to.graphicControllers[0].getFeatures().find(f => f.get('role') === 'graphic')!,
+        ) as unknown as Record<string, number>;
+        // Half the length, which is what a holder that files a length spends as its size.
+        expect(bag.radius).toBeCloseTo(585_928 / 2, 0);
+        expect(bag.length).toBeCloseTo(585_928, 0);
     });
 });

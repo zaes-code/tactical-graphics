@@ -618,17 +618,18 @@ const CIRCLED_STATUS_STEPS = 64;
  *
  * Returns nothing when the marks enclose no area, which is a symbol not yet drawn.
  *
- * A caller that knows better may hand in the circle outright — the mine cluster's ring is
- * its own dome completed, which no bounding box can express. @see mineClusterPaint
+ * A caller that knows better may hand in the **path** outright — the mine cluster's ring is
+ * its own dome pushed outward, which no bounding box can express, and which is a circle
+ * only where the projection makes the dome one. @see mineClusterPaint
  */
 export function plannedStatusRing(
     marks: readonly Paint[],
     feature: PaintFeature,
     context: PaintContext,
-    circle?: {center: ProjectedPosition; radius: number},
+    ring?: ProjectedPosition[],
 ): Paint | undefined {
     if (feature.properties.status !== TacticalGraphicStatus.planned) return undefined;
-    if (circle) return circleMark(circle.center, circle.radius, feature);
+    if (ring) return ring.length >= 3 ? ringMark(ring, feature) : undefined;
 
     let minX = Infinity;
     let minY = Infinity;
@@ -665,6 +666,11 @@ function circleMark(center: ProjectedPosition, radius: number, feature: PaintFea
         const t = (i / CIRCLED_STATUS_STEPS) * 2 * Math.PI;
         ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
     }
+    return ringMark(ring, feature);
+}
+
+/** The dash-dot stroke every planned ring wears, whoever worked out its path. */
+function ringMark(ring: ProjectedPosition[], feature: PaintFeature): Paint {
     return {
         geometry: {type: 'LineString', coordinates: ring},
         stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: CIRCLED_STATUS_DASH_PX},

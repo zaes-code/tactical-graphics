@@ -10,6 +10,7 @@ import {ObstacleBypass} from "../graphics/ObstacleBypass";
 import {MinimumSafeDistanceMultipleStrike, MinimumSafeDistanceZone} from "../graphics/SafeDistanceZone";
 import {AreaGraphic, RectangularArea, EncirclementArea, FortifiedArea, Obstacle, ObstacleFree} from "../graphics/AreaGraphic";
 import {RectangularTarget} from "../graphics/RectangularTarget";
+import {EllipticalArea, RadarSearchDoctrine} from "../graphics/MaritimeArea";
 import {isRectangular} from "./handles";
 import {
     AreaDefense,
@@ -25,7 +26,7 @@ import {
     Retain,
     Secure
 } from "../graphics/MissionTask";
-// import {SearchArea} from "../graphics/SearchArea";
+import {SearchArea} from "../graphics/SearchArea";
 import {SecurityOperation} from "../graphics/SecurityOperation";
 import {Block} from "../graphics/Block";
 import {Breach} from "../graphics/Breach";
@@ -48,7 +49,7 @@ import {AviationDirectionOfAttack, DirectionOfMainAttack, DirectionOfMainAttackF
 import {FollowTask} from "../graphics/FollowTask";
 import {AttackHelicopterAxisOfAdvance, AvenueOfApproach, AviationAxisOfAdvance, Counterattack, CounterattackByFire, MainAttack, MainAttackFeint, SupportingAttack} from "../graphics/Movement";
 import {Penetration} from "../graphics/Penetration";
-import {FightingPosition, FortifiedLine} from "../graphics/FieldFortification";
+import {FortifiedLine} from "../graphics/FieldFortification";
 import {Exploitation} from "../graphics/Exploitation";
 import {
     Ambush,
@@ -66,10 +67,12 @@ import {
 } from "../graphics/FormsOfManeuver";
 import {WeaponRangeFanCircular, WeaponRangeFanSector} from "../graphics/RangeFan";
 import {NamedBlockArrow} from "../graphics/AdditionalMissionTasks";
+import {Defeat} from '../graphics/Defeat';
 import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 import {Abatis} from "../graphics/Abatis";
 import {WireObstacle} from "../graphics/WireObstacle";
 import {ExplosivesReadiness} from "../graphics/ExplosivesReadiness";
+// Excluded — see ai/excluded-graphics.md
 import {RoadblockComplete} from "../graphics/RoadblockComplete";
 import {AntiTankDitch} from "../graphics/AntiTankDitch";
 
@@ -110,6 +113,7 @@ TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireTripl
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesPlannedStateOfReadiness));
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness1Safe));
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable));
+// Excluded — see ai/excluded-graphics.md
 TacticalGraphicsRegistry.register(new RoadblockComplete());
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchUnderConstruction));
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchCompleted));
@@ -160,6 +164,19 @@ let phaseLineGraphicNames: TacticalGraphicName[] = [
     TacticalGraphicName.MainSupplyRoute,
     TacticalGraphicName.AlternateSupplyRoute,
     TacticalGraphicName.CommonSensorBoundary,
+    // APP-06 §8.11. Every one is a plain two-point run — `Phaseline` is the generator for
+    // every simple line here, and what makes each of these its own symbol is the letter
+    // its paint sets and, for 220104, the dash. @see bearingLinePaint
+    TacticalGraphicName.BearingLine,
+    TacticalGraphicName.BearingLineElectronic,
+    TacticalGraphicName.BearingLineElectromagneticWarfare,
+    TacticalGraphicName.BearingLineAcoustic,
+    TacticalGraphicName.BearingLineAcousticAmbiguous,
+    TacticalGraphicName.BearingLineTorpedo,
+    TacticalGraphicName.BearingLineElectroOpticalIntercept,
+    TacticalGraphicName.BearingLineJammer,
+    TacticalGraphicName.BearingLineRadioDirectionFinder,
+    TacticalGraphicName.NavigationalRhumbLine,
     TacticalGraphicName.LightLine,
     TacticalGraphicName.LineGeneric,
     TacticalGraphicName.HandoverLine,
@@ -242,6 +259,7 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AirfieldZone,
     TacticalGraphicName.RadiationDoseRateContourLine,
     TacticalGraphicName.MinefieldDynamicDepiction,
+    TacticalGraphicName.MinedArea,
     TacticalGraphicName.MinedAreaFenced,
     TacticalGraphicName.PsyOpsZoneIrregular,
     TacticalGraphicName.PsyOpsZoneRectangular,
@@ -295,6 +313,14 @@ let areaGraphicNames = [TacticalGraphicName.ObjectiveArea,
     TacticalGraphicName.AirSpaceCoordinationAreaIrregular,
     TacticalGraphicName.UnexplodedExplosiveOrdnanceArea,
     TacticalGraphicName.AirheadLine,
+    // APP-06 240804. `isRectangular` routes it to `RectangularArea` below, which is the
+    // right generator: two anchor points and a width. Its centre cross is a *paint*, not
+    // geometry, because the plate fixes it upright however the box is turned.
+    TacticalGraphicName.TargetAreaSingleTargetAegis,
+    // APP-06 200202 and 200402: "two anchor points and a width, defined in metres" -- this
+    // family's rule word for word, so `isRectangular` routes both to `RectangularArea`.
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
 ]
 
 areaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(
@@ -342,6 +368,9 @@ let circularAreaGraphicNames = [
     TacticalGraphicName.TargetAreaCircular,
     TacticalGraphicName.AirSpaceCoordinationAreaCircular,
     TacticalGraphicName.PsyOpsZoneCircular,
+    // APP-06 200300 and 200500: "one anchor point and a radius", the circular family's rule.
+    TacticalGraphicName.NoAttackZone,
+    TacticalGraphicName.ActiveManeuverArea,
 ]
 circularAreaGraphicNames.forEach(name => TacticalGraphicsRegistry.register(new CircularArea(name)));
 
@@ -350,8 +379,27 @@ TacticalGraphicsRegistry.register(new Airfield());
 TacticalGraphicsRegistry.register(new EncirclementArea());
 TacticalGraphicsRegistry.register(new FortifiedArea());
 
-// Search Area
-// TacticalGraphicsRegistry.register(new SearchArea());
+// APP-06 152200. Three anchor points and two stepped arms; not the fixed-size SVG badge
+// it was before 2026-09-04. @see graphics/SearchArea.ts
+TacticalGraphicsRegistry.register(new SearchArea());
+
+/*
+ * APP-06 §8.10 Table 8-12 -- the maritime control areas, in the four constructions the
+ * group actually has rather than nine generators.
+ *
+ * The rectangles and circles reuse the families they belong to; only the ellipse and the
+ * annular sector are new shapes. `CuedAcquisitionDoctrine` takes `RectangularTarget`
+ * because 200600's rule is 240802's word for word -- one anchor point at the centre, a
+ * length, a width and a rotation -- and reusing it is what keeps the two boxes from
+ * drifting apart.
+ */
+[
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+].forEach(name => TacticalGraphicsRegistry.register(new EllipticalArea(name)));
+TacticalGraphicsRegistry.register(new RectangularTarget(TacticalGraphicName.CuedAcquisitionDoctrine));
+TacticalGraphicsRegistry.register(new RadarSearchDoctrine());
 
 const obstacleGraphics = [
     TacticalGraphicName.ObstacleBelt,
@@ -452,16 +500,15 @@ TacticalGraphicsRegistry.register(new WeaponRangeFanCircular());
 TacticalGraphicsRegistry.register(new WeaponRangeFanSector());
 
 // Field fortification
-TacticalGraphicsRegistry.register(new FightingPosition());
 TacticalGraphicsRegistry.register(new FortifiedLine());
 
 // Additional mission task block arrows (same geometry as Block, distinguished by name/label)
 const additionalBlockTasks = [
     TacticalGraphicName.AttackByFire,
     TacticalGraphicName.SupportByFire,
-    // Excluded — see ai/excluded-graphics.md
-    // TacticalGraphicName.FollowAndAssume,
-    // TacticalGraphicName.FollowAndSupport,
+    // Follow and assume / follow and support were here, and are NOT block arrows —
+    // that shape is why they were switched off. They have their own generator now.
+    // @see FollowTask, registered above.
 ];
 additionalBlockTasks.forEach(name => TacticalGraphicsRegistry.register(new NamedBlockArrow(name)));
 
@@ -474,6 +521,10 @@ const crossedTasks = [
     TacticalGraphicName.Suppress,
 ];
 crossedTasks.forEach(name => TacticalGraphicsRegistry.register(new CrossedMissionTask(name)));
+
+// Defeat takes Destroy's draw rule word for word but not its shape: four filled arrows
+// converging on the letter rather than two lines crossing at it. @see Defeat
+TacticalGraphicsRegistry.register(new Defeat());
 
 // Exfiltrate is a multi-vertex route with an arrowhead and no cane hook — see the
 // class comment for why it is not a RetrogradeTask.
@@ -493,9 +544,17 @@ const additionalLineGraphics = [
     TacticalGraphicName.LinearTarget,
     TacticalGraphicName.FinalProtectiveFire,
     TacticalGraphicName.LinearSmokeTarget,
-    // Excluded — see ai/excluded-graphics.md
-    // TacticalGraphicName.MovingConvoy,
-    // TacticalGraphicName.HaltedConvoy,
+    /*
+     * The convoys, revived 2026-09-04. `Phaseline` is the right *generator* -- their base
+     * is two anchor points and nothing else -- but it was not the right *symbol*: the
+     * block arrow and the open triangle are built in screen space by `convoyPaint`, which
+     * is what they lacked before. @see convoyPaints
+     */
+    TacticalGraphicName.MovingConvoy,
+    TacticalGraphicName.HaltedConvoy,
+    // APP-06 218400. Two anchor points and nothing else in the base; the bar and its two
+    // ticks are all built in screen space. @see navigationalLinePaint
+    TacticalGraphicName.NavigationalLine,
 ];
 additionalLineGraphics.forEach(name => TacticalGraphicsRegistry.register(new Phaseline(name)));
 

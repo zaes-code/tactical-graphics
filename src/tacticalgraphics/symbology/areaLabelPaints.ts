@@ -220,7 +220,22 @@ const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
  */
 export function areaLabelStackPaint(
     name: TacticalGraphicName,
-    options: {before?: string[]; after?: string[]; literalLines?: string[]} = {},
+    options: {
+        before?: string[];
+        after?: string[];
+        literalLines?: string[];
+        /**
+         * Whether the stack carries the operator's designation at all.
+         *
+         * False for exactly one graphic: APP-06 200300, the no-attack zone, whose Template
+         * letters `N` over `AM` over `W - W1` and **no `T` box**. Its field set offers no
+         * designation for the same reason, so nothing in the app can set one — but a
+         * restored or imported graphic can still carry the property, and drawing it would
+         * put text on a symbol the standard does not letter. Off by construction rather
+         * than by trusting the field registry, which is a different question.
+         */
+        withDesignation?: boolean;
+    } = {},
 ): AreaLabelPaint {
     return (feature, context) => {
         const at = anchorOf(feature);
@@ -245,7 +260,8 @@ export function areaLabelStackPaint(
         const named = COUNTRY_CODE_AREAS.includes(name)
             ? formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode)
             : (feature.properties.designation ?? '').trim();
-        const designation = options.literalLines ? named : getFullLabel(name, named).trim();
+        const titled = options.literalLines ? named : getFullLabel(name, named).trim();
+        const designation = options.withDesignation === false ? '' : titled;
 
         const lines = [
             ...(options.before ?? []),
@@ -391,12 +407,9 @@ export function smokeObscurantLabelPaint(): AreaLabelPaint {
  * centered in the shape; the two date-time groups stacked **outside** the shape's
  * upper-left, right-aligned so they run away from it.
  *
- * **The date anchor differs by variant, and that is the whole subtlety.** A
- * rectangle's top-left is a real vertex and a circle has none, so for both the
- * bounding box is right. For an *irregular* polygon the bounding-box corner can
- * sit far outside the drawn shape, leaving the dates stranded in open space — so
- * those anchor on the real upper-left **vertex**: smallest X, ties broken by
- * largest Y.
+ * The two dates hang **outside** the shape's upper-left corner, joined into one
+ * line. @see outsideCornerAnchor for which corner that is, and why the answer is not
+ * the same for all three variants.
  */
 export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): AreaLabelPaint {
     return (feature, context) => {
@@ -411,13 +424,20 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
         const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
         if (!dtg1 && !dtg2) return paints;
 
-        const dtgAnchor = irregular ? upperLeftVertex(feature.ring) : upperLeftCorner(feature);
+        const dtgAnchor = outsideCornerAnchor(feature, irregular);
         if (!dtgAnchor) return paints;
 
         paints.push({
             geometry: {type: 'Point', coordinates: dtgAnchor},
             text: {
-                text: [dtg1, dtg2].filter(s => s.length > 0).join('-\n'),
+                /*
+                 * **One line, `dtg1 - dtg2`.** These used to break after the hyphen while
+                 * the PsyOps zones beside them — the same block, from this function's own
+                 * other half — wrote theirs across. Nothing in the plate asks for the
+                 * break; it was two implementations of one layout disagreeing, which is
+                 * also why the anchor below is now shared. (User's call, 2026-09-04.)
+                 */
+                text: [dtg1, dtg2].filter(s => s.length > 0).join(' - '),
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
@@ -448,15 +468,7 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
         const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
         if (!dtg1 && !dtg2) return [];
 
-        /*
-         * **The ring's own vertex for an irregular shape, the bounding box for the rest.**
-         * The same split `zoneLabelPaint` makes, and it is not a nicety: a circle's
-         * leftmost *vertex* is level with its centre, so a round zone put its dates at the
-         * middle-left instead of above the shape. A rectangle's corner and its bounding
-         * box agree, so only the irregular variant needs the vertex — which is the one
-         * whose bounding-box corner can sit a long way outside the polygon.
-         */
-        const at = irregular && feature.ring ? upperLeftVertex(feature.ring) : upperLeftCorner(feature);
+        const at = outsideCornerAnchor(feature, irregular);
         if (!at) return [];
 
         return [{
@@ -474,6 +486,54 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
             },
         }];
     };
+}
+
+/**
+ * Where a block hung **outside a shape's upper left** actually goes.
+ *
+ * Three shapes, and the split is about corners rather than about which family the
+ * graphic belongs to:
+ *
+ * - an **irregular** polygon has corners but no useful bounding box — that box's corner
+ *   can sit a long way outside the drawn shape, stranding the dates in open water. It
+ *   anchors on the real upper-left vertex.
+ * - a **rectangle** has exactly four corners, and since rectangles began keeping the
+ *   angle they were drawn on, its bounding box's top edge is the height of whichever
+ *   corner happens to be highest. Tilt one and the dates climbed away from the corner
+ *   they belong beside — *"it tends to get far up if the top-right corner of the
+ *   rectangle is much higher than top-left"* (user, 2026-09-04). It anchors on the real
+ *   corner.
+ * - a **circle** has no corners at all, so the square hugging it is the only stand-in.
+ *   Its leftmost *vertex* is level with its centre, which would put the dates at the
+ *   middle-left instead of above the shape.
+ *
+ * The bounding box was the right answer for a rectangle only while rectangles were
+ * levelled. The note that used to sit here said exactly that, and stayed on after it
+ * stopped being true — so the discriminator is read off the ring now rather than off a
+ * family flag: four corners means take the corner, anything else keeps the old rule.
+ */
+function outsideCornerAnchor(feature: PaintFeature, irregular: boolean): ProjectedPosition | undefined {
+    if (irregular) return upperLeftVertex(feature.ring) ?? upperLeftCorner(feature);
+    return quadrilateralUpperLeft(feature.ring) ?? upperLeftCorner(feature);
+}
+
+/**
+ * The up-and-left-most corner of a four-cornered ring, or nothing for any other shape.
+ *
+ * `y - x` is greatest at the corner furthest towards the top left. For a **levelled**
+ * rectangle that is exactly the bounding box's corner, so nothing moves until a rectangle
+ * is genuinely tilted — which is the only case that was ever wrong.
+ */
+function quadrilateralUpperLeft(ring: ProjectedPosition[] | undefined): ProjectedPosition | undefined {
+    if (!ring?.length) return undefined;
+    const last = ring[ring.length - 1];
+    const closed = ring.length > 1 && last[0] === ring[0][0] && last[1] === ring[0][1];
+    const corners = closed ? ring.slice(0, -1) : ring;
+    if (corners.length !== 4) return undefined;
+
+    let best = corners[0];
+    for (const corner of corners) if (corner[1] - corner[0] > best[1] - best[0]) best = corner;
+    return best;
 }
 
 /** The real upper-left vertex of a ring: smallest X, ties broken by largest Y. */
