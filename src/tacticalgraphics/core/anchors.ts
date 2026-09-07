@@ -1258,14 +1258,60 @@ export const RECTANGLE_DEFAULT_HALF_WIDTH_PX = 55;
  * sheets are built at different zooms. Measured, the same graphic: 360 km against 1,005.
  *
  * A share of the axis is resolution-free, so both sheets reach it from the geometry alone.
- * A twentieth either side is what the drawn defaults come to at an ordinary zoom.
+ * The share itself is measured against the *drawn* default, which is the only other answer
+ * this library has to the same question. @see RECTANGLE_DEFAULT_WIDTH_FRACTION
  * @see rectangleFromAxis
  */
 export function rectangleDefaultHalfWidth(axisLengthMeters: number): number {
     return axisLengthMeters * RECTANGLE_DEFAULT_WIDTH_FRACTION;
 }
 
-const RECTANGLE_DEFAULT_WIDTH_FRACTION = 1 / 20;
+/**
+ * The share itself, and it is derived rather than chosen.
+ *
+ * **It was a twentieth, on the stated grounds that "a twentieth either side is what the
+ * drawn defaults come to at an ordinary zoom". That is measurable, and it is wrong.** A
+ * drawn zone's half-width is {@link RECTANGLE_DEFAULT_HALF_WIDTH_PX} screen pixels whatever
+ * the drag, so the share a drag produces is 55 over its length: measured in the running app,
+ * a 240 px drag gives 0.229, a 440 px drag 0.125 and an 800 px drag 0.069. A twentieth is
+ * the answer for a drag of about **1,100 px** — wider than most windows, and longer than any
+ * zone anyone drags. Every shorter drag, which is every real one, produces a box between two
+ * and five times deeper than this default was giving.
+ *
+ * The visible cost was a sample sweep whose eighteen rectangular zones drew as slivers ten
+ * times as long as they were deep, with their amplifiers — which stack *inside* the box —
+ * crushed into a slot a tenth the height of the text. (User's report, 2026-09-07: "on the
+ * sweep, don't make the rectangle so small.")
+ *
+ * **The share is now stated as an aspect, not derived from a drag.** An unsized zone is
+ * half as deep as it is long. (User's call, 2026-09-07: "make the vertical size 1/2 the
+ * horizontal".)
+ *
+ * A quarter of the axis is a little *deeper* than any real drag produces — the deepest
+ * measured, a 240 px one, gives 0.229 — and that is deliberate rather than an oversight. The
+ * drawn width answers a different question: an operator dragging a zone is placing it
+ * against ground they can see, where this default is drawing a symbol with nothing to place
+ * it against and amplifiers stacked inside it that have to be legible. The measurement above
+ * is kept because it is what disproved the twentieth and it says how far from a drag this
+ * sits: near it, not fitted to it. A stated ratio also survives a change of viewport, where
+ * a figure pinned to 440 px does not.
+ *
+ * **Fixed here rather than in the sheets**, deliberately. Every caller is the same case —
+ * the two sample sheets and a restore of a rectangle that carries no width and no zoom — and
+ * in all three the old figure was a sliver. A sheet-local override would leave the library's
+ * own default disagreeing with what the app draws, and would be a second place stating how
+ * wide an unsized rectangle is; both sheets read this one, which is what keeps them
+ * comparable. @see rectangleDefaultHalfWidth
+ */
+/**
+ * How deep an unsized zone is, as a share of its length: **half**.
+ *
+ * Half the depth of a 2:1 box is a quarter of the axis, which is the half-width this default
+ * hands out. @see RECTANGLE_DEFAULT_WIDTH_FRACTION
+ */
+const RECTANGLE_DEFAULT_DEPTH_RATIO = 1 / 2;
+
+const RECTANGLE_DEFAULT_WIDTH_FRACTION = RECTANGLE_DEFAULT_DEPTH_RATIO / 2;
 
 /** Shortest axis a rectangle may be dragged to, in metres — below this it has no shape. */
 const RECTANGLE_MIN_LENGTH = 1;

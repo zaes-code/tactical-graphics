@@ -20,9 +20,11 @@
 import type {Feature as GeoJSONFeature} from 'geojson';
 import {
     TacticalGraphicName,
+    TACTICAL_GRAPHIC_KEY,
     axisAndWidth,
     hasAxisAndWidth,
     listTacticalGraphicNames,
+    renderTacticalGraphic,
 } from '@zaes/tactical-graphics';
 /*
  * **The MapLibre adapter, from a suite that lives beside the OpenLayers one.** The defect
@@ -62,7 +64,11 @@ const DRAWN_RADIUS_M = 400_000;
  */
 function aspect(name: TacticalGraphicName, stamped: Record<string, unknown>): number {
     const built = buildTacticalGraphic(name, CENTRE, stamped, RESOLUTION)?.graphic;
-    const ring = (built?.geometry as {coordinates?: number[][][]})?.coordinates?.[0] ?? [];
+    return aspectOfRing((built?.geometry as {coordinates?: number[][][]})?.coordinates?.[0] ?? []);
+}
+
+/** Longer side over shorter, for a closed ring. A stroke reads in the hundreds. */
+function aspectOfRing(ring: number[][]): number {
     if (ring.length < 4) return NaN;
     const xs = ring.map(p => p[0]);
     const ys = ring.map(p => p[1]);
@@ -100,19 +106,41 @@ describe('the family is named, not inferred', () => {
 });
 
 describe('the shape a drawn radius produces', () => {
-    it.each(AXIS_AND_WIDTH)('%s is a stroke when only a radius is stamped', name => {
-        /*
-         * **The defect, stated as the property it broke.** This is what MapLibre did: a
-         * radius and no length, so the generator's own 2 km default became the length while
-         * the width was the drag. It is here as a *failing* shape rather than as a comment
-         * so that anyone who removes the fix sees what comes back.
-         */
-        expect(aspect(name, {radius: DRAWN_RADIUS_M, rotation: 0})).toBeGreaterThan(20);
+    /**
+     * **The defect, stated as the property it broke**, and it is worth being exact about
+     * where it lived. The generator is innocent: handed a bare `radius` it reads it as the
+     * graphic's *size* and derives a sensible box. What produced the stroke was the renderer
+     * turning that radius into a **width** — the generic half-width rule every drawn graphic
+     * goes through — and leaving `length` for the generator's flat 2 km default. A width of
+     * 800 km against a length of 2 is a vertical line.
+     *
+     * So this is asserted as the shape that bag makes, whoever writes it. The derivation used
+     * to be applied on the draw path alone, so every other door into this engine — a restore,
+     * an import, the sample sheet — arrived with exactly it. `sizeDefaults` now derives the
+     * pair instead, which is what the next case measures.
+     */
+    it.each(AXIS_AND_WIDTH)('%s is a stroke when only a width is filed', name => {
+        const rendered = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: CENTRE,
+            properties: {[TACTICAL_GRAPHIC_KEY]: {name, width: DRAWN_RADIUS_M * 2, rotation: 0}},
+        } as GeoJSONFeature);
+        expect(aspectOfRing((rendered.graphic.geometry as {coordinates?: number[][][]}).coordinates?.[0] ?? []))
+            .toBeGreaterThan(20);
     });
 
-    it.each(AXIS_AND_WIDTH)('%s is a box once both dimensions are derived', name => {
+    /**
+     * And the renderer no longer writes that bag: it derives the pair at the door, so a
+     * radius-only stamp — which is what a sweep, a snapshot and a host drop all hand in —
+     * builds a box.
+     */
+    it.each(AXIS_AND_WIDTH)('%s is a box when the renderer builds it from a radius alone', name => {
         // Both plates' own proportions sit between 1.5:1 and 2:1; anything under 4 is a
         // shape rather than a line, which is the distinction that matters here.
+        expect(aspect(name, {radius: DRAWN_RADIUS_M, rotation: 0})).toBeLessThan(4);
+    });
+
+    it.each(AXIS_AND_WIDTH)('%s is a box once both dimensions are stated', name => {
         expect(aspect(name, {...axisAndWidth(name, DRAWN_RADIUS_M)!, rotation: 0})).toBeLessThan(4);
     });
 });

@@ -6,6 +6,7 @@ import {
     TACTICAL_GRAPHIC_KEY,
     TacticalGraphicName,
     arrowheadMeters,
+    axisAndWidth,
     axisFromRectangleRing,
     boundsOf,
     carriesRectangleLength,
@@ -19,6 +20,7 @@ import {
     getPaintFunction,
     groundLength,
     groundMeters,
+    hasAxisAndWidth,
     hasBakedDecoration,
     isMovementGraphic,
     isRectangular,
@@ -289,6 +291,38 @@ function sizeDefaults(
             ? RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution
             : rectangleDefaultHalfWidth(baseLengthMeters(geometry));
         return {width: half * 2};
+    }
+
+    /*
+     * **Five plates state a length *and* a width about one anchor point, and a drag gives
+     * one number.**
+     *
+     * 240802, the three maritime ellipses and 200600 all carry `AM` and `AM1`, so a bag
+     * holding only a `radius` describes half of each of them. The generator falls back to a
+     * flat two-kilometre length for the half it was not told, and against a width derived
+     * from the drag that is a **vertical stroke** — measured at 3 km by 461 km on the sweep,
+     * an aspect of 176 where the symbol is about 1.7.
+     *
+     * `axisAndWidth` is the library's statement of the pair and both engines already read
+     * it — the OpenLayers holder through `halfWidth`, MapLibre's *draw* through
+     * `graphicFrom`. What was missing is that a draw is not the only door: the sample sheet,
+     * a restore of a bag written before the pair was filed, and any consumer handing in a
+     * radius all arrive here instead, and every one of them drew the stroke. Deriving it at
+     * the door is the same argument `withNormalizedBase` makes at the top of
+     * `buildTacticalGraphic`. @see axisAndWidth, hasAxisAndWidth
+     *
+     * Each figure is filled independently, so a caller who typed one of them keeps it — and
+     * the generic half-width rule below must not also run, because for these the width is
+     * a share of the length rather than a rail standing off a route.
+     */
+    if (hasAxisAndWidth(name)) {
+        const derived = axisAndWidth(name, supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : meters);
+        if (derived) {
+            return {
+                ...(supplied.length === undefined ? {length: derived.length} : {}),
+                ...(supplied.width === undefined ? {width: derived.width} : {}),
+            };
+        }
     }
 
     // A stamped `radius` on a line graphic **is** its half-width: that is what
