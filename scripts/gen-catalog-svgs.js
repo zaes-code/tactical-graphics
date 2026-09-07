@@ -128,7 +128,6 @@ const {
     frontEdgeBase,
     storedOrder,
     synthesizedBase,
-    drawsTipFirst,
     getDisplayName,
     GRAPHIC_CATEGORIES,
     isRectangular,
@@ -450,17 +449,20 @@ function makeBase(name) {
      * point 1 is an arrowhead tip and was being drawn as an edge end, collapsing the symbol;
      * and 152100 support by fire, whose arrows it splayed inward and put on the wrong side.
      *
-     * **Restricted to the graphics that are not tip-first**, which is exactly where the two
-     * synthesisers agree about ordering. For the eight cane arrows they do not: this file
-     * builds rear-to-tip and converts with `storedOrder`, as the convention says a catalog
-     * should, and `synthesizedBase` returns its layout unconverted. Both surfaces are drawn
-     * from those and both have been checked by eye, so the difference is recorded as an open
-     * question rather than settled by guessing here.
-     * @see ai/current-task.md, synthesizedBase, storedOrder
+     * **The tip-first graphics were the ones that gave it away.** For them this file's own
+     * chain and the library's produce the *same three positions in the opposite order*, and
+     * the resulting pictures are different symbols: 344100 delay came out as a bare arch with
+     * an arrowhead stuck on its end, where a cane arrow is a straight run with a half circle
+     * hooked off it. 344000 pursuit, which is not tip-first, took the library's layout and drew
+     * correctly — the two sat side by side in the same picker, one right and one wrong, and the
+     * only difference between them was which builder answered.
+     *
+     * So `storedOrder` is not owed here: `synthesizedBase` already returns each layout in the
+     * order the graphic stores its points, which is what the sample sheets feed straight to
+     * `normalizeDrawnBase`. Converting it again reversed the base and drew the symbol from the
+     * wrong end. @see synthesizedBase, storedOrder
      */
-    const stated = synthesizedBase && !(drawsTipFirst && drawsTipFirst(name))
-        ? synthesizedBase(name, [LON, LAT], D * 1.4, n)
-        : undefined;
+    const stated = synthesizedBase ? synthesizedBase(name, [LON, LAT], D * 1.4, n) : undefined;
     if (stated) return {type: 'LineString', coordinates: stated};
 
     if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
