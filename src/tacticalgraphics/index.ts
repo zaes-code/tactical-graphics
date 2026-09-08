@@ -299,6 +299,7 @@ export {
     areaFillPaint,
     areaOutlinePaint,
     defaultLinePaint,
+    affiliationColorOf,
     amplifierDash,
     formatDesignationWithCountry,
     formatFullLabel,
