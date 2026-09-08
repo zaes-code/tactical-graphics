@@ -14,8 +14,14 @@
  * The measurements below are geometric rather than pictorial: a tooth is the apex between
  * two baseline points, so the run of teeth on a segment can be recovered from the output
  * and compared against the segment's own ends.
+ *
+ * The fortified family — fortified area, fortified line and the trench position — got the
+ * same treatment on the same day. `castellatedPath` had the defect by a different route: it
+ * walked the whole path with `pathPointAt`, so a merlon starting on one segment and ending
+ * on the next bent around the corner, and its stretch-to-fit applied to the merlon width as
+ * well as the gap, giving one outline several merlon sizes.
  */
-import {crenellatedPath} from './decorations';
+import {castellatedPath, crenellatedPath, splitAtCorners} from './decorations';
 import type {ProjectedPosition} from '../core/paint';
 
 const BASE = 10;
@@ -68,41 +74,68 @@ describe('teeth on a single segment', () => {
     });
 });
 
-describe('teeth across a join, which is what was reported', () => {
-    /** Two equal horizontal segments meeting at x = 100. */
-    const twoSegments = () => crenellatedPath([[0, 0], [100, 0], [200, 0]], HEIGHT, BASE, GAP, 1);
-
-    it('gives each segment the same count, since they are the same length', () => {
-        const at = apexAlong(twoSegments());
-        const first = at.filter(x => x < 100);
-        const second = at.filter(x => x > 100);
-        expect(first).toHaveLength(second.length);
-    });
-
-    it('leaves a clear margin either side of the join, not a crowded tooth', () => {
-        const at = apexAlong(twoSegments());
-        const before = Math.max(...at.filter(x => x < 100));
-        const after = Math.min(...at.filter(x => x > 100));
-        // The gap spanning the corner is two margins plus nothing else, so it is strictly
-        // wider than an ordinary between-teeth gap. Carrying the offset across made this
-        // narrower than a gap, which is what read as a tooth falling off the join.
-        expect(after - before).toBeGreaterThan(BASE + GAP);
-    });
+describe('teeth across a corner, which is what was reported', () => {
+    /** An L: 100 east, then 100 north. A real 90-degree corner at [100, 0]. */
+    const corner = () => crenellatedPath([[0, 0], [100, 0], [100, 100]], HEIGHT, BASE, GAP, 1);
+    /** Teeth on the horizontal leg, by apex x. Its apexes are the ones off the y axis. */
+    const onFirstLeg = (out: ProjectedPosition[]) =>
+        out.filter(p => Math.abs(p[1]) > 1e-9 && p[0] < 100).map(p => p[0]).sort((a, b) => a - b);
 
     it('never places a tooth straddling the corner', () => {
-        for (const x of apexAlong(twoSegments())) {
+        for (const x of onFirstLeg(corner())) {
             expect(Math.abs(x - 100)).toBeGreaterThan(BASE / 2);
         }
     });
 
-    it('is unaffected by a preceding segment, which is the carry that was removed', () => {
-        // The same second segment, reached after a long first one and after a short one.
-        const long = apexAlong(crenellatedPath([[0, 0], [137, 0], [237, 0]], HEIGHT, BASE, GAP, 1))
-            .filter(x => x > 137).map(x => x - 137);
-        const short = apexAlong(crenellatedPath([[0, 0], [23, 0], [123, 0]], HEIGHT, BASE, GAP, 1))
-            .filter(x => x > 23).map(x => x - 23);
-        expect(long).toHaveLength(short.length);
-        long.forEach((x, i) => expect(x).toBeCloseTo(short[i], 6));
+    it('leaves a clear margin before the corner, not a crowded tooth', () => {
+        const at = onFirstLeg(corner());
+        expect(100 - (at[at.length - 1] + BASE / 2)).toBeGreaterThan(0);
+    });
+
+    it('gives a leg the same layout whatever precedes it', () => {
+        // The carried offset is gone: a leg's teeth depend on that leg alone.
+        // An apex on the vertical leg stands exactly HEIGHT off the line x = corner; the
+        // horizontal leg's apexes also have y > 0, so offset is the discriminator, not sign.
+        const upLeg = (x: number) => crenellatedPath([[0, 0], [x, 0], [x, 100]], HEIGHT, BASE, GAP, 1)
+            .filter(p => Math.abs(Math.abs(p[0] - x) - HEIGHT) < 1e-9)
+            .map(p => p[1]).sort((a, b) => a - b);
+        const after137 = upLeg(137);
+        const after23 = upLeg(23);
+        expect(after137).toHaveLength(after23.length);
+        after137.forEach((y, i) => expect(y).toBeCloseTo(after23[i], 6));
+    });
+});
+
+describe('a sampled curve is one run, not many segments', () => {
+    /*
+     * The fix for a real regression. A traced ellipse arrives as ~50 short chords; laying
+     * out per chord meant every chord was "too short for one" and a fortified area came out
+     * as a plain outline with no merlons at all — measured, 0 of 48 chords reached the 30
+     * pixels a merlon needs, median chord 11. Decorations break at *corners*, and a 4-degree
+     * bend between chords is not one. @see splitAtCorners
+     */
+    const arc = (n: number, r = 200): ProjectedPosition[] =>
+        Array.from({length: n + 1}, (_, i) => {
+            const t = (i / n) * (Math.PI / 2);
+            return [r * Math.cos(t), r * Math.sin(t)] as ProjectedPosition;
+        });
+
+    it('decorates a finely sampled curve rather than leaving it bare', () => {
+        const many = crenellatedPath(arc(48), HEIGHT, BASE, GAP, 1);
+        expect(many.length).toBeGreaterThan(arc(48).length);
+    });
+
+    it('gives a curve roughly the same count however finely it was sampled', () => {
+        const count = (n: number) =>
+            crenellatedPath(arc(n), HEIGHT, BASE, GAP, 1).length - arc(n).length;
+        // Sampling is a drawing artefact; the decoration should not depend on it.
+        expect(Math.abs(count(48) - count(12))).toBeLessThanOrEqual(6);
+    });
+
+    it('still breaks at a real corner', () => {
+        expect(splitAtCorners([[0, 0], [100, 0], [100, 100]])).toHaveLength(2);
+        // …and not at a gentle one.
+        expect(splitAtCorners(arc(48))).toHaveLength(1);
     });
 });
 
@@ -118,5 +151,49 @@ describe('a closed ring', () => {
         expect(perEdge[0]).toBeGreaterThan(0);
         expect(out[0]).toEqual([0, 0]);
         expect(out[out.length - 1]).toEqual([0, 0]);
+    });
+});
+
+
+describe('fortified merlons follow the same rule', () => {
+    /** A merlon is a pair of raised points; take the midpoint of each pair as its centre. */
+    const merlonCentres = (out: ProjectedPosition[]) => {
+        const raised = out.filter(p => Math.abs(p[1]) > 1e-9).map(p => p[0]);
+        const centres: number[] = [];
+        for (let i = 0; i + 1 < raised.length; i += 2) centres.push((raised[i] + raised[i + 1]) / 2);
+        return centres.sort((a, b) => a - b);
+    };
+
+    it('keeps the merlon its stated width rather than stretching it to fit', () => {
+        // The old layout scaled the merlon with the spacing, so the same graphic drawn
+        // longer grew wider merlons. Two different lengths, one width.
+        const width = (length: number) => {
+            const out = castellatedPath([[0, 0], [length, 0]], BASE, GAP, HEIGHT, 1);
+            const raised = out.filter(p => Math.abs(p[1]) > 1e-9).map(p => p[0]);
+            return raised[1] - raised[0];
+        };
+        expect(width(100)).toBeCloseTo(BASE, 6);
+        expect(width(213)).toBeCloseTo(BASE, 6);
+    });
+
+    it('centres the run on its own segment', () => {
+        const length = 100;
+        const at = merlonCentres(castellatedPath([[0, 0], [length, 0]], BASE, GAP, HEIGHT, 1));
+        const leading = at[0] - BASE / 2;
+        const trailing = length - (at[at.length - 1] + BASE / 2);
+        expect(leading).toBeCloseTo(trailing, 6);
+    });
+
+    it('never lets a merlon bend around a corner', () => {
+        // The failure `pathPointAt` produced: left point on one segment, right on the next.
+        const out = castellatedPath([[0, 0], [100, 0], [200, 0]], BASE, GAP, HEIGHT, 1);
+        for (const x of merlonCentres(out)) {
+            expect(Math.abs(x - 100)).toBeGreaterThan(BASE / 2);
+        }
+    });
+
+    it('draws a segment too short for one merlon bare', () => {
+        const out = castellatedPath([[0, 0], [BASE - 1, 0]], BASE, GAP, HEIGHT, 1);
+        expect(out.filter(p => Math.abs(p[1]) > 1e-9)).toHaveLength(0);
     });
 });
