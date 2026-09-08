@@ -334,6 +334,13 @@ export function encirclementToothSize(ring: ProjectedPosition[], resolution: num
  * Walks a path adding triangular teeth along it, returning one continuous
  * polyline that includes both the baseline and the teeth.
  *
+ * **Each segment is laid out on its own**, with a whole number of teeth centred along it
+ * and nothing carried across the join. A running offset used to be carried from one
+ * segment to the next, which spent the leftover immediately after each corner: teeth
+ * crowded one side of a join and left a gap on the other, and on a closed ring the last
+ * segment met the first mid-pattern. @see castellatedPath, which solves the same problem
+ * the other way — one count over the whole path, with the spacing stretched to fit.
+ *
  * `side` is `'up'`, or ±1 to force a side. **`'up'` is decided per segment from
  * the segment's own x-direction, not from its direction of travel.** A closed
  * ring has an inside and an outside; an open line has neither, so the only stable
@@ -350,7 +357,6 @@ export function crenellatedPath(
     if (path.length < 2 || baseMap <= 0) return path;
     const out: ProjectedPosition[] = [];
     const unit = baseMap + gapMap;
-    let nextToothAt = gapMap / 2;
 
     for (let i = 0; i < path.length - 1; i++) {
         const a = path[i];
@@ -368,17 +374,34 @@ export function crenellatedPath(
         const nx = -uy * sideSign;
         const ny = ux * sideSign;
 
-        while (nextToothAt + baseMap <= length) {
-            const p1: ProjectedPosition = [a[0] + ux * nextToothAt, a[1] + uy * nextToothAt];
-            const p2: ProjectedPosition = [a[0] + ux * (nextToothAt + baseMap), a[1] + uy * (nextToothAt + baseMap)];
+        /*
+         * **Every tooth whole, and the run centred on its own segment.**
+         *
+         * `n` teeth occupy `n * base + (n - 1) * gap` — gaps sit *between* teeth, not
+         * outside them — so the count that fits is `floor((length + gap) / unit)`. The
+         * leftover is split evenly at the two ends, which puts a clear margin at each
+         * corner and keeps a tooth from crowding the join.
+         *
+         * A segment too short for one tooth draws bare. That is a real outcome on a finely
+         * traced ring and it is the chosen one: forcing a shrunken tooth onto a short edge
+         * gives one outline several tooth sizes, which reads worse than a plain stretch.
+         * (User's call, 2026-09-07.)
+         */
+        const count = Math.floor((length + gapMap) / unit);
+        if (count < 1) continue;
+        const run = count * baseMap + (count - 1) * gapMap;
+        const startAt = (length - run) / 2;
+
+        for (let t = 0; t < count; t++) {
+            const from = startAt + t * unit;
+            const p1: ProjectedPosition = [a[0] + ux * from, a[1] + uy * from];
+            const p2: ProjectedPosition = [a[0] + ux * (from + baseMap), a[1] + uy * (from + baseMap)];
             out.push(
                 p1,
                 [(p1[0] + p2[0]) / 2 + nx * heightMap, (p1[1] + p2[1]) / 2 + ny * heightMap],
                 p2,
             );
-            nextToothAt += unit;
         }
-        nextToothAt = Math.max(0, nextToothAt - length);
     }
     out.push(path[path.length - 1]);
     return out;
