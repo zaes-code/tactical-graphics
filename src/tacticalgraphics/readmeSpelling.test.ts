@@ -6,6 +6,12 @@
  * carry doctrinal names, which are not ours to respell, and neither code blocks nor
  * inline code spans are prose: an identifier keeps whatever spelling it was declared
  * with.
+ *
+ * **Nor is a block quote.** APP-06 is a NATO publication and spells it *colour* and
+ * *metres*; a quotation respelled is a misquotation, and the citation stops being one.
+ * The rule for this repo has always been to quote the plate verbatim and use American
+ * spelling in our own words around it — this makes the gate able to say that, which it
+ * could not before and which is why quoting 8.1.4.3 in the config section failed here.
  */
 import {readFileSync} from 'fs';
 import {join} from 'path';
@@ -28,7 +34,9 @@ describe('README spelling', () => {
             // is usually an identifier — `AltitudeUnit.meters` is the name of a thing, and
             // respelling it would make the documentation wrong rather than American.
             .replace(/```[\s\S]*?```/g, '')
-            .replace(/`[^`]*`/g, '');
+            .replace(/`[^`]*`/g, '')
+            // Block quotes are the source's words, not ours. @see the note above.
+            .replace(/^>.*$/gm, '');
         const hits = Array.from(prose.matchAll(BRITISH), m => m[0]);
         expect(hits).toEqual([]);
     });
