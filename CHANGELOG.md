@@ -15,6 +15,22 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.1.1] — 2026-09-08
+
+### Fixed
+
+- **`affiliationColorOf` is actually exported.** 4.1.0's notes listed it under Added and
+  it was not on the barrel — the function existed and was exported from its own module, so
+  it typechecked, grepped fine and worked internally, but no consumer could import it. A
+  changelog describing a symbol nobody can reach is worse than a patch release, so here is
+  the patch.
+
+  The release checklist has warned about exactly this since 1.6.0: *assert every
+  release-note symbol against `dist/`, not the source — an export missing from a barrel
+  passes typecheck and grep.* That check ran for 4.0.0's notes and not for 4.1.0's.
+  `publicSurface.test.ts` now asserts it from the built output, so the next omission fails
+  a gate rather than a release.
+
 ## [4.1.0] — 2026-09-08
 
 > ### ⚠️ 35 graphics change colour on upgrade
@@ -1284,7 +1300,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...develop
+[4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...v4.0.0
 [3.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...v3.4.0
