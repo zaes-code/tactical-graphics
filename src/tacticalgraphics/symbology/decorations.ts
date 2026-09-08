@@ -200,7 +200,14 @@ export const DECORATION_MIN_PX = 3;
  * across needs the same treatment whether it got that way by being drawn small or
  * by the user zooming out, and a resolution threshold would only catch the second.
  */
-export function decorationScale(path: ProjectedPosition[], closed: boolean, resolution: number, heightPx: number): number {
+export function decorationScale(
+    path: ProjectedPosition[],
+    closed: boolean,
+    resolution: number,
+    heightPx: number,
+    footprintPx = heightPx,
+    minPx = DECORATION_MIN_PX,
+): number {
     let availablePx: number;
     if (closed) {
         const xs = path.map(p => p[0]);
@@ -210,12 +217,29 @@ export function decorationScale(path: ProjectedPosition[], closed: boolean, reso
         availablePx = pathLength(path) / resolution;
     }
     const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
-    const scale = Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+    // `footprintPx` is what the decoration spends *along* the path, and it is what decides
+    // how crowded a shape looks. Height alone under-caps anything wider than it is tall: the
+    // fortified merlon stands 11 px proud and is 15 wide, so a cap read off its height let
+    // it stay full size on a shape half as big as it should have, and it looked huge however
+    // far the map zoomed out. (Reported 2026-09-07.)
+    //
+    // The **item**, not the whole repeat. Capping on merlon-plus-crenel was tried and is too
+    // strict — the crenel is empty space, so counting it shrank the merlons until a
+    // fortified area read as texture rather than as battlements.
+    //
+    // Defaults to `heightPx`, so a caller that has not said otherwise is unchanged.
+    const scale = Math.max(0, Math.min(1, (availablePx * share) / Math.max(heightPx, footprintPx)));
 
     // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is
     // texture on the stroke — and a row of 2 px bumps reads as a fuzzy line rather than
     // as an obstacle. Drop it and let the plain geometry stand.
-    return heightPx * scale < DECORATION_MIN_PX ? 0 : scale;
+    //
+    // `minPx` is adjustable because legibility is not height alone: a merlon is a *step*
+    // 15 px wide, still readable as a square notch at a height a 10 px triangle would have
+    // vanished at. Capping the fortified family on its width made it disappear at a shape
+    // of 41 px where it used to hold to 30, and the shrinking was wanted but the vanishing
+    // was too early. (Reported 2026-09-07.) Everything else keeps the default.
+    return heightPx * scale < minPx ? 0 : scale;
 }
 
 /** Share of a path's on-screen length a single end mark may span before it shrinks. */
@@ -675,6 +699,16 @@ export const FORTIFIED_CRENEL_PX = 15;
 export const FORTIFIED_HEIGHT_PX = 11;
 
 /**
+ * The height below which a merlon stops being drawn — lower than the general floor.
+ *
+ * A merlon is a 15 px wide step, and a step reads as a notch at a height where a triangle
+ * of the same height would be a dot. Half the usual floor roughly doubles the range of
+ * shape sizes over which the fortified graphics keep their battlements.
+ * @see DECORATION_MIN_PX
+ */
+export const FORTIFIED_MIN_PX = 1.5;
+
+/**
  * Square battlements standing off a path — the fortified line and area.
  *
  * **Laid out per segment, like {@link crenellatedPath}, and for the same reason.** This
@@ -720,7 +754,7 @@ export function castellatedPath(
 
 /** A fortified ring's merlons, sized against the shape at this resolution. */
 export function fortifiedRing(ring: ProjectedPosition[], resolution: number): ProjectedPosition[] {
-    const scale = decorationScale(ring, true, resolution, FORTIFIED_HEIGHT_PX);
+    const scale = decorationScale(ring, true, resolution, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX);
     if (scale <= 0) return ring;
     return castellatedPath(
         ring,

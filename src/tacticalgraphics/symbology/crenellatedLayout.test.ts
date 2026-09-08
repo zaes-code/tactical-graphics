@@ -21,7 +21,15 @@
  * on the next bent around the corner, and its stretch-to-fit applied to the merlon width as
  * well as the gap, giving one outline several merlon sizes.
  */
-import {castellatedPath, crenellatedPath, splitAtCorners} from './decorations';
+import {
+    FORTIFIED_CRENEL_PX,
+    FORTIFIED_HEIGHT_PX,
+    FORTIFIED_MERLON_PX,
+    castellatedPath,
+    crenellatedPath,
+    decorationScale,
+    splitAtCorners,
+} from './decorations';
 import type {ProjectedPosition} from '../core/paint';
 
 const BASE = 10;
@@ -230,5 +238,47 @@ describe('fortified merlons follow the same rule', () => {
     it('draws a segment too short for one merlon bare', () => {
         const out = castellatedPath([[0, 0], [BASE - 1, 0]], BASE, GAP, HEIGHT, 1);
         expect(out.filter(p => Math.abs(p[1]) > 1e-9)).toHaveLength(0);
+    });
+});
+
+
+describe('the cap is read off what a decoration spends along the path', () => {
+    /** A closed ring `px` across, at resolution 1 so screen pixels and map units agree. */
+    const ring = (px: number): ProjectedPosition[] =>
+        Array.from({length: 33}, (_, i) => {
+            const t = (i / 32) * 2 * Math.PI;
+            return [(px / 2) * Math.cos(t), (px / 2) * Math.sin(t)] as ProjectedPosition;
+        });
+
+    const FOOTPRINT = FORTIFIED_MERLON_PX + FORTIFIED_CRENEL_PX;
+
+    it('starts shrinking the merlon far sooner than its height alone would', () => {
+        /*
+         * Reported 2026-09-07: the fortified merlons "look huge even after zoom out".
+         *
+         * They stand 11 px proud and occupy 30 along the path. Capped on height, full size
+         * held until a shape was down to about 110 px — by which point four merlons filled
+         * a side. Capped on the footprint it holds to 300 and then falls away.
+         */
+        const onHeight = (px: number) => decorationScale(ring(px), true, 1, FORTIFIED_HEIGHT_PX);
+        const onFootprint = (px: number) => decorationScale(ring(px), true, 1, FORTIFIED_HEIGHT_PX, FOOTPRINT);
+
+        expect(onHeight(200)).toBe(1);
+        expect(onFootprint(200)).toBeLessThan(1);
+        expect(onFootprint(200)).toBeCloseTo(200 * 0.1 / FOOTPRINT, 6);
+    });
+
+    it('never lets one repeat exceed the share of the shape it is allowed', () => {
+        for (const px of [600, 300, 200, 150, 120]) {
+            const scale = decorationScale(ring(px), true, 1, FORTIFIED_HEIGHT_PX, FOOTPRINT);
+            expect(FOOTPRINT * scale).toBeLessThanOrEqual(px * 0.1 + 1e-9);
+        }
+    });
+
+    it('leaves a caller that gives no footprint exactly as it was', () => {
+        // The parameter defaults to the height, so every other decoration is untouched.
+        for (const px of [600, 200, 120, 60]) {
+            expect(decorationScale(ring(px), true, 1, 10)).toBe(decorationScale(ring(px), true, 1, 10, 10));
+        }
     });
 });

@@ -25,6 +25,7 @@ import {DEFAULT_WIRE_STYLE, WIRE_MARK_PX, WIRE_STYLES} from '../graphics/WireObs
 import {
     FORTIFIED_CRENEL_PX,
     FORTIFIED_HEIGHT_PX,
+    FORTIFIED_MIN_PX,
     FORTIFIED_MERLON_PX,
     castellatedPath,
     centerSegmentIndex,
@@ -249,7 +250,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
         const path = drawnPath(feature);
         if (path.length < 2) return [];
 
-        const scale = decorationScale(path, false, context.resolution, FORTIFIED_HEIGHT_PX);
+        const scale = decorationScale(path, false, context.resolution, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX);
         const paints: Paint[] = [{
             geometry: {
                 type: 'LineString',
