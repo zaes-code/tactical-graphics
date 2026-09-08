@@ -15,6 +15,71 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.1.0] — 2026-09-08
+
+> ### ⚠️ 35 graphics change colour on upgrade
+>
+> Obstacles and obstructions now draw **green** by default, for every affiliation
+> including hostile. Nothing is removed or renamed and no types change — this is a minor
+> — but a map that looked one way in 4.0.0 looks different in 4.1.0 without any code
+> change on your part.
+>
+> To keep the previous appearance: `configureTacticalGraphics({obstacleColors: false})`.
+
+### Added
+
+- **`obstacleColors`** (boolean, default `true`) and **`obstacleColor`** (default
+  `#00FF00`, part of `DEFAULT_PALETTE`). The boolean says *whether* the rule applies, the
+  palette entry says *which* green — a host on a night display softens the colour rather
+  than switching the rule off.
+- **`OBSTACLE_GRAPHICS`** and **`drawsAsObstacle(name)`** — the 35 graphics the rule
+  governs, so a consumer can ask rather than keep a list.
+- **`affiliationColorOf(feature)`** — the colour a graphic's affiliation gives it, with
+  the obstacle rule *not* applied. What a mark wants when the mark is not part of the
+  symbol.
+- `FORTIFIED_MERLON_PX`, `FORTIFIED_CRENEL_PX`, `FORTIFIED_HEIGHT_PX`, `FORTIFIED_MIN_PX`
+  and `castellatedPath`, matching the obstacle-tooth constants that were already public.
+- `npm run check:layering` — the two boundary rules as a runnable script rather than two
+  greps buried in CI.
+
+### Changed
+
+- **Obstacles draw green, and it beats affiliation.** APP-06 8.1.4.3: *"Obstacles and
+  obstructions as shown in this chapter (friendly, hostile, neutral, unknown, or
+  factional) are to be drawn using the colour green."* The parenthesis is exhaustive and
+  the same paragraph says the rule *"is in contradiction to the Standard Identities"*, so
+  a hostile obstacle is green, not red — the plates carry the affiliation on a red enemy
+  diamond beside the symbol. Membership was read off the plates pixel by pixel, not
+  inferred from code ranges; the Mobility category is **not** the same set, holding 17
+  graphics drawn black while UXO area is green and filed under Areas.
+- **Obstacle teeth and fortified merlons are laid out per run, not per chord.** Whole
+  items, centred, never straddling a corner, and free to follow a curve. Decorations
+  break at real corners — a bend past 30° — so a traced ellipse is one run rather than
+  fifty.
+- **The fortified merlon is capped on its width**, not its height. It stands 11 px proud
+  and is 15 wide, so a cap read off the height held full size on a shape half as small as
+  it should have. Full size now to ~165 px, and it survives to ~20 px rather than 30.
+- **The explosives states of readiness draw as a band on the diagonal** — a fifth of the
+  run at 45° — because 271201–3 say point 3 states a *width*, and both the Template and
+  the Example draw the band across the road it blocks.
+
+### Fixed
+
+- **The planned-status ring is no longer green.** 290400's plate draws a green mine
+  cluster inside a *black* dash-dot circle: the ring says *planned*, not *obstacle*.
+- **A decorated path no longer jumps a chord across its own curve.** Each run emitted its
+  decorations and then its remaining vertices, so the polyline walked to the last item and
+  jumped back to retrace. Invisible on a straight two-point run; visible the moment an
+  edit added vertices.
+- The README quotes APP-06 verbatim without tripping the US-English gate, which had no
+  way to tell a citation from prose.
+
+### Testing
+
+167 suites, 7,226 tests. New: `obstacleColor.test.ts`, `crenellatedLayout.test.ts`.
+`sampleGallery`'s hostility suite was re-aimed rather than trimmed — the 30 obstacles stay
+in the stamping test and swap only their colour assertions, so its count is unchanged.
+
 ## [4.0.0] — 2026-09-07
 
 > **What shipped to npm is the `v4.0.0` tag, which is `develop` at the time of publish and
@@ -1219,7 +1284,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...develop
+[4.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...v4.0.0
 [3.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.2.0...v3.3.0

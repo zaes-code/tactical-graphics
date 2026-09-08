@@ -145,6 +145,44 @@ export interface TacticalGraphicsConfigOptions {
     labelUsesHostilityColor?: boolean;
     /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
     labelHaloColor?: string;
+    /**
+     * Draw obstacles and obstructions in green, as APP-06 8.1.4.3 requires. Default `true`.
+     *
+     * > Obstacles and obstructions as shown in this chapter (friendly, hostile, neutral,
+     * > unknown, or factional) are to be drawn using the colour green. However, if the
+     * > colour green is not available obstacles are to be drawn using black.
+     *
+     * **On by default because the plate says "are to be", not "may be".** This library
+     * already honours that distinction elsewhere — the maritime areas whose plates say
+     * *"has"* are painted and the ones that say *"may be depicted as"* are left to the
+     * host — and obstacles were the family where it had not been applied.
+     *
+     * **It beats affiliation, which nothing else here does.** The parenthesis above is
+     * exhaustive on purpose, and the same paragraph adds that *"The use of green and yellow
+     * for obstacles and CBRN is in contradiction to the Standard Identities."* So a hostile
+     * obstacle is green, not red; the plates carry the affiliation on a red enemy diamond
+     * drawn beside the symbol.
+     *
+     * Turning it off restores the affiliation colour — black normally, red when hostile —
+     * which is the fallback 8.1.4.3 names itself, not a compromise. It affects **only**
+     * this family: CBRN's yellow hatching, the cued-acquisition grey, the radar-search dark
+     * cyan and the sector-2 terrain colours are separate rules and are unmoved by it.
+     * @see OBSTACLE_GRAPHICS, obstacleColor
+     */
+    obstacleColors?: boolean;
+
+    /**
+     * The green itself. Default `#00FF00`, which is what the plates print — sampled off
+     * 270501's own Example cell, pure green and unmixed.
+     *
+     * A separate field from `obstacleColors` so the boolean says *whether* and this says
+     * *which*, matching how every other colour here works. Doctrinal defaults are literal
+     * rather than comfortable — `defaultLineColor` is `#000000` on the same principle — and
+     * a host on a night display or a busy chart softens it here rather than switching the
+     * rule off.
+     */
+    obstacleColor?: string;
+
     /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.feet}. @see AltitudeUnit */
     altitudeUnit?: AltitudeUnit;
 
@@ -179,6 +217,8 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly labelSize?: number;
     readonly lineWidth?: number;
     readonly hostilityColors?: Readonly<Partial<Record<TacticalGraphicHostility, string>>>;
+    readonly obstacleColors?: boolean;
+    readonly obstacleColor?: string;
     readonly defaultLineColor?: string;
     readonly labelFillColor?: string;
     readonly labelUsesHostilityColor?: boolean;
@@ -195,6 +235,8 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.labelSize !== undefined) this.labelSize = Math.min(MAX_LABEL_SIZE, Math.max(MIN_LABEL_SIZE, options.labelSize));
         if (options.lineWidth !== undefined) this.lineWidth = Math.min(MAX_LINE_WIDTH, Math.max(MIN_LINE_WIDTH, options.lineWidth));
         if (options.hostilityColors !== undefined) this.hostilityColors = Object.freeze({...options.hostilityColors});
+        if (options.obstacleColors !== undefined) this.obstacleColors = options.obstacleColors;
+        if (options.obstacleColor !== undefined) this.obstacleColor = options.obstacleColor;
         if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
         if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
         if (options.labelUsesHostilityColor !== undefined) this.labelUsesHostilityColor = options.labelUsesHostilityColor;
@@ -225,6 +267,10 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
             labelUsesHostilityColor: overrides.labelUsesHostilityColor ?? this.labelUsesHostilityColor,
             labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
+            // `??`, so composing `{obstacleColors: false}` over a config that never set it
+            // still turns it off — the same reason every other field here uses it.
+            obstacleColors: overrides.obstacleColors ?? this.obstacleColors,
+            obstacleColor: overrides.obstacleColor ?? this.obstacleColor,
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
@@ -254,8 +300,10 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
  * not do it on its own.
  */
 export const DEFAULT_PALETTE: Readonly<Required<Pick<TacticalGraphicsConfigOptions,
-    'defaultLineColor' | 'labelFillColor' | 'labelHaloColor' | 'handleColor' | 'inertHandleColor' | 'drawMarkerColor' | 'drawMarkerOutlineColor'>>> = {
+    'defaultLineColor' | 'labelFillColor' | 'labelHaloColor' | 'handleColor' | 'inertHandleColor' | 'drawMarkerColor' | 'drawMarkerOutlineColor' | 'obstacleColor'>>> = {
     defaultLineColor: '#000000',
+    // APP-06 8.1.4.3's green, sampled off 270501's Example cell: pure, unmixed.
+    obstacleColor: '#00FF00',
     labelFillColor: '#000000',
     labelHaloColor: 'rgba(255,255,255,1)',
     handleColor: 'rgba(255,0,0,1)',
@@ -321,6 +369,14 @@ export function setDefaultLineWidth(width: number): void {
  */
 export function getHostilityColorOverride(hostility: TacticalGraphicHostility): string | undefined {
     return _config.hostilityColors?.[hostility];
+}
+
+export function getObstacleColorsEnabled(): boolean {
+    return _config.obstacleColors ?? true;
+}
+
+export function getObstacleColorOverride(): string | undefined {
+    return _config.obstacleColor;
 }
 
 export function getDefaultLineColorOverride(): string | undefined {

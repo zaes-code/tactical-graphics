@@ -120,7 +120,11 @@ describe('supportsHostility', () => {
 
 describe('the paint layer refuses a hostility the symbol does not take', () => {
     it('draws an exempt graphic unaffiliated even when the bag says hostile', () => {
-        for (const name of [TacticalGraphicName.TacticalBlock, TacticalGraphicName.Block, TacticalGraphicName.Fix]) {
+        // 270501 block and 270503 fix used to sit in this list. They are the *obstacle
+        // effects*, not the mission tasks of the same name, and since 2026-09-07 they draw
+        // green under APP-06 8.1.4.3 — so they no longer demonstrate this rule. Their
+        // mission-task twins do. @see the precedence test below
+        for (const name of [TacticalGraphicName.TacticalBlock, TacticalGraphicName.TacticalDisrupt, TacticalGraphicName.Seize]) {
             expect(lineColorOf(hostileFeature(name))).toBe(UNAFFILIATED);
             expect(hostilityOf(hostileFeature(name))).toBe(TacticalGraphicHostility.unknown);
         }
@@ -135,7 +139,26 @@ describe('the paint layer refuses a hostility the symbol does not take', () => {
 
     it('still colors a graphic that does take one', () => {
         expect(lineColorOf(hostileFeature(TacticalGraphicName.PhaseLine))).toBe(HOSTILE_RED);
-        expect(lineColorOf(hostileFeature(TacticalGraphicName.ObstacleLine))).toBe(HOSTILE_RED);
+        // Was `ObstacleLine`, which is now green whatever its affiliation.
+        expect(lineColorOf(hostileFeature(TacticalGraphicName.AssemblyArea))).toBe(HOSTILE_RED);
+    });
+
+    /**
+     * **The obstacle rule outranks this one, and 270501 is where the two meet.**
+     *
+     * Block is exempt from affiliation *and* an obstacle. Exempt alone would draw it in the
+     * unaffiliated colour; the obstacle rule draws it green, and green wins — the plate
+     * covers "friendly, hostile, neutral, unknown, or factional" without exception, so
+     * there is no identity for which the exemption's answer is the right one.
+     *
+     * Its mission-task twin 340100 is not an obstacle and keeps the old behaviour, which is
+     * what makes this a precedence test rather than a rename.
+     */
+    it('lets the obstacle rule outrank the exemption where a graphic is both', () => {
+        const block = lineColorOf(hostileFeature(TacticalGraphicName.Block));
+        expect(block).not.toBe(UNAFFILIATED);
+        expect(block).not.toBe(HOSTILE_RED);
+        expect(lineColorOf(hostileFeature(TacticalGraphicName.TacticalBlock))).toBe(UNAFFILIATED);
     });
 
     it('leaves an unnamed feature alone', () => {

@@ -25,6 +25,7 @@ import {
     MIN_LINE_WIDTH,
     TacticalGraphicHostility,
     TacticalGraphicsConfigOptions,
+    DEFAULT_PALETTE,
 } from '@zaes/tactical-graphics';
 import {
     getDefaultLineColor,
@@ -370,6 +371,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={settings.defaultLineColor}
                 effective={basePalette.defaultLineColor ?? getDefaultLineColor()}
                 onChange={defaultLineColor => onChange({defaultLineColor})}
+            />
+            <ToggleSetting
+                label="Obstacles Draw Green"
+                hint="APP-06 8.1.4.3 — green for every affiliation, including hostile"
+                checked={settings.obstacleColors !== false}
+                onChange={obstacleColors => onChange({obstacleColors})}
+            />
+            <ColorSetting
+                label="Obstacle"
+                hint="The green itself, for a ground pure green glares on"
+                value={settings.obstacleColor}
+                effective={basePalette.obstacleColor ?? DEFAULT_PALETTE.obstacleColor}
+                onChange={obstacleColor => onChange({obstacleColor})}
+                disabledReason={settings.obstacleColors === false
+                    ? 'Off — obstacles follow their affiliation'
+                    : undefined}
             />
             <ToggleSetting
                 label="Label Text Uses Hostility"

@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "target": "es5",
+    // `es2018` at least, for the dotAll regex flag `render.test.ts` uses; `es2020` because
+    // nothing here targets a browser that old. It was `es5` because CRA generated it, and
+    // Babel transpiled past it — this config is typecheck-only now, and Vite sets its own
+    // build target, so `es5` was describing nothing.
+    "target": "es2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -10,23 +14,35 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "module": "esnext",
-    "moduleResolution": "node",
+    // `bundler`, not `node`: Vite and Vitest publish their types behind `exports` maps,
+    // which classic node resolution cannot see. The three build tsconfigs keep `node`,
+    // because what they emit is consumed by Node and by bundlers that predate this.
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
 
+    // Explicit, because an unset `types` auto-includes every `@types/*` in the tree —
+    // which is how `jest.fn()` typechecked for as long as `@types/jest` was installed,
+    // months after anything intended to use it. `vitest/globals` declares the
+    // `describe`/`it`/`expect`/`vi` the suites use without importing, and `vite/client`
+    // declares `import.meta.env`.
+    "types": ["node", "vite/client", "vitest/globals"],
+
     // The sample app imports the library through its published entry point, not
     // through deep paths, so it exercises exactly the surface a consumer gets.
     // This alias resolves that name to local source — no publish loop.
     //
-    // TypeScript honours `paths`; webpack and Jest do not. Their equivalents
-    // (`webpack.alias` and `jest.moduleNameMapper`) live in craco.config.js and
-    // must be kept in sync with this.
+    // TypeScript honours `paths`; the bundler and the test runner do not. Their
+    // equivalents (`resolve.alias` and `test.alias`) live in vite.config.ts and must be
+    // kept in sync with this.
     "baseUrl": ".",
     "paths": {
       "@zaes/tactical-graphics": ["src/tacticalgraphics/index.ts"]
     }
   },
-  "include": ["src"]
+  // `vite.config.ts` is included so the build configuration is typechecked too; it sat
+  // outside `src` and outside every gate as `craco.config.js`, an untyped .js file.
+  "include": ["src", "vite.config.mts"]
 }

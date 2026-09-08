@@ -73,6 +73,7 @@ import {
     obstacleRestrictedZoneStyle,
     getStyle,
 } from './openlayerStyles';
+import {FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX} from '@zaes/tactical-graphics';
 
 import {
     DEFAULT_SYMBOL_SIZE_PX,
@@ -330,6 +331,10 @@ const HOST_DARK_PALETTE = {
     inertHandleColor: 'rgba(109,109,109,0.8)',
     drawMarkerColor: 'rgb(69,106,185)',
     drawMarkerOutlineColor: 'rgb(23,23,23)',
+    // A host on a dark ground softens the obstacle green rather than switching the rule
+    // off — which is the whole reason `obstacleColor` is a palette entry and
+    // `obstacleColors` is a separate boolean. Pure #00FF00 glares on this background.
+    obstacleColor: 'rgb(84,196,120)',
 };
 
 describe('DEFAULT_PALETTE is the one palette', () => {
@@ -591,15 +596,16 @@ describe('getHaloStroke', () => {
 });
 
 describe('the library default', () => {
-    it('is an empty config, so an unconfigured consumer gets the doctrinal colors', () => {
-        // A fresh module registry, so this reads the declared default rather than
-        // whatever the tests above last set.
-        jest.isolateModules(() => {
-            const config: typeof import('@zaes/tactical-graphics') = require('@zaes/tactical-graphics');
-            expect(config.getDefaultLabelSize()).toBe(16);
-            expect(config.getDefaultLineWidth()).toBe(2);
-            expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
-        });
+    it('is an empty config, so an unconfigured consumer gets the doctrinal colors', async () => {
+        // A fresh module registry, so this reads the declared default rather than whatever
+        // the tests above last set. `vi.resetModules` drops the cache and the dynamic import
+        // repopulates it; there is no `isolateModules` to scope that to a callback, so the
+        // reset is the whole mechanism and this test must be the one that re-imports.
+        vi.resetModules();
+        const config = await import('@zaes/tactical-graphics');
+        expect(config.getDefaultLabelSize()).toBe(16);
+        expect(config.getDefaultLineWidth()).toBe(2);
+        expect(config.getTacticalGraphicsConfig().defaultLineColor).toBeUndefined();
     });
 });
 
@@ -875,10 +881,19 @@ describe('fortified and wave graphics in screen space', () => {
     });
 
     it('shrinks the merlons once the line itself is small on screen', () => {
-        // 4 km at resolution 40 is 100 px. An 11 px merlon on a 100 px line reads as a
-        // zigzag rather than as a fortified line, so it is capped at
-        // DECORATION_MAX_SHARE_OPEN of the length.
-        expect(fortifiedLinePx(40)).toBeCloseTo(100 * 0.05, 6);
+        /*
+         * 4 km at resolution 40 is 100 px. An 11 px merlon on a 100 px line reads as a
+         * zigzag rather than as a fortified line, so it is capped at
+         * DECORATION_MAX_SHARE_OPEN of the length.
+         *
+         * The share is measured against the merlon's **width**, not its height, since 2026-09-07:
+         * a merlon is 15 px wide and 11 tall, so a cap read off the height let it stay full
+         * size on a line half as long as it should have. Reported as merlons that "look huge
+         * even after zoom out". So the allowance is `100 * 0.05` of *width*, and the height
+         * that survives is that scale applied to 11.
+         */
+        const scale = (100 * 0.05) / FORTIFIED_MERLON_PX;
+        expect(fortifiedLinePx(40)).toBeCloseTo(FORTIFIED_HEIGHT_PX * scale, 6);
         expect(fortifiedLinePx(40)).toBeLessThan(fortifiedLinePx(10));
     });
 
