@@ -395,6 +395,42 @@ export function centredRun(total: number, itemLength: number, gap: number): numb
 }
 
 /**
+ * Lays decorations along one run, **interleaved with the run's own vertices in order**.
+ *
+ * The ordering is the whole point. Emitting every decoration and then the run's vertices
+ * produces a polyline that walks forward to the last item and then jumps back to the run's
+ * second vertex to retrace it — a straight chord across the curve, which on a fortified line
+ * drawn round a bend showed as a bare line cutting the corner. Measured on a quarter-circle
+ * of 48 chords: a 412-unit jump where the longest real chord was 9.8. (Reported 2026-09-07,
+ * after an edit added the vertices that made a run more than one chord long.)
+ *
+ * Vertices falling *inside* an item's span are dropped, because the item's own two feet
+ * already carry the baseline across it.
+ */
+function alongRun(
+    run: ProjectedPosition[],
+    itemLength: number,
+    gap: number,
+    item: (from: number, to: number) => ProjectedPosition[],
+): ProjectedPosition[] {
+    const cumulative = [0];
+    for (let i = 1; i < run.length; i++) {
+        cumulative.push(cumulative[i - 1] + Math.hypot(run[i][0] - run[i - 1][0], run[i][1] - run[i - 1][1]));
+    }
+    const total = cumulative[cumulative.length - 1];
+
+    const out: ProjectedPosition[] = [];
+    let next = 1;
+    for (const from of centredRun(total, itemLength, gap)) {
+        while (next < run.length && cumulative[next] <= from) out.push(run[next++]);
+        out.push(...item(from, from + itemLength));
+        while (next < run.length && cumulative[next] <= from + itemLength) next++;
+    }
+    while (next < run.length) out.push(run[next++]);
+    return out;
+}
+
+/**
  * Walks a path adding triangular teeth along it, returning one continuous
  * polyline that includes both the baseline and the teeth.
  *
@@ -422,23 +458,22 @@ export function crenellatedPath(
     const out: ProjectedPosition[] = [path[0]];
 
     for (const run of splitAtCorners(path)) {
-        const total = pathLength(run);
-        for (const from of centredRun(total, baseMap, gapMap)) {
+        out.push(...alongRun(run, baseMap, gapMap, (from, to) => {
             const left = pathPointAt(run, from);
-            const right = pathPointAt(run, from + baseMap);
+            const right = pathPointAt(run, to);
             const sideSign = side === 'up' ? upSign(left.dir) : side;
-            const mid: ProjectedPosition = [(left.point[0] + right.point[0]) / 2, (left.point[1] + right.point[1]) / 2];
             const dx = right.point[0] - left.point[0];
             const dy = right.point[1] - left.point[1];
             const n = Math.hypot(dx, dy) || 1;
-            out.push(
+            return [
                 left.point,
-                [mid[0] + (-dy / n) * sideSign * heightMap, mid[1] + (dx / n) * sideSign * heightMap],
+                [
+                    (left.point[0] + right.point[0]) / 2 + (-dy / n) * sideSign * heightMap,
+                    (left.point[1] + right.point[1]) / 2 + (dx / n) * sideSign * heightMap,
+                ],
                 right.point,
-            );
-        }
-        // The run's own vertices, so the baseline still follows every bend it was drawn with.
-        for (const v of run.slice(1)) out.push(v);
+            ];
+        }));
     }
     return out;
 }
@@ -666,21 +701,19 @@ export function castellatedPath(
     const out: ProjectedPosition[] = [path[0]];
 
     for (const run of splitAtCorners(path)) {
-        const total = pathLength(run);
-        for (const from of centredRun(total, merlonMap, crenelMap)) {
+        out.push(...alongRun(run, merlonMap, crenelMap, (from, to) => {
             const left = pathPointAt(run, from);
-            const right = pathPointAt(run, from + merlonMap);
+            const right = pathPointAt(run, to);
             const sign = side === 'up' ? upSign(left.dir) : side;
             const ln: ProjectedPosition = [-left.dir[1] * sign, left.dir[0] * sign];
             const rn: ProjectedPosition = [-right.dir[1] * sign, right.dir[0] * sign];
-            out.push(
+            return [
                 left.point,
                 [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
                 [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
                 right.point,
-            );
-        }
-        for (const v of run.slice(1)) out.push(v);
+            ];
+        }));
     }
     return out;
 }
