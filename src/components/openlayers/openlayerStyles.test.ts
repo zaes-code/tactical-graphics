@@ -73,7 +73,7 @@ import {
     obstacleRestrictedZoneStyle,
     getStyle,
 } from './openlayerStyles';
-import {FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX} from '../../tacticalgraphics/symbology/decorations';
+import {FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX} from '@zaes/tactical-graphics';
 
 import {
     DEFAULT_SYMBOL_SIZE_PX,
