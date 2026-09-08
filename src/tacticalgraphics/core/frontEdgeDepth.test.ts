@@ -1,7 +1,7 @@
 /**
  * # A synthesised three-point base is as deep as it is long
  *
- * The twenty-two graphics whose points are a front edge and a distance across it — the
+ * The nineteen graphics whose points are a front edge and a distance across it — the
  * block family, the retrogrades, the two passages, the explosives set — had that distance
  * set to 0.55 of the half-run, which is 0.275 of the edge. Drawn on a sheet they read as a
  * long bar with a short nub under it, and the nub is the part that says which task it is.
@@ -38,6 +38,10 @@ const hyp = (a: Position, b: Position) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 const perp = (a: Position, b: Position, p: Position) =>
     Math.abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / hyp(a, b);
 
+/** Compass bearing of the edge, 0 north and 90 east, for asserting the diagonal. */
+const axisDegrees = (base: Position[]) =>
+    ((Math.atan2(base[1][0] - base[0][0], base[1][1] - base[0][1]) * 180) / Math.PI + 360) % 360;
+
 /** The figure's depth as a share of its own edge — the number the rule is about. */
 const depthOverLength = (base: Position[]) => perp(base[0], base[1], base[2]) / hyp(base[0], base[1]);
 
@@ -67,11 +71,13 @@ const SERVED = (Object.values(TacticalGraphicName) as TacticalGraphicName[]).fil
 });
 
 describe('the depth of a synthesised front-edge base', () => {
-    it('governs the twenty-two graphics whose third point states a distance', () => {
+    it('governs the nineteen graphics whose third point states a distance', () => {
         // A count, so that a graphic silently leaving the family is visible here rather than
-        // only in a picture. Left out: the three with their own stated layouts, and the
-        // roadblock, which is dropped rather than drawn.
-        expect(SERVED).toHaveLength(22);
+        // only in a picture. Left out: the three with their own stated layouts, the
+        // roadblock, which is dropped rather than drawn, and the three explosives states of
+        // readiness, which state their own width and their own diagonal.
+        expect(SERVED).toHaveLength(19);
+        expect(SERVED).not.toContain(TacticalGraphicName.ExplosivesStateOfReadiness1Safe);
         expect(SERVED).not.toContain(TacticalGraphicName.RoadblockCompleteExecuted);
         expect(SERVED).toContain(TacticalGraphicName.Canalize);
         expect(SERVED).toContain(TacticalGraphicName.Block);
@@ -112,6 +118,37 @@ describe('the depth of a synthesised front-edge base', () => {
             const degrees = depthOverLength(synthesizedBase(name, [12, 41], 1.4, 3, undefined, true)!.map(merc));
             expect(degrees).toBeCloseTo(metres, 1);
         }
+    });
+
+    it('draws the explosives family as a narrow band on the diagonal', () => {
+        /*
+         * 271201-3 read *"Points 1 and 2 determine the centreline of the symbol and point 3
+         * determines its width"* — a width, not a depth — and both the Template and the
+         * Example draw the band across the road it blocks rather than along it. A fifth of
+         * the run, at 45 degrees. (User's call, 2026-09-07.)
+         *
+         * Asserted in both unit systems, because the rotation is applied in shape space and
+         * the degree correction after it: get that order wrong and the angle is right in
+         * metres and wrong at every latitude.
+         */
+        for (const name of [
+            TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+            TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+            TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+        ]) {
+            const metres = synthesizedBase(name, [0, 0], 91_800, 3)!;
+            expect(depthOverLength(metres)).toBeCloseTo(1 / 5, 3);
+            expect(axisDegrees(metres)).toBeCloseTo(45, 1);
+
+            const degrees = synthesizedBase(name, [12, 41], 1.4, 3, undefined, true)!.map(merc);
+            expect(depthOverLength(degrees)).toBeCloseTo(1 / 5, 2);
+            expect(axisDegrees(degrees)).toBeCloseTo(45, 1);
+        }
+    });
+
+    it('leaves the rest of the family axis-aligned', () => {
+        // The diagonal is the explosives', not the family's.
+        expect(axisDegrees(synthesizedBase(TacticalGraphicName.Canalize, [0, 0], 91_800, 3)!)).toBeCloseTo(90, 1);
     });
 
     it('leaves a caller that states its own depth alone', () => {

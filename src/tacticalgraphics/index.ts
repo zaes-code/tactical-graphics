@@ -184,6 +184,7 @@ export {
     fontStyle,
     getColorByHostility,
     getDefaultLineColor,
+    getObstacleColor,
     getDoctrinalHostilityColor,
     getDrawMarkerColor,
     getDrawMarkerOutlineColor,
@@ -276,6 +277,11 @@ export {
     OBSTACLE_TOOTH_GAP_PX,
     OBSTACLE_TOOTH_HEIGHT_PX,
     angleBetween,
+    FORTIFIED_CRENEL_PX,
+    FORTIFIED_HEIGHT_PX,
+    FORTIFIED_MERLON_PX,
+    FORTIFIED_MIN_PX,
+    castellatedPath,
     centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
@@ -439,6 +445,7 @@ export {baseGeometryFor} from './core/render';
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
+export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {acrossPointAtEnd, arcAndArrowBase, drawsAsHairpin, firePositionBase, frontEdgeBase, hairpinBase, FRONT_EDGE_ACROSS, FRONT_EDGE_ACROSS_RULE, circleAndArrowBase, normalizeDrawnBase, railCrossingBase, supportByFireBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors

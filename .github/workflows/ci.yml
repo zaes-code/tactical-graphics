@@ -32,37 +32,27 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # `vitest run` is already single-shot; the old `-- --watchAll=false` was a Jest flag
+      # that Vitest rejects.
       - name: Test
-        run: npm test -- --watchAll=false
+        run: npm test
         env:
           CI: true
 
       - name: Build library
         run: npm run build
 
-      # Guards the layering rule: the published library must never import the
-      # sample app, and must not depend on any map library.
-      # Matches only module specifiers in import/export statements — an earlier
-      # version matched the bare word "components/" and tripped on a comment.
-      - name: Library stays map-agnostic
-        run: |
-          if grep -rnE "from ['\"](ol($|[/'\"])|[^'\"]*components/)" src/tacticalgraphics --include='*.ts' | grep -v '\.test\.ts'; then
-            echo "::error::src/tacticalgraphics must not import OpenLayers or the sample app"
-            exit 1
-          fi
-          echo "OK — library imports nothing from the sample app"
-
-      # The sample app must reach the library through its published entry point,
-      # so it exercises the same surface a consumer gets. A deep import here means
-      # something is missing from src/tacticalgraphics/index.ts — export it rather
-      # than reaching past the barrel.
-      - name: Sample app imports the library via its public entry point
-        run: |
-          if grep -rn "from ['\"][^'\"]*tacticalgraphics/" src/components src/utils --include='*.ts' --include='*.tsx'; then
-            echo "::error::Import from '@zaes/tactical-graphics', not a deep path into src/tacticalgraphics/"
-            exit 1
-          fi
-          echo "OK — sample app uses the barrel"
+      # Both layering rules: the published library never imports a renderer or a
+      # map library, and the sample app reaches the library through its published
+      # entry point rather than a deep path.
+      #
+      # The patterns live in the script, not here. They used to be two inline greps,
+      # which meant the rules could not be run locally — typecheck and the test suite
+      # both pass with a deep import in place, because the path resolves and neither
+      # tool has an opinion about it. Two of them reached the trunk on 2026-09-07 for
+      # that reason. `npm run check:layering` is the same check a developer runs.
+      - name: Layering rules
+        run: npm run check:layering
 
       - name: Package contents
         run: npm pack --dry-run

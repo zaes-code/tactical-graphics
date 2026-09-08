@@ -203,12 +203,23 @@ export function frontEdgeBase(
     acrossAt = 0.5,
     acrossRatio = FRONT_EDGE_ACROSS,
     degreeLayout = false,
+    rotationDeg = 0,
 ): Position[] {
     const [cx, cy] = center;
-    const across = half * acrossRatio * (degreeLayout ? Math.cos((cy * Math.PI) / 180) : 1);
-    const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
+    // Shape space: offsets in units of `half`, x along the edge and y across it. Emitting
+    // puts the degree correction on y alone, which makes both offsets carry the same
+    // `cos(latitude)` factor — a uniform scale, so the figure's proportions survive it and
+    // a rotation can be applied here rather than after. @see the header note on units.
+    const k = degreeLayout ? Math.cos((cy * Math.PI) / 180) : 1;
+    const across = half * acrossRatio;
+    const theta = (rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    const at = (gx: number, gy: number): Position => [cx + (gx * cos - gy * sin), cy + (gx * sin + gy * cos) * k];
+
+    const edge: Position[] = [at(-half, 0), at(half, 0)];
     if (points >= 4) {
-        return [...edge, [cx - half * 0.75, cy - across], [cx + half * 0.75, cy - across]];
+        return [...edge, at(-half * 0.75, -across), at(half * 0.75, -across)];
     }
     // `acrossAt` slides the third point along the edge, 0 at point 1 and 1 at point 2. It is
     // 0.5 for the graphics whose third point states a rear or a width — the distance is all
@@ -216,7 +227,7 @@ export function frontEdgeBase(
     // plate puts that point at an *end*: 270502's is "the tip of the longest arrow", which is
     // the arrow at point 2. Put in the middle, its grip drew half a symbol away from the tip
     // it holds. @see acrossPointAtEnd
-    return [...edge, [cx - half + 2 * half * acrossAt, cy - across]];
+    return [...edge, at(-half + 2 * half * acrossAt, -across)];
 }
 
 /**
@@ -286,6 +297,35 @@ export function hairpinBase(center: Position, half: number): Position[] {
  * A caller with a tile to fill may still state its own, and the catalog does.
  * @see frontEdgeBase
  */
+/**
+ * 271201–271203, the explosives states of readiness: **a narrow band, drawn on the diagonal.**
+ *
+ * Their plate reads *"Points 1 and 2 determine the centreline of the symbol and point 3
+ * determines its width"* — a width, not a depth, and the Template draws the two parallel
+ * dashes close together over a long run. The family default of "as deep as it is long" is
+ * the wrong shape for that: it draws a square where the symbol is a stripe.
+ *
+ * A fifth of the run, which is the separation the fords are drawn with and near enough what
+ * the plate shows. (User's call, 2026-09-07.) Stated as a share of the **half**-run like
+ * every ratio here, so a fifth of the edge is two fifths of the half. @see FRONT_EDGE_ACROSS
+ */
+const EXPLOSIVES_ACROSS_OF_EDGE = 1 / 5;
+export const EXPLOSIVES_ACROSS = EXPLOSIVES_ACROSS_OF_EDGE * 2;
+
+/**
+ * And laid out on the diagonal, because that is how both the Template and the Example draw
+ * it — the band crosses the road it blocks rather than running along it, which is the whole
+ * point of the symbol. Axis-aligned, a row of these read as underlines. (User's call.)
+ */
+export const EXPLOSIVES_ROTATION_DEG = 45;
+
+/** The three that share that plate's wording. 271204 roadblock is dropped, not drawn. */
+const EXPLOSIVES_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+];
+
 export const FRONT_EDGE_ACROSS = 2;
 
 /**
@@ -324,6 +364,10 @@ export function synthesizedBase(
     // A circle with an arrow swinging out of it, sized the way its plate draws one.
     // @see circleAndArrowBase
     if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
+    // The explosives family states its own two numbers. @see EXPLOSIVES_ACROSS
+    if (EXPLOSIVES_GRAPHICS.includes(name)) {
+        return frontEdgeBase(center, half, points, 0.5, EXPLOSIVES_ACROSS, degreeLayout, EXPLOSIVES_ROTATION_DEG);
+    }
     if (usesFrontEdgeBase(name)) return frontEdgeBase(center, half, points, acrossPointAtEnd(name) ? 1 : 0.5, acrossRatio, degreeLayout);
     return undefined;
 }
