@@ -200,7 +200,14 @@ export const DECORATION_MIN_PX = 3;
  * across needs the same treatment whether it got that way by being drawn small or
  * by the user zooming out, and a resolution threshold would only catch the second.
  */
-export function decorationScale(path: ProjectedPosition[], closed: boolean, resolution: number, heightPx: number): number {
+export function decorationScale(
+    path: ProjectedPosition[],
+    closed: boolean,
+    resolution: number,
+    heightPx: number,
+    footprintPx = heightPx,
+    minPx = DECORATION_MIN_PX,
+): number {
     let availablePx: number;
     if (closed) {
         const xs = path.map(p => p[0]);
@@ -210,12 +217,29 @@ export function decorationScale(path: ProjectedPosition[], closed: boolean, reso
         availablePx = pathLength(path) / resolution;
     }
     const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
-    const scale = Math.max(0, Math.min(1, (availablePx * share) / heightPx));
+    // `footprintPx` is what the decoration spends *along* the path, and it is what decides
+    // how crowded a shape looks. Height alone under-caps anything wider than it is tall: the
+    // fortified merlon stands 11 px proud and is 15 wide, so a cap read off its height let
+    // it stay full size on a shape half as big as it should have, and it looked huge however
+    // far the map zoomed out. (Reported 2026-09-07.)
+    //
+    // The **item**, not the whole repeat. Capping on merlon-plus-crenel was tried and is too
+    // strict — the crenel is empty space, so counting it shrank the merlons until a
+    // fortified area read as texture rather than as battlements.
+    //
+    // Defaults to `heightPx`, so a caller that has not said otherwise is unchanged.
+    const scale = Math.max(0, Math.min(1, (availablePx * share) / Math.max(heightPx, footprintPx)));
 
     // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is
     // texture on the stroke — and a row of 2 px bumps reads as a fuzzy line rather than
     // as an obstacle. Drop it and let the plain geometry stand.
-    return heightPx * scale < DECORATION_MIN_PX ? 0 : scale;
+    //
+    // `minPx` is adjustable because legibility is not height alone: a merlon is a *step*
+    // 15 px wide, still readable as a square notch at a height a 10 px triangle would have
+    // vanished at. Capping the fortified family on its width made it disappear at a shape
+    // of 41 px where it used to hold to 30, and the shrinking was wanted but the vanishing
+    // was too early. (Reported 2026-09-07.) Everything else keeps the default.
+    return heightPx * scale < minPx ? 0 : scale;
 }
 
 /** Share of a path's on-screen length a single end mark may span before it shrinks. */
@@ -331,8 +355,115 @@ export function encirclementToothSize(ring: ProjectedPosition[], resolution: num
 }
 
 /**
+ * How sharp a bend counts as a **corner** rather than a sampled curve, in degrees.
+ *
+ * A traced ellipse is one smooth run recorded as fifty short chords, not fifty segments
+ * with fifty corners between them. Treating each chord as its own run is what left a
+ * fortified area with no merlons at all: its median chord measured 11 screen pixels against
+ * the 30 a merlon and its crenel need, so every single one was "too short for one" and the
+ * symbol came out a plain outline.
+ *
+ * 30 degrees keeps a drawn rectangle's four right angles as corners and a traced curve as
+ * one run. @see splitAtCorners
+ */
+const CORNER_DEGREES = 30;
+
+/**
+ * A path cut into runs at its real corners, each run kept whole.
+ *
+ * This is the unit a decoration is laid out along: complete items, centred, never straddling
+ * a corner — but free to follow a curve through as many sampled chords as it takes.
+ */
+export function splitAtCorners(path: ProjectedPosition[], cornerDegrees = CORNER_DEGREES): ProjectedPosition[][] {
+    if (path.length < 3) return [path];
+    const limit = Math.cos((cornerDegrees * Math.PI) / 180);
+    const runs: ProjectedPosition[][] = [];
+    let run: ProjectedPosition[] = [path[0]];
+
+    const dir = (a: ProjectedPosition, b: ProjectedPosition): ProjectedPosition | undefined => {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const n = Math.hypot(dx, dy);
+        return n === 0 ? undefined : [dx / n, dy / n];
+    };
+
+    for (let i = 1; i < path.length - 1; i++) {
+        run.push(path[i]);
+        const before = dir(path[i - 1], path[i]);
+        const after = dir(path[i], path[i + 1]);
+        // A zero-length chord carries no direction and cannot be a corner.
+        if (before && after && before[0] * after[0] + before[1] * after[1] < limit) {
+            runs.push(run);
+            run = [path[i]];
+        }
+    }
+    run.push(path[path.length - 1]);
+    runs.push(run);
+    return runs;
+}
+
+/**
+ * Where a whole number of items of `itemLength` sit along a run of `total`, centred.
+ *
+ * `n` items occupy `n * item + (n - 1) * gap` — gaps between them, not outside — so the
+ * count that fits is `floor((total + gap) / unit)` and the leftover splits evenly at the
+ * two ends. Returns the distance along the run at which each item starts.
+ */
+export function centredRun(total: number, itemLength: number, gap: number): number[] {
+    const unit = itemLength + gap;
+    if (unit <= 0 || itemLength <= 0) return [];
+    const count = Math.floor((total + gap) / unit);
+    if (count < 1) return [];
+    const startAt = (total - (count * itemLength + (count - 1) * gap)) / 2;
+    return Array.from({length: count}, (_, i) => startAt + i * unit);
+}
+
+/**
+ * Lays decorations along one run, **interleaved with the run's own vertices in order**.
+ *
+ * The ordering is the whole point. Emitting every decoration and then the run's vertices
+ * produces a polyline that walks forward to the last item and then jumps back to the run's
+ * second vertex to retrace it — a straight chord across the curve, which on a fortified line
+ * drawn round a bend showed as a bare line cutting the corner. Measured on a quarter-circle
+ * of 48 chords: a 412-unit jump where the longest real chord was 9.8. (Reported 2026-09-07,
+ * after an edit added the vertices that made a run more than one chord long.)
+ *
+ * Vertices falling *inside* an item's span are dropped, because the item's own two feet
+ * already carry the baseline across it.
+ */
+function alongRun(
+    run: ProjectedPosition[],
+    itemLength: number,
+    gap: number,
+    item: (from: number, to: number) => ProjectedPosition[],
+): ProjectedPosition[] {
+    const cumulative = [0];
+    for (let i = 1; i < run.length; i++) {
+        cumulative.push(cumulative[i - 1] + Math.hypot(run[i][0] - run[i - 1][0], run[i][1] - run[i - 1][1]));
+    }
+    const total = cumulative[cumulative.length - 1];
+
+    const out: ProjectedPosition[] = [];
+    let next = 1;
+    for (const from of centredRun(total, itemLength, gap)) {
+        while (next < run.length && cumulative[next] <= from) out.push(run[next++]);
+        out.push(...item(from, from + itemLength));
+        while (next < run.length && cumulative[next] <= from + itemLength) next++;
+    }
+    while (next < run.length) out.push(run[next++]);
+    return out;
+}
+
+/**
  * Walks a path adding triangular teeth along it, returning one continuous
  * polyline that includes both the baseline and the teeth.
+ *
+ * **Each segment is laid out on its own**, with a whole number of teeth centred along it
+ * and nothing carried across the join. A running offset used to be carried from one
+ * segment to the next, which spent the leftover immediately after each corner: teeth
+ * crowded one side of a join and left a gap on the other, and on a closed ring the last
+ * segment met the first mid-pattern. @see castellatedPath, which solves the same problem
+ * the other way — one count over the whole path, with the spacing stretched to fit.
  *
  * `side` is `'up'`, or ±1 to force a side. **`'up'` is decided per segment from
  * the segment's own x-direction, not from its direction of travel.** A closed
@@ -348,39 +479,26 @@ export function crenellatedPath(
     side: number | 'up',
 ): ProjectedPosition[] {
     if (path.length < 2 || baseMap <= 0) return path;
-    const out: ProjectedPosition[] = [];
-    const unit = baseMap + gapMap;
-    let nextToothAt = gapMap / 2;
+    const out: ProjectedPosition[] = [path[0]];
 
-    for (let i = 0; i < path.length - 1; i++) {
-        const a = path[i];
-        const b = path[i + 1];
-        out.push(a);
-
-        const dx = b[0] - a[0];
-        const dy = b[1] - a[1];
-        const length = Math.hypot(dx, dy);
-        if (length === 0) continue;
-
-        const ux = dx / length;
-        const uy = dy / length;
-        const sideSign = side === 'up' ? (ux >= 0 ? 1 : -1) : side;
-        const nx = -uy * sideSign;
-        const ny = ux * sideSign;
-
-        while (nextToothAt + baseMap <= length) {
-            const p1: ProjectedPosition = [a[0] + ux * nextToothAt, a[1] + uy * nextToothAt];
-            const p2: ProjectedPosition = [a[0] + ux * (nextToothAt + baseMap), a[1] + uy * (nextToothAt + baseMap)];
-            out.push(
-                p1,
-                [(p1[0] + p2[0]) / 2 + nx * heightMap, (p1[1] + p2[1]) / 2 + ny * heightMap],
-                p2,
-            );
-            nextToothAt += unit;
-        }
-        nextToothAt = Math.max(0, nextToothAt - length);
+    for (const run of splitAtCorners(path)) {
+        out.push(...alongRun(run, baseMap, gapMap, (from, to) => {
+            const left = pathPointAt(run, from);
+            const right = pathPointAt(run, to);
+            const sideSign = side === 'up' ? upSign(left.dir) : side;
+            const dx = right.point[0] - left.point[0];
+            const dy = right.point[1] - left.point[1];
+            const n = Math.hypot(dx, dy) || 1;
+            return [
+                left.point,
+                [
+                    (left.point[0] + right.point[0]) / 2 + (-dy / n) * sideSign * heightMap,
+                    (left.point[1] + right.point[1]) / 2 + (dx / n) * sideSign * heightMap,
+                ],
+                right.point,
+            ];
+        }));
     }
-    out.push(path[path.length - 1]);
     return out;
 }
 
@@ -581,13 +699,30 @@ export const FORTIFIED_CRENEL_PX = 15;
 export const FORTIFIED_HEIGHT_PX = 11;
 
 /**
+ * The height below which a merlon stops being drawn — lower than the general floor.
+ *
+ * A merlon is a 15 px wide step, and a step reads as a notch at a height where a triangle
+ * of the same height would be a dot. Half the usual floor roughly doubles the range of
+ * shape sizes over which the fortified graphics keep their battlements.
+ * @see DECORATION_MIN_PX
+ */
+export const FORTIFIED_MIN_PX = 1.5;
+
+/**
  * Square battlements standing off a path — the fortified line and area.
  *
- * Unlike {@link crenellatedPath}, which walks each segment independently, this
- * distributes a **whole number** of merlons over the path's total length and
- * stretches the spacing to fit. A closed ring has to come back to where it
- * started, so a pattern that simply repeats at a fixed pitch leaves a ragged
- * partial merlon at the join.
+ * **Laid out per segment, like {@link crenellatedPath}, and for the same reason.** This
+ * used to distribute one whole count over the path's *total* length and stretch the spacing
+ * to fit, on the grounds that a closed ring has to come back to where it started. It did
+ * solve the seam, at two costs that showed on any shape with corners: it walked the path
+ * with `pathPointAt`, so a merlon whose left point fell on one segment and its right on the
+ * next bent around the corner; and the stretch applied to the merlon *width* as well as the
+ * gap, so one outline could carry several merlon sizes.
+ *
+ * A whole number centred on each segment settles the seam too — every segment is
+ * self-contained, so there is no pattern left running when the ring closes — and it keeps
+ * the merlon the size it is meant to be. A segment too short for one draws bare.
+ * (User's call, 2026-09-07, extending the obstacle teeth decision to this family.)
  */
 export function castellatedPath(
     path: ProjectedPosition[],
@@ -596,36 +731,30 @@ export function castellatedPath(
     heightMap: number,
     side: number | 'up',
 ): ProjectedPosition[] {
-    const total = pathLength(path);
-    const pattern = merlonMap + crenelMap;
-    if (path.length < 2 || pattern <= 0 || total < pattern) return path;
-
-    const count = Math.max(1, Math.round(total / pattern));
-    const spacing = total / count;
-    const merlon = spacing * (merlonMap / pattern);
-
+    if (path.length < 2 || merlonMap <= 0) return path;
     const out: ProjectedPosition[] = [path[0]];
-    for (let i = 0; i < count; i++) {
-        const startAt = i * spacing + (spacing - merlon) / 2;
-        const left = pathPointAt(path, startAt);
-        const right = pathPointAt(path, startAt + merlon);
-        const sign = side === 'up' ? upSign(left.dir) : side;
-        const ln: ProjectedPosition = [-left.dir[1] * sign, left.dir[0] * sign];
-        const rn: ProjectedPosition = [-right.dir[1] * sign, right.dir[0] * sign];
-        out.push(
-            left.point,
-            [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
-            [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
-            right.point,
-        );
+
+    for (const run of splitAtCorners(path)) {
+        out.push(...alongRun(run, merlonMap, crenelMap, (from, to) => {
+            const left = pathPointAt(run, from);
+            const right = pathPointAt(run, to);
+            const sign = side === 'up' ? upSign(left.dir) : side;
+            const ln: ProjectedPosition = [-left.dir[1] * sign, left.dir[0] * sign];
+            const rn: ProjectedPosition = [-right.dir[1] * sign, right.dir[0] * sign];
+            return [
+                left.point,
+                [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
+                [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
+                right.point,
+            ];
+        }));
     }
-    out.push(path[path.length - 1]);
     return out;
 }
 
 /** A fortified ring's merlons, sized against the shape at this resolution. */
 export function fortifiedRing(ring: ProjectedPosition[], resolution: number): ProjectedPosition[] {
-    const scale = decorationScale(ring, true, resolution, FORTIFIED_HEIGHT_PX);
+    const scale = decorationScale(ring, true, resolution, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX);
     if (scale <= 0) return ring;
     return castellatedPath(
         ring,

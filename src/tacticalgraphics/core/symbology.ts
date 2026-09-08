@@ -25,6 +25,8 @@ import {
     getDrawMarkerOutlineColorOverride,
     getHandleColorOverride,
     getHostilityColorOverride,
+    getObstacleColorsEnabled,
+    getObstacleColorOverride,
     getInertHandleColorOverride,
     getLabelFillColorOverride,
     getLabelUsesHostilityColor,
@@ -114,6 +116,18 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
 
     return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
 };
+
+/**
+ * The green APP-06 8.1.4.3 requires for obstacles, or `undefined` when the host has turned
+ * the rule off and the affiliation colour should apply instead.
+ *
+ * Returns a colour rather than a boolean so a caller cannot get the rule right and the value
+ * wrong — there is one place that knows both. @see OBSTACLE_GRAPHICS
+ */
+export function getObstacleColor(): string | undefined {
+    if (!getObstacleColorsEnabled()) return undefined;
+    return getObstacleColorOverride() ?? DEFAULT_PALETTE.obstacleColor;
+}
 
 /** Default stroke/fill color for graphics with no specific hostility color. */
 export function getDefaultLineColor(): string {
