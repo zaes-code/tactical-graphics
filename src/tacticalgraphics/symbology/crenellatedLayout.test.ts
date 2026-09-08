@@ -126,10 +126,45 @@ describe('a sampled curve is one run, not many segments', () => {
     });
 
     it('gives a curve roughly the same count however finely it was sampled', () => {
-        const count = (n: number) =>
-            crenellatedPath(arc(n), HEIGHT, BASE, GAP, 1).length - arc(n).length;
+        /*
+         * Count the teeth, not the output length. Output length is no longer a proxy for
+         * the count, because a vertex falling inside a tooth's span is dropped — so a
+         * finely sampled curve loses more baseline vertices than a coarse one and the
+         * lengths diverge while the teeth agree.
+         *
+         * On this fixture a tooth's apex stands `HEIGHT` proud of the radius, which the
+         * baseline never does.
+         */
+        const teeth = (n: number, r = 200) =>
+            crenellatedPath(arc(n, r), HEIGHT, BASE, GAP, 1)
+                .filter(p => Math.hypot(p[0], p[1]) > r + HEIGHT / 2).length;
         // Sampling is a drawing artefact; the decoration should not depend on it.
-        expect(Math.abs(count(48) - count(12))).toBeLessThanOrEqual(6);
+        expect(Math.abs(teeth(48) - teeth(12))).toBeLessThanOrEqual(2);
+    });
+
+    it('never jumps a chord across the curve it is decorating', () => {
+        /*
+         * The defect a user saw on a fortified line after editing it: the output walked
+         * forward to the last item and then jumped back to the run's second vertex to
+         * retrace it, drawing a straight line across the bend. Measured on a 48-chord
+         * quarter circle, that jump was 412 units against a longest real chord of 9.8.
+         *
+         * Asserted as "no output step is much longer than the longest input step", which
+         * holds for any sampling and does not need a magic distance.
+         */
+        const longest = (pts: ProjectedPosition[]) => {
+            let m = 0;
+            for (let i = 1; i < pts.length; i++) m = Math.max(m, Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+            return m;
+        };
+        for (const n of [4, 12, 48]) {
+            const path = arc(n);
+            // An item's own feet and apex are legitimately longer than a fine chord, so the
+            // ceiling is the item, not the chord.
+            const ceiling = Math.max(longest(path), BASE + GAP) * 2;
+            expect(longest(crenellatedPath(path, HEIGHT, BASE, GAP, 1))).toBeLessThan(ceiling);
+            expect(longest(castellatedPath(path, BASE, GAP, HEIGHT, 1))).toBeLessThan(ceiling);
+        }
     });
 
     it('still breaks at a real corner', () => {
