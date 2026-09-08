@@ -853,6 +853,8 @@ configureTacticalGraphics({
         [TacticalGraphicHostility.friend]: 'rgb(92,148,255)',
     },
     defaultLineColor: '#000000',   // unaffiliated line work, and label text with it
+    obstacleColors: true,          // default true — see below
+    obstacleColor: '#00FF00',      // the green itself, default as the plates print it
 });
 
 source.forEachFeature(f => f.changed());   // repaint what is already drawn
@@ -861,6 +863,63 @@ source.forEachFeature(f => f.changed());   // repaint what is already drawn
 That last line matters: OpenLayers caches its render per feature revision, so a
 config change does not reach features already on the map until something bumps their
 revision.
+
+### Obstacles are green, and that beats affiliation
+
+APP-06 8.1.4.3 is unusually direct about this:
+
+> Obstacles and obstructions as shown in this chapter (friendly, hostile, neutral,
+> unknown, or factional) are to be drawn using the colour green. However, if the colour
+> green is not available obstacles are to be drawn using black.
+
+So the 35 obstacle graphics — the belts and zones, the four obstacle effects, the mines
+and wire, the anti-tank ditches, abatis, the explosives states of readiness — draw green
+by default, and **they do it for every affiliation**. A hostile obstacle is green, not
+red. That is not an oversight: the parenthesis above is exhaustive, and the same
+paragraph adds that *"The use of green and yellow for obstacles and CBRN is in
+contradiction to the Standard Identities."* The plates carry the affiliation on a red
+enemy diamond drawn beside the symbol rather than in it.
+
+Two settings, because *whether* and *which* are different questions:
+
+```ts
+configureTacticalGraphics({
+    obstacleColors: false,          // fall back to the affiliation colour
+    obstacleColor: 'rgb(84,196,120)',  // or keep the rule and soften the green
+});
+```
+
+- **`obstacleColors`** (default `true`) turns the rule on and off. Off, obstacles take
+  their affiliation colour again — black normally, red when hostile — which is the
+  fallback 8.1.4.3 names itself, not a compromise.
+- **`obstacleColor`** (default `#00FF00`) is the green. That is what the plates print,
+  sampled off 270501's own Example cell: pure, unmixed. A doctrinal default is literal
+  rather than comfortable, the same reason `defaultLineColor` is `#000000` — a host on a
+  night display or a busy chart softens it here rather than switching the rule off.
+
+`obstacleColor` is part of `DEFAULT_PALETTE`, so a host spreading that into its own set
+gets it like any other colour. `obstacleColors` is not — it is a rule, not a colour.
+
+Two things it does **not** touch. The planned-status ring stays the affiliation colour,
+because 290400's plate draws a green mine cluster inside a *black* dash-dot circle: the
+ring says *planned*, not *obstacle*. And the CBRN yellow hatching, the cued-acquisition
+grey, the radar-search dark cyan and the sector-2 terrain colours are separate rules and
+are unmoved by either setting.
+
+Which graphics does it govern? Ask, rather than keeping a list:
+
+```ts
+import {OBSTACLE_GRAPHICS, drawsAsObstacle} from '@zaes/tactical-graphics';
+
+drawsAsObstacle(TacticalGraphicName.ObstacleZone);   // true
+drawsAsObstacle(TacticalGraphicName.Route);          // false — a route is not an obstacle
+OBSTACLE_GRAPHICS.size;                              // 35
+```
+
+The category is deliberately *not* the answer: `MobilityAndCountermobility` holds 51,
+of which 17 are mobility measures drawn black — routes, supply routes, the crossings,
+the bypasses, the convoys — while unexploded explosive ordnance area is green and filed
+under Areas.
 
 ### There is one palette
 

@@ -37,6 +37,7 @@ import {
     configuredLabelScale,
     fontStyle,
     getColorByHostility,
+    getObstacleColor,
     getLabelFillColor,
     getLabelHaloColor,
     getLabelUsesHostilityColor,
@@ -47,6 +48,7 @@ import {
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {drawsAsObstacle} from '../core/obstacles';
 import {capLabelToGraphic} from './labelFit';
 import {
     centerSegmentIndex,
@@ -204,6 +206,43 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  * color, so honoring it would let the same value back in through the other door.
  */
 export function lineColorOf(feature: PaintFeature): string {
+    const name = feature.properties.name;
+
+    /*
+     * **Obstacles first, because 8.1.4.3 beats affiliation and nothing else here does.**
+     *
+     * > Obstacles and obstructions … (friendly, hostile, neutral, unknown, or factional)
+     * > are to be drawn using the colour green.
+     *
+     * The parenthesis is exhaustive, and the paragraph says plainly that this "is in
+     * contradiction to the Standard Identities". So a hostile obstacle is green, and the
+     * affiliation is carried beside the symbol on a red enemy diamond, the way the plates
+     * draw it. Placed above the exemption below and above `hostilityColor` for the same
+     * reason that clause skips it: a resolved affiliation colour must not get back in
+     * through the other door.
+     *
+     * `getObstacleColor()` returns `undefined` when the host has set `obstacleColors:
+     * false`, and the affiliation colour resumes — which is 8.1.4.3's own fallback, not a
+     * compromise. @see OBSTACLE_GRAPHICS
+     */
+    if (drawsAsObstacle(name)) {
+        const green = getObstacleColor();
+        if (green) return green;
+    }
+
+    return affiliationColorOf(feature);
+}
+
+/**
+ * The colour a graphic's affiliation gives it, with the obstacle rule **not** applied.
+ *
+ * This is what `lineColorOf` was before 8.1.4.3's green went in, and it is still what a
+ * mark wants when the mark is not part of the symbol. The planned-status ring is the case:
+ * 290400's own plate draws a green mine cluster inside a **black** dash-dot circle, because
+ * the circle says *planned* rather than *obstacle*. Colouring it green with the symbol
+ * would make a status indicator look like line work. @see ringMark, plannedStatusRing
+ */
+export function affiliationColorOf(feature: PaintFeature): string {
     const name = feature.properties.name;
     if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
     return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
@@ -673,7 +712,9 @@ function circleMark(center: ProjectedPosition, radius: number, feature: PaintFea
 function ringMark(ring: ProjectedPosition[], feature: PaintFeature): Paint {
     return {
         geometry: {type: 'LineString', coordinates: ring},
-        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: CIRCLED_STATUS_DASH_PX},
+        // `affiliationColorOf`, not `lineColorOf`: the ring is status, not symbol, and
+        // 290400's Planned Example draws it black around a green mine cluster.
+        stroke: {color: affiliationColorOf(feature), widthPx: LINE_WIDTH(), dashPx: CIRCLED_STATUS_DASH_PX},
     };
 }
 
