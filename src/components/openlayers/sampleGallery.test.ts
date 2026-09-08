@@ -21,6 +21,7 @@ import {LineString, MultiPoint} from 'ol/geom';
 import {toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {baseVertexCount, handleContract, isRectangular, normalizeDrawnBase, usesDrawnAnchors} from '@zaes/tactical-graphics';
+import {drawsAsObstacle, getObstacleColor} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 import {LineGraphicController} from './controllers/LineGraphicController';
 import {PROVEN_GRAPHICS} from './provenGraphics';
@@ -57,7 +58,21 @@ const HOSTILE_RED = 'rgba(255, 0, 0, 1)';
 const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
     .filter(n => GRAPHIC_CATEGORIES[n] === TacticalGraphicCategory.TacticalMissionTasks)
     .filter(n => !supportsHostility(n));
+/** Graphics that carry an affiliation at all — everything but the tactical mission tasks. */
 const others = PROVEN_GRAPHICS.filter(supportsHostility);
+
+/**
+ * Of those, the ones whose line work actually **takes** the affiliation colour.
+ *
+ * Obstacles are excluded here and only here. They carry an affiliation and the demo still
+ * stamps `hostilityColor` on them — which is why they stay in the stamping suite above —
+ * but the paint layer draws them green regardless, per APP-06 8.1.4.3. The distinction is
+ * the point: the field is set, and the colour ignores it. @see OBSTACLE_GRAPHICS
+ */
+const takeHostilityColor = others.filter(n => !drawsAsObstacle(n));
+
+/** And the obstacles themselves, which assert the other half of that rule. */
+const obstacles = others.filter(drawsAsObstacle);
 
 /**
  * Builds a sample the way the sweep does, minus the map. A generator that throws
@@ -367,10 +382,23 @@ describe('hostility survives a bag-only stamp, as restore and consumers produce'
         return handler;
     };
 
-    it.each(others)('%s paints hostile red from the bag alone', name => {
+    it.each(takeHostilityColor)('%s paints hostile red from the bag alone', name => {
         const colors = strokeColors(bagOnly(name));
         expect(colors.length).toBeGreaterThan(0);
         expect(colors).toContain(normalize(HOSTILE_RED));
+    });
+
+    /**
+     * The same test for the obstacles, asserting the other half of the rule: the bag is
+     * still read, the affiliation is still there, and the colour is green anyway. Without
+     * this, excluding them above would have quietly dropped 30 graphics from a suite whose
+     * whole subject is that a bag-only stamp reaches the paint layer.
+     */
+    it.each(obstacles)('%s stays green from the bag alone, hostile or not', name => {
+        const colors = strokeColors(bagOnly(name));
+        expect(colors.length).toBeGreaterThan(0);
+        expect(colors).not.toContain(normalize(HOSTILE_RED));
+        expect(colors).toContain(normalize(getObstacleColor()!));
     });
 });
 
