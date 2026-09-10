@@ -12,15 +12,19 @@ import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {projectedMidSegment, textWidth} from './decorations';
-import {echelonMarks} from './echelonPaints';
+import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
 /** Screen-pixel clearance between the echelon glyph and the line ends, and the labels. */
 const BOUNDARY_GAP_PX = 10;
-/** Share of the segment the gap takes, before the pixel clearance is added. */
-const BOUNDARY_GAP_SHARE = 0.1;
+/*
+ * There was a `BOUNDARY_GAP_SHARE` of 0.1 here — a tenth of the segment either side of the
+ * middle, before clearance. The hole is measured off the glyph now, so the share is gone
+ * rather than kept as a floor: a share is what made a squad's dot sit in a hole four times
+ * its width. @see echelonWidthPx
+ */
 
 /** The echelon glyph's half-extent *across* the line, in screen pixels at scale 1. */
 function echelonPerpExtentPx(echelon: TacticalGraphicEchelon): number {
@@ -102,7 +106,15 @@ export function boundaryPaint(): LinePaint {
         if (segLen === 0) return [];
 
         const scale = scaleOf(feature, context);
-        const gapHalfMap = BOUNDARY_GAP_SHARE * segLen + BOUNDARY_GAP_PX * scale * context.resolution;
+        /*
+         * **The hole is the glyph's own width plus clearance.** It used to be a tenth of the
+         * segment either side of the middle, which is one number for every echelon: a corps
+         * XXX overran it while a squad's single dot sat in a hole four times its width. The
+         * glyph is measured first — after its own cap — and the line is cut to fit it.
+         * (User's call, 2026-09-10.) @see echelonWidthPx
+         */
+        const glyphHalfPx = echelonWidthPx(dx, dy, context.resolution, echelon, scale) / 2;
+        const gapHalfMap = (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution;
         const gapRatio = gapHalfMap / segLen;
 
         const gapA: ProjectedPosition = [p1[0] + dx * (t - gapRatio), p1[1] + dy * (t - gapRatio)];

@@ -20,9 +20,8 @@ type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
 /** Screen-pixel clearance either side of the echelon glyph in its gap. */
 const ECHELON_GAP_PX = 10;
-/** Where along the opening segment the gap runs, before clearance. */
-const ECHELON_GAP_FROM = 0.4;
-const ECHELON_GAP_TO = 0.6;
+/** Where along the opening segment the gap is centred. */
+const ECHELON_OPENING_MIDPOINT = 0.5;
 
 /** Echelon glyph dimensions, in screen pixels at scale 1. */
 const ECHELON_DOT_RADIUS_PX = 5;
@@ -71,7 +70,39 @@ interface OpenedRing {
  * edge** — the formula is the inward normal, so pointing north selects the
  * south-facing side.
  */
-function openRing(ring: ProjectedPosition[], rotation: number, resolution: number): OpenedRing | null {
+/**
+ * The edge the ring opens on, as its vector — the same choice `openRing` makes.
+ *
+ * Split out because the hole's width is now the glyph's, and the glyph's width depends on
+ * the segment it is laid along: which edge comes first, then how big the mark on it may be,
+ * then where to cut. @see openRing
+ */
+function openingSegment(ring: ProjectedPosition[], rotation: number): [number, number] | null {
+    if (ring.length < 2) return null;
+    const unitRot = [Math.cos(rotation), Math.sin(rotation)];
+    let best = -Infinity;
+    let found: [number, number] | null = null;
+    for (let i = 0; i < ring.length - 1; i++) {
+        const dx = ring[i + 1][0] - ring[i][0];
+        const dy = ring[i + 1][1] - ring[i][1];
+        const segLen = Math.hypot(dx, dy);
+        if (segLen === 0) continue;
+        const dot = (-dy / segLen) * unitRot[0] + (dx / segLen) * unitRot[1];
+        if (dot > best) {
+            best = dot;
+            found = [dx, dy];
+        }
+    }
+    return found;
+}
+
+function openRing(
+    ring: ProjectedPosition[],
+    rotation: number,
+    resolution: number,
+    /** Half the hole to cut, in screen pixels — the glyph's own half-width. @see echelonWidthPx */
+    halfGapPx: number,
+): OpenedRing | null {
     if (ring.length < 2) return null;
 
     const unitRot = [Math.cos(rotation), Math.sin(rotation)];
@@ -101,14 +132,16 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
         if (i !== openIndex) outline.push([ring[i], ring[i + 1]]);
     }
 
-    const gapRatio = (ECHELON_GAP_PX * resolution) / segLen;
+    // The hole is the glyph's own width plus clearance, centred on the segment — not the
+    // fixed fifth it used to be. @see echelonWidthPx
+    const gapRatio = ((halfGapPx + ECHELON_GAP_PX) * resolution) / segLen;
     const gapA: ProjectedPosition = [
-        p1[0] + dx * (ECHELON_GAP_FROM - gapRatio),
-        p1[1] + dy * (ECHELON_GAP_FROM - gapRatio),
+        p1[0] + dx * (ECHELON_OPENING_MIDPOINT - gapRatio),
+        p1[1] + dy * (ECHELON_OPENING_MIDPOINT - gapRatio),
     ];
     const gapB: ProjectedPosition = [
-        p1[0] + dx * (ECHELON_GAP_TO + gapRatio),
-        p1[1] + dy * (ECHELON_GAP_TO + gapRatio),
+        p1[0] + dx * (ECHELON_OPENING_MIDPOINT + gapRatio),
+        p1[1] + dy * (ECHELON_OPENING_MIDPOINT + gapRatio),
     ];
     outline.push([p1, gapA], [gapB, p2]);
 
@@ -256,6 +289,34 @@ function alongExtentPx(marks: Paint[], mid: ProjectedPosition, ux: number, uy: n
 }
 
 /**
+ * How wide the glyph comes out, in screen pixels, once the cap has had its say.
+ *
+ * **A gap has to follow whatever it makes room for.** Every caller cuts a hole in its own
+ * line for this glyph, and each used to size that hole from a constant — a fifth of the
+ * segment, plus a fixed clearance — which is right for one echelon at one zoom and wrong
+ * either side of it: a corps XXX overran the hole while a squad's single dot sat in a hole
+ * four times its width. The same lesson `TURN_LABEL_GAP_METERS` carries for the "T" in a
+ * bowed turn: measure the thing, then cut. (User's call, 2026-09-10.)
+ */
+export function echelonWidthPx(
+    dx: number,
+    dy: number,
+    resolution: number,
+    echelon: TacticalGraphicEchelon,
+    scale = 1,
+): number {
+    const segLen = Math.hypot(dx, dy);
+    if (!segLen || !(resolution > 0)) return 0;
+    return alongExtentPx(
+        echelonMarks([0, 0], dx, dy, resolution, echelon, '#000', scale),
+        [0, 0],
+        dx / segLen,
+        dy / segLen,
+        resolution,
+    );
+}
+
+/**
  * The echelon glyph, **capped against the segment it sits on**.
  *
  * Every size inside is screen pixels times the label scale, so the glyph holds its size
@@ -375,7 +436,15 @@ export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPa
         const ring = outerRing(feature);
         if (!ring) return [];
         // π/2 selects the south-facing edge — @see openRing.
-        const opened = openRing(ring, feature.properties.rotation ?? Math.PI / 2, context.resolution);
+        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        const rotation = feature.properties.rotation ?? Math.PI / 2;
+        // The hole is cut to fit the glyph that goes in it, so the ring opens exactly as
+        // far as this echelon needs and no further. @see echelonWidthPx
+        const opening = openingSegment(ring, rotation);
+        const halfGlyphPx = opening
+            ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
+            : 0;
+        const opened = openRing(ring, rotation, context.resolution, halfGlyphPx);
         if (!opened) return [];
 
         const color = lineColorOf(feature);
@@ -390,15 +459,7 @@ export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPa
                         : undefined,
                 },
             },
-            ...echelonMarks(
-                opened.midGap,
-                opened.dx,
-                opened.dy,
-                context.resolution,
-                feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad,
-                color,
-                scaleOf(feature, context),
-            ),
+            ...echelonMarks(opened.midGap, opened.dx, opened.dy, context.resolution, echelon, color, scaleOf(feature, context)),
         ];
     };
 }
@@ -408,21 +469,21 @@ export function strongPointPaint(): AreaPaint {
     return (feature, context) => {
         const ring = outerRing(feature);
         if (!ring) return [];
-        const opened = openRing(ring, feature.properties.rotation ?? Math.PI / 2, context.resolution);
+        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        const rotation = feature.properties.rotation ?? Math.PI / 2;
+        // The hole is cut to fit the glyph that goes in it, so the ring opens exactly as
+        // far as this echelon needs and no further. @see echelonWidthPx
+        const opening = openingSegment(ring, rotation);
+        const halfGlyphPx = opening
+            ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
+            : 0;
+        const opened = openRing(ring, rotation, context.resolution, halfGlyphPx);
         if (!opened) return [];
 
         const color = lineColorOf(feature);
         return [
             {geometry: {type: 'MultiLineString', coordinates: opened.outline}, stroke: {color, widthPx: LINE_WIDTH()}},
-            ...echelonMarks(
-                opened.midGap,
-                opened.dx,
-                opened.dy,
-                context.resolution,
-                feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad,
-                color,
-                scaleOf(feature, context),
-            ),
+            ...echelonMarks(opened.midGap, opened.dx, opened.dy, context.resolution, echelon, color, scaleOf(feature, context)),
             ...crossTies(opened.outline, context.resolution, color),
         ];
     };
