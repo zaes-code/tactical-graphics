@@ -126,8 +126,29 @@ export function passageLanePaint(showDates = true): LinePaint {
 /** Where along the left leg the solid bar starts and ends. */
 const FIELD_OF_FIRE_BAR_FROM = 0.2;
 const FIELD_OF_FIRE_BAR_TO = 0.7;
-/** Thickness of that bar, in screen pixels. */
+/** Thickness of that bar, in screen pixels, before the cap below. */
 const FIELD_OF_FIRE_BAR_WIDTH_PX = 12;
+
+/**
+ * The most of its own leg the bar may be thick.
+ *
+ * Measured off 140500's Template at 200 dpi: the leg runs 331 px from the vertex to the
+ * arrowhead and the thick section is 19 px across it, which is 0.057. A flat 12 px is right
+ * at the sizes a field of fire is usually drawn and wrong below them — the leg shrinks with
+ * the zoom and the bar does not, so a symbol drawn small or zoomed away from wears a slab
+ * down one side. The same shape-relative rule the obstacle teeth and the merlons take.
+ * (User's report, 2026-09-10.) @see decorationScale for the repeating-decoration twin
+ */
+const FIELD_OF_FIRE_BAR_SHARE = 0.057;
+
+/**
+ * And a floor, because the bar is what tells this symbol apart.
+ *
+ * A share alone takes it to nothing on a very short leg, where what is left is a plain V —
+ * which is a different symbol. Twice the line width is the least that still reads as a
+ * thickening rather than as a heavy stroke.
+ */
+const FIELD_OF_FIRE_BAR_MIN_MULTIPLE = 2;
 /** Drop from the V's vertex to the top of its label, in screen pixels. */
 const FIELD_OF_FIRE_LABEL_OFFSET_PX = 8;
 
@@ -159,6 +180,13 @@ export function fieldsOfFirePaint(): LinePaint {
 
         const leg = geometry.coordinates[0] ?? [];
         if (leg.length >= 2) {
+            // Capped against the leg's own on-screen length, so the bar keeps its share of
+            // the symbol at every size instead of a fixed number of pixels.
+            const legPx = Math.hypot(leg[1][0] - leg[0][0], leg[1][1] - leg[0][1]) / context.resolution;
+            const widthPx = Math.max(
+                LINE_WIDTH() * FIELD_OF_FIRE_BAR_MIN_MULTIPLE,
+                Math.min(FIELD_OF_FIRE_BAR_WIDTH_PX, legPx * FIELD_OF_FIRE_BAR_SHARE),
+            );
             paints.push({
                 geometry: {
                     type: 'LineString',
@@ -167,7 +195,7 @@ export function fieldsOfFirePaint(): LinePaint {
                         along(leg[0], leg[1], FIELD_OF_FIRE_BAR_TO),
                     ],
                 },
-                stroke: {color, widthPx: FIELD_OF_FIRE_BAR_WIDTH_PX, cap: 'butt'},
+                stroke: {color, widthPx, cap: 'butt'},
             });
         }
 
