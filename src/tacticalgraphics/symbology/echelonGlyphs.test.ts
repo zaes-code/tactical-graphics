@@ -47,16 +47,17 @@ describe('the echelons drawn as X', () => {
     });
 
     /**
-     * **Side by side, not spaced out.** The X's step by their own width, so the pair reads
-     * as `XX` the way the plate draws it rather than as two marks with a hole between them.
+     * **Side by side with daylight between them.** The X's step by their own width plus a
+     * couple of pixels, so the pair reads as `XX` the way the plate draws it — neither two
+     * marks with a hole between them nor a lattice of touching arms.
      */
-    it('steps a division’s two X by one glyph width', () => {
+    it('leaves a small gap between a division’s two X', () => {
         const centres = arms(marks(TacticalGraphicEchelon.division)).map(a => (a[0][0] + a[1][0]) / 2);
-        const left = Math.min(...centres);
-        const right = Math.max(...centres);
-        const oneX = arms(marks(TacticalGraphicEchelon.brigade));
-        const width = Math.max(...oneX.flat().map(p => p[0])) - Math.min(...oneX.flat().map(p => p[0]));
-        expect(right - left).toBeCloseTo(width, 6);
+        const step = Math.max(...centres) - Math.min(...centres);
+        const oneX = arms(marks(TacticalGraphicEchelon.brigade)).flat().map(p => p[0]);
+        const width = Math.max(...oneX) - Math.min(...oneX);
+        // At one metre per pixel the gap is the constant itself.
+        expect(step - width).toBeCloseTo(2, 6);
     });
 
     /** The dots and bars are untouched, and still say what they said. */
