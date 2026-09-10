@@ -21,8 +21,13 @@ import {echelonMarks} from './echelonPaints';
 const RES = 1;
 const MID: ProjectedPosition = [0, 0];
 
-/** The glyph drawn along an east-west segment. */
-const marks = (echelon: TacticalGraphicEchelon): Paint[] => echelonMarks(MID, 100, 0, RES, echelon, '#000');
+/**
+ * The glyph drawn along an east-west segment.
+ *
+ * Long enough that the span cap below never bites, so these measure the layout itself.
+ * @see ECHELON_SPAN_SHARE
+ */
+const marks = (echelon: TacticalGraphicEchelon): Paint[] => echelonMarks(MID, 2_000, 0, RES, echelon, '#000');
 
 /** Every stroked arm, as its two ends. */
 const arms = (paints: Paint[]): ProjectedPosition[][] =>
@@ -76,5 +81,56 @@ describe('the echelons drawn as X', () => {
         const paints = marks(echelon);
         expect(paints.filter(p => p.circle)).toHaveLength(dots);
         expect(arms(paints)).toHaveLength(bars);
+    });
+});
+
+/**
+ * # The glyph may not outgrow the line it sits on
+ *
+ * Every size in it is screen pixels times the label scale, so it held its size while the
+ * symbol shrank under it: measured on a boundary before this, a corps glyph spanned 20 px
+ * of a 40 px line and its outer arms lay across the line rather than inside the gap cut for
+ * it. (User's report, 2026-09-10.)
+ */
+describe('the cap against the segment', () => {
+    /** The glyph's own width, in screen pixels, along an east-west segment. */
+    const widthPx = (echelon: TacticalGraphicEchelon, segmentPx: number, resolution = 1): number => {
+        const half = (segmentPx * resolution) / 2;
+        const paints = echelonMarks([0, 0], segmentPx * resolution, 0, resolution, echelon, '#000');
+        expect(half).toBeGreaterThan(0);
+        const xs = paints.flatMap(p => {
+            if (p.circle && p.geometry.type === 'Point') {
+                const at = (p.geometry as {coordinates: ProjectedPosition}).coordinates[0] / resolution;
+                return [at - (p.circle.radiusPx ?? 0), at + (p.circle.radiusPx ?? 0)];
+            }
+            if (p.geometry.type === 'LineString') {
+                return (p.geometry as {coordinates: ProjectedPosition[]}).coordinates.map(c => c[0] / resolution);
+            }
+            return [];
+        });
+        return xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+    };
+
+    it.each([
+        TacticalGraphicEchelon.platoonDetachment,
+        TacticalGraphicEchelon.regimentGroup,
+        TacticalGraphicEchelon.division,
+        TacticalGraphicEchelon.corpsMef,
+    ])('%s stays inside the fifth of the segment the gap is cut from', echelon => {
+        // A tenth of a pixel of slack: the space between the X's is a stroke allowance and
+        // does not shrink with the rest. @see ECHELON_SPAN_SHARE
+        for (const segmentPx of [40, 80, 160]) {
+            expect(widthPx(echelon, segmentPx)).toBeLessThanOrEqual(segmentPx * 0.2 + 3.1);
+        }
+    });
+
+    /** Above the cap it is the size it always was, so nothing changes at ordinary zooms. */
+    it('leaves a glyph alone on a segment long enough to carry it', () => {
+        expect(widthPx(TacticalGraphicEchelon.corpsMef, 1_000)).toBeCloseTo(widthPx(TacticalGraphicEchelon.corpsMef, 400), 6);
+    });
+
+    /** The rule is about the shape, so zooming out does what drawing small does. */
+    it('reads the segment on screen, not on the ground', () => {
+        expect(widthPx(TacticalGraphicEchelon.division, 80, 1)).toBeCloseTo(widthPx(TacticalGraphicEchelon.division, 80, 250), 6);
     });
 });
