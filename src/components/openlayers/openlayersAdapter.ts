@@ -122,8 +122,9 @@ export interface TacticalGraphicHandler {
      * during a resize they stop seven of the block family shrinking below the size they
      * happened to be drawn at, which reads as a handle that gives up.
      *
-     * Not the same as `suspendMinimumSize` on the curves: that one is a *readability*
-     * floor, not a draw-time one, and it stays.
+     * The curves used to carry a second, readability floor of their own. It was deleted
+     * on 2026-09-10, so what this lifts is the length floors on the block and line
+     * families. @see decorationSizes.ts, "There is no floor"
      */
     suspendSizeFloor?(active: boolean): void;
 
