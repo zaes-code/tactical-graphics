@@ -1041,13 +1041,22 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         const theta = (this.rotation * Math.PI) / 180;
 
         if (handleIndex === TURN_TIP_HANDLE) {
-            // The tip is the far end of the chord, so the cursor gives both of
-            // the chord's inputs directly: how long it is and which way it
-            // points. `bend` is unitless and rides along unchanged.
+            /*
+             * The tip is the far end of the chord, so the cursor gives both of the chord's
+             * inputs directly: how long it is and which way it points. `bend` is unitless
+             * and rides along unchanged.
+             *
+             * **The cursor is measured on the screen and `size` is spent on the ground**,
+             * so the reach is converted before it is written. The two differ by the
+             * Mercator scale factor, which is nothing on the equator and 1.74 at 55° — the
+             * grip was left sitting well beyond the tip it had been dragged to. Same
+             * arithmetic as MapLibre's `setReach`, which has always converted here.
+             * @see mercator.ts, editGeometry.ts
+             */
             const reach = Math.hypot(dx, dy);
             if (reach <= 0) return;
             this.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-            this.updateGeom({size: reach});
+            this.updateGeom({size: groundLength(reach, latitudeFromMercatorY(center[1]))});
             return;
         }
 
@@ -1263,10 +1272,13 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
             // The line's end carries both of the approach's inputs: how long it
             // runs and which way it points. `bend` is unitless and rides along,
             // so the circle keeps its proportion through a resize.
+            //
+            // Converted out of projected metres for the reason Turn's tip grip spells
+            // out: the cursor is a screen distance and `size` is a ground one.
             const reach = Math.hypot(dx, dy);
             if (reach <= 0) return;
             this.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-            this.updateGeom({size: reach});
+            this.updateGeom({size: groundLength(reach, latitudeFromMercatorY(center[1]))});
             return;
         }
 
