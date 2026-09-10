@@ -29,6 +29,9 @@ const ECHELON_DOT_RADIUS_PX = 5;
 const ECHELON_SPACING_PX = 12;
 const ECHELON_HALF_LENGTH_PX = 10;
 
+/** Clear space between one X and the next, in screen pixels. @see echelonMarks */
+const ECHELON_CROSS_GAP_PX = 2;
+
 /** Screen-pixel length of a strong point's cross tie, and the spacing between ties. */
 const CROSS_TIE_PX = 10;
 
@@ -158,9 +161,11 @@ export function echelonMarks(
      * edge rather than spaced out. The dots and bars are marks on a line and take
      * `spacing`; an X is a *letter* and the pair reads as one word, so the step between
      * them is the width of the glyph itself — `halfLength * √2` is exactly corner to
-     * corner. Spacing them like the bars leaves a hole down the middle of the XX.
+     * corner — plus a couple of pixels of daylight, or the arms of neighbouring X's meet
+     * and the pair reads as a lattice. Spacing them like the bars leaves a hole down the
+     * middle of the XX instead. (User's call, 2026-09-10.)
      */
-    const crossStep = halfLength * Math.SQRT2;
+    const crossStep = halfLength * Math.SQRT2 + ECHELON_CROSS_GAP_PX * scale * resolution;
     const cross = (offset: number): Paint[] => {
         const cx = mid[0] + ux * crossStep * offset;
         const cy = mid[1] + uy * crossStep * offset;
