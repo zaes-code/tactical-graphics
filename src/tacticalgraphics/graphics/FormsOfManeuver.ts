@@ -858,6 +858,32 @@ const MD_EQUILATERAL_HEIGHT = Math.sqrt(3) / 2;
 const MD_BARB_ALONG_LINE = 0.27;
 const MD_BARB_ALONG_ARC = 0.15;
 
+/**
+ * The point `target` metres along `path`, interpolated between vertices and clamped to
+ * its ends.
+ *
+ * Straight-line interpolation between two neighbouring vertices, which is what the
+ * renderers draw between them — a geodesic reading would put the point somewhere the ink
+ * is not. @see MobileDefense.barbOn
+ */
+function pointAlongPath(path: Position[], target: number): Position {
+    if (path.length === 0) return [0, 0];
+    if (path.length === 1 || target <= 0) return path[0];
+    let travelled = 0;
+    for (let i = 1; i < path.length; i++) {
+        const step = turf.distance(turf.point(path[i - 1]), turf.point(path[i]), {units: 'meters'});
+        if (travelled + step >= target) {
+            const t = step > 0 ? (target - travelled) / step : 0;
+            return [
+                path[i - 1][0] + (path[i][0] - path[i - 1][0]) * t,
+                path[i - 1][1] + (path[i][1] - path[i - 1][1]) * t,
+            ];
+        }
+        travelled += step;
+    }
+    return path[path.length - 1];
+}
+
 /** Vertices in the half circle. 36 is one every five degrees. */
 const MD_ARC_STEPS = 36;
 
@@ -1001,20 +1027,63 @@ export class MobileDefense extends MovementGraphicBase {
     }
 
     /**
-     * One barb: an equilateral triangle sitting on the path with its apex pointing outward.
+     * One barb: an equilateral triangle **standing on the path it decorates**, apex outward.
+     *
+     * Both base corners are points *on* the path rather than a bearing walked either way
+     * from its middle, which is what closes the gaps. A bearing walk gives a great-circle
+     * chord: on a straight leg its far end drifts off the drawn segment — measured, 9% of
+     * the barb's own base on an ordinary hairpin — and on the arc the base comes out
+     * tangent, so the curve falls away underneath it and daylight shows between the two.
+     * Corners taken off the path leave nothing to show through: on the arc the base is a
+     * chord, and the sliver of curve above it is covered by the triangle's own ink.
+     * (User's report, 2026-09-10.)
+     *
+     * `outward` is asked for the finished base's midpoint, because on a curve the direction
+     * away from the shape is a function of where the barb ended up rather than of where it
+     * was aimed.
      *
      * Returned closed, with four vertices, because that is what `mobileDefenseGraphicPaint`
      * fills — an open ring of the same points would be stroked as a line instead.
      * @see TRIANGLE_RING_LENGTH
      */
-    private barb(at: Position, alongBearing: number, outBearing: number, base: number): Position[] {
-        const half = base / 2;
-        const b1 = turf.destination(turf.point(at), half, alongBearing + 180, {units: 'meters'}).geometry
-            .coordinates as Position;
-        const b2 = turf.destination(turf.point(at), half, alongBearing, {units: 'meters'}).geometry
-            .coordinates as Position;
-        const apex = turf.destination(turf.point(at), base * MD_EQUILATERAL_HEIGHT, outBearing, {units: 'meters'})
-            .geometry.coordinates as Position;
+    private barbOn(path: Position[], along: number, base: number, outward: (mid: Position) => number): Position[] {
+        /*
+         * **Half a base *along the path* is not half a base *across* it.** On the arc the
+         * corners are a chord apart while the walk that placed them is arc length, so
+         * stepping a flat `base / 2` each way leaves the triangle short in the base and
+         * taller than equilateral — measured, 6.5% out on a wide hairpin, which is exactly
+         * what `mobileDefenseTriangles.test.ts` counts. Two corrections converge to well
+         * inside that suite's tolerance on any curve this symbol draws, and on a straight
+         * leg the first one is already exact.
+         */
+        let half = base / 2;
+        let b1 = pointAlongPath(path, along - half);
+        let b2 = pointAlongPath(path, along + half);
+        for (let i = 0; i < 2; i++) {
+            const chord = turf.distance(turf.point(b1), turf.point(b2), {units: 'meters'});
+            if (!(chord > 0)) break;
+            half *= base / chord;
+            b1 = pointAlongPath(path, along - half);
+            b2 = pointAlongPath(path, along + half);
+        }
+
+        /*
+         * **The apex goes up the base's own perpendicular bisector**, not up the bearing the
+         * caller aimed at. `outward` is the *side* — which way is away from the shape — and
+         * over a long leg the meridians converge, so a bearing taken at the line's start is
+         * a degree or two off perpendicular by the time the barb sits. Off the bisector the
+         * two slant sides stop being equal, which is what
+         * `mobileDefenseTriangles.test.ts` measures: 6.5% out on a symbol spanning 16
+         * degrees. The perpendicular is read off the finished base and the half nearest the
+         * caller's direction wins.
+         */
+        const mid = turf.midpoint(turf.point(b1), turf.point(b2)).geometry.coordinates as Position;
+        const baseBearing = turf.bearing(turf.point(b1), turf.point(b2));
+        const intended = outward(mid);
+        const turned = ((intended - baseBearing + 360) % 360) < 180 ? 90 : -90;
+        const apex = turf.destination(turf.point(mid), base * MD_EQUILATERAL_HEIGHT, baseBearing + turned, {
+            units: 'meters',
+        }).geometry.coordinates as Position;
         return [b1, apex, b2, b1];
     }
 
@@ -1047,25 +1116,18 @@ export class MobileDefense extends MovementGraphicBase {
          * is the other; on the arc it is radially out from the centre.
          */
         const barbBase = Math.max(radius * MD_BARB_BASE_OF_RADIUS, 1);
-        const alongNear = turf.destination(turf.point(tip), length * MD_BARB_ALONG_LINE, axis + 180, {
-            units: 'meters',
-        }).geometry.coordinates as Position;
-        const alongFar = turf.destination(turf.point(farEnd), length * MD_BARB_ALONG_LINE, axis + 180, {
-            units: 'meters',
-        }).geometry.coordinates as Position;
-
-        const arcBarb = (t: number): Position[] => {
-            const bearing = (axis - side * 90) - side * 180 * t;
-            const at = turf.destination(turf.point(center), radius, bearing, {units: 'meters'}).geometry
-                .coordinates as Position;
-            // On a circle the tangent is a quarter turn from the radius, and outward is the
-            // radius itself — so the barb sits on the curve and points away from the middle.
-            return this.barb(at, bearing - side * 90, bearing, barbBase);
-        };
+        // Each barb is placed by its distance **along its own line**, measured from that
+        // line's start, so `barbOn` can take both base corners off the path.
+        const alongLine = length * (1 - MD_BARB_ALONG_LINE);
+        // Outward is a fixed side for a straight leg and the radius for the curve, where it
+        // is read from wherever the base ended up.
+        const arcBarb = (t: number): Position[] =>
+            this.barbOn(arc, Math.PI * radius * t, barbBase, mid =>
+                turf.bearing(turf.point(center), turf.point(mid)));
 
         const barbs: Position[][] = [
-            this.barb(alongNear, axis, axis - side * 90, barbBase),
-            this.barb(alongFar, axis, axis + side * 90, barbBase),
+            this.barbOn(nearLine, alongLine, barbBase, () => axis - side * 90),
+            this.barbOn(farLine, alongLine, barbBase, () => axis + side * 90),
             arcBarb(MD_BARB_ALONG_ARC),
             arcBarb(1 - MD_BARB_ALONG_ARC),
         ];
