@@ -32,6 +32,19 @@ const ECHELON_HALF_LENGTH_PX = 10;
 /** Clear space between one X and the next, in screen pixels. @see echelonMarks */
 const ECHELON_CROSS_GAP_PX = 2;
 
+/**
+ * The most of its own segment the echelon glyph may span before it is shrunk.
+ *
+ * **0.2 is not a new number.** It is the hole every caller already cuts for the glyph:
+ * `ECHELON_GAP_FROM` to `ECHELON_GAP_TO` is a fifth of the opening segment, and the
+ * boundary's `BOUNDARY_GAP_SHARE` is a tenth either side of the middle. Capping the glyph
+ * at the same share is what keeps it inside the gap it is drawn in — measured before this,
+ * a corps glyph on an 80 px boundary spanned 35 px against a 28 px hole, so its outer arms
+ * lay across the line, and on a 40 px one it took half the symbol. (User's report,
+ * 2026-09-10.) @see decorationScale, the same shape-relative rule for repeating marks
+ */
+const ECHELON_SPAN_SHARE = 0.2;
+
 /** Screen-pixel length of a strong point's cross tie, and the spacing between ties. */
 const CROSS_TIE_PX = 10;
 
@@ -113,14 +126,14 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
  * An unrecognized echelon falls back to the single dot rather than drawing
  * nothing: a position with no readable echelon is still a position.
  */
-export function echelonMarks(
+function buildEchelonMarks(
     mid: ProjectedPosition,
     dx: number,
     dy: number,
     resolution: number,
     echelon: TacticalGraphicEchelon,
     color: string,
-    scale = 1,
+    scale: number,
 ): Paint[] {
     const segLen = Math.hypot(dx, dy);
     if (!segLen) return [];
@@ -217,6 +230,77 @@ export function echelonMarks(
         default:
             return [dot(0)];
     }
+}
+
+/**
+ * How far the glyph reaches **along** the segment, in screen pixels.
+ *
+ * Measured off the marks themselves rather than from the layout constants, so a new
+ * echelon cannot be added with a size the cap does not know about. A dot's ink runs a
+ * radius past its centre; a stroke's ends are its geometry.
+ */
+function alongExtentPx(marks: Paint[], mid: ProjectedPosition, ux: number, uy: number, resolution: number): number {
+    let reach = 0;
+    for (const mark of marks) {
+        const along = (at: ProjectedPosition): number =>
+            ((at[0] - mid[0]) * ux + (at[1] - mid[1]) * uy) / resolution;
+        if (mark.circle && mark.geometry.type === 'Point') {
+            reach = Math.max(reach, Math.abs(along(mark.geometry.coordinates)) + (mark.circle.radiusPx ?? 0));
+            continue;
+        }
+        if (mark.geometry.type === 'LineString') {
+            for (const at of mark.geometry.coordinates) reach = Math.max(reach, Math.abs(along(at)));
+        }
+    }
+    return reach * 2;
+}
+
+/**
+ * The echelon glyph, **capped against the segment it sits on**.
+ *
+ * Every size inside is screen pixels times the label scale, so the glyph holds its size
+ * while the symbol shrinks under it: a corps boundary 40 px long wore a 20 px XXX, and the
+ * outer arms of a division's XX lay across the line rather than inside the gap cut for it.
+ * The cap is the general rule this library states everywhere else — a mark may not outgrow
+ * the thing it marks — measured against the opening segment, which is what every caller
+ * hands over and what the gap is cut from. @see ECHELON_SPAN_SHARE
+ *
+ * The glyph itself: dots for squad through platoon, perpendicular bars for company through
+ * regiment, and one X per level from brigade up.
+ */
+export function echelonMarks(
+    mid: ProjectedPosition,
+    dx: number,
+    dy: number,
+    resolution: number,
+    echelon: TacticalGraphicEchelon,
+    color: string,
+    scale = 1,
+): Paint[] {
+    const segLen = Math.hypot(dx, dy);
+    if (!segLen || !(resolution > 0)) return [];
+
+    const allowedPx = (ECHELON_SPAN_SHARE * segLen) / resolution;
+    const ux = dx / segLen;
+    const uy = dy / segLen;
+
+    /*
+     * **Measured, shrunk and measured again**, because the glyph is not quite linear in its
+     * own scale: the daylight between the X's carries a stroke-width term that stays put
+     * while everything around it shrinks. A single correction therefore lands slightly wide
+     * — a corps glyph came out 12.8 px against an 11.1 px allowance — and three passes put
+     * every echelon inside it. Bounded rather than looped to convergence: this runs on every
+     * frame of a drag.
+     */
+    let marks = buildEchelonMarks(mid, dx, dy, resolution, echelon, color, scale);
+    let current = scale;
+    for (let pass = 0; pass < 3; pass++) {
+        const extentPx = alongExtentPx(marks, mid, ux, uy, resolution);
+        if (!(extentPx > allowedPx) || !(extentPx > 0)) return marks;
+        current *= allowedPx / extentPx;
+        marks = buildEchelonMarks(mid, dx, dy, resolution, echelon, color, current);
+    }
+    return marks;
 }
 
 /**
