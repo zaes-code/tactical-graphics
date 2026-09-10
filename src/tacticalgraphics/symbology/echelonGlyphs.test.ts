@@ -14,6 +14,7 @@
 import type {Paint, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicEchelon} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
+import {LINE_WIDTH} from '../core/symbology';
 import {echelonMarks} from './echelonPaints';
 
 /** One metre per pixel, so a screen size and a ground size are the same number. */
@@ -51,13 +52,19 @@ describe('the echelons drawn as X', () => {
      * couple of pixels, so the pair reads as `XX` the way the plate draws it — neither two
      * marks with a hole between them nor a lattice of touching arms.
      */
-    it('leaves a small gap between a division’s two X', () => {
+    it('leaves a gap between a division’s two X that survives the stroke', () => {
         const centres = arms(marks(TacticalGraphicEchelon.division)).map(a => (a[0][0] + a[1][0]) / 2);
         const step = Math.max(...centres) - Math.min(...centres);
         const oneX = arms(marks(TacticalGraphicEchelon.brigade)).flat().map(p => p[0]);
         const width = Math.max(...oneX) - Math.min(...oneX);
-        // At one metre per pixel the gap is the constant itself.
-        expect(step - width).toBeCloseTo(2, 6);
+        /*
+         * **Wider than the two pixels asked for, because an arm is a stroke.** A 45-degree
+         * stroke of width `w` puts ink `w/√2` past its own endpoint horizontally, from each
+         * neighbour, so a step of geometry-plus-two left the X's touching on screen: zero
+         * empty columns, measured on the rendered boundary. The allowance is what buys the
+         * daylight, and at one metre per pixel these are pixels.
+         */
+        expect(step - width).toBeCloseTo(2 + LINE_WIDTH() * Math.SQRT2, 6);
     });
 
     /** The dots and bars are untouched, and still say what they said. */
