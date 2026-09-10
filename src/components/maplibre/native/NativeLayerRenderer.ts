@@ -9,7 +9,8 @@ import {
     getDrawMarkerColor,
     getHandleColor,
     LINE_WIDTH,
-    formatDistance,
+    measureReadout,
+    type MeasurePart,
     groundLength,
     MERCATOR_MAX_LATITUDE,
     latitudeFromMercatorY,
@@ -664,11 +665,21 @@ export class NativeLayerRenderer {
      * Editor chrome, so it lives in its own source rather than in the paint buckets:
      * it must never reach `snapshot`, a sample sweep or a restored map.
      */
-    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null, caption?: string): void {
+    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null, caption?: string, parts?: MeasurePart[]): void {
         this.measure = line;
         this.measureCaption = caption;
+        this.measureParts = parts;
         this.realizeEditorMarks();
     }
+
+    /**
+     * Everything the read-out states, where the gesture sets more than one number.
+     *
+     * Set instead of `measureCaption` by the radar search doctrine, whose plate names four
+     * numbers and two of them in degrees — a measure line's own length cannot report those.
+     * `RangeFanGraphicBase.measureParts` is the same statement on the other engine.
+     */
+    private measureParts?: MeasurePart[];
 
     /**
      * A word naming which dimension the read-out is reporting, or nothing.
@@ -874,7 +885,7 @@ export class NativeLayerRenderer {
          */
         this.setData('connector', connectorFeatures(this.handleBearers()));
 
-        this.setData('measure', this.measure ? measureFeatures(this.measure, this.measureCaption) : []);
+        this.setData('measure', this.measure ? measureFeatures(this.measure, this.measureCaption, this.measureParts) : []);
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{
@@ -1281,11 +1292,11 @@ export function connectorFeatures(graphics: readonly MapLibreTacticalGraphic[]):
 }
 
 /** `Start 20 km`, or just `20 km`. The same assembly `createMeasureFeature` uses. */
-function withCaption(caption: string | undefined, distance: string): string {
-    return caption ? `${caption} ${distance}` : distance;
-}
-
-function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition], caption?: string): Feature[] {
+function measureFeatures(
+    [from, to]: [ProjectedPosition, ProjectedPosition],
+    caption?: string,
+    parts?: MeasurePart[],
+): Feature[] {
     const dx = to[0] - from[0];
     const dy = to[1] - from[1];
 
@@ -1321,9 +1332,13 @@ function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition], cap
             // one the operator reads and the dialog states. @see mercator.ts
             properties: {
                 ...shared,
-                label: withCaption(
-                    caption,
-                    formatDistance(groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))),
+                label: measureReadout(
+                    parts ?? [
+                        {
+                            caption,
+                            meters: groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2)),
+                        },
+                    ],
                 ),
                 rotation,
             },

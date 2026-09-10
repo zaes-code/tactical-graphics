@@ -9,7 +9,7 @@ import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import {latitudeFromMercatorY, projectedLength} from '@zaes/tactical-graphics';
 import openlayersAdapter from "../openlayersAdapter";
 import {getRangeFanLabelStyleFn, LINE_WIDTH, radarSearchDoctrineStyleFunc, readHostilityColor} from "../openlayerStyles";
-import {RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, radarSectorOpening, resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
+import {type MeasurePart, RADAR_READOUT_CAPTIONS, RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, radarSectorOpening, resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
 /**
@@ -105,6 +105,25 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      */
     private measuringBand?: number;
 
+    /**
+     * Which of 200700's two angles the hand is on, while it is on one.
+     *
+     * The plate states four numbers and two of them are angles — the search axis and the
+     * stop relative bearing — so the grips that set those report degrees rather than the
+     * distance the measure line was built for. Cleared the moment a range grip takes over,
+     * the same way `measuringBand` is. (User's call, 2026-09-10.) @see measureAngle
+     */
+    private measuringAngle?: {caption: string; degrees: number};
+
+    /**
+     * What the *draw* is stating, when a click is in flight.
+     *
+     * Held apart from the grip state above because a draw sets two of the four numbers at
+     * once and names them by how far through the three clicks it is, which no grip does.
+     * Cleared when the read-out is disarmed, so it cannot outlive its own gesture.
+     */
+    private measuringDraw?: MeasurePart[];
+
     /** The range of the band being dragged, which is the number the hand is changing. */
     protected measureStated(): number {
         const band = this.bandBeingDragged();
@@ -119,9 +138,53 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * names, so it keeps the bare figure it has always shown. @see fixedBands
      */
     protected measureCaption(): string | undefined {
+        if (this.measuringAngle) return this.measuringAngle.caption;
         if (this.measuringBand === undefined) return super.measureCaption();
-        if (this.name !== TacticalGraphicName.RadarSearchDoctrine) return super.measureCaption();
-        return ['Start', 'Stop'][this.measuringBand] ?? undefined;
+        return this.bandCaption(this.measuringBand) ?? super.measureCaption();
+    }
+
+    /** What 200700 calls the ring being dragged. Nothing for a fan, whose rings are a stack. */
+    private bandCaption(bandIndex: number): string | undefined {
+        if (this.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
+        return [RADAR_READOUT_CAPTIONS.startRange, RADAR_READOUT_CAPTIONS.stopRange][bandIndex] ?? undefined;
+    }
+
+    /** Disarming the read-out ends whatever the last gesture was stating. */
+    showMeasure(active: boolean, anchor?: Coordinate): void {
+        if (!active) {
+            this.measuringAngle = undefined;
+            this.measuringDraw = undefined;
+        }
+        super.showMeasure(active, anchor);
+    }
+
+    /** @see measuringAngle */
+    protected measureAngle(): number | undefined {
+        return this.measuringAngle?.degrees;
+    }
+
+    /**
+     * What 200700 prints beside the measure line.
+     *
+     * One part per number the gesture in hand is setting. Aiming the second click sets the
+     * axis *and* the start range together, so that one prints both; a grip afterwards sets
+     * one number and prints one. Everything that is not the radar keeps the single figure
+     * the base class states. @see measureReadout
+     */
+    protected measureParts(): MeasurePart[] | undefined {
+        if (!this.isRadarSearch) return undefined;
+        if (this.measuringDraw) return this.measuringDraw;
+        const parts: MeasurePart[] = [];
+        if (this.measuringAngle) {
+            parts.push({caption: this.measuringAngle.caption, degrees: this.measuringAngle.degrees});
+        }
+        if (this.measuringBand !== undefined) {
+            // The band's own name, not `measureCaption` — that one answers for the angle
+            // when an angle is what the hand is on, and here it is not. Reading it anyway
+            // is how the ranges lost their captions the first time this was wired.
+            parts.push({caption: this.bandCaption(this.measuringBand), meters: this.measureStated()});
+        }
+        return parts.length ? parts : undefined;
     }
 
     /** The line stops on the ring being dragged, not on the outermost one. */
@@ -324,6 +387,19 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
          * box — measures against it, so leaving it stale would make the symbol turn under a
          * resize. The generator reads `searchAxisAzimuthDeg` and ignores it.
          */
+        /*
+         * **The draw states what the click in hand is setting.** The second click fixes the
+         * axis and the start range together and the third settles the stop range, so the
+         * read-out names the azimuth throughout and adds whichever range is being placed.
+         * The axis had no read-out at all before: the measure line reports a distance, and
+         * an azimuth is not one. (User's call, 2026-09-10.) @see measureParts
+         */
+        this.measuringDraw = [
+            {caption: RADAR_READOUT_CAPTIONS.azimuth, degrees: normAz(frame.centerAzimuthDeg)},
+            // The range just placed: the near arc until the third click settles the far one.
+            {caption: frame.ranges.length > 1 ? RADAR_READOUT_CAPTIONS.stopRange : RADAR_READOUT_CAPTIONS.startRange, meters: stop},
+        ];
+
         this.updateGeom({
             center: fromLonLat(frame.center as Coordinate),
             size: stop,
@@ -365,6 +441,15 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         // statement of the identity rather than one per gesture. @see syncRadarState
         this.updateGeom({rotation: this.rotation + delta});
         if (this.isRadarSearch) {
+            // A turn *is* the azimuth gesture for this symbol, so the read-out states the
+            // azimuth while it runs. @see measureParts
+            this.measuringBand = undefined;
+            this.measuringDraw = undefined;
+            this.measuringAngle = {
+                caption: RADAR_READOUT_CAPTIONS.azimuth,
+                degrees: this.radar?.searchAxisAzimuthDeg ?? this.rotation,
+            };
+            this.showMeasure(true);
             this.publishRadar();
             return;
         }
@@ -514,12 +599,20 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
              */
             const ranges = 2;
             if (handleIndex >= ranges) {
-                // The opening swings an angle; the read-out formats a distance, so it stays
-                // off rather than reporting a range nobody is changing.
+                // The opening swings an angle, and the read-out states it: the plate names
+                // this number a *stop relative bearing*, so it is one of the four the
+                // operator is placing. It used to switch the read-out off here.
                 this.measuringBand = undefined;
-                this.showMeasure(false);
+                this.measuringDraw = undefined;
                 this.setRadarHalfAngle(coordinate);
+                this.measuringAngle = {
+                    caption: RADAR_READOUT_CAPTIONS.relativeBearing,
+                    degrees: this.radar?.stopRelativeBearingDeg ?? 0,
+                };
+                this.showMeasure(true, coordinate);
             } else {
+                this.measuringAngle = undefined;
+                this.measuringDraw = undefined;
                 this.setRadarRange(handleIndex, coordinate);
                 this.measuringBand = handleIndex;
                 this.showMeasure(true, coordinate);

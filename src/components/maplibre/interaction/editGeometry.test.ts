@@ -76,6 +76,31 @@ describe('rotate', () => {
         // A quarter turn counter-clockwise, added to what was already there.
         expect(turned.properties.rotation).toBeCloseTo(100, 4);
     });
+
+    /**
+     * **A stated azimuth turns with the symbol.** 200700 files its search axis as a bearing
+     * of its own and the generator prefers that field, so advancing only `rotation` turned
+     * nothing at all: measured in the app, the bag came away with a rotation of -14 degrees
+     * and an axis still reading 045, and the same graphic on OpenLayers had swung to 059.
+     * The two are one bearing read opposite ways round, which is why this is a subtraction.
+     */
+    it('turns the radar search doctrine’s stated axis, not just its rotation', () => {
+        const before = props({
+            name: TacticalGraphicName.RadarSearchDoctrine,
+            searchAxisAzimuthDeg: 45,
+            stopRange: 80_000,
+        });
+        // A quarter turn counter-clockwise: an azimuth runs the other way, so 45 becomes 315.
+        const turned = rotate({geometry: POINT, properties: before}, [1, 0], [0, 1]);
+
+        expect(turned.properties.searchAxisAzimuthDeg).toBeCloseTo(315, 4);
+    });
+
+    /** And a graphic that never stated one is left as it was. */
+    it('adds no azimuth to a graphic that files none', () => {
+        const turned = rotate({geometry: POINT, properties: props({rotation: 0})}, [1, 0], [0, 1]);
+        expect(turned.properties.searchAxisAzimuthDeg).toBeUndefined();
+    });
 });
 
 describe('resize', () => {
