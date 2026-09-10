@@ -101,7 +101,8 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
 
 /**
  * The echelon glyph: dots for squad through platoon, perpendicular bars for
- * company through regiment, and an X for brigade.
+ * company through regiment, and one X per level from brigade up: X, XX for a
+ * division, XXX for a corps or MEF.
  *
  * Every size is screen pixels multiplied by the label scale, so the glyph grows
  * and shrinks with the amplifiers around it rather than with the map.
@@ -149,6 +150,37 @@ export function echelonMarks(
         };
     };
 
+    /*
+     * **The X's, and why their spacing is their own.**
+     *
+     * One for a brigade, two for a division, three for a corps or MEF, which is what FM
+     * 1-02.2's table 5-3 draws on its division boundary: two X's side by side, sharing an
+     * edge rather than spaced out. The dots and bars are marks on a line and take
+     * `spacing`; an X is a *letter* and the pair reads as one word, so the step between
+     * them is the width of the glyph itself — `halfLength * √2` is exactly corner to
+     * corner. Spacing them like the bars leaves a hole down the middle of the XX.
+     */
+    const crossStep = halfLength * Math.SQRT2;
+    const cross = (offset: number): Paint[] => {
+        const cx = mid[0] + ux * crossStep * offset;
+        const cy = mid[1] + uy * crossStep * offset;
+        // The tangent turned ±45°, so the X straddles the segment evenly however
+        // the position was drawn.
+        const cos = Math.cos(Math.PI / 4);
+        const sin = Math.sin(Math.PI / 4);
+        const arm = (vx: number, vy: number): Paint => ({
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [cx - vx * halfLength, cy - vy * halfLength],
+                    [cx + vx * halfLength, cy + vy * halfLength],
+                ],
+            },
+            stroke,
+        });
+        return [arm(ux * cos - uy * sin, ux * sin + uy * cos), arm(ux * cos + uy * sin, -ux * sin + uy * cos)];
+    };
+
     switch (echelon) {
         case TacticalGraphicEchelon.squad:
             return [dot(0)];
@@ -162,23 +194,12 @@ export function echelonMarks(
             return [bar(-1), bar(1)];
         case TacticalGraphicEchelon.regimentGroup:
             return [bar(-1), bar(0), bar(1)];
-        case TacticalGraphicEchelon.brigade: {
-            // The tangent turned ±45°, so the X straddles the segment evenly however
-            // the position was drawn.
-            const cos = Math.cos(Math.PI / 4);
-            const sin = Math.sin(Math.PI / 4);
-            const arm = (vx: number, vy: number): Paint => ({
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [
-                        [mid[0] - vx * halfLength, mid[1] - vy * halfLength],
-                        [mid[0] + vx * halfLength, mid[1] + vy * halfLength],
-                    ],
-                },
-                stroke,
-            });
-            return [arm(ux * cos - uy * sin, ux * sin + uy * cos), arm(ux * cos + uy * sin, -ux * sin + uy * cos)];
-        }
+        case TacticalGraphicEchelon.brigade:
+            return cross(0);
+        case TacticalGraphicEchelon.division:
+            return [...cross(-0.5), ...cross(0.5)];
+        case TacticalGraphicEchelon.corpsMef:
+            return [...cross(-1), ...cross(0), ...cross(1)];
         default:
             return [dot(0)];
     }

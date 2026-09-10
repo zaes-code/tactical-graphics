@@ -29,6 +29,8 @@ function echelonPerpExtentPx(echelon: TacticalGraphicEchelon): number {
         case TacticalGraphicEchelon.battalionSquadron:
         case TacticalGraphicEchelon.regimentGroup:
         case TacticalGraphicEchelon.brigade:
+        case TacticalGraphicEchelon.division:
+        case TacticalGraphicEchelon.corpsMef:
             return 10;
         default:
             return 5;
