@@ -161,11 +161,20 @@ export function echelonMarks(
      * edge rather than spaced out. The dots and bars are marks on a line and take
      * `spacing`; an X is a *letter* and the pair reads as one word, so the step between
      * them is the width of the glyph itself — `halfLength * √2` is exactly corner to
-     * corner — plus a couple of pixels of daylight, or the arms of neighbouring X's meet
-     * and the pair reads as a lattice. Spacing them like the bars leaves a hole down the
-     * middle of the XX instead. (User's call, 2026-09-10.)
+     * corner — plus daylight, or the arms of neighbouring X's meet and the pair reads as a
+     * lattice. Spacing them like the bars leaves a hole down the middle of the XX instead.
+     * (User's call, 2026-09-10.)
+     *
+     * **The arms are strokes, so the corner is not where the ink stops.** Stepping by the
+     * geometry alone left the two X's touching however wide the gap was written: a stroke
+     * of width `w` at 45 degrees puts ink `w/√2` past its own endpoint horizontally, from
+     * each of the two neighbours, which is the whole of a two-pixel gap at the default line
+     * width. Measured on the rendered boundary: zero empty columns between the X's before
+     * this term, and the gap asked for after it. The allowance does not take `scale`,
+     * because a stroke width is screen pixels and does not either.
      */
-    const crossStep = halfLength * Math.SQRT2 + ECHELON_CROSS_GAP_PX * scale * resolution;
+    const inkAllowance = (LINE_WIDTH() * Math.SQRT2) * resolution;
+    const crossStep = halfLength * Math.SQRT2 + ECHELON_CROSS_GAP_PX * scale * resolution + inkAllowance;
     const cross = (offset: number): Paint[] => {
         const cx = mid[0] + ux * crossStep * offset;
         const cy = mid[1] + uy * crossStep * offset;
