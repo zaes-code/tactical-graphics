@@ -15,7 +15,49 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+> ### ⚠️ Twelve graphics change the shape of their base, and the snapshot version is now 2
+>
+> The eleven axis arrows — the five axes of advance, avenue of approach, frontal attack,
+> turning movement, both counter-attacks and advance to contact — store their **width as
+> their last coordinate** rather than as a `width` amplifier, which is what APP-06 asks for:
+> *"Point N determines the width."* 343100 exploit stores **three anchor points** for the
+> same reason. Every base of these twelve gains a coordinate, and `properties.tacticalGraphic`
+> loses its `width` for the eleven.
+>
+> **Files written by 4.1.1 and earlier open unchanged and re-save in the new shape.** They are
+> converted on read, from the `width` they filed, and the picture is the one they were saved
+> with to within a tenth of a percent. `tacticalGraphicsVersion` is **2**, and a file that
+> declares no version is now read as version 1 rather than as the current one — which is what
+> an unversioned file actually is.
+>
+> A consumer that builds these bases by hand has to append the width point:
+> `axisWithWidthPoint(name, axis, halfWidthMetres)`. One that only reads them should ask
+> `halfWidthFromBase(name, coordinates)` instead of reading `width`.
+
 ### Added
+
+- **`axisWithWidthPoint`, `halfWidthFromBase`, `axisOf`, `widthPointOf`, `squareWidthPoint`,
+  `upgradeAxisBase`, `axisBaseFromDraw`, `carriesWidthPointInBase`** and the rest of
+  `core/axisWidth.ts` — reading and writing the coordinate the eleven axis arrows keep their
+  width in, plus `DEFAULT_AXIS_HALF_WIDTH_PX` and `tipOverhangOf`, which both renderers now
+  read rather than each stating the same figure.
+- **`exploitationAnchors`, `exploitationParts`, `exploitationTailPoint`** and
+  `EXPLOITATION_ANGLE_DEG` — 343100's three anchor points and the runs it is drawn as.
+- **`pivotVertexIndex`** — which stored vertex a drawn line's gestures anchor on, as an index,
+  so OpenLayers can ask it in projected metres and MapLibre in degrees.
+- **`LEGACY_SNAPSHOT_VERSION`** — the version a file that declares none is read as.
+- **A width read-out** in the properties panel for the eleven, derived from their points.
+
+### Changed
+
+- **343100 exploit's four angled lines are one length.** Its dashed tail was drawn at twice
+  the arrowhead; the plate gives all four the same anchor point. The two tail strokes are also
+  dashed separately now, so the pattern starts at point 2 on both of them rather than running
+  on through the bend and landing differently on each.
+- **152300 avenue of approach and 340700 counter-attack by fire answer `handleRole`.** Both
+  were in no handle contract at all, so their width grip resolved to a shape handle — which
+  OpenLayers ignored and MapLibre acted on, translating the whole graphic instead of widening
+  it.
 
 - **Division and corps echelons.** `TacticalGraphicEchelon` gains `division` and `corpsMef`,
   drawn as XX and XXX per FM 1-02.2 table 5-3. Every graphic that carries an echelon picks
