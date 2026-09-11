@@ -432,7 +432,28 @@ export class MapLibreInteractions {
         onPivot: boolean;
         /** Which handle was grabbed, or -1 for a drag that started on the body. */
         handle: number;
-        last: Position;
+        /**
+         * Where the pointer went down, in lon/lat — **not where it was last seen.**
+         *
+         * Every move of a gesture is measured from here and applied to {@link start}, so the
+         * answer depends on where the cursor is rather than on how it got there.
+         * @see dragTo
+         */
+        origin: Position;
+        /**
+         * The description the gesture started from, which every move is applied to afresh.
+         *
+         * Applying a move to the *previous* move's result is the obvious way to write this
+         * and it is wrong, because a build is not a no-op: `normalizeDrawnBase` re-squares an
+         * axis arrow's width point against the axis, and a vertex drag moves the axis. Ten
+         * intermediate readings then compose and the width lands 6.4% narrower than the same
+         * drag delivered in one step — measured, 6,582 m against OpenLayers' 7,007. That
+         * engine squares once, at `modifyend`, which is why its answer does not depend on the
+         * path. @see ai/decisions.md, "Idempotent is not the same as path-independent"
+         *
+         * Re-set once, and only once, when a drag on a segment turns into a vertex.
+         */
+        start: GraphicDescription;
         /** Whether the pointer has moved far enough to count. @see DRAG_THRESHOLD_PX */
         started: boolean;
         startPixel: {x: number; y: number};
@@ -561,7 +582,8 @@ export class MapLibreInteractions {
             // a ratio. The pivot guard is for a handle dragged from on top of it.
             onPivot: false,
             handle: -1,
-            last: origin,
+            origin,
+            start: {geometry: graphic.base.geometry, properties: graphic.properties},
             // Already past the threshold: the host decided a drag began by pressing the
             // affordance, and re-measuring it against a pixel distance would swallow the
             // first few degrees of every rotate.
@@ -1378,7 +1400,8 @@ export class MapLibreInteractions {
             handle,
             vertex,
             insertAt,
-            last: [event.lngLat.lng, event.lngLat.lat],
+            origin: [event.lngLat.lng, event.lngLat.lat],
+            start: {geometry: graphic.base.geometry, properties: graphic.properties},
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
@@ -1489,13 +1512,34 @@ export class MapLibreInteractions {
         const drag = this.dragging;
         if (!drag) return;
 
-        let before: GraphicDescription = {geometry: drag.graphic.base.geometry, properties: drag.graphic.properties};
+        /*
+         * **The description the gesture started from, not the one the last move produced.**
+         *
+         * Every gesture in `applyGesture` is absolute — it takes the graphic, the pointer's
+         * origin and where the pointer is now — so applying it afresh to the starting shape
+         * gives the same answer however many times the pointer reported itself on the way.
+         * Feeding it the previous result instead does not, because the rebuild between two
+         * moves is not a no-op: `normalizeDrawnBase` re-squares an axis arrow's width point
+         * against its axis, and a vertex drag moves the axis, so ten intermediate squarings
+         * compose into a width 6.4% narrower than the one-step drag's. OpenLayers squares
+         * once, at `modifyend`; this is the same guarantee reached the same way.
+         *
+         * It also holds the two gestures that used to change meaning halfway through. A
+         * rotate reads "did the grab land on the pivot" from the position it is measuring
+         * from, and a resize reads its refusal off the same one — both answered yes on the
+         * first move and no on every move after it, because the cursor had left by then.
+         * @see ai/decisions.md, "Idempotent is not the same as path-independent"
+         */
+        let before = drag.start;
 
         // The drag began on a segment: add the vertex now that it is a drag, then carry
         // on as though the user had grabbed it. Done once — `insertAt` is cleared — so
         // the rest of the gesture moves the new vertex instead of sowing a trail of them.
+        // The insertion belongs to the starting shape, since that is what every later move
+        // is applied to.
         if (drag.insertAt >= 0) {
-            before = insertVertex(before, drag.insertAt, drag.last);
+            before = insertVertex(before, drag.insertAt, drag.origin);
+            drag.start = before;
             drag.vertex = drag.insertAt;
             drag.insertAt = -1;
         }
@@ -1506,7 +1550,6 @@ export class MapLibreInteractions {
             before,
             this.effectiveMode(),
         );
-        drag.last = to;
         if (after === before) return;
 
         const rebuilt = buildTacticalGraphic(
@@ -1586,7 +1629,7 @@ export class MapLibreInteractions {
         // gesture the graphic refuses is refused below rather than quietly becoming a
         // move. Treating the center as "move" in every mode made a security operation —
         // which refuses resize — move when the user asked it to resize.
-        if (drag.onCenter && mode === 'translate') return translate(before, drag.last, to);
+        if (drag.onCenter && mode === 'translate') return translate(before, drag.origin, to);
 
         // A handle with a *role* means that role, whatever mode is selected — an
         // offset handle sets a width and nothing else, and a band handle sets its own
@@ -1612,11 +1655,11 @@ export class MapLibreInteractions {
 
         switch (mode) {
             case 'translate':
-                return translate(before, drag.last, to);
+                return translate(before, drag.origin, to);
             case 'rotate':
-                return rotate(before, drag.last, to);
+                return rotate(before, drag.origin, to);
             case 'resize':
-                return resize(before, drag.last, to);
+                return resize(before, drag.origin, to);
             // `edit` reshapes, exactly as `modify` does — the difference between the two
             // is the selection, the box and the affordances, none of which change what a
             // drag on a handle means. Sharing the case rather than duplicating it is what
@@ -1628,7 +1671,7 @@ export class MapLibreInteractions {
                 // editable line: dragging a leg opens or closes the V. Translating
                 // instead slid the whole graphic, so the angle could not be changed that
                 // way at all. @see editStretches
-                if (drag.vertex < 0 && editStretches(drag.graphic.name)) return resize(before, drag.last, to);
+                if (drag.vertex < 0 && editStretches(drag.graphic.name)) return resize(before, drag.origin, to);
                 // A graphic that does not reshape and does not stretch is left alone.
                 // Falling through to the move below would make "edit" a second "move" for
                 // the point-anchored symbols, where OpenLayers does nothing at all.
@@ -1645,7 +1688,7 @@ export class MapLibreInteractions {
                 // dragged below it a moment later, and OpenLayers refuses both.
                 return drag.vertex >= 0
                     ? this.withFirstSegmentFloor(moveVertex(before, drag.vertex, to))
-                    : translate(before, drag.last, to);
+                    : translate(before, drag.origin, to);
 
             default:
                 return before;
