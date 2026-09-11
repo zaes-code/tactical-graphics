@@ -29,8 +29,8 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // Handle is the end of the crossbar, drawn at 1 × size by `getBlockArrow`.
     [TacticalGraphicName.TacticalBlock]: 1,
     [TacticalGraphicName.Block]: 1,
-    // Handle is an arrowhead wing, `size × sin 45°` off the base line.
-    [TacticalGraphicName.Exploitation]: Math.SQRT2,
+    // Exploitation's arrowhead-wing entry left on 2026-09-10 with the grip itself: its four
+    // angled lines take their length from point 3 now. @see exploitationAnchors
 };
 
 /**
