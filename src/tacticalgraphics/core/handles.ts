@@ -17,6 +17,7 @@
 import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
 import {drawsTipFirst} from './drawOrder';
+import {carriesWidthPointInBase} from './axisWidth';
 import {reservedLeadPx} from './decorationSizes';
 import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from '../graphics/SecurityOperation';
 
@@ -609,7 +610,15 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
      * *is* the flip, and a grip that exists only to flip is not a thing the symbol needs. Its
      * own branch returned this same triple and has been folded in. @see MobileDefense.frame
      */
-    if (carriesSeparationInBase(name)) {
+    /*
+     * **The eleven axis arrows are the exception, and they come first.** Their separation is in
+     * the base too, but its grip is not a base vertex a user drags to a place — the plate fixes
+     * the angle and reads the point for a distance across the axis, so the gesture is the
+     * `offset` role and the renderer spends the answer by moving the stored point. Falling into
+     * the branch below called that grip a `shape` handle and MapLibre moved a vertex with it.
+     * @see carriesWidthPointInBase, MOVEMENT_GRAPHICS
+     */
+    if (carriesSeparationInBase(name) && !carriesWidthPointInBase(name)) {
         return {roles: ['shape', 'shape', 'shape'], repeating: 'shape'};
     }
     if (MOVEMENT_GRAPHICS.includes(name)) {
@@ -824,7 +833,14 @@ export function pivotVertexIndex(name: TacticalGraphicName | string | undefined,
     if (count <= 0) return 0;
     const named = name === undefined ? undefined : PIVOT_VERTEX[name as TacticalGraphicName];
     if (named !== undefined) return Math.min(named, count - 1);
-    if (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) return count - 1;
+    /*
+     * **The last *axis* point, for a base whose last coordinate is a width.** The eleven pivot
+     * on their rear, which was their last coordinate while the width was an amplifier and is
+     * the one before it now. Turning about the width point would swing an axis of advance about
+     * a corner of its own arrowhead. @see carriesWidthPointInBase
+     */
+    const last = count - 1 - (carriesWidthPointInBase(name) && count >= 3 ? 1 : 0);
+    if (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) return Math.max(0, last);
     return 0;
 }
 
@@ -1729,6 +1745,17 @@ export function acceptsInsertedVertex(
     basePixels: readonly (readonly [number, number])[],
     at: readonly [number, number],
 ): boolean {
+    /*
+     * **The eleven axis arrows refuse their last segment**, because it is not a segment: it is
+     * the run from the rear to the point that states the width, drawn only because a base is one
+     * LineString. A vertex inserted there splits the width point off the end of the array, and
+     * everything downstream — the generator, the pivot, the grip — then reads a route point as a
+     * width and the width as a route point. There is nothing to correct it to, so it is refused
+     * the way abatis refuses its chevron. @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name) && basePixels.length >= 3 && nearestSegmentIndex(basePixels, at) === basePixels.length - 2) {
+        return false;
+    }
     const lead = reservedLeadPx(name);
     if (lead === undefined || basePixels.length < 2) return true;
 
@@ -1785,6 +1812,27 @@ const INERT_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
+/** Which segment of a pixel path the point `at` lies nearest, by its starting index. */
+function nearestSegmentIndex(path: readonly (readonly [number, number])[], at: readonly [number, number]): number {
+    let best = -1;
+    let nearest = Infinity;
+    for (let i = 1; i < path.length; i++) {
+        const [ax, ay] = path[i - 1];
+        const [bx, by] = path[i];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const span = Math.hypot(dx, dy);
+        if (span === 0) continue;
+        const t = Math.min(1, Math.max(0, ((at[0] - ax) * dx + (at[1] - ay) * dy) / (span * span)));
+        const distance = Math.hypot(at[0] - (ax + t * dx), at[1] - (ay + t * dy));
+        if (distance < nearest) {
+            nearest = distance;
+            best = i - 1;
+        }
+    }
+    return best;
+}
+
 /** Whether every handle this graphic publishes is inert. @see INERT_HANDLE_GRAPHICS */
 export function handlesAreInert(name: TacticalGraphicName): boolean {
     return INERT_HANDLE_GRAPHICS.includes(name);
@@ -1822,6 +1870,16 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
  * 2026-09-06.) @see MobileDefense.frame
  */
 export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
+    /*
+     * **The eleven axis arrows, ahead of the vertex-count gate, because they have no count.**
+     *
+     * APP-06 lets them run from 3 to 50 anchor points, so the derivation below — "three base
+     * points, and the third has nowhere else to be" — cannot reach them. What their plates do
+     * fix is the *position*: *"Point N determines the width"*, whatever N is. Stated in
+     * `axisWidth.ts` and read here, so the one question every renderer asks about a second copy
+     * of a width has one answer. @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name)) return true;
     if ((baseVertexCount(name) ?? 2) < 3) return false;
     return (
         isMovementGraphic(name) ||

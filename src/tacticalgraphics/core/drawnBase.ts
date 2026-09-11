@@ -28,6 +28,7 @@ import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
 import {baseVertexCount, carriesSeparationInBase, drawsAsRailCrossing} from './handles';
+import {carriesWidthPointInBase, squareWidthPoint, tipOverhangOf} from './axisWidth';
 import {EXPLOITATION_SAMPLE_ARM_DIVISOR, exploitationAnchors} from '../graphics/exploitationAnchors';
 import geometryService from './GeometryService';
 import {
@@ -161,6 +162,21 @@ export function normalizeDrawnBase(
 
     const placed = anchorsFromClicks(name, deduped, resolution);
     if (placed) return placed;
+
+    /*
+     * **The eleven axis arrows: the last coordinate is a width, and it is put back square.**
+     *
+     * Its distance across the axis is the whole of what it says, so the along-axis component of
+     * whatever moved it — a grip drag, a vertex drag, a rotate — is discarded and the point is
+     * republished on the arrowhead's back corner. Idempotent, which is what lets it run here,
+     * on every build.
+     *
+     * **A two-coordinate base is left alone**, because it has no width point to square: it is a
+     * save older than the coordinate, and the door that can repair it is a restore, which can
+     * see the `width` filed beside it. Seeding one here would spend a number this function does
+     * not have. @see upgradeAxisBase, axisBaseFromDraw
+     */
+    if (carriesWidthPointInBase(name)) return squareWidthPoint(name, deduped);
 
     return deduped;
 }
@@ -363,6 +379,7 @@ export function synthesizedBase(
     // @see supportByFireBase
     if (name === TacticalGraphicName.SupportByFire) return supportByFireBase(center, half);
     if (name === TacticalGraphicName.Exploitation) return exploitationBase(center, half);
+    if (carriesWidthPointInBase(name)) return axisSampleBase(name, center, half, points);
     // A circle with an arrow swinging out of it, sized the way its plate draws one.
     // @see circleAndArrowBase
     if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
@@ -470,6 +487,30 @@ export function railCrossingBase(center: Position, half: number, points = 3): Po
 }
 
 /**
+ * The base the eleven axis arrows expect, for anything that has to synthesise one.
+ *
+ * A plain run west to east — these are free-length routes and a sample has no bends to invent —
+ * with the width point on the end. Stored order, so the arrowhead lands at the east end and the
+ * sample reads left to right like every other line on the sheet.
+ *
+ * The half-width is a fifth of the half-run, which is roughly what the family draws at the 20
+ * screen pixels both renderers seed a fresh graphic with. **Unit-free**, because one sheet lays
+ * out in projected metres and the other in degrees: `axisWithWidthPoint` is turf and wants
+ * lon/lat, so the point is placed by hand here and squared onto the real corner by
+ * `normalizeDrawnBase`, which both sheets run over the result. @see frontEdgeBase
+ */
+export function axisSampleBase(name: TacticalGraphicName, center: Position, half: number, points: number): Position[] {
+    const [cx, cy] = center;
+    const across = half / 5;
+    const axis: Position[] = points >= 3
+        ? [[cx + half, cy], [cx, cy + half * 0.25], [cx - half, cy]]
+        : [[cx + half, cy], [cx - half, cy]];
+    // Two half-widths off the centreline and one overhang back from the tip, which is where
+    // `widthPointForBuiltAxis` puts it. @see TIP_OVERHANG
+    return [...axis, [cx + half - across * tipOverhangOf(name), cy + across * 2]];
+}
+
+/**
  * Whether this graphic's points are a **front edge and a distance across it**.
  *
  * `carriesSeparationInBase` is the library's own statement of that shape and is now the
@@ -488,6 +529,13 @@ export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
      * nothing places that way. @see exploitationBase
      */
     if (name === TacticalGraphicName.Exploitation) return false;
+    /*
+     * **And the eleven axis arrows are not this shape either.** Their separation is in the base
+     * as well, but what carries it is a point appended to a free-length *route* — so there is no
+     * front edge to lay two points along, and the run itself is whatever the operator drew.
+     * `axisSampleBase` lays them out instead. @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name)) return false;
     return carriesSeparationInBase(name);
 }
 

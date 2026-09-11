@@ -18,7 +18,7 @@
  * @see tmp/probe-roundtrip-sweep.mjs, which drives the same thing with `--from-maplibre`
  */
 import VectorSource from 'ol/source/Vector';
-import {TacticalGraphicName, SNAPSHOT_VERSION, toSnapshot} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, LEGACY_SNAPSHOT_VERSION, toSnapshot} from '@zaes/tactical-graphics';
 import type {Feature as GeoFeature, Geometry} from 'geojson';
 import {restoreTacticalGraphics, serializeTacticalGraphics} from './openlayers/persistence';
 import {readGraphicLabels} from './openlayers/graphicProperties';
@@ -135,6 +135,8 @@ describe('the handover, from each origin', () => {
         const report = restoreTacticalGraphics(to, bare as never);
         expect(report.failed).toEqual([]);
         expect(report.restored).toBe(1);
-        expect(report.version).toBe(SNAPSHOT_VERSION);
+        // Read as the oldest version, which is what an unversioned file is: it was written
+        // before the stamp existed. @see LEGACY_SNAPSHOT_VERSION
+        expect(report.version).toBe(LEGACY_SNAPSHOT_VERSION);
     });
 });

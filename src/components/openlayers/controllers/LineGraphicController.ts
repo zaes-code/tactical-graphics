@@ -390,8 +390,12 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     currentOffset(): number | undefined {
+        // A holder that reads its own width off its base declares it, because the field the
+        // duck-type below finds is only what the generator falls back to there.
+        // @see MovementGraphicBase.currentOffset
+        const declared = (this.graphic as unknown as {currentOffset?: () => number | undefined}).currentOffset?.();
         const holder = this.graphic as unknown as {offset?: number; size?: number};
-        const value = holder.offset ?? holder.size;
+        const value = declared ?? holder.offset ?? holder.size;
         return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
     }
 

@@ -229,7 +229,7 @@ let nextId = 0;
 const DEFAULT_SIZE_FRACTION = 1 / 20;
 
 /** Screen pixels at the drawing zoom, matching what the OpenLayers holders seed. */
-const DEFAULT_OFFSET_PX = 20;
+export const DEFAULT_OFFSET_PX = 20;
 
 /**
  * Sizes for a graphic drawn with none, measured against what was drawn.

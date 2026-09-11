@@ -69,6 +69,7 @@ import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojs
 import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
+    upgradeAxisBase,
     axisFromRectangleRing,
     isRectangular,
     normalizeDrawnBase,
@@ -83,6 +84,15 @@ import {
 } from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
+
+/**
+ * The full width to spend on a version 1 axis arrow that filed none.
+ *
+ * Both engines open one of these at 20 screen pixels of half-width, so a save with no `width`
+ * at all — the shape MapLibre wrote before it stamped one — comes back the size a fresh draw
+ * would be rather than with no arrowhead. @see upgradeAxisBase
+ */
+const defaultWidthMetres = (resolution: number): number => resolution * 20 * 2;
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -586,7 +596,23 @@ export function restoreTacticalGraphics(
             // which every one of its paths goes through; this is the same door on this
             // side. @see normalizeDrawnBase
             if (geometry instanceof LineString) {
-                const tidied = normalizeDrawnBase(name, geometry.getCoordinates().map(c => toLonLat(c)));
+                /*
+                 * **A version 1 base is upgraded before anything else reads it.**
+                 *
+                 * The eleven axis arrows filed their width as an amplifier until 2026-09-10 and
+                 * carry it as their last coordinate now, so an older file is two coordinates and
+                 * a `width` where a current one is three and no width at all. The conversion has
+                 * to happen here rather than in `normalizeDrawnBase`, because it spends a number
+                 * that lives beside the geometry and the normalizer only ever sees the geometry.
+                 *
+                 * A file that declares no version is read as version 1, which is what every
+                 * unversioned collection actually is. @see upgradeAxisBase, snapshotVersionOf
+                 */
+                const stored = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
+                const upgraded = report.version < SNAPSHOT_VERSION
+                    ? upgradeAxisBase(name, stored, state.width, defaultWidthMetres(resolution))
+                    : stored;
+                const tidied = normalizeDrawnBase(name, upgraded);
                 if (tidied.length !== geometry.getCoordinates().length) {
                     geometry.setCoordinates(tidied.map(c => fromLonLat(c as Coordinate)));
                 }
