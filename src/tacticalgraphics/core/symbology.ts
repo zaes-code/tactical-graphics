@@ -422,6 +422,36 @@ export function measureReadout(parts: MeasurePart[]): string {
 }
 
 /**
+ * The smallest a read-out may be shrunk to fit its own line, as a share of the label size.
+ *
+ * Half. Below that the figure stops being readable, and a number nobody can read is no
+ * better than the nothing this replaces.
+ */
+export const MEASURE_READOUT_MIN_SCALE = 0.5;
+
+/** How much of the line the text may fill, so it does not run out past both ends at once. */
+const MEASURE_READOUT_SHARE = 0.95;
+
+/**
+ * How far to shrink a read-out so it fits the line it is drawn along.
+ *
+ * **A read-out that does not fit is not drawn at all.** OpenLayers lays line-placed text
+ * along its geometry and drops it when the glyphs run past the ends, so the radar search
+ * doctrine's label — 201 px wide with an azimuth and a range in it — appeared only once the
+ * drag passed 201 px. Everything before that was blind, which is the opposite of what a
+ * read-out is for. (User's report, 2026-09-10.)
+ *
+ * So the text shrinks to the room it has, down to {@link MEASURE_READOUT_MIN_SCALE}. Below
+ * that a caller should stop laying it along the line and place it at the midpoint instead:
+ * shrinking further would trade one unreadable state for another.
+ */
+export function measureReadoutScale(naturalWidthPx: number, linePx: number, desired = 1): number {
+    if (!(naturalWidthPx > 0) || !(linePx > 0)) return desired;
+    const fitted = (linePx * MEASURE_READOUT_SHARE) / naturalWidthPx;
+    return Math.max(MEASURE_READOUT_MIN_SCALE, Math.min(desired, fitted));
+}
+
+/**
  * An altitude or height for a label, from whatever the user typed.
  *
  * The number is written in the configured {@link AltitudeUnit} and the unit is appended,
