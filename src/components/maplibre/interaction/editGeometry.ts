@@ -27,7 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {drawnAnchorFrame, generatorOrder, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {drawnAnchorFrame, generatorOrder, rotationToAzimuth, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -159,7 +159,33 @@ export function rotate(description: GraphicDescription, from: Position, to: Posi
         // Degrees, and **counter-clockwise from east** — the frame the generators
         // build their local axes in, not a compass bearing.
         const current = description.properties.rotation ?? 0;
-        return {...description, properties: {...description.properties, rotation: current + (delta * 180) / Math.PI}};
+        const turned = current + (delta * 180) / Math.PI;
+        /*
+         * **A stated azimuth has to turn with it.** 200700 files its search axis as a
+         * bearing of its own, and the generator prefers that field over `rotation` — so a
+         * rotate that advanced only `rotation` turned nothing at all here, while the same
+         * gesture on OpenLayers restated the azimuth and the symbol swung. Measured: the
+         * bag came away carrying a rotation of -14° and an axis still reading 045°, which
+         * also hands the other engine a graphic that draws where it started.
+         * `RangeFanGraphicBase.syncRadarState` is the same identity on that side.
+         */
+        const azimuth = description.properties.searchAxisAzimuthDeg;
+        /*
+         * Advanced by the same turn, not rebuilt from `rotation`: the two are the same
+         * bearing read opposite ways round — `azimuth = 90 - rotation`, so a turn that adds
+         * to one subtracts from the other — and a graphic that filed an axis without ever
+         * filing a rotation has no rotation to rebuild from. Deriving it from a `rotation`
+         * of 0 put a symbol aimed at 045 on a bearing of 104.
+         */
+        const degrees = (delta * 180) / Math.PI;
+        return {
+            ...description,
+            properties: {
+                ...description.properties,
+                rotation: turned,
+                ...(azimuth === undefined ? {} : {searchAxisAzimuthDeg: rotationToAzimuth(90 - azimuth + degrees)}),
+            },
+        };
     }
 
     const cos = Math.cos(delta);

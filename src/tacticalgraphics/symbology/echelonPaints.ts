@@ -20,14 +20,29 @@ type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
 /** Screen-pixel clearance either side of the echelon glyph in its gap. */
 const ECHELON_GAP_PX = 10;
-/** Where along the opening segment the gap runs, before clearance. */
-const ECHELON_GAP_FROM = 0.4;
-const ECHELON_GAP_TO = 0.6;
+/** Where along the opening segment the gap is centred. */
+const ECHELON_OPENING_MIDPOINT = 0.5;
 
 /** Echelon glyph dimensions, in screen pixels at scale 1. */
 const ECHELON_DOT_RADIUS_PX = 5;
 const ECHELON_SPACING_PX = 12;
 const ECHELON_HALF_LENGTH_PX = 10;
+
+/** Clear space between one X and the next, in screen pixels. @see echelonMarks */
+const ECHELON_CROSS_GAP_PX = 2;
+
+/**
+ * The most of its own segment the echelon glyph may span before it is shrunk.
+ *
+ * **0.2 is not a new number.** It is the hole every caller already cuts for the glyph:
+ * `ECHELON_GAP_FROM` to `ECHELON_GAP_TO` is a fifth of the opening segment, and the
+ * boundary's `BOUNDARY_GAP_SHARE` is a tenth either side of the middle. Capping the glyph
+ * at the same share is what keeps it inside the gap it is drawn in — measured before this,
+ * a corps glyph on an 80 px boundary spanned 35 px against a 28 px hole, so its outer arms
+ * lay across the line, and on a 40 px one it took half the symbol. (User's report,
+ * 2026-09-10.) @see decorationScale, the same shape-relative rule for repeating marks
+ */
+const ECHELON_SPAN_SHARE = 0.2;
 
 /** Screen-pixel length of a strong point's cross tie, and the spacing between ties. */
 const CROSS_TIE_PX = 10;
@@ -55,7 +70,39 @@ interface OpenedRing {
  * edge** — the formula is the inward normal, so pointing north selects the
  * south-facing side.
  */
-function openRing(ring: ProjectedPosition[], rotation: number, resolution: number): OpenedRing | null {
+/**
+ * The edge the ring opens on, as its vector — the same choice `openRing` makes.
+ *
+ * Split out because the hole's width is now the glyph's, and the glyph's width depends on
+ * the segment it is laid along: which edge comes first, then how big the mark on it may be,
+ * then where to cut. @see openRing
+ */
+function openingSegment(ring: ProjectedPosition[], rotation: number): [number, number] | null {
+    if (ring.length < 2) return null;
+    const unitRot = [Math.cos(rotation), Math.sin(rotation)];
+    let best = -Infinity;
+    let found: [number, number] | null = null;
+    for (let i = 0; i < ring.length - 1; i++) {
+        const dx = ring[i + 1][0] - ring[i][0];
+        const dy = ring[i + 1][1] - ring[i][1];
+        const segLen = Math.hypot(dx, dy);
+        if (segLen === 0) continue;
+        const dot = (-dy / segLen) * unitRot[0] + (dx / segLen) * unitRot[1];
+        if (dot > best) {
+            best = dot;
+            found = [dx, dy];
+        }
+    }
+    return found;
+}
+
+function openRing(
+    ring: ProjectedPosition[],
+    rotation: number,
+    resolution: number,
+    /** Half the hole to cut, in screen pixels — the glyph's own half-width. @see echelonWidthPx */
+    halfGapPx: number,
+): OpenedRing | null {
     if (ring.length < 2) return null;
 
     const unitRot = [Math.cos(rotation), Math.sin(rotation)];
@@ -85,14 +132,16 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
         if (i !== openIndex) outline.push([ring[i], ring[i + 1]]);
     }
 
-    const gapRatio = (ECHELON_GAP_PX * resolution) / segLen;
+    // The hole is the glyph's own width plus clearance, centred on the segment — not the
+    // fixed fifth it used to be. @see echelonWidthPx
+    const gapRatio = ((halfGapPx + ECHELON_GAP_PX) * resolution) / segLen;
     const gapA: ProjectedPosition = [
-        p1[0] + dx * (ECHELON_GAP_FROM - gapRatio),
-        p1[1] + dy * (ECHELON_GAP_FROM - gapRatio),
+        p1[0] + dx * (ECHELON_OPENING_MIDPOINT - gapRatio),
+        p1[1] + dy * (ECHELON_OPENING_MIDPOINT - gapRatio),
     ];
     const gapB: ProjectedPosition = [
-        p1[0] + dx * (ECHELON_GAP_TO + gapRatio),
-        p1[1] + dy * (ECHELON_GAP_TO + gapRatio),
+        p1[0] + dx * (ECHELON_OPENING_MIDPOINT + gapRatio),
+        p1[1] + dy * (ECHELON_OPENING_MIDPOINT + gapRatio),
     ];
     outline.push([p1, gapA], [gapB, p2]);
 
@@ -101,7 +150,8 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
 
 /**
  * The echelon glyph: dots for squad through platoon, perpendicular bars for
- * company through regiment, and an X for brigade.
+ * company through regiment, and one X per level from brigade up: X, XX for a
+ * division, XXX for a corps or MEF.
  *
  * Every size is screen pixels multiplied by the label scale, so the glyph grows
  * and shrinks with the amplifiers around it rather than with the map.
@@ -109,14 +159,14 @@ function openRing(ring: ProjectedPosition[], rotation: number, resolution: numbe
  * An unrecognized echelon falls back to the single dot rather than drawing
  * nothing: a position with no readable echelon is still a position.
  */
-export function echelonMarks(
+function buildEchelonMarks(
     mid: ProjectedPosition,
     dx: number,
     dy: number,
     resolution: number,
     echelon: TacticalGraphicEchelon,
     color: string,
-    scale = 1,
+    scale: number,
 ): Paint[] {
     const segLen = Math.hypot(dx, dy);
     if (!segLen) return [];
@@ -149,6 +199,48 @@ export function echelonMarks(
         };
     };
 
+    /*
+     * **The X's, and why their spacing is their own.**
+     *
+     * One for a brigade, two for a division, three for a corps or MEF, which is what FM
+     * 1-02.2's table 5-3 draws on its division boundary: two X's side by side, sharing an
+     * edge rather than spaced out. The dots and bars are marks on a line and take
+     * `spacing`; an X is a *letter* and the pair reads as one word, so the step between
+     * them is the width of the glyph itself — `halfLength * √2` is exactly corner to
+     * corner — plus daylight, or the arms of neighbouring X's meet and the pair reads as a
+     * lattice. Spacing them like the bars leaves a hole down the middle of the XX instead.
+     * (User's call, 2026-09-10.)
+     *
+     * **The arms are strokes, so the corner is not where the ink stops.** Stepping by the
+     * geometry alone left the two X's touching however wide the gap was written: a stroke
+     * of width `w` at 45 degrees puts ink `w/√2` past its own endpoint horizontally, from
+     * each of the two neighbours, which is the whole of a two-pixel gap at the default line
+     * width. Measured on the rendered boundary: zero empty columns between the X's before
+     * this term, and the gap asked for after it. The allowance does not take `scale`,
+     * because a stroke width is screen pixels and does not either.
+     */
+    const inkAllowance = (LINE_WIDTH() * Math.SQRT2) * resolution;
+    const crossStep = halfLength * Math.SQRT2 + ECHELON_CROSS_GAP_PX * scale * resolution + inkAllowance;
+    const cross = (offset: number): Paint[] => {
+        const cx = mid[0] + ux * crossStep * offset;
+        const cy = mid[1] + uy * crossStep * offset;
+        // The tangent turned ±45°, so the X straddles the segment evenly however
+        // the position was drawn.
+        const cos = Math.cos(Math.PI / 4);
+        const sin = Math.sin(Math.PI / 4);
+        const arm = (vx: number, vy: number): Paint => ({
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [cx - vx * halfLength, cy - vy * halfLength],
+                    [cx + vx * halfLength, cy + vy * halfLength],
+                ],
+            },
+            stroke,
+        });
+        return [arm(ux * cos - uy * sin, ux * sin + uy * cos), arm(ux * cos + uy * sin, -ux * sin + uy * cos)];
+    };
+
     switch (echelon) {
         case TacticalGraphicEchelon.squad:
             return [dot(0)];
@@ -162,26 +254,114 @@ export function echelonMarks(
             return [bar(-1), bar(1)];
         case TacticalGraphicEchelon.regimentGroup:
             return [bar(-1), bar(0), bar(1)];
-        case TacticalGraphicEchelon.brigade: {
-            // The tangent turned ±45°, so the X straddles the segment evenly however
-            // the position was drawn.
-            const cos = Math.cos(Math.PI / 4);
-            const sin = Math.sin(Math.PI / 4);
-            const arm = (vx: number, vy: number): Paint => ({
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [
-                        [mid[0] - vx * halfLength, mid[1] - vy * halfLength],
-                        [mid[0] + vx * halfLength, mid[1] + vy * halfLength],
-                    ],
-                },
-                stroke,
-            });
-            return [arm(ux * cos - uy * sin, ux * sin + uy * cos), arm(ux * cos + uy * sin, -ux * sin + uy * cos)];
-        }
+        case TacticalGraphicEchelon.brigade:
+            return cross(0);
+        case TacticalGraphicEchelon.division:
+            return [...cross(-0.5), ...cross(0.5)];
+        case TacticalGraphicEchelon.corpsMef:
+            return [...cross(-1), ...cross(0), ...cross(1)];
         default:
             return [dot(0)];
     }
+}
+
+/**
+ * How far the glyph reaches **along** the segment, in screen pixels.
+ *
+ * Measured off the marks themselves rather than from the layout constants, so a new
+ * echelon cannot be added with a size the cap does not know about. A dot's ink runs a
+ * radius past its centre; a stroke's ends are its geometry.
+ */
+function alongExtentPx(marks: Paint[], mid: ProjectedPosition, ux: number, uy: number, resolution: number): number {
+    let reach = 0;
+    for (const mark of marks) {
+        const along = (at: ProjectedPosition): number =>
+            ((at[0] - mid[0]) * ux + (at[1] - mid[1]) * uy) / resolution;
+        if (mark.circle && mark.geometry.type === 'Point') {
+            reach = Math.max(reach, Math.abs(along(mark.geometry.coordinates)) + (mark.circle.radiusPx ?? 0));
+            continue;
+        }
+        if (mark.geometry.type === 'LineString') {
+            for (const at of mark.geometry.coordinates) reach = Math.max(reach, Math.abs(along(at)));
+        }
+    }
+    return reach * 2;
+}
+
+/**
+ * How wide the glyph comes out, in screen pixels, once the cap has had its say.
+ *
+ * **A gap has to follow whatever it makes room for.** Every caller cuts a hole in its own
+ * line for this glyph, and each used to size that hole from a constant — a fifth of the
+ * segment, plus a fixed clearance — which is right for one echelon at one zoom and wrong
+ * either side of it: a corps XXX overran the hole while a squad's single dot sat in a hole
+ * four times its width. The same lesson `TURN_LABEL_GAP_METERS` carries for the "T" in a
+ * bowed turn: measure the thing, then cut. (User's call, 2026-09-10.)
+ */
+export function echelonWidthPx(
+    dx: number,
+    dy: number,
+    resolution: number,
+    echelon: TacticalGraphicEchelon,
+    scale = 1,
+): number {
+    const segLen = Math.hypot(dx, dy);
+    if (!segLen || !(resolution > 0)) return 0;
+    return alongExtentPx(
+        echelonMarks([0, 0], dx, dy, resolution, echelon, '#000', scale),
+        [0, 0],
+        dx / segLen,
+        dy / segLen,
+        resolution,
+    );
+}
+
+/**
+ * The echelon glyph, **capped against the segment it sits on**.
+ *
+ * Every size inside is screen pixels times the label scale, so the glyph holds its size
+ * while the symbol shrinks under it: a corps boundary 40 px long wore a 20 px XXX, and the
+ * outer arms of a division's XX lay across the line rather than inside the gap cut for it.
+ * The cap is the general rule this library states everywhere else — a mark may not outgrow
+ * the thing it marks — measured against the opening segment, which is what every caller
+ * hands over and what the gap is cut from. @see ECHELON_SPAN_SHARE
+ *
+ * The glyph itself: dots for squad through platoon, perpendicular bars for company through
+ * regiment, and one X per level from brigade up.
+ */
+export function echelonMarks(
+    mid: ProjectedPosition,
+    dx: number,
+    dy: number,
+    resolution: number,
+    echelon: TacticalGraphicEchelon,
+    color: string,
+    scale = 1,
+): Paint[] {
+    const segLen = Math.hypot(dx, dy);
+    if (!segLen || !(resolution > 0)) return [];
+
+    const allowedPx = (ECHELON_SPAN_SHARE * segLen) / resolution;
+    const ux = dx / segLen;
+    const uy = dy / segLen;
+
+    /*
+     * **Measured, shrunk and measured again**, because the glyph is not quite linear in its
+     * own scale: the daylight between the X's carries a stroke-width term that stays put
+     * while everything around it shrinks. A single correction therefore lands slightly wide
+     * — a corps glyph came out 12.8 px against an 11.1 px allowance — and three passes put
+     * every echelon inside it. Bounded rather than looped to convergence: this runs on every
+     * frame of a drag.
+     */
+    let marks = buildEchelonMarks(mid, dx, dy, resolution, echelon, color, scale);
+    let current = scale;
+    for (let pass = 0; pass < 3; pass++) {
+        const extentPx = alongExtentPx(marks, mid, ux, uy, resolution);
+        if (!(extentPx > allowedPx) || !(extentPx > 0)) return marks;
+        current *= allowedPx / extentPx;
+        marks = buildEchelonMarks(mid, dx, dy, resolution, echelon, color, current);
+    }
+    return marks;
 }
 
 /**
@@ -256,7 +436,15 @@ export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPa
         const ring = outerRing(feature);
         if (!ring) return [];
         // π/2 selects the south-facing edge — @see openRing.
-        const opened = openRing(ring, feature.properties.rotation ?? Math.PI / 2, context.resolution);
+        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        const rotation = feature.properties.rotation ?? Math.PI / 2;
+        // The hole is cut to fit the glyph that goes in it, so the ring opens exactly as
+        // far as this echelon needs and no further. @see echelonWidthPx
+        const opening = openingSegment(ring, rotation);
+        const halfGlyphPx = opening
+            ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
+            : 0;
+        const opened = openRing(ring, rotation, context.resolution, halfGlyphPx);
         if (!opened) return [];
 
         const color = lineColorOf(feature);
@@ -271,15 +459,7 @@ export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPa
                         : undefined,
                 },
             },
-            ...echelonMarks(
-                opened.midGap,
-                opened.dx,
-                opened.dy,
-                context.resolution,
-                feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad,
-                color,
-                scaleOf(feature, context),
-            ),
+            ...echelonMarks(opened.midGap, opened.dx, opened.dy, context.resolution, echelon, color, scaleOf(feature, context)),
         ];
     };
 }
@@ -289,21 +469,21 @@ export function strongPointPaint(): AreaPaint {
     return (feature, context) => {
         const ring = outerRing(feature);
         if (!ring) return [];
-        const opened = openRing(ring, feature.properties.rotation ?? Math.PI / 2, context.resolution);
+        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        const rotation = feature.properties.rotation ?? Math.PI / 2;
+        // The hole is cut to fit the glyph that goes in it, so the ring opens exactly as
+        // far as this echelon needs and no further. @see echelonWidthPx
+        const opening = openingSegment(ring, rotation);
+        const halfGlyphPx = opening
+            ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
+            : 0;
+        const opened = openRing(ring, rotation, context.resolution, halfGlyphPx);
         if (!opened) return [];
 
         const color = lineColorOf(feature);
         return [
             {geometry: {type: 'MultiLineString', coordinates: opened.outline}, stroke: {color, widthPx: LINE_WIDTH()}},
-            ...echelonMarks(
-                opened.midGap,
-                opened.dx,
-                opened.dy,
-                context.resolution,
-                feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad,
-                color,
-                scaleOf(feature, context),
-            ),
+            ...echelonMarks(opened.midGap, opened.dx, opened.dy, context.resolution, echelon, color, scaleOf(feature, context)),
             ...crossTies(opened.outline, context.resolution, color),
         ];
     };
