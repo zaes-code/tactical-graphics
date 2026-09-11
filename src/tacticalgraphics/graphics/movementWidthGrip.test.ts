@@ -25,6 +25,7 @@ import type {Feature, MultiPoint, Position} from 'geojson';
 import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {generatorOrder} from '../core/drawOrder';
+import {handleRole, isMovementGraphic} from '../core/handles';
 import {TacticalGraphicName} from '../core/type';
 
 /**
@@ -99,4 +100,23 @@ describe("the movement family's width grip", () => {
             expect(side(mirrored[0], mirrored[1], width)).toBe(1);
         },
     );
+
+    /**
+     * **The grip is only a width grip if the contract says so.**
+     *
+     * 152300 avenue of approach and 340700 counter-attack by fire were in the symbology
+     * registry's movement family and in no handle contract at all, so `handleRole` answered
+     * `shape` for their third grip. OpenLayers never noticed — it routes a width drag off the
+     * `offsetHandler` flag stamped on the feature rather than off the contract — and MapLibre,
+     * which dispatches by role alone, sent the drag to `moveVertex` and translated the whole
+     * graphic instead. Measured on the running app, the same 90 px drag from `width` 40000:
+     * OpenLayers 21028 on both, MapLibre 18617 on their siblings and **40000 with the base
+     * moved 0.1891 degrees north** on these two.
+     */
+    it.each(FAMILY.map(n => [String(n), n] as const))('%s declares that third grip an offset', (_label, name) => {
+        expect(handleRole(name, 2)).toBe('offset');
+        expect(handleRole(name, 0)).toBe('shape');
+        expect(handleRole(name, 1)).toBe('shape');
+        expect(isMovementGraphic(name)).toBe(true);
+    });
 });
