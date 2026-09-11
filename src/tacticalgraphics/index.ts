@@ -210,6 +210,8 @@ export {
     formatBearing,
     formatDistance,
     measureReadout,
+    measureReadoutScale,
+    MEASURE_READOUT_MIN_SCALE,
     RADAR_READOUT_CAPTIONS,
     type MeasurePart,
     formatAltitude,

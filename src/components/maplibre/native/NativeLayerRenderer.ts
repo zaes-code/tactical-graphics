@@ -9,7 +9,9 @@ import {
     getDrawMarkerColor,
     getHandleColor,
     LINE_WIDTH,
+    fontStyle,
     measureReadout,
+    measureReadoutScale,
     type MeasurePart,
     groundLength,
     MERCATOR_MAX_LATITUDE,
@@ -47,8 +49,7 @@ import {
     fillLayer,
     lineLayer,
     renderHatchImage,
-    symbolLayer,
-} from './paintToLayers';
+    symbolLayer, MEASURE_LABEL_PX} from './paintToLayers';
 
 /**
  * # Path B — realize the geometry, then let MapLibre draw it
@@ -885,7 +886,12 @@ export class NativeLayerRenderer {
          */
         this.setData('connector', connectorFeatures(this.handleBearers()));
 
-        this.setData('measure', this.measure ? measureFeatures(this.measure, this.measureCaption, this.measureParts) : []);
+        this.setData(
+            'measure',
+            this.measure
+                ? measureFeatures(this.measure, this.measureCaption, this.measureParts, this.measureText, resolutionOf(this.map))
+                : [],
+        );
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{
@@ -1296,9 +1302,17 @@ function measureFeatures(
     [from, to]: [ProjectedPosition, ProjectedPosition],
     caption?: string,
     parts?: MeasurePart[],
+    measureText?: (text: string, font: string) => number,
+    resolution = 1,
 ): Feature[] {
     const dx = to[0] - from[0];
     const dy = to[1] - from[1];
+
+    const label = measureReadout(
+        parts ?? [{caption, meters: groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))}],
+    );
+    const naturalPx = measureText ? measureText(label, fontStyle) : 0;
+    const linePx = Math.hypot(dx, dy) / resolution;
 
     // **The angle from horizontal, not a compass bearing.** `text-rotate` turns the
     // glyphs clockwise from ordinary left-to-right, so an east-west line wants 0 — a
@@ -1332,14 +1346,13 @@ function measureFeatures(
             // one the operator reads and the dialog states. @see mercator.ts
             properties: {
                 ...shared,
-                label: measureReadout(
-                    parts ?? [
-                        {
-                            caption,
-                            meters: groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2)),
-                        },
-                    ],
-                ),
+                label,
+                // **Sized to the line, the way OpenLayers sizes its own.** MapLibre draws
+                // this one whatever its width — the layer's note says why it is placed on a
+                // point — but a label wider than the line it reports is still unreadable
+                // beside a short drag. Both engines shrink to `measureReadoutScale` and stop
+                // at the same floor, so the two state the same number at the same size.
+                textSize: MEASURE_LABEL_PX * measureReadoutScale(naturalPx, linePx),
                 rotation,
             },
         },
