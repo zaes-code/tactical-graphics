@@ -12,20 +12,9 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, DEFAULT_AXIS_HALF_WIDTH_PX, acceptsInsertedVertex, allowedGestures, axisBaseFromDraw, axisOf, carriesWidthPointInBase, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx, screenMeters} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
-/**
- * The half-width a freshly drawn axis arrow opens at, in ground metres.
- *
- * The library states the figure in screen pixels and the renderer supplies the zoom, so this
- * engine and MapLibre place the same width point from the same three clicks.
- * @see DEFAULT_AXIS_HALF_WIDTH_PX
- */
-export function seedHalfWidth(name: TacticalGraphicName, drawn: Position[], resolution: number | undefined): number {
-    if (!resolution || resolution <= 0) return 0;
-    return screenMeters(DEFAULT_AXIS_HALF_WIDTH_PX, resolution, drawn[0]?.[1] ?? 0);
-}
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -1789,23 +1778,20 @@ export class TacticalGraphicsManager {
         const geometry = e.feature?.getGeometry();
         if (!(geometry instanceof LineString)) return;
 
-        const drawn = geometry.getCoordinates().map(c => toLonLat(c));
         /*
-         * **A draw is the one caller that may append the width point**, so it does it here
-         * rather than inside the normalizer — the same division that keeps a rectangle's
-         * levelling in the draw paths. A sketch of clicks and a settled base are the same array
-         * of coordinates, and only the caller knows which it is holding.
-         *
-         * The half-width to seed is what the holder was built with: 20 screen pixels at the
-         * drawing zoom, which is the figure both engines start every one of these at.
-         * @see axisBaseFromDraw
+         * **The eleven axis arrows are already finished, and touching them here would undo
+         * them.** Their base is not the sketch: the holder rebuilds it from every click plus a
+         * seeded width point on each pointer move, through `setSketchBase`, so by the time this
+         * runs the last click has already been through that door. What is left in the sketch is
+         * a run of clicks, and normalizing *those* would read the operator's final click as a
+         * width and pull it square to the axis. @see MovementGraphicBase.setSketchBase
          */
-        const seeded = carriesWidthPointInBase(name)
-            ? axisBaseFromDraw(name, drawn as Position[], seedHalfWidth(name, drawn as Position[], this.map.getView().getResolution()))
-            : drawn;
+        if (carriesWidthPointInBase(name)) return;
+
+        const drawn = geometry.getCoordinates().map(c => toLonLat(c));
         // **The resolution matters now**: the S pair's point 2 is held to a pixel range, and
         // a normalizer with no view to ask leaves it where the user put it.
-        const normalized = normalizeDrawnBase(name, seeded as Position[], this.map.getView().getResolution());
+        const normalized = normalizeDrawnBase(name, drawn as Position[], this.map.getView().getResolution());
         // Compared by *content*, not by length. This used to bail whenever the vertex count
         // was unchanged, which is every case where a vertex moves rather than appears.
         if (normalized.length === drawn.length
