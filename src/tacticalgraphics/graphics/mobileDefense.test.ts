@@ -205,3 +205,71 @@ describe('mobile defence — the hairpin the Template draws', () => {
         expect(Math.abs(along)).toBeLessThan(reach * 0.01);
     });
 });
+
+/**
+ * # The barbs stand on the symbol, not beside it
+ *
+ * Each triangle used to be built by walking a bearing either way from a point on the path,
+ * which puts its corners on a great-circle chord rather than on the line the renderer
+ * draws. On a straight leg the far corner drifted off by 9% of the barb's own base; on the
+ * arc the base came out tangent, so the curve fell away underneath it. Both showed as
+ * daylight between the triangle and the symbol. (User's report, 2026-09-10.)
+ *
+ * Measured in projected metres, because the drawn line is straight on the screen and a
+ * degree of longitude at this latitude is not a degree of latitude.
+ */
+describe('the four barbs', () => {
+    const R = 6378137;
+    const project = ([lon, lat]: Position): Position => [
+        (R * lon * Math.PI) / 180,
+        R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)),
+    ];
+
+    /** Distance from `p` to the nearest point of any segment in `parts`, in metres. */
+    const offPath = (p: Position, parts: Position[][]): number => {
+        let best = Infinity;
+        for (const part of parts) {
+            for (let i = 1; i < part.length; i++) {
+                const [ax, ay] = part[i - 1];
+                const [bx, by] = part[i];
+                const vx = bx - ax;
+                const vy = by - ay;
+                const len = vx * vx + vy * vy;
+                const t = len ? Math.max(0, Math.min(1, ((p[0] - ax) * vx + (p[1] - ay) * vy) / len)) : 0;
+                best = Math.min(best, Math.hypot(p[0] - (ax + t * vx), p[1] - (ay + t * vy)));
+            }
+        }
+        return best;
+    };
+
+    /** `[near line, arc, far line]`, projected — the paths the barbs stand on. */
+    const symbol = (out: ReturnType<typeof renderTacticalGraphic>) =>
+        rings(out).slice(0, 3).map(part => part.map(project));
+
+    /** The four barb rings, projected. Everything past the arrowhead. */
+    const barbs = (out: ReturnType<typeof renderTacticalGraphic>) =>
+        rings(out).slice(4).map(ring => ring.map(project));
+
+    it('put both base corners on the line or the arc they decorate', () => {
+        const out = md([P1, P2, P3]);
+        const parts = symbol(out);
+        const found = barbs(out);
+        expect(found).toHaveLength(4);
+        for (const ring of found) {
+            const width = Math.hypot(ring[0][0] - ring[2][0], ring[0][1] - ring[2][1]);
+            // A thousandth of the barb's own width: the interpolation's own rounding.
+            expect(offPath(ring[0], parts) / width).toBeLessThan(0.001);
+            expect(offPath(ring[2], parts) / width).toBeLessThan(0.001);
+        }
+    });
+
+    /** And the apex still points away from the ground the hairpin encloses. */
+    it('point their apex away from the symbol', () => {
+        const out = md([P1, P2, P3]);
+        const parts = symbol(out);
+        for (const ring of barbs(out)) {
+            const mid: Position = [(ring[0][0] + ring[2][0]) / 2, (ring[0][1] + ring[2][1]) / 2];
+            expect(offPath(ring[1], parts)).toBeGreaterThan(offPath(mid, parts));
+        }
+    });
+});

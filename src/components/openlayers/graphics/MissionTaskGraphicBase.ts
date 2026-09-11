@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {handlesAreInert, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import {handlesAreInert, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
@@ -489,6 +489,8 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // @see createMeasureFeature, which reads this
         this.measure.set('measureMeters', this.measureStated());
         this.measure.set('measureLabel', this.measureCaption());
+        this.measure.set('measureDegrees', this.measureAngle());
+        this.measure.set('measureParts', this.measureParts());
         this.measure.setGeometry(new LineString([this.center, edge]));
     }
 
@@ -527,6 +529,30 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * dimensions has to say which is moving. @see createMeasureFeature
      */
     protected measureCaption(): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * The angle the read-out states instead of a distance, in degrees, or nothing.
+     *
+     * Nothing for every graphic sized by a drag, which is what a measure line was built
+     * for. The radar search doctrine has two numbers its plate states in degrees — the
+     * search axis and the stop relative bearing — and the grips that set them had no
+     * read-out at all, because the only one on offer formatted metres. @see measureReadout
+     */
+    protected measureAngle(): number | undefined {
+        return undefined;
+    }
+
+    /**
+     * Everything the read-out states, when one gesture sets more than one number.
+     *
+     * `undefined` for every graphic that sets one thing at a time, which is nearly all of
+     * them — the read-out then shows the single figure it always has. The radar search
+     * doctrine's second click fixes its axis and its start range together, and reporting
+     * one of the two is how the axis came to have no read-out. @see measureReadout
+     */
+    protected measureParts(): MeasurePart[] | undefined {
         return undefined;
     }
 
