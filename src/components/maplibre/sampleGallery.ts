@@ -518,7 +518,8 @@ function sheetSizes(
     const axis = geometry.coordinates as Position[];
     const metres = metersBetween(axis[0], axis[axis.length - 1]);
     if (!(metres > 0)) return properties;
-    return {...properties, width: rectangleDefaultHalfWidth(metres) * 2};
+    // Rounded to the metre, matching what the other engine files. @see sizeDefaults
+    return {...properties, width: Math.round(rectangleDefaultHalfWidth(metres) * 2)};
 }
 
 export interface MapLibreSampleReport {

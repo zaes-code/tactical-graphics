@@ -491,7 +491,7 @@ export {TIP_FIRST_GRAPHICS, drawsTipFirst, featureInGeneratorOrder, generatorOrd
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
 export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
 export {ARC_ARROW_MIN_REACH, RAIL_PREVIEW_GAP_PX, SUPPORT_BY_FIRE_PREVIEW_REACH, supportByFireAnchors, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
-export {carriesRectangleLength, groundMeters, rectangleAmplifiers, usesCornerAnchors, usesDrawnAnchors} from './core/handles';
+export {carriesRectangleLength, groundMeters, rectangleAmplifiers, shapedByWidth, usesCornerAnchors, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
 export {HANDLE_EDIT_MODES} from './core/engine';
 export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';

@@ -18,8 +18,9 @@ import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
 import {drawsTipFirst} from './drawOrder';
 import {carriesWidthPointInBase} from './axisWidth';
-import {reservedLeadPx} from './decorationSizes';
+import {hasAxisAndWidth, reservedLeadPx} from './decorationSizes';
 import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from '../graphics/SecurityOperation';
+import {usesStandoffWidth} from '../graphics/SafeDistanceZone';
 
 /**
  * What dragging a handle does.
@@ -1545,6 +1546,38 @@ export function groundMeters(a: [number, number], b: [number, number]): number {
 
 export function isRectangular(name: TacticalGraphicName): boolean {
     return RECTANGULAR_GRAPHICS.includes(name);
+}
+
+/**
+ * Whether a `width` in the bag **changes what this graphic looks like**.
+ *
+ * Four families answer yes and every one of them states the width in its own terms: the
+ * corridors, whose rails stand off the centre line by half of it; the two-anchor-point
+ * rectangles; the five plates that give a length and a width to one anchor point; and the
+ * multiple-strike safe distance zone, whose width is the standoff between two rings.
+ * Measured, not asserted — `shapedByWidth.test.ts` renders all 318 graphics with and
+ * without a width and compares the geometry, so this list cannot quietly fall out of date.
+ *
+ * The eleven axis arrows are deliberately absent: their width is the last coordinate of
+ * the base, not an amplifier, so a `width` beside it is the second copy
+ * {@link carriesWidthPointInBase} exists to prevent.
+ *
+ * **A renderer needs this before it invents a size.** For the other 284 graphics a width
+ * is a field the generator never reads, and filing one anyway is how a number nobody typed
+ * travels: it rides into a saved file, an engine that replays a scalar on restore picks it
+ * up, and a symbol comes back a different size. That defect has been found five times in
+ * this repository, once per family, each time as its own exception. This is the rule those
+ * exceptions were approximating. @see maplibreAdapter.sizeDefaults
+ *
+ * Reading one is not the same as wanting one **invented**: the standoff zone is here and
+ * still takes no default, because the absence of its width is itself the legacy two-ring
+ * description. @see usesStandoffWidth
+ */
+export function shapedByWidth(name: TacticalGraphicName): boolean {
+    return CORRIDOR_GRAPHICS.includes(name)
+        || isRectangular(name)
+        || hasAxisAndWidth(name)
+        || usesStandoffWidth(name);
 }
 
 /**
