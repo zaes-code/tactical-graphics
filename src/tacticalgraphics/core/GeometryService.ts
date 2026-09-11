@@ -595,6 +595,40 @@ class GeometryService {
         return newLine;
     }
 
+    /**
+     * A quadratic Bezier along `chord` that passes **exactly through `apex`** at its
+     * middle, sampled the same way {@link bendLine} samples its own.
+     *
+     * The difference between the two is where the bow's depth comes from. `bendLine`
+     * measures it on the ground — a geodesic offset from the chord's midpoint — and then
+     * interpolates the curve in degrees, so the point the curve actually reaches is the
+     * degree-space average rather than the ground one. The gap between those two is
+     * nothing on the equator and about 1% of the symbol at 75 degrees, which is where a
+     * grip sitting on the apex ends up floating beside the line it is meant to be on.
+     *
+     * A caller that already knows the apex — because it is one of the symbol's own anchor
+     * points — hands it over instead, and the curve is built to meet it. A Bezier's
+     * midpoint is `(P0 + 2C + P2) / 4`, so the control point is `2 * apex` less the
+     * chord's own midpoint.
+     */
+    bendLineThroughApex(chord: Position[], apex: Position, segments: number = 32): Position[] {
+        const [pStart, pEnd] = chord;
+        if (!pStart || !pEnd) return chord;
+
+        const cx = 2 * apex[0] - (pStart[0] + pEnd[0]) / 2;
+        const cy = 2 * apex[1] - (pStart[1] + pEnd[1]) / 2;
+
+        const line: Position[] = [];
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            line.push([
+                (1 - t) * (1 - t) * pStart[0] + 2 * (1 - t) * t * cx + t * t * pEnd[0],
+                (1 - t) * (1 - t) * pStart[1] + 2 * (1 - t) * t * cy + t * t * pEnd[1],
+            ]);
+        }
+        return line;
+    }
+
     bendLine(
         lineCoords: Position[], // [pStart, pEnd]
         resolution: number,     // meters per unit (caller-defined)

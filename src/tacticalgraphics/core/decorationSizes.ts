@@ -222,49 +222,26 @@ export function drawnSizeMeters(name: TacticalGraphicName, resolution: number): 
     return px === undefined ? undefined : px * resolution;
 }
 
-/**
- * The smallest a curve may be **drawn**, in screen pixels at the drawing zoom.
+/*
+ * **There is no floor on how small a curve may be drawn, and there deliberately is not.**
  *
- * Turn, its table 5-19 twin and Envelopment are curves rather than circles, and below a
- * certain size they collapse into an unreadable kink — so a barely-dragged one is held to
- * a legible size rather than committed as a squiggle. They stay shrinkable *to* the floor
- * and recoverable from it, because a resize is measured from where the drag began rather
- * than accumulated frame by frame.
+ * Turn, its table 5-19 twin and Envelopment used to be held to 50 px on the way in, so a
+ * barely-dragged one was committed at a legible size rather than as a kink. Two families
+ * had already left that list for the same reason — the arc mission-task circles and the
+ * crossed four both refused a shrink the operator was entitled to make — and the last
+ * three left it when they became click-placed: the floor sat on the centre-to-edge drag
+ * they no longer use, so nothing reached it on either engine.
  *
- * **Two families left this list, and both for the same shape of reason.** The arc
- * mission-task circles — Contain, Control, Isolate, Occupy, Retain, Secure — could not be
- * resized below a 100 px diameter while Cordon and Search and Area Defense, built from the
- * same arcs, had always been free to go small; a circle that refuses to shrink reads as a
- * broken handle rather than a rule. Then the crossed four, whose floor was *exactly* their
- * `dropSizePx`: they could never be made smaller than the size they were dropped at, and
- * every attempt to shrink one did nothing at all.
+ * It was not re-armed. It only ever governed the draw, never a later resize, so a symbol
+ * could be dragged under it a moment afterwards and the guard was partial at best; and
+ * arming it on a click-placed draw pins the size while the cursor keeps going, which is
+ * the "jumpy and not smooth" preview reported on 2026-09-05. Keeping the constant on those
+ * terms would state a protection the code cannot deliver. (User's call, 2026-09-10.)
  *
- * **A draw-time affordance, and only that.** It lived in `MissionTaskGraphicBase.updateGeom`,
- * which every gesture goes through, so it also fired on graphics that had been drawn long
- * ago: panning a small turn at a low zoom grew it, and a restored one was inflated by the
- * first gesture that touched it — 129 km to 300 km at 6000 m/px, which is this constant
- * times that resolution. MapLibre had no equivalent at all, so the two engines drew
- * different symbols from the same short drag: 100 px against 60.
- *
- * Here so that both renderers apply it at the same moment and to the same list.
+ * If small curves need guarding, the answer is something after the draw that the operator
+ * can see and overrule, not a size the gesture silently overrides.
  */
-const MIN_DRAWN_RADIUS_PX = 50;
 
-/** @see MIN_DRAWN_RADIUS_PX */
-const MIN_DRAWN_RADIUS_GRAPHICS: readonly TacticalGraphicName[] = [
-    TacticalGraphicName.TacticalTurn,
-    TacticalGraphicName.Turn,
-    TacticalGraphicName.Envelopment,
-];
-
-/**
- * The floor this graphic's *drawn* radius is held to, in pixels, or `undefined` when it
- * has none. Convert with `screenMeters`, so the number is a real distance where the
- * symbol lands. @see MIN_DRAWN_RADIUS_PX
- */
-export function minimumDrawnRadiusPx(name: TacticalGraphicName): number | undefined {
-    return MIN_DRAWN_RADIUS_GRAPHICS.includes(name) ? MIN_DRAWN_RADIUS_PX : undefined;
-}
 
 /**
  * How short the **first segment** of these graphics may be drawn, in pixels.

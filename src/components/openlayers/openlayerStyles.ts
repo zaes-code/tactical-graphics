@@ -49,6 +49,8 @@ import {
     fontStyle,
     formatAltitude,
     formatDistance,
+    measureReadout,
+    type MeasurePart,
     getColorByHostility,
     getDefaultLineColor,
     getDoctrinalHostilityColor,
@@ -661,9 +663,14 @@ export const createMeasureFeature = () => {
 
         const [a, b] = coords;
         const stated = f.get('measureMeters') as number | undefined;
-        const distance = formatDistance(
-            typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
-        );
+        const metres = typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]);
+        /*
+         * **A gesture that swings an angle reports the angle.** The radar search doctrine's
+         * axis and its sector opening are both stated in degrees by its plate, and the
+         * read-out used to switch itself off for those two rather than print a distance
+         * nobody was dragging. @see measureAngle
+         */
+        const degrees = f.get('measureDegrees') as number | undefined;
         /*
          * **A graphic with more than one dimension has to say which one this is.** A radius
          * read-out needs no caption — a circle has one number — but the rectangular target
@@ -671,7 +678,13 @@ export const createMeasureFeature = () => {
          * one of them does not say which the drag is changing. @see measureCaption
          */
         const caption = f.get('measureLabel') as string | undefined;
-        const text = caption ? `${caption} ${distance}` : distance;
+        /*
+         * A holder that sets more than one number with one gesture states its own parts;
+         * everything else is the single figure this read-out has always shown.
+         * @see MissionTaskGraphicBase.measureParts
+         */
+        const parts = (f.get('measureParts') as MeasurePart[] | undefined) ?? [{caption, meters: metres, degrees}];
+        const text = measureReadout(parts);
 
         // `placement: 'line'` lays the text along the geometry, so it picks up the
         // line's own angle and stays upright-relative to it as the user swings the
