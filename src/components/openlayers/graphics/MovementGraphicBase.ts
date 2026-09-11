@@ -15,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import {handlesAreInert, DEFAULT_AXIS_HALF_WIDTH_PX, screenMeters, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert, DEFAULT_AXIS_HALF_WIDTH_PX, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, screenMeters, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
