@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, anchorVertex, editStretches, normalizeDrawnBase, pivotVertexIndex, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, usesCornerAnchors} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -312,8 +312,18 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * Only the *gesture* scales it. `setOffset` is also how a restore replays a
          * stamped size, and scaling there would compound on every load.
          */
+        /*
+         * **Unless the size is a vertex, in which case the scale below already carries it.**
+         *
+         * The eleven axis arrows keep their width as the last coordinate of their base, so
+         * `resizeFeature` scales it about the pivot along with everything else — exactly what
+         * MapLibre's `scaleDrawnSizes` does by having no `width` to scale. Spending it here as
+         * well moved the point twice, and from the *pre-scale* axis: measured against MapLibre
+         * on the same gesture, five of the eleven moved 29.7 degrees where the other engine
+         * moved 0.8. @see carriesWidthPointInBase, scaleDrawnSizes
+         */
         const holder = this.graphic as unknown as {sizeOverride?: number; setOffset?: (value: number) => void};
-        const current = this.currentDecorationSize();
+        const current = carriesWidthPointInBase(this.resolvedName()) ? undefined : this.currentDecorationSize();
         if (holder.setOffset && current !== undefined && current > 0) holder.setOffset(current * deltaSize);
 
         let resized = openlayersAdapter.resizeFeature(this.graphic.base, deltaSize) as Feature<LineString>;
