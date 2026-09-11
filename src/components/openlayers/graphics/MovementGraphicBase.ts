@@ -15,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import {handlesAreInert, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert, DEFAULT_AXIS_HALF_WIDTH_PX, screenMeters, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
@@ -292,6 +292,55 @@ export class MovementGraphicBase implements LineGraphic {
         const incoming = base.getGeometry();
         this.base.setGeometry(this.squared(incoming) ?? incoming);
         this.updateGeometry();
+    }
+
+    /**
+     * **A base that is still a run of clicks**, which is what the draw interaction hands over
+     * on every pointer move until the last one.
+     *
+     * For the eleven axis arrows the two are not the same thing. Their last stored coordinate
+     * is the width, so a sketch arriving through `setBaseFeature` has the point under the
+     * cursor read as a width and the one before it as the tip: the preview lost a click's worth
+     * of axis and drew an arrow pinched to whatever the cursor happened to be off the line.
+     * Measured mid-draw at three clicks, the previewed half-width ran between a few metres and
+     * a few hundred where the committed symbol's was 4,684.
+     *
+     * Here every click is an axis point and the width is **seeded**, which is the same reading
+     * MapLibre's preview has always taken — `drawBase` seeds through `axisBaseFromDraw` and
+     * `previewDraw` and the commit both come through it. The half-width is the same 20 screen
+     * pixels, spent at the first click's latitude the way MapLibre spends it, so the two engines
+     * place one width point from one set of clicks rather than two that agree to within a
+     * percent. @see DEFAULT_AXIS_HALF_WIDTH_PX
+     *
+     * Everything else this holder draws has a base whose every coordinate is a route point, so
+     * a sketch and a base really are the same array and this falls through.
+     * @see LineGraphic.setSketchBase, axisBaseFromDraw
+     */
+    setSketchBase(base: Feature<LineString>) {
+        const seeded = this.seeded(base.getGeometry());
+        if (!seeded) return this.setBaseFeature(base);
+        // A fresh LineString, never the one handed over: the draw interaction owns the sketch's
+        // geometry and writing into it re-enters this holder. @see squared
+        this.base.setGeometry(seeded);
+        this.updateGeometry();
+    }
+
+    /**
+     * The clicks with a width point seeded on the end, or `undefined` when this graphic keeps
+     * no width point and the sketch is already a base. @see setSketchBase
+     */
+    private seeded(sketch: LineString | undefined): LineString | undefined {
+        if (!carriesWidthPointInBase(this.graphicName) || !sketch) return undefined;
+        // The library speaks degrees and these are projected metres, as everywhere else on
+        // this boundary. @see LineGraphicController.settle
+        const clicks = sketch.getCoordinates().map(c => toLonLat(c)) as Position[];
+        if (clicks.length < 2) return undefined;
+        // Where the arrow is going, not where the operator happened to be looking: the holder's
+        // own `offset` was spent at the view centre, which is a few tenths of a percent off at
+        // any working zoom and was the only thing left between the two engines' bases.
+        const seed = screenMeters(DEFAULT_AXIS_HALF_WIDTH_PX, this.resolution, clicks[0][1]);
+        const base = axisBaseFromDraw(this.graphicName, clicks, seed > 0 ? seed : this.offset);
+        return new LineString(base.map(c => fromLonLat(c as [number, number])));
     }
 
     /**

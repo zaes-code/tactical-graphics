@@ -26,6 +26,18 @@ export interface LineGraphic extends TacticalGraphic {
      * two vertices; see `visiblePathHandles`.
      */
     hidesStartHandle?: boolean;
+
+    /**
+     * Takes a base that is still a run of clicks, rather than a settled one.
+     *
+     * **The two are the same array of coordinates and only the caller knows which it is
+     * holding**, which is the division `axisBaseFromDraw` already keeps one layer down. It
+     * matters for the eleven axis arrows: their last stored coordinate is the width, so a
+     * holder handed a sketch reads the point under the cursor as a width and previews an
+     * arrow pinched to nothing. Declared optional, so a holder with no such distinction is
+     * reached through `setBaseFeature` exactly as before.
+     */
+    setSketchBase?(base: Feature<LineString>): void;
 }
 
 /**
@@ -428,8 +440,10 @@ export class LineGraphicController implements TacticalGraphicHandler {
                 coords.pop();
                 (geometry as LineString).setCoordinates(coords);
             }
-            this.graphic.setBaseFeature(originalFeature as Feature<LineString>);
-
+            // **Through the sketch door where the holder has one**, because these coordinates
+            // are clicks and not a base. @see LineGraphic.setSketchBase
+            if (this.graphic.setSketchBase) this.graphic.setSketchBase(originalFeature as Feature<LineString>);
+            else this.graphic.setBaseFeature(originalFeature as Feature<LineString>);
         });
     };
 
