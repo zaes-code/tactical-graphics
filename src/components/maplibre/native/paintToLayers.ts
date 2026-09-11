@@ -468,7 +468,13 @@ export function measureLabelLayer(id: string, source: string, fontStack: string)
         layout: {
             'text-field': ['get', 'label'],
             'text-font': [fontStack],
-            'text-size': MEASURE_LABEL_PX,
+            // One line, like the other engine's. A read-out naming two numbers carries a
+            // separator MapLibre will happily break at, and the two engines then say the
+            // same thing in a different shape. @see NO_WRAP_EMS
+            'text-max-width': NO_WRAP_EMS,
+            // The feature's own size when it carries one — the read-out shrinks to the line
+            // it reports, the same way OpenLayers' does. @see measureReadoutScale
+            'text-size': ['coalesce', ['get', 'textSize'], MEASURE_LABEL_PX],
             // **Point placement on a midpoint feature, not a line placement.** Both of
             // MapLibre's line placements refuse a label that does not fit inside the
             // geometry's length, which silently dropped the read-out on every small
@@ -497,7 +503,7 @@ export function measureLabelLayer(id: string, source: string, fontStack: string)
 const NO_WRAP_EMS = 1e4;
 
 /** Rendered size of the read-out, matching `fontStyle`'s 16px base. */
-const MEASURE_LABEL_PX = 16;
+export const MEASURE_LABEL_PX = 16;
 const MEASURE_HALO_PX = outwardHalo(HALO_WIDTH);
 
 /**
