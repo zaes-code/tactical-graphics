@@ -13,7 +13,9 @@ import {Draw} from 'ol/interaction';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Style from 'ol/style/Style';
-import {TacticalGraphicHostility, TacticalGraphicName, getColorByHostility} from '@zaes/tactical-graphics';
+import type {Position} from 'geojson';
+import {toLonLat} from 'ol/proj';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, getColorByHostility, halfWidthFromBase} from '@zaes/tactical-graphics';
 import {hiddenAmplifierIds, setAmplifiersHidden} from '../amplifierVisibility';
 import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
@@ -57,6 +59,38 @@ function anchorCoordinate(geometry: Geometry): Coordinate | undefined {
         default:
             return undefined;
     }
+}
+
+/**
+ * The width the **base geometry** states, for the graphics that keep it there.
+ *
+ * The panel's `measured` figures otherwise come out of `properties.tacticalGraphic`, and the
+ * eleven axis arrows deliberately file nothing there: a `width` beside a base that already
+ * describes the width is the second copy the whole change removed. So it is derived on the way
+ * to the panel instead, which is the one place that wants a number to *show* rather than to
+ * rebuild from.
+ *
+ * Read-only, and the field registry leaves `widthTyped` off for these, so it renders as the
+ * read-out this panel already draws for a dragged width — *"you can check the figure you
+ * dragged to, without a second way to set it that would have to be kept in step with the
+ * geometry."* @see halfWidthFromBase
+ */
+function widthFromBase(manager: TacticalGraphicsManager, symbolId: string): {width?: number} {
+    const handler = manager.graphicControllers.find(c => c.getSymbolId?.() === symbolId);
+    // The holders name the graphic differently — `graphicName` on the movement family, `name`
+    // on the block one — and only the first of them can reach here, so both are read rather
+    // than one being asserted.
+    const holder = handler?.graphic as unknown as {
+        graphicName?: TacticalGraphicName;
+        name?: TacticalGraphicName;
+        base?: {getGeometry(): {getCoordinates(): number[][]} | undefined};
+    } | undefined;
+    const name = holder?.graphicName ?? holder?.name;
+    if (!holder || !carriesWidthPointInBase(name)) return {};
+    const geometry = holder.base?.getGeometry();
+    const stored = geometry?.getCoordinates().map(c => toLonLat(c as [number, number])) as Position[] | undefined;
+    const half = halfWidthFromBase(name, stored);
+    return half === undefined ? {} : {width: half * 2};
 }
 
 export function createOpenLayersPropertiesSource(
@@ -111,7 +145,7 @@ export function createOpenLayersPropertiesSource(
                         graphicName: feature.get('graphicName') as TacticalGraphicName,
                         labels: readGraphicLabels(feature),
                         echelon: (feature.get('echelon') as string) || '',
-                        measured: readGraphicGeometryState(feature),
+                        measured: {...readGraphicGeometryState(feature), ...widthFromBase(manager, id)},
                         graphicSize: feature.get('graphicSize') as number | undefined,
                     });
                 }, HIT_TEST_DELAY_MS);
