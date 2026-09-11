@@ -70,6 +70,7 @@ import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
     upgradeAxisBase,
+    carriesWidthPointInBase,
     axisFromRectangleRing,
     isRectangular,
     normalizeDrawnBase,
@@ -481,7 +482,24 @@ export function applyRestoredGeometry(
         //
         // The width families are unaffected: `AirCorridor` and `MovementGraphicBase` stamp
         // a width and no decoration size, so they still take the second branch.
-        const scalar = state.decorationSize ?? (state.width !== undefined ? state.width / 2 : state.radius);
+        /*
+         * **Nothing beside the base may set a width the base itself states.**
+         *
+         * `MovementGraphicBase.setOffset` moves the stored width point for the eleven axis
+         * arrows, which is right for a grip drag and destructive here: the point is already in
+         * the coordinates that were just restored, and replaying a scalar over it republishes
+         * it at whatever number happened to be in the bag. The sample sheet is the case that
+         * showed it — its records carry a `decorationSize`, so every axis arrow on the sweep
+         * came back with its width point 300 km from where MapLibre, which rebuilds from the
+         * geometry and reads the width off it, put the same graphic's.
+         *
+         * A version 1 record is unaffected: `upgradeAxisBase` has already spent the `width`
+         * beside it on the way in, so the coordinate states the saved figure before this runs.
+         * @see carriesWidthPointInBase, optionsFromWidthPoint
+         */
+        const scalar = carriesWidthPointInBase(restoredName)
+            ? undefined
+            : state.decorationSize ?? (state.width !== undefined ? state.width / 2 : state.radius);
         if (scalar !== undefined) handler.setOffset?.(scalar);
         // A width that is an amplifier rather than a half-width. `toLabels` strips it from
         // the bag as a geometry key, so a holder that reads one needs it handed back here or

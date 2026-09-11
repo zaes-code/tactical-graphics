@@ -15,6 +15,7 @@ import {
     isRectangular,
     rectangleDefaultHalfWidth,
     storedOrder,
+    toSnapshot,
     RSD_DEFAULT_RELATIVE_BEARING_DEG,
     RSD_DEFAULT_START_SHARE,
     anchorsFromFrame,
@@ -764,6 +765,14 @@ export function buildSampleGraphics(
  *
  * Exported so the two engines can be handed *identical* input when comparing them,
  * which is the whole basis of the parity checks. @see components/spikeSamples.ts
+ *
+ * **Versioned, because a reader that cannot see a version reads the oldest shape.** These
+ * bases are current: `sheetBase` puts every one through `normalizeDrawnBase`, so an axis
+ * arrow's already carries the width point its plate numbers. Handed over unstamped, the
+ * OpenLayers sweep — which draws by restoring this collection — read it as a version 1 file
+ * and spent `upgradeAxisBase` on it, appending a *second* width point to a base that had
+ * one. Measured on the running app: eleven graphics stored five coordinates on that sheet
+ * where MapLibre's stored four, from the same function. @see toSnapshot, snapshotVersionOf
  */
 export function sampleFeatureCollection(
     hostility?: TacticalGraphicHostility,
@@ -798,7 +807,7 @@ export function sampleFeatureCollection(
         });
     });
 
-    return {type: 'FeatureCollection', features};
+    return toSnapshot(features);
 }
 
 
