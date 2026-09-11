@@ -27,7 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {drawnAnchorFrame, generatorOrder, rotationToAzimuth, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {axisOf, axisWithWidthPoint, carriesWidthPointInBase, drawnAnchorFrame, generatorOrder, rotationToAzimuth, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -452,7 +452,12 @@ export function setOffset(
     // way from the one their symbol was built along. Reading the stored order would
     // invert the sign for exactly those graphics: a corridor would flip the instant it
     // was dragged along the side it already hung on. @see drawOrder.ts
-    const drawn = generatorOrder(description.properties.name, positionsOf(description.geometry));
+    const name = description.properties.name;
+    // **The axis, not the whole base.** Eleven of these carry the width itself as their last
+    // coordinate, and it is a point off to one side: left in, it is a segment for the loop below
+    // to measure against and it reverses into the *front* of the line. @see carriesWidthPointInBase
+    const stored = axisOf(name, positionsOf(description.geometry));
+    const drawn = generatorOrder(name, stored);
     const coords = drawn.map(p => toMercator([p[0], p[1]]));
     if (coords.length < 2) return description;
 
@@ -480,6 +485,21 @@ export function setOffset(
     // dragging it. @see mercator.ts
     const ground = groundLength(Math.abs(perpendicular), drawn[0][1]);
     const width = ground * (options.offsetScale ?? DEFAULT_OFFSET_SCALE) * 2;
+
+    /*
+     * **For the eleven axis arrows the answer is a coordinate, not an amplifier.**
+     *
+     * Their width lives at the end of the base as of 2026-09-10, so a `width` written here would
+     * be a second copy that the generator ignores and a save carries anyway. The same number is
+     * spent by moving the stored point instead, which is where `halfWidthFromBase` reads it back
+     * from — and `mirrored` goes with it, because these arrows have no side to fall on and the
+     * point is republished square however the grip was dragged. @see axisWithWidthPoint
+     */
+    if (carriesWidthPointInBase(name)) {
+        const moved = axisWithWidthPoint(name, stored, width / 2);
+        return {...description, geometry: {type: 'LineString', coordinates: moved}};
+    }
+
     const properties = {...description.properties, width};
 
     // **Negative, not positive.** The axis above is the left normal and an

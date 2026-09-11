@@ -59,6 +59,12 @@ const EXPLOSIVES = [
 const REFERENCE = [TacticalGraphicName.AirCorridor, TacticalGraphicName.MainAxisOfAdvance];
 /** Carries a width point past point 2, so the mark stops at the centreline. @see sideAnchors */
 const SIDE_POINT = [TacticalGraphicName.InfiltrationLane, ...EXPLOSIVES];
+/** The same rule with a free-length run: the mark stops one short of the end. @see axisWidth.ts */
+const AXIS_ARROWS = [
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.AvenueOfApproach,
+    TacticalGraphicName.CounterattackByFire,
+];
 
 // ── 1. One statement, read by both engines ───────────────────────────────────
 
@@ -103,8 +109,20 @@ describe('the run the mark follows', () => {
         expect(anchorConnectorRun(name, base)).toEqual([[0, 0], [1, 0]]);
     });
 
-    it.each([...CROSSINGS, ...CONVOYS, ...REFERENCE])('%s follows the whole base', name => {
+    it.each([...CROSSINGS, ...CONVOYS, TacticalGraphicName.AirCorridor])('%s follows the whole base', name => {
         expect(anchorConnectorRun(name, base)).toEqual(base);
+    });
+
+    /**
+     * **151403 moved to the trimmed run on 2026-09-10**, with the other ten axis arrows: their
+     * last coordinate is the width as of that date, so the mark stops one short of the end
+     * exactly as the demolition family's does. The difference is only where "the end of the
+     * centreline" is — a fixed point 2 for those, one before the last for a free-length route.
+     */
+    it.each(AXIS_ARROWS)('%s stops before the width point', name => {
+        expect(anchorConnectorRun(name, base)).toEqual([[0, 0], [1, 0]]);
+        // A legacy two-point base has no point to drop.
+        expect(anchorConnectorRun(name, [[0, 0], [1, 0]])).toEqual([[0, 0], [1, 0]]);
     });
 
     /** A two-point base has no third point to drop, whichever family it belongs to. */

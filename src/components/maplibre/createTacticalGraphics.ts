@@ -19,6 +19,9 @@ import {
     allowedGestures,
     applyAmplifierAliases,
     migrateRetiredGraphic,
+    upgradeAxisBase,
+    snapshotVersionOf,
+    SNAPSHOT_VERSION,
     type AllowedGestures,
     type EditMode,
     type GestureKind,
@@ -32,7 +35,7 @@ import {
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {MapLibreInteractions, type EditMode as InteractionMode} from './interaction/MapLibreInteractions';
 import {amplifiersHidden} from '../amplifierVisibility';
-import {buildTacticalGraphic} from './maplibreAdapter';
+import {DEFAULT_OFFSET_PX, buildTacticalGraphic} from './maplibreAdapter';
 import {resolutionOf} from './projection';
 
 /** Options for {@link createTacticalGraphics}. */
@@ -129,6 +132,17 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
         restore(snapshot: FeatureCollection) {
             renderer.clear();
             const resolution = resolutionOf(map);
+            /*
+             * **The file's own version, because a version 1 axis arrow is a different shape.**
+             *
+             * The eleven filed their width as an amplifier until 2026-09-10 and carry it as
+             * their last coordinate now, so an older record is a run of route points and a
+             * `width` where a current one is that run plus a coordinate. A collection that
+             * declares no version is read as version 1, which is what every unversioned one
+             * actually is — MapLibre wrote them itself until 2026-09-04.
+             * @see upgradeAxisBase, snapshotVersionOf
+             */
+            const version = snapshotVersionOf(snapshot);
             for (const feature of snapshot.features ?? []) {
                 const props = feature.properties ?? {};
                 const stored = props[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
@@ -148,6 +162,23 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
                     geometry = migrated.geometry;
                 }
                 if (!properties?.name || !geometry) continue;
+                if (version < SNAPSHOT_VERSION && geometry.type === 'LineString') {
+                    const upgraded = upgradeAxisBase(
+                        properties.name,
+                        geometry.coordinates,
+                        properties.width,
+                        resolution * DEFAULT_OFFSET_PX * 2,
+                    );
+                    if (upgraded !== geometry.coordinates) {
+                        geometry = {...geometry, coordinates: upgraded};
+                        // **And the amplifier goes with it**, because the point now says what it
+                        // said. Left in the bag it is the second copy the whole change exists to
+                        // remove, and it rides straight back out into the next save.
+                        const {width, ...rest} = properties;
+                        void width;
+                        properties = rest as typeof properties;
+                    }
+                }
                 // Rebuilt through the generator from the saved description rather than
                 // restored as drawn output, which is what makes a graphic saved in the
                 // other engine arrive **editable** rather than as a picture of itself.
