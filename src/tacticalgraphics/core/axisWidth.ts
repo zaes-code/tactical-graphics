@@ -196,6 +196,23 @@ export function halfWidthFromBase(name: TacticalGraphicName | string | undefined
 }
 
 /**
+ * The **full** width the base states, in ground metres, or `undefined` when it states none.
+ *
+ * What a panel shows. `width` is edge to edge everywhere it is public — the dialog, the saved
+ * bag, `toGraphicOptions` — and the half-width above is the generator's offset from the
+ * centreline, so the factor of two belongs in one place rather than at each caller. It was at
+ * two callers: both engines' properties sources derive this number, and the second one to be
+ * written could as easily have doubled nothing and shown half a width.
+ *
+ * Takes the base's coordinates in **stored order and lon/lat**, which is what each renderer has
+ * to hand once it has found the graphic the operator clicked. @see halfWidthFromBase
+ */
+export function widthFromBase(name: TacticalGraphicName | string | undefined, coords: Position[] | undefined): number | undefined {
+    const half = halfWidthFromBase(name, coords);
+    return half === undefined ? undefined : half * 2;
+}
+
+/**
  * Where the width point belongs, for an axis **already in generator order** — rear to tip.
  *
  * The back corner of the arrowhead, which is what the Template letters `PT N`: one half-width
