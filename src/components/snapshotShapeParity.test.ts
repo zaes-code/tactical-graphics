@@ -16,7 +16,7 @@
  * This file is deliberately *not* under `openlayers/` or `maplibre/`: it is about the two
  * agreeing, so it imports the library's statement and each engine's use of it.
  */
-import {SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from '@zaes/tactical-graphics';
+import {LEGACY_SNAPSHOT_VERSION, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from '@zaes/tactical-graphics';
 import type {Feature, Geometry} from 'geojson';
 
 /** A base feature of the shape both renderers emit. */
@@ -38,22 +38,29 @@ describe('the snapshot both engines write', () => {
         expect(toSnapshot(features).features).toEqual(features);
     });
 
-    it('reads a file with no version as the current one rather than refusing it', () => {
+    it('reads a file with no version as the oldest rather than refusing it', () => {
         /*
-         * **Absent is not invalid.** Every MapLibre export up to 2026-09-04 carried no
-         * version, and a host assembling a collection by hand from the documented property
-         * carries none either — both are structurally identical to what this library writes.
+         * **Absent is not invalid, and it is not current either.** Every MapLibre export up to
+         * 2026-09-04 carried no version, and a host assembling a collection by hand from the
+         * documented property carries none either — both are readable, and both were written
+         * against the *first* shape. Reading them as the current one was harmless while there
+         * was only one shape and became a silent misreading on 2026-09-10, when an axis arrow's
+         * last coordinate stopped being a route point. @see LEGACY_SNAPSHOT_VERSION
          */
-        expect(snapshotVersionOf({type: 'FeatureCollection', features: []})).toBe(SNAPSHOT_VERSION);
-        expect(snapshotVersionOf(undefined)).toBe(SNAPSHOT_VERSION);
-        expect(snapshotVersionOf(null)).toBe(SNAPSHOT_VERSION);
+        expect(snapshotVersionOf({type: 'FeatureCollection', features: []})).toBe(LEGACY_SNAPSHOT_VERSION);
+        expect(snapshotVersionOf(undefined)).toBe(LEGACY_SNAPSHOT_VERSION);
+        expect(snapshotVersionOf(null)).toBe(LEGACY_SNAPSHOT_VERSION);
+        // And the two are genuinely different numbers, so the assertions above are a claim
+        // rather than a tautology.
+        expect(SNAPSHOT_VERSION).toBeGreaterThan(LEGACY_SNAPSHOT_VERSION);
     });
 
     it('reports a version a file actually declares', () => {
         expect(snapshotVersionOf({tacticalGraphicsVersion: 7})).toBe(7);
-        // ...and ignores one that is not a number, rather than passing rubbish along.
-        expect(snapshotVersionOf({tacticalGraphicsVersion: 'two'})).toBe(SNAPSHOT_VERSION);
-        expect(snapshotVersionOf({tacticalGraphicsVersion: Number.NaN})).toBe(SNAPSHOT_VERSION);
+        // ...and reads one that is not a number as the oldest, rather than passing rubbish
+        // along: "unknown" is the oldest thing a file can safely be.
+        expect(snapshotVersionOf({tacticalGraphicsVersion: 'two'})).toBe(LEGACY_SNAPSHOT_VERSION);
+        expect(snapshotVersionOf({tacticalGraphicsVersion: Number.NaN})).toBe(LEGACY_SNAPSHOT_VERSION);
     });
 
     it('is the same object shape either engine produces', () => {

@@ -432,7 +432,7 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
 export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag, statesShapeAsRangeBands} from './core/symbology';
-export {SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
+export {LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
@@ -452,7 +452,26 @@ export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTa
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
-export {acrossPointAtEnd, arcAndArrowBase, drawsAsHairpin, exploitationBase, firePositionBase, frontEdgeBase, hairpinBase, FRONT_EDGE_ACROSS, FRONT_EDGE_ACROSS_RULE, circleAndArrowBase, normalizeDrawnBase, railCrossingBase, supportByFireBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
+export {
+    BY_FIRE_SHAFT,
+    BY_FIRE_STANDOFF,
+    DEFAULT_AXIS_HALF_WIDTH_PX,
+    DEFAULT_TIP_OVERHANG,
+    axisBaseFromDraw,
+    axisFeature,
+    axisOf,
+    axisWithWidthPoint,
+    carriesWidthPointInBase,
+    halfWidthFromBase,
+    optionsFromWidthPoint,
+    squareWidthPoint,
+    tipOverhangOf,
+    upgradeAxisBase,
+    widthPointFor,
+    widthPointForBuiltAxis,
+    widthPointOf,
+} from './core/axisWidth';
+export {acrossPointAtEnd, arcAndArrowBase, axisSampleBase, drawsAsHairpin, exploitationBase, firePositionBase, frontEdgeBase, hairpinBase, FRONT_EDGE_ACROSS, FRONT_EDGE_ACROSS_RULE, circleAndArrowBase, normalizeDrawnBase, railCrossingBase, supportByFireBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
 // The point layout each drawn-anchor symbol is described by — the direction both
 // renderers were missing. @see core/drawnAnchors
 export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';

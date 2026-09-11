@@ -26,6 +26,7 @@ import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {generatorOrder} from '../core/drawOrder';
 import {handleRole, isMovementGraphic} from '../core/handles';
+import {axisWithWidthPoint} from '../core/axisWidth';
 import {TacticalGraphicName} from '../core/type';
 
 /**
@@ -43,8 +44,14 @@ const FAMILY = [
     TacticalGraphicName.AvenueOfApproach,
 ];
 
-/** A three-click arrow: the tip, a bend, and the rear — stored tip-first. */
-const STORED: Position[] = [[-1, 20], [0, 20.8], [1.4, 20.3]];
+/**
+ * A three-click arrow: the tip, a bend, and the rear — stored tip-first — and the width point
+ * APP-06 numbers `PT N` on the end of it, which is what the base has carried since 2026-09-10.
+ * @see axisWithWidthPoint
+ */
+const AXIS: Position[] = [[-1, 20], [0, 20.8], [1.4, 20.3]];
+const HALF_WIDTH = 12000;
+const STORED: Position[] = axisWithWidthPoint(TacticalGraphicName.MainAxisOfAdvance, AXIS, HALF_WIDTH);
 
 const handlesOf = (name: TacticalGraphicName, coords: Position[]) =>
     (renderTacticalGraphic({
@@ -77,11 +84,11 @@ describe("the movement family's width grip", () => {
             // Point 1 is the tip and point 2 the next point along, in the order the base is
             // *stored* — which is tip-first for this family, so the stored line is already
             // the direction the plate numbers along. @see TIP_FIRST_GRAPHICS
-            expect(side(STORED[0], STORED[1], width)).toBe(1);
+            expect(side(AXIS[0], AXIS[1], width)).toBe(1);
 
             // And the other two grips are the ends they claim to be, so a reversal of the
             // base could not quietly satisfy the assertion above by relabelling them.
-            const built = generatorOrder(name, STORED);
+            const built = generatorOrder(name, AXIS);
             const metres = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
             expect(metres(rear, built[0])).toBeLessThan(1);
             expect(metres(tip, built[built.length - 1])).toBeLessThan(1);
@@ -95,9 +102,9 @@ describe("the movement family's width grip", () => {
             // The reflected arrow is the same figure drawn anticlockwise, so its grip must
             // still be right of its own point 1 → point 2 — a fixed answer fails one of the
             // two. @see turnBulgesLeft for the same test on the cane arrows.
-            const mirrored: Position[] = STORED.map(([lon, lat]) => [lon, 41 - lat] as Position);
-            const [, , width] = handlesOf(name, mirrored);
-            expect(side(mirrored[0], mirrored[1], width)).toBe(1);
+            const axis: Position[] = AXIS.map(([lon, lat]) => [lon, 41 - lat] as Position);
+            const [, , width] = handlesOf(name, axisWithWidthPoint(name, axis, HALF_WIDTH));
+            expect(side(axis[0], axis[1], width)).toBe(1);
         },
     );
 

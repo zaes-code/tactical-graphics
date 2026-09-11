@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -1095,9 +1095,22 @@ export class MapLibreInteractions {
         // always behaved. They used to be squared up here and turned by a later gesture.
         // `previewDraw` and the commit both come through this function, so the preview
         // cannot disagree with what the last click produces.
-        const tidied = wants === 'LineString'
-            ? this.minimumFirstSegment(name, normalizeDrawnBase(name, vertices, resolutionOf(this.map)))
+        /*
+         * **A draw is the one caller that may append a width point**, so it does it here rather
+         * than inside the normalizer — the same division that keeps a rectangle's levelling in
+         * the draw paths. A sketch of clicks and a settled base are the same array of
+         * coordinates and only the caller knows which it is holding, and this function holds
+         * clicks: `previewDraw` and the commit both come through it. @see axisBaseFromDraw
+         *
+         * The half-width is the generic drawn offset both engines seed one of these with — 20
+         * screen pixels at the drawing zoom, converted where it lands. @see sizeDefaults
+         */
+        const seeded = carriesWidthPointInBase(name)
+            ? axisBaseFromDraw(name, vertices, screenMeters(DEFAULT_AXIS_HALF_WIDTH_PX, resolutionOf(this.map), vertices[0]?.[1] ?? 0))
             : vertices;
+        const tidied = wants === 'LineString'
+            ? this.minimumFirstSegment(name, normalizeDrawnBase(name, seeded, resolutionOf(this.map)))
+            : seeded;
         const geometry = buildBase(wants, tidied);
         if (!geometry) return undefined;
 
