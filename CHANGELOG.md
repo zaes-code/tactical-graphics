@@ -15,6 +15,40 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **Division and corps echelons.** `TacticalGraphicEchelon` gains `division` and `corpsMef`,
+  drawn as XX and XXX per FM 1-02.2 table 5-3. Every graphic that carries an echelon picks
+  them up: the boundary, the battle position, the strong point and the mobility corridor.
+- **`formatBearing`, `measureReadout` and `RADAR_READOUT_CAPTIONS`.** What a measure read-out
+  says while a gesture runs, so a host and both renderers state a number the same way.
+  The radar search doctrine now reports all four values its plate names, two of which are
+  angles and had no read-out at all.
+
+### Fixed
+
+- **Turn, tactical turn and envelopment grips land under the cursor.** The tip grip and the
+  line end measured the drag in projected metres and wrote it into a size spent on the
+  ground, so at 55 degrees north the symbol came out 1.74 times too long.
+- **A turn's bend grip sits on its own curve**, at every latitude and size. It was the
+  geodesic apex while the curve was interpolated in degrees, which parted by 69 px on a
+  200 km turn at 75 degrees.
+- **Mobile defense's barbs stand on the line they decorate**, rather than on a great-circle
+  chord that lifted one corner off a straight leg and left the arc falling away beneath a
+  tangent base.
+- **The field of fire bar and the echelon glyph are capped against their own symbol**, and
+  the break cut for the echelon is measured from the glyph instead of from a constant.
+- **A rotate turns the radar search doctrine on MapLibre.** It advanced `rotation` and left
+  the stated axis alone, so the symbol did not turn and the saved graphic disagreed with
+  the other engine.
+
+### Removed
+
+- **`minimumDrawnRadiusPx`.** The 50 px drawn-size floor it described became unreachable
+  when the three curves that carried it moved to a click-placed draw, and it was deleted
+  rather than re-armed: it governed the draw and never a resize, so a symbol could be
+  dragged under it a moment later anyway. Nothing about any graphic changes on screen.
+
 ## [4.1.1] — 2026-09-08
 
 ### Fixed
