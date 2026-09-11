@@ -419,6 +419,13 @@ export class MapLibreInteractions {
     /** Vertices collected so far, in lon/lat. */
     private sketch: Position[] = [];
 
+    /**
+     * Takes the window listeners down again, or null when no drag owns them.
+     *
+     * @see attachDragToWindow for why a drag cannot be driven by the map's own events.
+     */
+    private releaseDragPointer: (() => void) | null = null;
+
     /** State for the drag in progress. */
     private dragging: {
         graphic: MapLibreTacticalGraphic;
@@ -502,6 +509,9 @@ export class MapLibreInteractions {
     }
 
     destroy(): void {
+        // A drag in flight holds `window` listeners; torn down here so a destroyed
+        // interaction layer cannot go on reading the pointer. @see attachDragToWindow
+        this.releaseDragPointer?.();
         this.unlistenDoubleClickRestore?.();
         this.unlistenDoubleClickRestore = undefined;
         this.map.off('mousedown', this.onPointerDown);
@@ -1407,7 +1417,74 @@ export class MapLibreInteractions {
         };
         // Otherwise the map pans out from under the gesture.
         this.map.dragPan.disable();
+        this.attachDragToWindow();
     };
+
+    /**
+     * Drives the rest of the drag from the **window**, not from the map's own event stream.
+     *
+     * MapLibre stops dispatching `mousemove` and `mouseup` partway through a gesture that
+     * moves far enough in a single step — its handler manager claims the pointer — and the
+     * drag then simply stops receiving positions. Measured on the running app: a drag
+     * delivered as two pointer moves had its second move and its *mouseup* swallowed, while
+     * a `window` listener on the same page saw all of them. Two things followed, and the
+     * second is the worse one:
+     *
+     * - The gesture ended wherever the last delivered move left it. A tip drag came out at
+     *   exactly half the distance the cursor travelled.
+     * - `endDrag` never ran, so `this.dragging` stayed set, `onChange` never fired, and
+     *   **`dragPan` was left disabled** — the map could not be panned again for the rest of
+     *   the session.
+     *
+     * A `window` listener is the same machinery {@link beginGesture} already uses for a
+     * host's affordance, and for the same reason: the pointer belongs to the gesture from
+     * the moment it goes down, not to whichever element it happens to be over.
+     *
+     * The map's own `mousemove` keeps the *hover* half — the vertex hint and the cursor —
+     * because that is not part of a drag and reads better from the map's own projection.
+     */
+    private attachDragToWindow(): void {
+        this.releaseDragPointer?.();
+
+        const move = (event: PointerEvent) => {
+            const drag = this.dragging;
+            if (!drag) return;
+
+            const point = this.pointFromPointer(event);
+            const to = this.positionFromPointer(event);
+            if (!point || !to) return;
+
+            // The same threshold the map stream applied, measured in the same container
+            // pixels `startPixel` was recorded in. @see DRAG_THRESHOLD_PX
+            if (!drag.started) {
+                if (Math.hypot(point.x - drag.startPixel.x, point.y - drag.startPixel.y) < DRAG_THRESHOLD_PX) return;
+                drag.started = true;
+            }
+            this.dragTo(to);
+        };
+        const up = () => {
+            this.releaseDragPointer?.();
+            this.endDrag();
+        };
+
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        this.releaseDragPointer = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+            this.releaseDragPointer = null;
+        };
+    }
+
+    /** A DOM pointer event's position in **map-container pixels**, or undefined if there is no map. */
+    private pointFromPointer(event: {clientX: number; clientY: number}): {x: number; y: number} | undefined {
+        const canvas = this.map.getCanvasContainer();
+        if (!canvas) return undefined;
+        const rect = canvas.getBoundingClientRect();
+        return {x: event.clientX - rect.left, y: event.clientY - rect.top};
+    }
 
     /**
      * Whether the grab landed on the point a rotate or a resize turns about.
@@ -1491,6 +1568,11 @@ export class MapLibreInteractions {
             this.updateHoverCursor(event.point);
             return;
         }
+
+        // **The window owns the drag once it has begun.** Advancing it from here as well
+        // would apply every move twice, and this stream is the one that goes quiet halfway
+        // through. @see attachDragToWindow
+        if (this.releaseDragPointer) return;
 
         if (!drag.started) {
             const moved = Math.hypot(event.point.x - drag.startPixel.x, event.point.y - drag.startPixel.y);
@@ -1602,6 +1684,7 @@ export class MapLibreInteractions {
      * only if the drag moved something.
      */
     private endDrag(): void {
+        this.releaseDragPointer?.();
         this.renderer.setMeasure(null);
         if (!this.dragging) return;
         const changed = this.dragging.started;
