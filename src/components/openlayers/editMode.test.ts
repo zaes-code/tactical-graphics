@@ -639,27 +639,23 @@ describe('a deliberate resize lifts the draw-time floor', () => {
     });
 
     /**
-     * **The curves lift theirs too, as of 2026-08-21.**
+     * **The curves have no floor left to lift, as of 2026-09-10.**
      *
-     * `suspendMinimumSize` keeps Turn, TacticalTurn and Envelopment from collapsing into
-     * an unreadable kink, and that is worth protecting *while the graphic is being
-     * drawn*. It was initially left in place during a resize on those grounds — and the
-     * result was that a turn asked for a tenth of its size gave a third of it and no
-     * further, which is the same silent refusal the whole mode exists to remove. The
-     * user's rule is that everything except the security operations resizes.
+     * They carried a readability minimum of their own, which a resize had to switch off or
+     * a turn asked for a tenth of its size gave a third of it. The minimum is gone — it had
+     * become unreachable when these three moved to a click-placed draw, and it was deleted
+     * rather than re-armed — so the controller offers no switch either. A switch reappearing
+     * here means the floor did too. @see decorationSizes.ts, "There is no floor"
      */
     it.each([TacticalGraphicName.Turn, TacticalGraphicName.TacticalTurn, TacticalGraphicName.Envelopment])(
-        "lifts and restores %s's minimum radius",
+        '%s has no size floor and no way to suspend one',
         name => {
             const manager = stubbedManager();
             const handler = build(manager, name, 'a');
-            const holder = handler.graphic as unknown as {suspendMinimumSize?: boolean};
+            const holder = handler.graphic as unknown as Record<string, unknown>;
 
-            expect(holder.suspendMinimumSize).toBe(false);
-            handler.suspendSizeFloor?.(true);
-            expect(holder.suspendMinimumSize).toBe(true);
-            handler.suspendSizeFloor?.(false);
-            expect(holder.suspendMinimumSize).toBe(false);
+            expect(handler.suspendSizeFloor).toBeUndefined();
+            expect('suspendMinimumSize' in holder).toBe(false);
         },
     );
 });

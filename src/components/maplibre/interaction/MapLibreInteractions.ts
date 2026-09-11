@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -252,7 +252,7 @@ function changedBand(before: GraphicDescription, after: GraphicDescription): num
  */
 function bandCaption(graphic: MapLibreTacticalGraphic, bandIndex: number | undefined): string | undefined {
     if (bandIndex === undefined || graphic.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
-    return ['Start', 'Stop'][bandIndex];
+    return [RADAR_READOUT_CAPTIONS.startRange, RADAR_READOUT_CAPTIONS.stopRange][bandIndex];
 }
 
 /** `reach` metres from `center` along the direction of `towards`, in projected metres. */
@@ -934,7 +934,7 @@ export class MapLibreInteractions {
         // builds from geodesically; these are mercator metres, 1.56x too long at 50
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
-        const drawn = this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]);
+        const drawn = groundLength(radius, vertices[0][1]);
         const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
         /*
          * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
@@ -1158,6 +1158,32 @@ export class MapLibreInteractions {
      * the other engine: `centerAzimuthDeg` outranks it, so an axis filed there would pin the
      * symbol against every later rotate. @see RangeFanGraphicBase.applyRadarSearchFrame
      */
+    /**
+     * What the read-out states while 200700 is being clicked out.
+     *
+     * Its plate names four numbers and one click can set two of them: the second fixes the
+     * axis and the near range together, the third settles the far one. So the label names
+     * the azimuth throughout and adds whichever range is under the cursor — where before
+     * the axis had no read-out at all, because a measure line reports its own length and an
+     * azimuth is not one. (User's call, 2026-09-10.)
+     *
+     * `undefined` for every other draw, which keeps the plain distance it already showed.
+     * @see RangeFanGraphicBase.applyRadarSearchFrame, the same statement on the other engine
+     */
+    private rangeClickReadout(event: MapMouseEvent): MeasurePart[] | undefined {
+        if (!this.drawing || !drawsByRangeClicks(this.drawing)) return undefined;
+        const frame = radarSearchFromClicks([...this.sketch, [event.lngLat.lng, event.lngLat.lat]]);
+        if (!frame) return undefined;
+        const placed = frame.ranges[frame.ranges.length - 1];
+        return [
+            {caption: RADAR_READOUT_CAPTIONS.azimuth, degrees: ((frame.centerAzimuthDeg % 360) + 360) % 360},
+            {
+                caption: frame.ranges.length > 1 ? RADAR_READOUT_CAPTIONS.stopRange : RADAR_READOUT_CAPTIONS.startRange,
+                meters: placed,
+            },
+        ];
+    }
+
     private rangeClickDraw(
         name: TacticalGraphicName,
         vertices: Position[],
@@ -1233,7 +1259,7 @@ export class MapLibreInteractions {
          * half the reach, a quarter turn round. @see frameFromDrag
          */
         const drag = frameFromDrag(name, radius, rotationDeg);
-        const size = this.legibleRadius(name, drag.size, vertices[0][1]);
+        const size = drag.size;
         // Walked in projected metres and converted back, which is the space this file
         // measured the drag in -- the same two lines OpenLayers' controller runs, because
         // each renderer walks its own coordinates and only the *rule* is shared.
@@ -1393,21 +1419,6 @@ export class MapLibreInteractions {
         this.previewing = true;
     }
 
-    /**
-     * A drawn radius, held to the size below which this symbol stops being readable.
-     *
-     * **Only a draw.** The three curves that carry a floor collapse into a kink when they
-     * are barely dragged, so the gesture that creates one holds it legible — and nothing
-     * afterwards does, or a later pan would resize a symbol the user had already drawn.
-     * OpenLayers has applied this from the start and MapLibre had no equivalent, so the
-     * same short drag drew 100 px there and 60 px here. @see minimumDrawnRadiusPx
-     */
-    private legibleRadius(name: TacticalGraphicName, radius: number, latitude: number): number {
-        const px = minimumDrawnRadiusPx(name);
-        if (px === undefined) return radius;
-        return Math.max(radius, screenMeters(px, resolutionOf(this.map), latitude));
-    }
-
     /** Takes the preview off, whichever way the draw ended. @see previewDraw */
     private clearPreview(): void {
         if (!this.previewing) return;
@@ -1429,7 +1440,7 @@ export class MapLibreInteractions {
                 // way a resize does — the second click is otherwise blind, and the number
                 // it is about to commit is the whole point of the gesture.
                 if (baseGeometryFor(this.drawing) === 'Point' && showsSizeReadout(this.drawing)) {
-                    this.renderer.setMeasure([center, cursor]);
+                    this.renderer.setMeasure([center, cursor], undefined, this.rangeClickReadout(event));
                 }
                 this.previewDraw([...this.sketch, [event.lngLat.lng, event.lngLat.lat]]);
             }
@@ -1515,6 +1526,16 @@ export class MapLibreInteractions {
          */
         const moved = changedBand(before, after);
         if (moved !== undefined) this.showMeasure(next, moved);
+
+        // The two angles 200700 is described by. Each is armed by the gesture that sets it,
+        // which is the rule the other engine states in `RangeFanGraphicBase.measureParts`.
+        if (next.name === TacticalGraphicName.RadarSearchDoctrine) {
+            if (after.properties.stopRelativeBearingDeg !== before.properties.stopRelativeBearingDeg) {
+                this.showAngleMeasure(next, RADAR_READOUT_CAPTIONS.relativeBearing, after.properties.stopRelativeBearingDeg);
+            } else if (after.properties.searchAxisAzimuthDeg !== before.properties.searchAxisAzimuthDeg) {
+                this.showAngleMeasure(next, RADAR_READOUT_CAPTIONS.azimuth, after.properties.searchAxisAzimuthDeg);
+            }
+        }
     }
 
     /**
@@ -1723,6 +1744,25 @@ export class MapLibreInteractions {
         // the hand is changing rather than the outermost one.
         const edge = bandIndex === undefined ? rim : projectOnto(center, rim, radius);
         this.renderer.setMeasure([center, edge], bandCaption(graphic, bandIndex));
+    }
+
+    /**
+     * The read-out for a gesture that swings an **angle** rather than dragging a distance.
+     *
+     * 200700's plate names four numbers and two of them are in degrees — the search axis
+     * and the stop relative bearing — so the grips that set those had no read-out at all:
+     * a measure line reports its own length, and an angle is not one. The line still runs
+     * centre to rim, because it says which symbol is being edited; the label states the
+     * angle. (User's call, 2026-09-10.)
+     * @see RangeFanGraphicBase.measureParts, the same statement on the other engine
+     */
+    private showAngleMeasure(graphic: MapLibreTacticalGraphic, caption: string, degrees: number | undefined): void {
+        if (degrees === undefined || !isFinite(degrees)) return;
+        const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name) as [number, number]);
+        const radius = graphic.properties.radius ?? graphic.properties.stopRange;
+        const rim = rimHandleOf(graphic, center)
+            ?? ([center[0] + projectedLength(radius ?? 0, latitudeFromMercatorY(center[1])), center[1]] as ProjectedPosition);
+        this.renderer.setMeasure([center, rim], undefined, [{caption, degrees}]);
     }
 
     private readonly onPointerUp = (): void => {

@@ -141,12 +141,23 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
         };
     }
 
-    /** The bowed curve, rear → arrow end, in EPSG:4326. */
+    /**
+     * The bowed curve, rear → arrow end, in EPSG:4326.
+     *
+     * **Built through anchor point 3**, which is the same point `generateHandles`
+     * publishes as the bend grip. A bow whose depth is measured on the ground and then
+     * interpolated in degrees reaches a slightly different place — nothing at the equator,
+     * about 1% of the symbol at 75 degrees — and the grip was left sitting off the line it
+     * belongs to, further out the bigger the symbol and the further north it was drawn.
+     * The apex and the grip are one number now, so they cannot disagree.
+     * @see anchorsForBow, GeometryService.bendLineThroughApex
+     */
     private curve(base: Feature<any>, opts?: TurnOptions): Position[] {
         const {center, angle, size, bend} = this.frame(base, opts);
         const chordStart = geometryService.translateCoordinates(center, size, angle + Math.PI);
         const chordEnd = geometryService.translateCoordinates(center, size, angle);
-        return geometryService.bendLine([chordStart, chordEnd], size, bend, CURVE_STEPS);
+        const apex = anchorsForBow(center, size, toDegrees(angle), bend)[2];
+        return geometryService.bendLineThroughApex([chordStart, chordEnd], apex, CURVE_STEPS);
     }
 
     /** Cumulative along-curve distance to each vertex, in meters. */

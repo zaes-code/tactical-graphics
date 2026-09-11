@@ -207,7 +207,11 @@ export {
     drawsAnchorConnector,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
+    formatBearing,
     formatDistance,
+    measureReadout,
+    RADAR_READOUT_CAPTIONS,
+    type MeasurePart,
     formatAltitude,
     getLabelUsesHostilityColor,
     hasRadiusReadout,
@@ -444,7 +448,7 @@ export {baseGeometryFor} from './core/render';
  *
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
-export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumDrawnRadiusPx, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
 export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, ratioLockOf, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {acrossPointAtEnd, arcAndArrowBase, drawsAsHairpin, firePositionBase, frontEdgeBase, hairpinBase, FRONT_EDGE_ACROSS, FRONT_EDGE_ACROSS_RULE, circleAndArrowBase, normalizeDrawnBase, railCrossingBase, supportByFireBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';

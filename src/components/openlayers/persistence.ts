@@ -369,20 +369,11 @@ export function applyRestoredGeometry(
                 const withHead = handler.graphic as {headSize?: number};
                 if (typeof withHead.headSize === 'number') withHead.headSize = state.decorationSize;
             }
-            // The minimum-size floor is suspended here for the same reason the branch
-            // below suspends it: `RATIO_LOCKED_MIN_RADIUS_PX * drawingResolution` is a
-            // draw-time affordance measured against *this* session's zoom, and the
-            // restored size is already final. Without it an envelopment saved zoomed in
-            // came back exactly 4x too large in a 4x-resolution session — the anchor
-            // points were right and `updateGeom` grew them anyway.
-            const anchored = handler.graphic as {suspendMinimumSize?: boolean};
-            const floorGuarded = typeof anchored.suspendMinimumSize === 'boolean';
-            if (floorGuarded) anchored.suspendMinimumSize = true;
-            try {
-                handler.setBaseFeature(base as Feature<LineString>);
-            } finally {
-                if (floorGuarded) anchored.suspendMinimumSize = false;
-            }
+            // No floor to suspend on the way in any more: the anchor points are the size,
+            // and a restore rebuilds from them. This used to guard against a draw-time
+            // minimum measured at *this* session's zoom, which brought an envelopment saved
+            // zoomed in back 4x too large. @see decorationSizes.ts, "There is no floor"
+            handler.setBaseFeature(base as Feature<LineString>);
             if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
             return;
         }
@@ -419,30 +410,20 @@ export function applyRestoredGeometry(
         if (state.decorationSize !== undefined && typeof withHead.headSize === 'number') {
             withHead.headSize = state.decorationSize;
         }
-        // Same reasoning as the line families: a minimum-size floor is a draw-time
-        // affordance, and re-applying it here scales the restored graphic by the ratio
-        // between the drawing resolution and this session's.
         if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
-        const holder = handler.graphic as {suspendMinimumSize?: boolean};
-        const guarded = typeof holder.suspendMinimumSize === 'boolean';
-        if (guarded) holder.suspendMinimumSize = true;
         // The rectangular target is the one point-anchored graphic whose shape is filed
         // rather than derived: its width is typed, never dragged, so nothing else replays
         // it. Duck-typed for the same reason the flags above are — a future holder that
         // files a width should inherit this without being named here.
         const widthed = handler.graphic as {setOffset?: (n: number) => void};
         if (state.width !== undefined) widthed.setOffset?.(state.width / 2);
-        try {
-            handler.graphic.updateGeom({
-                center: coords as Coordinate,
-                // `size` is a half-length for a graphic that files a length, and a radius
-                // for everything else. A holder files one or the other, never both.
-                size: state.length !== undefined ? state.length / 2 : state.radius,
-                rotation: state.rotation,
-            });
-        } finally {
-            if (guarded) holder.suspendMinimumSize = false;
-        }
+        handler.graphic.updateGeom({
+            center: coords as Coordinate,
+            // `size` is a half-length for a graphic that files a length, and a radius
+            // for everything else. A holder files one or the other, never both.
+            size: state.length !== undefined ? state.length / 2 : state.radius,
+            rotation: state.rotation,
+        });
         return;
     }
 
