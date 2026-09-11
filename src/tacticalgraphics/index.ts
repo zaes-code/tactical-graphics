@@ -467,6 +467,7 @@ export {
     squareWidthPoint,
     tipOverhangOf,
     upgradeAxisBase,
+    widthFromBase,
     widthPointFor,
     widthPointForBuiltAxis,
     widthPointOf,

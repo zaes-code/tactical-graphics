@@ -15,7 +15,7 @@ import VectorSource from 'ol/source/Vector';
 import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, getColorByHostility, halfWidthFromBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, getColorByHostility, widthFromBase} from '@zaes/tactical-graphics';
 import {hiddenAmplifierIds, setAmplifiersHidden} from '../amplifierVisibility';
 import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
@@ -73,9 +73,9 @@ function anchorCoordinate(geometry: Geometry): Coordinate | undefined {
  * Read-only, and the field registry leaves `widthTyped` off for these, so it renders as the
  * read-out this panel already draws for a dragged width — *"you can check the figure you
  * dragged to, without a second way to set it that would have to be kept in step with the
- * geometry."* @see halfWidthFromBase
+ * geometry."* @see widthFromBase
  */
-function widthFromBase(manager: TacticalGraphicsManager, symbolId: string): {width?: number} {
+function widthOfSelection(manager: TacticalGraphicsManager, symbolId: string): {width?: number} {
     const handler = manager.graphicControllers.find(c => c.getSymbolId?.() === symbolId);
     // The holders name the graphic differently — `graphicName` on the movement family, `name`
     // on the block one — and only the first of them can reach here, so both are read rather
@@ -89,8 +89,8 @@ function widthFromBase(manager: TacticalGraphicsManager, symbolId: string): {wid
     if (!holder || !carriesWidthPointInBase(name)) return {};
     const geometry = holder.base?.getGeometry();
     const stored = geometry?.getCoordinates().map(c => toLonLat(c as [number, number])) as Position[] | undefined;
-    const half = halfWidthFromBase(name, stored);
-    return half === undefined ? {} : {width: half * 2};
+    const width = widthFromBase(name, stored);
+    return width === undefined ? {} : {width};
 }
 
 export function createOpenLayersPropertiesSource(
@@ -145,7 +145,7 @@ export function createOpenLayersPropertiesSource(
                         graphicName: feature.get('graphicName') as TacticalGraphicName,
                         labels: readGraphicLabels(feature),
                         echelon: (feature.get('echelon') as string) || '',
-                        measured: {...readGraphicGeometryState(feature), ...widthFromBase(manager, id)},
+                        measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id)},
                         graphicSize: feature.get('graphicSize') as number | undefined,
                     });
                 }, HIT_TEST_DELAY_MS);
