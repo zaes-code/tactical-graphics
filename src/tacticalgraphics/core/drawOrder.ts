@@ -85,7 +85,18 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.Retirement,                       // 342000 Retire
     TacticalGraphicName.ForwardPassageOfLines,            // 344100
     TacticalGraphicName.RearwardPassageOfLines,           // 344200
-    TacticalGraphicName.Exploitation,                     // 343100 Exploit
+    /*
+     * **343100 exploit left on 2026-09-10**, for the reason the four brackets and the two
+     * blocks left on 2026-09-06. It was here because its rule numbers the arrowhead's tip
+     * point 1 while the old two-point generator built that head at the *last* vertex, so the
+     * line had to be turned around on the way in. Its base carries all three of the points its
+     * plate letters now, in the plate's own order, and a reversal would hand the reader points
+     * 3 and 2 where it expects points 1 and 2 — and point 3 is not even on the axis.
+     *
+     * A legacy two-point save needs no flip: point 1 was its tip already, so the two points it
+     * holds are exactly PT 1 and PT 2. What it is missing is PT 3, and `exploitationAnchors`
+     * is the one place that can tell the two shapes apart. @see exploitationAnchors
+     */
 
     // -- Mission tasks drawn as a route into a front --
     TacticalGraphicName.Fix,                              // 270503 obstacle effect

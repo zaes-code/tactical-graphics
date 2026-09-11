@@ -11,8 +11,6 @@ import {
     boundsOf,
     carriesRectangleLength,
     decorationMeters,
-    carriesSeparationInBase,
-    statesShapeAsRangeBands,
     usesStandoffWidth,
     drawnAnchorFrame,
     drawnAnchors,
@@ -33,6 +31,7 @@ import {
     rectangleDefaultHalfWidth,
     renderTacticalGraphic,
     resolveRangeFanBands,
+    shapedByWidth,
     toGraphicOptions,
     type Paint,
     type PaintContext,
@@ -229,7 +228,7 @@ let nextId = 0;
 const DEFAULT_SIZE_FRACTION = 1 / 20;
 
 /** Screen pixels at the drawing zoom, matching what the OpenLayers holders seed. */
-const DEFAULT_OFFSET_PX = 20;
+export const DEFAULT_OFFSET_PX = 20;
 
 /**
  * Sizes for a graphic drawn with none, measured against what was drawn.
@@ -285,12 +284,18 @@ function sizeDefaults(
      * no zoom — a sample sheet, a raw-GeoJSON reader — it is a share of the axis, which is
      * the figure both engines reach from the same function and therefore the only one that
      * makes two sheets comparable. @see rectangleDefaultHalfWidth
+     *
+     * **To the metre**, because that is the resolution the library states a rectangle's
+     * width at: OpenLayers files whatever `rectangleAmplifiers` measures off the built ring
+     * and that function rounds. Left as a float, the two engines filed 176156 and
+     * 176156.16224730815 for the same box — the same number, and a difference in every diff
+     * of the two files. @see rectangleAmplifiers
      */
     if (isRectangular(name) && supplied.width === undefined) {
         const half = drawingResolution
             ? RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution
             : rectangleDefaultHalfWidth(baseLengthMeters(geometry));
-        return {width: half * 2};
+        return {width: Math.round(half * 2)};
     }
 
     /*
@@ -353,51 +358,35 @@ function sizeDefaults(
         ? decorationMeters(name, drawingResolution ?? 0)
         : drawnSizeMeters(name, drawingResolution ?? 0) ?? meters;
 
-    // **A graphic whose size is stated as a bar has no width to default.** The block
-    // family files `decorationSize` and nothing else on OpenLayers; handing it the generic
-    // offset put a `width` in the file that the other engine's restore then replayed as
-    // the bar's size — a block drawn at 60 px came back at 20. @see drawnSizeMeters
-    const statesItsOwnSize = drawnSizeMeters(name, drawingResolution ?? 0) !== undefined;
-
     /*
-     * **And a graphic whose separation is a base vertex needs no width at all.** The
-     * demolition block's point 3 sets how far apart its rails sit as of 2026-09-05, so a
-     * stamped `width` here is a second copy of a number the coordinates already carry —
-     * the same defaulting mistake the multiple-strike zone's standoff was, one field over.
-     * @see carriesSeparationInBase
-     */
-    const separationInBase = carriesSeparationInBase(name);
-
-    /*
-     * **A graphic whose `width` is a standoff gets no width from here at all.**
+     * **A width is filed only for a graphic whose shape is built from one.**
      *
-     * This used to seed one — half a screen inch, matching OpenLayers — and that was the
-     * wrong place for it, because `sizeDefaults` runs on every build: a draw, a rebuild
-     * *and a restore*. For the multiple-strike zone the absence of a width is not a gap to
-     * fill, it is the legacy two-ring description saying it carries both rings itself, so
-     * filling it made the generator read those points as one traced ring and the symbol
-     * came back a self-crossing star. The seed now belongs to the draw path, which is the
-     * only caller that means "this graphic is new". @see MapLibreInteractions.graphicFrom
+     * This was five separate refusals — the block family, whose size is a bar; the graphics
+     * whose rail separation is a base vertex; the range-band symbols; the multiple-strike
+     * standoff; and the eleven axis arrows once their width became a coordinate. Each was
+     * added after the same defect: a number the generator never reads, filed anyway, and
+     * then replayed as something else by whatever restored it. A block drawn here at 60 px
+     * came back at 20 on OpenLayers; the multiple-strike zone came back a self-crossing star.
      *
-     * It must fall through the generic default below as well — a standoff is not half of
-     * anything, so 20 px of half-width would be a different number meaning a different
-     * thing. @see usesStandoffWidth
+     * `shapedByWidth` is the positive rule those five were approximating, and it is measured
+     * rather than listed — 34 graphics of 318. For the other 284 the field is inert, so the
+     * only thing filing one ever did was put a figure nobody typed into a saved file. That
+     * is the whole of the 259-graphic bag difference the two engines' sample sheets reported:
+     * this side echoed the number, OpenLayers rebuilt its bag from a holder that owns no such
+     * number. @see ai/current-task.md, shapedByWidth
+     *
+     * **Reading a width is not the same as wanting one invented.** The multiple-strike zone
+     * is shaped by its width and still takes no default: for that one graphic the *absence*
+     * of a width is the legacy two-ring description saying it carries both rings itself, and
+     * inventing one made the generator read those points as a single traced ring. Its seed
+     * belongs to the draw path, which is the only caller that means "this graphic is new".
+     * @see usesStandoffWidth, MapLibreInteractions.graphicFrom
      */
-    const filesStandoff = usesStandoffWidth(name);
-
-    /*
-     * **And a graphic described entirely by range bands has no width either.** Every
-     * dimension a fan or 200700 has is a typed number, so the generic half-width was a field
-     * in the file that the generator ignores and the other engine never writes — twice the
-     * radius, on every saved 200700. @see statesShapeAsRangeBands
-     */
-    const bandsStateTheShape = statesShapeAsRangeBands(name);
+    const takesDefaultWidth = shapedByWidth(name) && !usesStandoffWidth(name);
 
     return {
         // `width` is a full width; the generators halve it. @see toGraphicOptions
-        ...(supplied.width === undefined && !filesStandoff && !statesItsOwnSize && !separationInBase && !bandsStateTheShape
-            ? {width: halfWidth * 2}
-            : {}),
+        ...(supplied.width === undefined && takesDefaultWidth ? {width: halfWidth * 2} : {}),
         ...(supplied.decorationSize === undefined && supplied.radius === undefined && drawingResolution
             ? {decorationSize: decoration}
             : {}),
