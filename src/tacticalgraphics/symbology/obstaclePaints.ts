@@ -22,20 +22,7 @@ import {
     ANTI_TANK_TOOTH_PX,
 } from '../graphics/AntiTankDitch';
 import {DEFAULT_WIRE_STYLE, WIRE_MARK_PX, WIRE_STYLES} from '../graphics/WireObstacle';
-import {
-    FORTIFIED_CRENEL_PX,
-    FORTIFIED_HEIGHT_PX,
-    FORTIFIED_MIN_PX,
-    FORTIFIED_MERLON_PX,
-    castellatedPath,
-    centerSegmentIndex,
-    decorationScale,
-    offsetBelow,
-    parallelPath,
-    pathLength,
-    uprightRotation,
-    walkPath,
-} from './decorations';
+import {castellatedPath, centerSegmentIndex, centredRun, decorationScale, FORTIFIED_CRENEL_PX, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX, offsetBelow, parallelPath, pathLength, splitAtCorners, uprightRotation, walkPath} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -90,17 +77,29 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
         }
         if (width <= 0) return paints;
 
-        const total = pathLength(path);
         const innerGap = (style.innerGap ?? 0) * width;
         const step = width + innerGap;
-        const period = style.perGroup * width + (style.perGroup - 1) * innerGap + style.gap * width;
+        /** One group's own length: its marks and the spaces inside it, and nothing outside. */
+        const groupLength = style.perGroup * width + (style.perGroup - 1) * innerGap;
         const marks: ProjectedPosition[][] = [];
 
-        for (let start = period / 2; start < total; start += period) {
+        /*
+         * **A whole number of groups, centred on each straight run.**
+         *
+         * The walk used to start half a period in and carry on until the next group did not
+         * fit, which leaves an uneven tail at the far end and a pattern whose phase depends
+         * on where the operator happened to click. It also stepped straight through the
+         * corners: a mark placed there is built on one segment's frame while sitting on the
+         * join between two, so it belongs to neither. Both are what the obstacle teeth and
+         * the fortified merlons fixed in September, and this is the same layout.
+         * (User's report, 2026-09-10.) @see splitAtCorners, centredRun
+         */
+        for (const run of splitAtCorners(path)) {
+        const runLength = pathLength(run);
+        for (const from of centredRun(runLength, groupLength, style.gap * width)) {
             for (let i = 0; i < style.perGroup; i++) {
-                const d = start + i * step;
-                if (d + width / 2 > total) break;
-                const at = walkPath(path, d);
+                const d = from + width / 2 + i * step;
+                const at = walkPath(run, d);
                 if (!at) continue;
 
                 const [tx, ty] = at.tangent;
@@ -124,6 +123,7 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
                     marks.push(ring);
                 }
             }
+        }
         }
 
         if (marks.length) paints.push({geometry: {type: 'MultiLineString', coordinates: marks}, stroke});

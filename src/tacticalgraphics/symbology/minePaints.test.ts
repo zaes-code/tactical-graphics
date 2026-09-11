@@ -460,3 +460,82 @@ describe('APP-06 270707 / 270800 / 270801 — the three mine areas', () => {
         expect(at(400)).toBeCloseTo(at(200) * 2, 6);
     });
 });
+
+/**
+ * # The fence's wire is a decoration, and decorations are capped
+ *
+ * The crosses were a flat 9 px arm at any size, so a fence 60 px across wore marks a third
+ * of its own side and read as a row of glyphs with an outline behind them. They take the
+ * shape-relative rule the obstacle teeth and the fortified merlons take, and they are laid
+ * out per side rather than round the ring, so none straddles a corner where a mark built on
+ * one segment's frame belongs to neither. (User's report, 2026-09-10.)
+ */
+describe('APP-06 270801 — the fence marks are sized to the area', () => {
+    /** A square of `sidePx` on screen, at one metre per pixel. */
+    const square = (sidePx: number): PaintFeature => {
+        const half = sidePx / 2;
+        return {
+            geometry: {
+                type: 'Polygon',
+                coordinates: [[[-half, -half], [half, -half], [half, half], [-half, half], [-half, -half]]],
+            },
+            properties: {name: TacticalGraphicName.MinedAreaFenced},
+        } as PaintFeature;
+    };
+
+    /** Every wire arm, as drawn. Two per cross. */
+    const arms = (sidePx: number): ProjectedPosition[][] => {
+        const marks = minedAreaFencedPaint()(square(sidePx), context(1)).find(
+            p => p.geometry.type === 'MultiLineString' && p.stroke,
+        );
+        return marks ? ((marks.geometry as {coordinates: ProjectedPosition[][]}).coordinates) : [];
+    };
+
+    const armLength = (sidePx: number): number => {
+        const found = arms(sidePx);
+        if (!found.length) return 0;
+        return Math.hypot(found[0][1][0] - found[0][0][0], found[0][1][1] - found[0][0][1]);
+    };
+
+    it('keeps its full size on an area big enough to carry it', () => {
+        expect(armLength(700)).toBeCloseTo(armLength(300), 6);
+    });
+
+    it('shrinks the marks on a small area instead of stamping full-size ones', () => {
+        expect(armLength(120)).toBeLessThan(armLength(300));
+        expect(armLength(60)).toBeLessThan(armLength(120));
+    });
+
+    /**
+     * **And never drops them.** `decorationScale` returns zero below its floor and the caller
+     * draws a plain ring, which here would be 270800 — a different symbol that means the
+     * opposite of a fence.
+     */
+    it('still draws wire on an area far too small for a full-size mark', () => {
+        expect(arms(40).length).toBeGreaterThan(0);
+        expect(armLength(40)).toBeGreaterThan(0);
+    });
+
+    /**
+     * A mark belongs to the side it sits on, so a whole one has to fit before the corner.
+     *
+     * Measured on the cross's centre against its own span along the side. The arms reach
+     * across the line as well, which is what a wire mark is, so the perpendicular offset is
+     * not what this asks about.
+     */
+    it('lays whole crosses along each side, none over a corner', () => {
+        const sidePx = 300;
+        const half = sidePx / 2;
+        // The arms run at 45 degrees, so a mark whose arm spans `armLength` is
+        // `armLength / sqrt(2)` wide along the side it sits on.
+        const halfSpan = armLength(sidePx) / Math.SQRT2 / 2;
+        const found = arms(sidePx);
+        expect(found.length).toBeGreaterThan(8);
+        for (const arm of found) {
+            const mid: ProjectedPosition = [(arm[0][0] + arm[1][0]) / 2, (arm[0][1] + arm[1][1]) / 2];
+            for (const corner of [[-half, -half], [half, -half], [half, half], [-half, half]]) {
+                expect(Math.hypot(mid[0] - corner[0], mid[1] - corner[1])).toBeGreaterThanOrEqual(halfSpan - 1e-6);
+            }
+        }
+    });
+});

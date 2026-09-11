@@ -37,6 +37,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicMineType} from '../core/type';
 import {PLANNED_DASH_PX, amplifierText, hostilityOf, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+import {DECORATION_MIN_PX, centredRun, decorationScale, splitAtCorners} from './decorations';
 import {fitSymbolScale} from './symbolFit';
 
 type MinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -498,9 +499,26 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
             lengths.push(lengths[i - 1] + Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]));
         }
         const total = lengths[lengths.length - 1];
-        const pitch = FENCE_PITCH_PX * context.resolution;
-        const size = FENCE_MARK_PX * context.resolution;
-        if (!(total > pitch * 4)) return paints;
+        /*
+         * **Capped against the area, like every other repeating decoration.** The crosses
+         * were a flat 9 px arm at any size, so a fence 60 px across wore marks 30% of its own
+         * side: the wire read as a row of glyphs with an outline behind it. `decorationScale`
+         * is the same rule the obstacle teeth and the fortified merlons take, measured against
+         * the shape rather than the zoom. (User's report, 2026-09-10.)
+         */
+        /*
+         * **Floored rather than dropped, because the wire is the whole of the difference.**
+         * `decorationScale` returns zero below `DECORATION_MIN_PX` and the caller draws a
+         * plain ring — right for teeth on a belt, wrong here: 270801 without its wire is
+         * 270800, a different symbol that means something else. So it shrinks to the floor
+         * and stops. Same argument as the field of fire bar's own floor.
+         */
+        const fenceScale =
+            decorationScale(ring, true, context.resolution, FENCE_MARK_PX, FENCE_PITCH_PX)
+            || DECORATION_MIN_PX / FENCE_MARK_PX;
+        const pitch = FENCE_PITCH_PX * fenceScale * context.resolution;
+        const size = FENCE_MARK_PX * fenceScale * context.resolution;
+        if (!(fenceScale > 0) || !(total > pitch * 4)) return paints;
 
         const xs = ring.map(p => p[0]);
         const ys = ring.map(p => p[1]);
@@ -535,25 +553,45 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
         // label paint draws inside it.
         if (!fenced) return paints;
 
-        const steps = Math.floor(total / pitch);
         // A cross arm's reach along each of its own two diagonals. `size` is the arm's
         // length, so the diagonal offsets are that over root two.
         const arm = size / Math.SQRT2;
         const crosses: ProjectedPosition[][] = [];
 
-        for (let s = 0; s < steps; s++) {
-            const d = (s + 0.5) * pitch;
+        /*
+         * **Laid out per side, a whole number centred on each**, which is what the obstacle
+         * teeth and the fortified merlons do and for the same reasons. Walking the whole ring
+         * at a running pitch put crosses across the corners, where a mark built on one
+         * segment's frame sits on neither side, and left every side starting its pattern at
+         * whatever phase the previous one ended on. @see splitAtCorners, centredRun
+         */
+        for (const run of splitAtCorners(ring)) {
+            const along: number[] = [0];
+            for (let i = 1; i < run.length; i++) {
+                along.push(along[i - 1] + Math.hypot(run[i][0] - run[i - 1][0], run[i][1] - run[i - 1][1]));
+            }
+            const runLength = along[along.length - 1];
+
+            /*
+             * The cross's own width **along the segment**, which is not `size`: its arms run
+             * at 45 degrees, so each reaches `size / sqrt(2)` either way and the mark spans
+             * `size * sqrt(2)`. Laying it out as `size` wide let the first cross of a side
+             * sit half an arm from the corner.
+             */
+            const crossSpan = size * Math.SQRT2;
+            for (const from of centredRun(runLength, crossSpan, Math.max(pitch - crossSpan, 0))) {
+            const d = from + crossSpan / 2;
             let seg = 1;
-            while (seg < lengths.length - 1 && lengths[seg] < d) seg++;
-            const span = lengths[seg] - lengths[seg - 1];
-            const t = span > 0 ? (d - lengths[seg - 1]) / span : 0;
+            while (seg < along.length - 1 && along[seg] < d) seg++;
+            const span = along[seg] - along[seg - 1];
+            const t = span > 0 ? (d - along[seg - 1]) / span : 0;
             const at: ProjectedPosition = [
-                ring[seg - 1][0] + (ring[seg][0] - ring[seg - 1][0]) * t,
-                ring[seg - 1][1] + (ring[seg][1] - ring[seg - 1][1]) * t,
+                run[seg - 1][0] + (run[seg][0] - run[seg - 1][0]) * t,
+                run[seg - 1][1] + (run[seg][1] - run[seg - 1][1]) * t,
             ];
             // The segment's own frame: `u` along it, `v` to its left.
-            const ux = span > 0 ? (ring[seg][0] - ring[seg - 1][0]) / span : 1;
-            const uy = span > 0 ? (ring[seg][1] - ring[seg - 1][1]) / span : 0;
+            const ux = span > 0 ? (run[seg][0] - run[seg - 1][0]) / span : 1;
+            const uy = span > 0 ? (run[seg][1] - run[seg - 1][1]) / span : 0;
 
             if (!clearOfLetters(at)) continue;
             // **Turned with the wire, not with the map.** The crosses were built on the
@@ -569,6 +607,7 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
             };
             crosses.push(diag(1));
             crosses.push(diag(-1));
+            }
         }
 
         if (crosses.length) paints.push({geometry: {type: 'MultiLineString', coordinates: crosses}, stroke});
