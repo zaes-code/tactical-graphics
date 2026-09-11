@@ -297,6 +297,22 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AviationAxisOfAdvance,
     TacticalGraphicName.SupportingAxisOfAdvance,
     TacticalGraphicName.Counterattack,
+    /*
+     * **152300 and 340700 joined on 2026-09-10.** Both were in the *symbology* registry's
+     * `MOVEMENT_GRAPHICS` and in neither this list nor any other contract, so
+     * `handleContract` answered `SHAPE_ONLY` for them and their third grip resolved to
+     * `shape`. OpenLayers widened them anyway — it routes a width drag off the
+     * `offsetHandler` flag on the feature, not off the contract — so the gap was invisible
+     * there and total on MapLibre, which dispatches by role alone.
+     *
+     * Measured on the running app, one 90 px drag on the width grip at zoom 8/9, starting
+     * from `width` 40000: OpenLayers wrote 21028 for both, MapLibre left `width` at 40000
+     * and moved **both base points 0.1891 degrees north** — a translate of the whole
+     * graphic. Their nine siblings set the width on both engines from the same gesture.
+     * @see handleRole
+     */
+    TacticalGraphicName.AvenueOfApproach,
+    TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.InfiltrationLane,
     TacticalGraphicName.Bridge,
     TacticalGraphicName.Gap,
