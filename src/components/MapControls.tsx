@@ -885,7 +885,7 @@ function getPointHint(name: TacticalGraphicName): string | null {
         TacticalGraphicName.FordEasy, TacticalGraphicName.FordDifficult,
         TacticalGraphicName.TacticalBlock, TacticalGraphicName.Breach, TacticalGraphicName.Bypass,
         TacticalGraphicName.Canalize, TacticalGraphicName.Clear, TacticalGraphicName.TacticalDisrupt,
-        TacticalGraphicName.Penetration, TacticalGraphicName.Exploitation,
+        TacticalGraphicName.Penetration,
         TacticalGraphicName.Delay, TacticalGraphicName.Withdraw, TacticalGraphicName.WithdrawUnderPressure,
         TacticalGraphicName.Disengage,
         TacticalGraphicName.Retirement,
@@ -914,6 +914,9 @@ function getPointHint(name: TacticalGraphicName): string | null {
     // Both are the same three-point V: a vertex and two arrowhead tips, in APP-06's own
     // numbering. @see SWAP_FIRST_TWO
     if (name === TacticalGraphicName.FieldsOfFire || name === TacticalGraphicName.SearchArea) return '3 points';
+    // 343100: the tip, the end of the symbol, and the length of its four angled lines.
+    // @see exploitationAnchors
+    if (name === TacticalGraphicName.Exploitation) return '3 points';
 
     if (name.endsWith('Irregular') ||
         name === TacticalGraphicName.LimitedAccessArea ||

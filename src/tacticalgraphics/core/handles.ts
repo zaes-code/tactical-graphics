@@ -371,9 +371,18 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
      * the back line's two ends, so the bar that was a ratio of the shaft — and the offset
      * grip that dragged it — are two anchor points now. @see firePositionAnchors
      */
-    TacticalGraphicName.Exploitation,
-    // Follow and assume / follow and support are deliberately absent: they are no
-    // longer block arrows and carry their own two-point handles. @see FollowTask
+    /*
+     * **343100 exploit left on 2026-09-10, and the family is now empty.** Its plate gives the
+     * four angled lines their own anchor point — *"Point 3's distance from Point 2 defines the
+     * length of the four angled lines"* — so the perpendicular its leading `offset` grip used
+     * to drag is a point the operator states. Kept as a const rather than deleted because the
+     * contract it describes is real and a graphic may want it again: a *derived* width grip
+     * emitted first, which is the opposite of the movement family's and the reason a renderer
+     * cannot guess a role from an index. @see exploitationAnchors
+     *
+     * Follow and assume / follow and support were deliberately absent before that: they are no
+     * longer block arrows and carry their own two-point handles. @see FollowTask
+     */
 ];
 
 /**
@@ -432,8 +441,9 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Penetration]: 1 / 3,
     // Block's crossbar handle left on 2026-09-06: the crossbar is points 1 and 2 now, so
     // there is no derived width for an offset grip to drag. @see Block
-    // The handle is an arrowhead wing, `size × sin 45°` off the base line.
-    [TacticalGraphicName.Exploitation]: Math.SQRT2,
+    // Exploitation's arrowhead-wing grip left on 2026-09-10: the four angled lines are
+    // point 3 now, so there is no derived length for an offset grip to drag.
+    // @see exploitationAnchors
 };
 
 /**
@@ -781,6 +791,43 @@ const PIVOTS_ON_LAST_VERTEX: readonly TacticalGraphicName[] = [
     TacticalGraphicName.TacticalBlock,
 ];
 
+/**
+ * Graphics whose pivot is neither the first vertex nor the last, by index.
+ *
+ * 343100 is the case that needed it. It turned about its rear while it was a two-point
+ * tip-first line, which made the rear its *last* vertex; the rear is point 2 of three now, and
+ * its last vertex is point 3 — a tail stroke's far end, off the axis entirely. Turning about
+ * that would swing the symbol about a corner of its own dashed tail.
+ *
+ * Point 2 is also where the plate puts the thing on the ground: *"The unit's projected
+ * location would be at the base of the symbol."* @see exploitationAnchors
+ */
+const PIVOT_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.Exploitation]: 1,
+};
+
+/**
+ * Which **stored vertex** a drawn line's gestures anchor on, by index.
+ *
+ * Three answers, and the default is the first: *"where the user started drawing, and where
+ * the symbol grows from"*. A tip-first graphic answers its last, because the renumbering into
+ * APP-06's order moved that same physical end from index 0 to index N-1 — and two blocks
+ * answer their last without being tip-first at all, which is why the two questions are asked
+ * separately. {@link PIVOT_VERTEX} carries the rest.
+ *
+ * Stated as an **index** rather than a coordinate so OpenLayers can ask it too: its
+ * `pivotCoordinate` works in projected metres, where re-projecting a base to ask
+ * `rotationAnchor` would be an absurd amount of work for "which end". Both engines reading one
+ * table is what stops a graphic turning about different ends in the two of them.
+ */
+export function pivotVertexIndex(name: TacticalGraphicName | string | undefined, count: number): number {
+    if (count <= 0) return 0;
+    const named = name === undefined ? undefined : PIVOT_VERTEX[name as TacticalGraphicName];
+    if (named !== undefined) return Math.min(named, count - 1);
+    if (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) return count - 1;
+    return 0;
+}
+
 export function rotationAnchor(
     geometry: {type: string; coordinates: unknown},
     /**
@@ -870,13 +917,9 @@ export function rotationAnchor(
      * same coordinate these pivoted on before the renumbering, so the gesture is
      * unchanged — only the index it lives at moved. @see drawOrder.ts
      */
-    if (
-        (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) &&
-        (geometry.type === 'LineString' || geometry.type === 'MultiLineString')
-    ) {
-        return positions[positions.length - 1];
+    if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
+        return positions[pivotVertexIndex(name, positions.length)];
     }
-    if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
 
     // Measured in **projected** meters, not degrees. OpenLayers' `getInteriorPoint`
     // runs on EPSG:3857 coordinates, and Mercator's y is not linear in latitude — the
@@ -1128,7 +1171,15 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      * derived from `size`. @see Disrupt, disruptAnchors
      */
     [TacticalGraphicName.TacticalDisrupt]: 3,
-    [TacticalGraphicName.Exploitation]: 2,
+    /*
+     * **Three, which is what 343100 states**: *"This symbol requires three anchor points.
+     * Point 1 defines the tip of the arrowhead. Point 2 defines the end of the symbol. Point
+     * 3's distance from Point 2 defines the length of the four angled lines making up the
+     * arrowhead and dashed tail."* Held at two until 2026-09-10, with that length carried as a
+     * `size` amplifier and dragged by a width grip hung off an arrowhead wing.
+     * @see exploitationAnchors
+     */
+    [TacticalGraphicName.Exploitation]: 3,
     [TacticalGraphicName.Block]: 3,
     [TacticalGraphicName.Disrupt]: 3,
     /*
@@ -1616,6 +1667,10 @@ const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Canalize,
     TacticalGraphicName.AttackByFire,
     TacticalGraphicName.SupportByFire,
+    // 343100 joined on 2026-09-10 and needs the same protection as the brackets: points 1 and
+    // 2 set the symbol's length and point 3 sets the length of its four angled lines, so a
+    // stray drag that scaled the whole graphic would move both at once.
+    TacticalGraphicName.Exploitation,
 ];
 
 /**
@@ -1783,6 +1838,18 @@ export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
          * would falsify. @see Pursuit, usesFrontEdgeBase
          */
         name === TacticalGraphicName.Pursuit ||
+        /*
+         * **343100 is named too, on 2026-09-10.** What its point 3 separates is not a pair of
+         * rails but the *length* of the four angled lines — a distance from point 2, at a
+         * fixed 45 degrees. The fact this predicate is about is the same one: the dimension is
+         * a stored coordinate, so a `size` or a `width` filed beside it is a second copy. It
+         * is not a movement graphic, so the derivation above misses it.
+         *
+         * `usesFrontEdgeBase` deliberately does **not** follow it there — three points that
+         * are a tip, an end and a 45 degree arm are not a front edge and a point across it.
+         * @see exploitationAnchors, usesFrontEdgeBase
+         */
+        name === TacticalGraphicName.Exploitation ||
         /*
          * **The two-rail crossings carry their separation in the base as of 2026-09-06.** It
          * was a `radius` amplifier — the gap between the rails as a number with nowhere to

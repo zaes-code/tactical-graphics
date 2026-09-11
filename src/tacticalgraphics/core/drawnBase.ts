@@ -28,6 +28,7 @@ import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
 import {baseVertexCount, carriesSeparationInBase, drawsAsRailCrossing} from './handles';
+import {EXPLOITATION_SAMPLE_ARM_DIVISOR, exploitationAnchors} from '../graphics/exploitationAnchors';
 import geometryService from './GeometryService';
 import {
     anchorsForBow,
@@ -361,6 +362,7 @@ export function synthesizedBase(
     // Its two arrows stand square off their own ends of the back line, on the other side.
     // @see supportByFireBase
     if (name === TacticalGraphicName.SupportByFire) return supportByFireBase(center, half);
+    if (name === TacticalGraphicName.Exploitation) return exploitationBase(center, half);
     // A circle with an arrow swinging out of it, sized the way its plate draws one.
     // @see circleAndArrowBase
     if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
@@ -477,7 +479,42 @@ export function railCrossingBase(center: Position, half: number, points = 3): Po
  * the exception went with it. @see synthesizedBase, acrossPointAtEnd
  */
 export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
+    /*
+     * **343100 is the one member that is not this shape.** It joined
+     * `carriesSeparationInBase` on 2026-09-10 because the fact that predicate states is true
+     * of it — its dimension is a stored coordinate rather than an amplifier beside the base —
+     * but its three points are a tip, an end and a 45 degree arm, not a front edge and a point
+     * across it. Laid out as one, the sheet read an arm end as an edge end and drew a symbol
+     * nothing places that way. @see exploitationBase
+     */
+    if (name === TacticalGraphicName.Exploitation) return false;
     return carriesSeparationInBase(name);
+}
+
+/**
+ * The base 343100 expects, for anything that has to synthesise one.
+ *
+ * Point 1 is the tip, at the far end of the run so the arrow reads left to right like every
+ * other line sample; point 2 is the near end; point 3 is the arm, which
+ * `exploitationTailPoint` places on its own 45 degree ray so the synthesised base and a
+ * settled one are the same points and the sheet is idempotent.
+ *
+ * The arm is a third of the half-run, which is roughly the proportion the Template draws and
+ * what the symbol was sized at while the length was a 20 px screen amplifier.
+ */
+export function exploitationBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const arm = (half * 2) / EXPLOITATION_SAMPLE_ARM_DIVISOR;
+    const leg = arm * Math.SQRT1_2;
+    /*
+     * **Unit-free, so one sheet lays out in projected metres and the other in degrees.** The
+     * 45 degrees is put in by hand rather than through `exploitationTailPoint`, which is turf
+     * and wants lon/lat: handed metres its bearing and distance guards fail and it answers
+     * something that is not on the ray at all. Both sheets run `normalizeDrawnBase` over the
+     * result, which squares the point onto the real ray at the real latitude, so this is a
+     * position close enough to settle rather than the settled one. @see frontEdgeBase
+     */
+    return [[cx + half, cy], [cx - half, cy], [cx - half - leg, cy + leg]];
 }
 
 /**
@@ -691,6 +728,28 @@ function anchorsFromClicks(
          */
         case TacticalGraphicName.Pursuit:
             return pursuitAnchors(clicks);
+
+        /*
+         * **343100 — three clicks: the arrowhead tip, the end of the symbol, then the arm.**
+         *
+         * *"Point 3's distance from Point 2 defines the length of the four angled lines"*, and
+         * *"angles a are always drawn at 45 degrees. Angle b is always drawn at 90 degrees"* —
+         * so the third click carries a distance and nothing else, and is put on the 45 degree
+         * ray the Template letters it on. A click left where it landed would offer an angle the
+         * plate fixes. @see exploitationAnchors
+         */
+        case TacticalGraphicName.Exploitation: {
+            /*
+             * **Three, not two.** A two-point base is a save written before the arm had a
+             * point, and it is left exactly as it arrived: this function runs on every
+             * *build*, so upgrading here would replace the screen-sized arm that save carries
+             * with a proportional one and redraw a graphic nobody touched. The upgrade needs
+             * the stored size, which only a restore can see. @see upgradeStoredBase
+             */
+            if (clicks.length < 3) return undefined;
+            const anchors = exploitationAnchors(clicks, 0);
+            return anchors && [anchors.tip, anchors.end, anchors.tail];
+        }
 
         /*
          * **343300 and 341900 — three clicks: the arrowhead tip, the turn, the far leg.**

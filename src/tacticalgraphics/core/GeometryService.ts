@@ -1862,24 +1862,6 @@ class GeometryService {
 
     }
 
-    getExploitationArrowGraphic(base: Position[], size: number): Feature<MultiLineString> {
-        let middleArrow = this.computeArrowheadPoints(base[base.length - 2], base[base.length - 1], size, 45);
-        // Fish tail (dashed): twice the main arrowhead size so it reads as a
-        // clearly larger backward chevron at the base.
-        const tailSize = size * 2;
-        let baseArrow = this.lineStringToDashes(
-            this.computeArrowheadPoints(base[base.length - 1], base[base.length - 2], -tailSize, 45),
-            [tailSize / 6, tailSize / 6]
-        );
-
-        return turf.multiLineString([
-            base,
-            middleArrow,
-            ...baseArrow.geometry.coordinates
-        ]);
-
-    }
-
     computeArrowheadPointsProjected(
         start: number[],
         end: number[],

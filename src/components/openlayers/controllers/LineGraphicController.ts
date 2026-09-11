@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, anchorVertex, drawsTipFirst, editStretches, normalizeDrawnBase, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, editStretches, normalizeDrawnBase, pivotVertexIndex, usesCornerAnchors} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -96,22 +96,25 @@ function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Co
 /**
  * The end of a drawn line an edit turns, scales and stacks its label about.
  *
- * `coords[0]` for an ordinary line -- where the user started drawing -- and the **last**
- * coordinate for the thirty-four graphics that store their points tip-first, whose first
- * point is the arrowhead. It is the same physical end in both cases; only the index it
- * lives at moved when the bases were renumbered into APP-06's order.
+ * `coords[0]` for an ordinary line -- where the user started drawing -- the **last**
+ * coordinate for the graphics that store their points tip-first, whose first point is the
+ * arrowhead, and a named index for the handful that are neither. It is the same physical end
+ * in every case; only the index it lives at moved when the bases were renumbered into
+ * APP-06's order.
  *
  * Both jobs `hidesStartHandle` does want this end rather than index zero: the redundant
  * handle is the one on the pivot, and the label sits there too. Anchoring a resize on the
  * tip instead would grow an axis of advance backwards out of its own arrowhead.
  *
- * The library's `rotationAnchor` states the same rule for MapLibre and for the adapter's
- * transforms; this is it in OpenLayers' projected coordinates, where re-projecting to ask
- * would be an absurd amount of work for "which end". @see drawOrder.ts
+ * **The index comes from the library**, not from `drawsTipFirst` read here. The two questions
+ * that function answers -- which order the points are stored in, and which end the symbol
+ * turns about -- have been parting company one graphic at a time since 2026-09-06, and this
+ * engine reading the first to answer the second is how they could disagree with MapLibre,
+ * which asks `rotationAnchor`. Same table, two coordinate systems. @see pivotVertexIndex
  */
 export function pivotCoordinate(name: TacticalGraphicName | undefined, coords: Coordinate[] | undefined): Coordinate | undefined {
     if (!coords?.length) return undefined;
-    return drawsTipFirst(name) ? coords[coords.length - 1] : coords[0];
+    return coords[pivotVertexIndex(name, coords.length)];
 }
 
 export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate | undefined, hidesStartHandle?: boolean): Coordinate[] {
