@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumDrawnRadiusPx, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -934,7 +934,7 @@ export class MapLibreInteractions {
         // builds from geodesically; these are mercator metres, 1.56x too long at 50
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
-        const drawn = this.legibleRadius(name, groundLength(radius, vertices[0][1]), vertices[0][1]);
+        const drawn = groundLength(radius, vertices[0][1]);
         const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
         /*
          * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
@@ -1233,7 +1233,7 @@ export class MapLibreInteractions {
          * half the reach, a quarter turn round. @see frameFromDrag
          */
         const drag = frameFromDrag(name, radius, rotationDeg);
-        const size = this.legibleRadius(name, drag.size, vertices[0][1]);
+        const size = drag.size;
         // Walked in projected metres and converted back, which is the space this file
         // measured the drag in -- the same two lines OpenLayers' controller runs, because
         // each renderer walks its own coordinates and only the *rule* is shared.
@@ -1391,21 +1391,6 @@ export class MapLibreInteractions {
         // the last shape it accepted standing under a cursor that has moved on.
         this.renderer.setPreview(built ? {...built, id: DRAW_PREVIEW_ID} : null);
         this.previewing = true;
-    }
-
-    /**
-     * A drawn radius, held to the size below which this symbol stops being readable.
-     *
-     * **Only a draw.** The three curves that carry a floor collapse into a kink when they
-     * are barely dragged, so the gesture that creates one holds it legible — and nothing
-     * afterwards does, or a later pan would resize a symbol the user had already drawn.
-     * OpenLayers has applied this from the start and MapLibre had no equivalent, so the
-     * same short drag drew 100 px there and 60 px here. @see minimumDrawnRadiusPx
-     */
-    private legibleRadius(name: TacticalGraphicName, radius: number, latitude: number): number {
-        const px = minimumDrawnRadiusPx(name);
-        if (px === undefined) return radius;
-        return Math.max(radius, screenMeters(px, resolutionOf(this.map), latitude));
     }
 
     /** Takes the preview off, whichever way the draw ended. @see previewDraw */

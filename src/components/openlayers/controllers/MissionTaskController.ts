@@ -36,16 +36,6 @@ export interface MissionTaskGraphic extends TacticalGraphic {
      */
     showMeasure?(active: boolean, anchor?: Coordinate): void;
 
-    /**
-     * Whether the draw interaction is the thing setting the size right now.
-     *
-     * The legibility floor reads it, and nothing else does: it is an affordance for the
-     * gesture that creates the graphic, and applying it to a later one resized a symbol
-     * the user had already drawn. Optional, so a host's own holder need not carry it.
-     * @see minimumDrawnRadiusPx
-     */
-    sizingFromDraw?: boolean;
-
     /** @see TacticalGraphicHandler.setMirrored */
     setMirrored?(mirrored: boolean): void;
 
@@ -103,24 +93,6 @@ export class MissionTaskController implements TacticalGraphicHandler {
      * it unconditionally would route every circle graphic into a no-op.
      */
     handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
-
-    /**
-     * Lifts the minimum-radius floor for the length of a deliberate resize.
-     *
-     * The floor keeps Turn, TacticalTurn and Envelopment from collapsing into an
-     * unreadable kink, which is a real thing to protect — **while the graphic is being
-     * drawn**. It should not also decide how small a finished one may be: it caps the
-     * shrink at 50 px worth of metres at the drawing zoom, so asking a turn for a tenth
-     * of its size got a third of it and no further.
-     *
-     * The user's rule is that everything except the security operations resizes. A floor
-     * that silently refuses is the same "gesture that does nothing" this mode exists to
-     * get rid of. @see TacticalGraphicHandler.suspendSizeFloor
-     */
-    suspendSizeFloor(active: boolean): void {
-        const holder = this.graphic as unknown as {suspendMinimumSize?: boolean};
-        if ('suspendMinimumSize' in holder) holder.suspendMinimumSize = active;
-    }
 
     /**
      * The radius the graphic is drawn at. @see TacticalGraphicHandler.currentSize
@@ -197,8 +169,6 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
         this.graphic.showMeasure?.(true);
-        // The legibility floor is for *this* gesture and no other. @see minimumDrawnRadiusPx
-        this.graphic.sizingFromDraw = true;
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
@@ -249,10 +219,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
         const radius = this.drawnRadius(circleGeom);
 
-        // Still the draw: the floor has to reach the size that is *committed*, or a short
-        // drag would be held legible right up until the click that ends it.
         this.graphic.updateGeom(this.drawnFrame(radius, this.rotationAngleDeg));
-        this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
     };
 
@@ -448,22 +415,15 @@ export class AnchorClickController extends MissionTaskController {
      */
     onDrawStartFunc = (e: DrawEvent) => {
         /*
-         * **The legibility floor is not armed here, and that is the point.**
+         * **A click-placed draw previews on every pointer move, and nothing damps it.**
          *
-         * It was, to match the circle draw — but a click-placed draw previews on every
-         * pointer move, so flooring the preview pins `size` at the floor while the cursor
-         * keeps going: measured on a turn, the symbol stood still at 478 km through the
-         * first 120 px of drag while the cursor slid from 0.70 to 1.14 of its own bounding
-         * box, then lurched into tracking once the chord outgrew the floor. "The cursor
-         * seems to be in the middle of the graphic making it seem jumpy and not smooth."
-         * (User's report, 2026-09-05.)
-         *
-         * MapLibre applies no floor on this path — `legibleRadius` sits on the
-         * centre-to-edge frame, which the anchor-click family left — and its preview tracks
-         * the cursor exactly, which is the behaviour the user signed off on for ambush. So
-         * the floor moves to `onDrawEndFunc`, where the circle draw already has it and where
-         * this graphic's own doc says it belongs: *committed* at a readable size.
-         * @see minimumDrawnRadiusPx, onDrawEndFunc
+         * There was a legibility floor here once, to match the circle draw, and it pinned
+         * `size` while the cursor kept going: measured on a turn, the symbol stood still at
+         * 478 km through the first 120 px of drag while the cursor slid from 0.70 to 1.14 of
+         * its own bounding box, then lurched into tracking. "The cursor seems to be in the
+         * middle of the graphic making it seem jumpy and not smooth." (User's report,
+         * 2026-09-05.) The floor is gone from both engines now.
+         * @see decorationSizes.ts, "There is no floor"
          */
         /*
          * **And so does the read-out.** The circle draw armed it in its own `onDrawStartFunc`,
@@ -592,21 +552,8 @@ export class AnchorClickController extends MissionTaskController {
         const feature = e.feature as Feature<LineString> | undefined;
         if (!(feature?.getGeometry() instanceof LineString)) return;
 
-        /*
-         * **And it is not armed here either, which leaves the committed geometry exactly as
-         * it was.** The flag used to be cleared on the line above this one, so on this path
-         * the floor already reached nothing that gets stored — it distorted every pointer
-         * move of the draw and then stood down for the one call that decides the symbol.
-         * Arming it now would *change* the finished shape of a barely-dragged curve, and the
-         * user's report is explicit that "the end drawing is perfect".
-         *
-         * So `minimumDrawnRadiusPx` is currently unreachable for this family on **both**
-         * engines — MapLibre's `legibleRadius` sits on the centre-to-edge frame, which these
-         * graphics left when they became click-placed. That is a deliberate hold, not an
-         * oversight: re-arming it belongs on both engines at once and is a change to what the
-         * gesture produces, so it is someone's call rather than a side effect of this fix.
-         */
-        this.graphic.sizingFromDraw = false;
+        // What the operator placed is what is committed: there is no size floor on this
+        // path, on either engine. @see decorationSizes.ts, "There is no floor"
         this.graphic.setBaseFeature?.(feature);
     };
 }
@@ -643,7 +590,6 @@ export class RangeClickController extends AnchorClickController {
     }
 
     onDrawEndFunc = (e: DrawEvent) => {
-        this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
         /*
          * **Clearing the sketch is not bookkeeping, it is the off switch.** This overrides
