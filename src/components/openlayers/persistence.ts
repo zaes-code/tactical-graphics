@@ -292,6 +292,25 @@ function restoreLatitude(feature: GeoJSONFeature): number {
     return Array.isArray(node) && typeof node[1] === 'number' ? node[1] : 0;
 }
 
+/**
+ * The geometry state a restore may stamp, which for a drawn-anchor graphic is not all of it.
+ *
+ * `MissionTaskGraphicBase.writeBase` refuses to file `radius`, `rotation` and `mirrored` for
+ * the graphics whose anchor points carry them — *"stamping them as well is a second copy of
+ * the geometry"*, decided 2026-09-06 after the demolition block and 200700 each shipped one.
+ * The restore was filing exactly those three anyway, straight out of the saved bag, and
+ * `writeGraphicProperties` merges, so the figure stuck: 151204 contain rebuilt its shape from
+ * the points and went on reporting the file's 40 km beside a symbol drawn at 29.8.
+ *
+ * The arrowhead size is deliberately kept. It is a screen distance rather than a place, so the
+ * points cannot carry it, which is the same line `writeBase` draws. @see usesDrawnAnchors
+ */
+function statePublishedFor(name: TacticalGraphicName, state: GraphicGeometryState): GraphicGeometryState {
+    if (!usesDrawnAnchors(name)) return state;
+    const {radius: _radius, rotation: _rotation, mirrored: _mirrored, ...carried} = state;
+    return carried;
+}
+
 export function serializeTacticalGraphics(
     manager: TacticalGraphicsManager,
     opts: SerializeOptions = {},
@@ -676,7 +695,7 @@ export function restoreTacticalGraphics(
             const labels = toLabels(bag);
             const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
             if (holder.setLabel) holder.setLabel(labels);
-            else writeGraphicProperties(handler.getFeatures(), name, labels, state);
+            else writeGraphicProperties(handler.getFeatures(), name, labels, statePublishedFor(name, state));
 
             applyRestoredGeometry(handler, handler.graphic.base, state);
 
