@@ -79,6 +79,15 @@ export function createMapLibrePropertiesSource(
                          * @see widthFromBase, carriesWidthPointInBase
                          */
                         width: widthFromBase(graphic.name, basePositions(graphic.base.geometry)) ?? props.width,
+                        /*
+                         * **`length` is a read-out this half never reported**, so the five plates
+                         * that state a length and a width about one anchor point showed the figure
+                         * on OpenLayers and nothing at all here. Both engines file the same number
+                         * — measured, 80,000 m for 200101 on each — so the panel's silence was
+                         * this line missing rather than anything about the graphic.
+                         * @see GraphicGeometryState, hasAxisAndWidth
+                         */
+                        length: props.length,
                         rotation: props.rotation,
                         bend: props.bend,
                         mirrored: props.mirrored,

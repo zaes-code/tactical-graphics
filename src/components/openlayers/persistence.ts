@@ -277,6 +277,21 @@ export function serializeOneGraphic(handler: TacticalGraphicHandler): GeoJSONFea
  * own base. A graphic drawn but never registered with the manager is not saved, which
  * matches what the rest of the manager already considers to exist.
  */
+/**
+ * The latitude a restored graphic is going to, in degrees, or the equator if its geometry
+ * cannot say.
+ *
+ * Read off the **saved** feature rather than the map, because the figure it decides is a
+ * property of the symbol's place on the ground and not of where the operator happens to be
+ * looking. @see getController
+ */
+function restoreLatitude(feature: GeoJSONFeature): number {
+    const coordinates = (feature.geometry as {coordinates?: unknown} | undefined)?.coordinates;
+    let node: unknown = coordinates;
+    while (Array.isArray(node) && Array.isArray(node[0])) node = node[0];
+    return Array.isArray(node) && typeof node[1] === 'number' ? node[1] : 0;
+}
+
 export function serializeTacticalGraphics(
     manager: TacticalGraphicsManager,
     opts: SerializeOptions = {},
@@ -497,9 +512,22 @@ export function applyRestoredGeometry(
          * beside it on the way in, so the coordinate states the saved figure before this runs.
          * @see carriesWidthPointInBase, optionsFromWidthPoint
          */
+        /*
+         * **`radius` is not a rectangle's scalar, and must not be spent as one.**
+         *
+         * The chain below is "the holder's own number", and for a rectangle that number is the
+         * half-width. `radius` means *how far does this reach* — a centre-anchored figure — and
+         * no rectangle files one; the library's answer for an un-typed rectangle width is
+         * `rectangleDefaultHalfWidth`, which is what the holder seeds for itself. So a stray
+         * radius arriving in the bag, from a hand-written file or an older format, was being
+         * read as half the box. Measured on 152500 free fire area with `radius` 40,000 and no
+         * width: 80 km wide here against MapLibre's own seed for the same file, which ignores
+         * the field. @see isRectangular, rectangleDefaultHalfWidth
+         */
+        const reach = restoredName && isRectangular(restoredName) ? undefined : state.radius;
         const scalar = carriesWidthPointInBase(restoredName)
             ? undefined
-            : state.decorationSize ?? (state.width !== undefined ? state.width / 2 : state.radius);
+            : state.decorationSize ?? (state.width !== undefined ? state.width / 2 : reach);
         if (scalar !== undefined) handler.setOffset?.(scalar);
         // A width that is an amplifier rather than a half-width. `toLabels` strips it from
         // the bag as a geometry key, so a holder that reads one needs it handed back here or
@@ -577,7 +605,15 @@ export function restoreTacticalGraphics(
                 throw new Error('no resolution available to build the controller with');
             }
 
-            handler = getController(name, resolution);
+            /*
+             * **And where it is going**, which decides what a screen-pixel default costs on
+             * the ground. `getController`'s latitude defaults to the equator, where a projected
+             * metre and a real one agree, and a restore was taking that default: a rectangular
+             * zone with no stated width came back 132 km wide at 40 degrees north where
+             * MapLibre, which converts, built the same file at 101. The error is 1/cos, so it
+             * grows with latitude — half again at 50 degrees. @see RectangularAreaGraphicBase
+             */
+            handler = getController(name, resolution, restoreLatitude(source));
             handler.setSymbolId(symbolId);
             handler.getFeatures().forEach(f => {
                 f.set('graphicName', name);
