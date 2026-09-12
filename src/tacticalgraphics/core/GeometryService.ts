@@ -15,9 +15,13 @@
  *
  * Kept as a single merged object (not a class) so every existing call site —
  * `geometryService.foo(...)`, across ~40 files — keeps working unchanged.
- * Prefer importing directly from the relevant `geometry/*.ts` module in new
- * code; reach for this barrel only when you're already touching a call site
- * that uses it.
+ *
+ * **Inside `src/tacticalgraphics/`, prefer importing directly from the relevant
+ * `geometry/*.ts` module in new code**; reach for this barrel only when you are
+ * already touching a call site that uses it. The advice stops at the library's
+ * edge: the modules are not exported from `index.ts`, so a consumer has only
+ * this object, and a deep import from the sample app is what `check:layering`
+ * exists to refuse.
  */
 import * as primitives from './geometry/primitives';
 import * as arcs from './geometry/arcs';
