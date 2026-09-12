@@ -29,6 +29,8 @@ import {
     ratioLockOf,
     rectangleAmplifiers,
     rectangleDefaultHalfWidth,
+    statesShapeAsRangeBands,
+    RSD_DEFAULT_START_SHARE,
     renderTacticalGraphic,
     resolveRangeFanBands,
     shapedByWidth,
@@ -296,6 +298,21 @@ function sizeDefaults(
             ? RECTANGLE_DEFAULT_HALF_WIDTH_PX * drawingResolution
             : rectangleDefaultHalfWidth(baseLengthMeters(geometry));
         return {width: Math.round(half * 2)};
+    }
+
+    /*
+     * **A graphic described by range bands takes its ranges from a stated radius.**
+     *
+     * 200700's plate names a start range and a stop range, and a bag holding only a `radius`
+     * is the older, partial way of saying the same thing: the radius *is* the outer ring.
+     * `RSD_DEFAULT_START_SHARE` is the library's own figure for the inner one, and the
+     * OpenLayers holder has always spent it — so a file with a radius and no ranges opened as
+     * a two-arc sector there and as nothing at all here. Measured: 16,000 and 40,000 against
+     * neither. @see statesShapeAsRangeBands, RSD_DEFAULT_START_SHARE
+     */
+    if (statesShapeAsRangeBands(name) && supplied.startRange === undefined && supplied.stopRange === undefined) {
+        const outer = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : undefined;
+        if (outer !== undefined) return {startRange: outer * RSD_DEFAULT_START_SHARE, stopRange: outer};
     }
 
     /*
