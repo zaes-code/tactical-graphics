@@ -191,6 +191,17 @@ export function getSearchArrowLine(base: Feature<Point>, centerPadding: number, 
     ];
 }
 
+/**
+ * The default standoff from a symbol's centre to the foot of a search-area arrow, in metres.
+ *
+ * A field on the old `GeometryService` class rather than a function, and it survived the split
+ * only because it is put back here: `geometryService` is a public export, so a member vanishing
+ * from it is a breaking change, and this one would have gone without anybody deciding it. It is
+ * `getSearchAreaArrow`'s first argument, which is why it sits beside it. Nothing in this
+ * repository reads it — a consumer that does still can. @see getSearchAreaArrow
+ */
+export const arrowCenterPadding = 120;
+
 export const getSearchAreaArrow = (centerPadding: number, arrowLength: number, arrowDepth: number, arrowHeadLength: number, arrowHeadDegree: number): Position[][] => {
     let base = turf.point([0, 0]);
     let arrowCoords = getSearchArrowLine(base, centerPadding, arrowLength, arrowDepth);
