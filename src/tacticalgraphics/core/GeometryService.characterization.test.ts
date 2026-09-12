@@ -351,10 +351,6 @@ describe('GeometryService — mission-task block graphics', () => {
         expect(geometryService.getPenetrationArrowGraphic(base3, 100)).toMatchSnapshot();
     });
 
-    it('getExploitationArrowGraphic', () => {
-        expect(geometryService.getExploitationArrowGraphic(base3, 100)).toMatchSnapshot();
-    });
-
     it('getDisruptGraphic', () => {
         expect(geometryService.getDisruptGraphic([P0, P1], 100)).toMatchSnapshot();
     });

@@ -2,7 +2,6 @@ import {Feature, MultiLineString, Position} from 'geojson';
 import * as turf from '../turf';
 import {computeArrowheadPoints, computeArrowheadPointsProjected} from './arrows';
 import {computeParallelLineString, project, unproject} from './primitives';
-import {lineStringToDashes} from './wavesBendsDashes';
 
 /**
  * Internal proportions of the attack-by-fire / support-by-fire position symbols,
@@ -183,24 +182,6 @@ export function getPenetrationArrowGraphic(base: Position[], size: number): Feat
         base,
         middleArrow,
         [top.geometry.coordinates, bottom.geometry.coordinates],
-    ]);
-
-}
-
-export function getExploitationArrowGraphic(base: Position[], size: number): Feature<MultiLineString> {
-    let middleArrow = computeArrowheadPoints(base[base.length - 2], base[base.length - 1], size, 45);
-    // Fish tail (dashed): twice the main arrowhead size so it reads as a
-    // clearly larger backward chevron at the base.
-    const tailSize = size * 2;
-    let baseArrow = lineStringToDashes(
-        computeArrowheadPoints(base[base.length - 1], base[base.length - 2], -tailSize, 45),
-        [tailSize / 6, tailSize / 6]
-    );
-
-    return turf.multiLineString([
-        base,
-        middleArrow,
-        ...baseArrow.geometry.coordinates
     ]);
 
 }
