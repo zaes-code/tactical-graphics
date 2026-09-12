@@ -297,9 +297,10 @@ describe('a library-stated layout reaches the sheet unreversed', () => {
     });
 
     it('has the family the defect was invisible in', () => {
-        // The eight tip-first members. A layout whose order already agrees is unaffected
-        // either way, so only these can show the difference at all.
-        expect(REVERSED_BY_A_SECOND_CONVERSION.length).toBe(8);
+        // The eight cane arrows, plus the eleven axis arrows that gained a stated layout on
+        // 2026-09-10 when their width became a coordinate. A layout whose order already agrees
+        // is unaffected either way, so only the tip-first ones can show the difference at all.
+        expect(REVERSED_BY_A_SECOND_CONVERSION.length).toBe(19);
     });
 
     /**

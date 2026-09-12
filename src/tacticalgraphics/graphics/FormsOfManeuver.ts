@@ -958,7 +958,8 @@ export class MobileDefense extends MovementGraphicBase {
     name: string = TacticalGraphicName.MobileDefense;
 
     /** Nothing is drawn past the arrowhead. */
-    protected tipOverhang: number = 0;
+    // The overhang is a table in the map-agnostic half as of 2026-09-10: zero for this one,
+    // whose head already lands on its last vertex. @see TIP_OVERHANG
 
     /**
      * The hairpin's own frame.
@@ -1200,7 +1201,8 @@ export class InfiltrationLane extends MovementGraphicBase {
     name: string = TacticalGraphicName.InfiltrationLane;
 
     /** Two bare rails, no arrowhead — the lane ends on the last vertex. */
-    protected tipOverhang: number = 0;
+    // The overhang is a table in the map-agnostic half as of 2026-09-10: zero for this one,
+    // whose head already lands on its last vertex. @see TIP_OVERHANG
 
     /** The centreline the plate names: points 1 and 2, never point 3. */
     private centreline(base: Feature<LineString>): Position[] {
