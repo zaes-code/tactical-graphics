@@ -28,6 +28,8 @@ import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
 import {generatorOrder, storedOrder} from './drawOrder';
 import {baseVertexCount, carriesSeparationInBase, drawsAsRailCrossing} from './handles';
+import {carriesWidthPointInBase, squareWidthPoint, tipOverhangOf} from './axisWidth';
+import {EXPLOITATION_SAMPLE_ARM_DIVISOR, exploitationAnchors} from '../graphics/exploitationAnchors';
 import geometryService from './GeometryService';
 import {
     anchorsForBow,
@@ -160,6 +162,21 @@ export function normalizeDrawnBase(
 
     const placed = anchorsFromClicks(name, deduped, resolution);
     if (placed) return placed;
+
+    /*
+     * **The eleven axis arrows: the last coordinate is a width, and it is put back square.**
+     *
+     * Its distance across the axis is the whole of what it says, so the along-axis component of
+     * whatever moved it — a grip drag, a vertex drag, a rotate — is discarded and the point is
+     * republished on the arrowhead's back corner. Idempotent, which is what lets it run here,
+     * on every build.
+     *
+     * **A two-coordinate base is left alone**, because it has no width point to square: it is a
+     * save older than the coordinate, and the door that can repair it is a restore, which can
+     * see the `width` filed beside it. Seeding one here would spend a number this function does
+     * not have. @see upgradeAxisBase, axisBaseFromDraw
+     */
+    if (carriesWidthPointInBase(name)) return squareWidthPoint(name, deduped);
 
     return deduped;
 }
@@ -361,6 +378,8 @@ export function synthesizedBase(
     // Its two arrows stand square off their own ends of the back line, on the other side.
     // @see supportByFireBase
     if (name === TacticalGraphicName.SupportByFire) return supportByFireBase(center, half);
+    if (name === TacticalGraphicName.Exploitation) return exploitationBase(center, half);
+    if (carriesWidthPointInBase(name)) return axisSampleBase(name, center, half, points);
     // A circle with an arrow swinging out of it, sized the way its plate draws one.
     // @see circleAndArrowBase
     if (CIRCLE_AND_ARROW.includes(name)) return circleAndArrowBase(center, half);
@@ -468,6 +487,30 @@ export function railCrossingBase(center: Position, half: number, points = 3): Po
 }
 
 /**
+ * The base the eleven axis arrows expect, for anything that has to synthesise one.
+ *
+ * A plain run west to east — these are free-length routes and a sample has no bends to invent —
+ * with the width point on the end. Stored order, so the arrowhead lands at the east end and the
+ * sample reads left to right like every other line on the sheet.
+ *
+ * The half-width is a fifth of the half-run, which is roughly what the family draws at the 20
+ * screen pixels both renderers seed a fresh graphic with. **Unit-free**, because one sheet lays
+ * out in projected metres and the other in degrees: `axisWithWidthPoint` is turf and wants
+ * lon/lat, so the point is placed by hand here and squared onto the real corner by
+ * `normalizeDrawnBase`, which both sheets run over the result. @see frontEdgeBase
+ */
+export function axisSampleBase(name: TacticalGraphicName, center: Position, half: number, points: number): Position[] {
+    const [cx, cy] = center;
+    const across = half / 5;
+    const axis: Position[] = points >= 3
+        ? [[cx + half, cy], [cx, cy + half * 0.25], [cx - half, cy]]
+        : [[cx + half, cy], [cx - half, cy]];
+    // Two half-widths off the centreline and one overhang back from the tip, which is where
+    // `widthPointForBuiltAxis` puts it. @see TIP_OVERHANG
+    return [...axis, [cx + half - across * tipOverhangOf(name), cy + across * 2]];
+}
+
+/**
  * Whether this graphic's points are a **front edge and a distance across it**.
  *
  * `carriesSeparationInBase` is the library's own statement of that shape and is now the
@@ -477,7 +520,49 @@ export function railCrossingBase(center: Position, half: number, points = 3): Po
  * the exception went with it. @see synthesizedBase, acrossPointAtEnd
  */
 export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
+    /*
+     * **343100 is the one member that is not this shape.** It joined
+     * `carriesSeparationInBase` on 2026-09-10 because the fact that predicate states is true
+     * of it — its dimension is a stored coordinate rather than an amplifier beside the base —
+     * but its three points are a tip, an end and a 45 degree arm, not a front edge and a point
+     * across it. Laid out as one, the sheet read an arm end as an edge end and drew a symbol
+     * nothing places that way. @see exploitationBase
+     */
+    if (name === TacticalGraphicName.Exploitation) return false;
+    /*
+     * **And the eleven axis arrows are not this shape either.** Their separation is in the base
+     * as well, but what carries it is a point appended to a free-length *route* — so there is no
+     * front edge to lay two points along, and the run itself is whatever the operator drew.
+     * `axisSampleBase` lays them out instead. @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name)) return false;
     return carriesSeparationInBase(name);
+}
+
+/**
+ * The base 343100 expects, for anything that has to synthesise one.
+ *
+ * Point 1 is the tip, at the far end of the run so the arrow reads left to right like every
+ * other line sample; point 2 is the near end; point 3 is the arm, which
+ * `exploitationTailPoint` places on its own 45 degree ray so the synthesised base and a
+ * settled one are the same points and the sheet is idempotent.
+ *
+ * The arm is a third of the half-run, which is roughly the proportion the Template draws and
+ * what the symbol was sized at while the length was a 20 px screen amplifier.
+ */
+export function exploitationBase(center: Position, half: number): Position[] {
+    const [cx, cy] = center;
+    const arm = (half * 2) / EXPLOITATION_SAMPLE_ARM_DIVISOR;
+    const leg = arm * Math.SQRT1_2;
+    /*
+     * **Unit-free, so one sheet lays out in projected metres and the other in degrees.** The
+     * 45 degrees is put in by hand rather than through `exploitationTailPoint`, which is turf
+     * and wants lon/lat: handed metres its bearing and distance guards fail and it answers
+     * something that is not on the ray at all. Both sheets run `normalizeDrawnBase` over the
+     * result, which squares the point onto the real ray at the real latitude, so this is a
+     * position close enough to settle rather than the settled one. @see frontEdgeBase
+     */
+    return [[cx + half, cy], [cx - half, cy], [cx - half - leg, cy + leg]];
 }
 
 /**
@@ -691,6 +776,28 @@ function anchorsFromClicks(
          */
         case TacticalGraphicName.Pursuit:
             return pursuitAnchors(clicks);
+
+        /*
+         * **343100 — three clicks: the arrowhead tip, the end of the symbol, then the arm.**
+         *
+         * *"Point 3's distance from Point 2 defines the length of the four angled lines"*, and
+         * *"angles a are always drawn at 45 degrees. Angle b is always drawn at 90 degrees"* —
+         * so the third click carries a distance and nothing else, and is put on the 45 degree
+         * ray the Template letters it on. A click left where it landed would offer an angle the
+         * plate fixes. @see exploitationAnchors
+         */
+        case TacticalGraphicName.Exploitation: {
+            /*
+             * **Three, not two.** A two-point base is a save written before the arm had a
+             * point, and it is left exactly as it arrived: this function runs on every
+             * *build*, so upgrading here would replace the screen-sized arm that save carries
+             * with a proportional one and redraw a graphic nobody touched. The upgrade needs
+             * the stored size, which only a restore can see. @see upgradeStoredBase
+             */
+            if (clicks.length < 3) return undefined;
+            const anchors = exploitationAnchors(clicks, 0);
+            return anchors && [anchors.tip, anchors.end, anchors.tail];
+        }
 
         /*
          * **343300 and 341900 — three clicks: the arrowhead tip, the turn, the far leg.**

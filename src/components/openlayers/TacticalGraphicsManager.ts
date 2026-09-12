@@ -12,7 +12,9 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import type {Position} from 'geojson';
+
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -1413,7 +1415,11 @@ export class TacticalGraphicsManager {
         // cursor had just left, and MapLibre's `setOffset` — which does orient — would
         // have disagreed with this engine on the same gesture. @see drawOrder.ts
         const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
-        const coords = generatorOrder(name, stored) as number[][];
+        // **The axis, not the whole base.** Eleven of these carry the width itself as their last
+        // coordinate, and it is a point off to one side: left in, it is a segment for the loop
+        // below to measure against and it reverses into the *front* of the line the width is
+        // read along. @see carriesWidthPointInBase
+        const coords = generatorOrder(name, axisOf(name, stored as Position[]) as number[][]) as number[][];
 
         // Measure against the segment the cursor is nearest to, not always the
         // last one. For a two-point base (block, relief in place, retrograde)
@@ -1772,10 +1778,20 @@ export class TacticalGraphicsManager {
         const geometry = e.feature?.getGeometry();
         if (!(geometry instanceof LineString)) return;
 
+        /*
+         * **The eleven axis arrows are already finished, and touching them here would undo
+         * them.** Their base is not the sketch: the holder rebuilds it from every click plus a
+         * seeded width point on each pointer move, through `setSketchBase`, so by the time this
+         * runs the last click has already been through that door. What is left in the sketch is
+         * a run of clicks, and normalizing *those* would read the operator's final click as a
+         * width and pull it square to the axis. @see MovementGraphicBase.setSketchBase
+         */
+        if (carriesWidthPointInBase(name)) return;
+
         const drawn = geometry.getCoordinates().map(c => toLonLat(c));
         // **The resolution matters now**: the S pair's point 2 is held to a pixel range, and
         // a normalizer with no view to ask leaves it where the user put it.
-        const normalized = normalizeDrawnBase(name, drawn, this.map.getView().getResolution());
+        const normalized = normalizeDrawnBase(name, drawn as Position[], this.map.getView().getResolution());
         // Compared by *content*, not by length. This used to bail whenever the vertex count
         // was unchanged, which is every case where a vertex moves rather than appears.
         if (normalized.length === drawn.length

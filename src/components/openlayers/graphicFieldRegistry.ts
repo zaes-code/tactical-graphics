@@ -499,8 +499,30 @@ const ENGAGEMENT_ZONE = f(true, false, true, true, true, {width: false, altitude
  */
 const MOVEMENT_ARROW = f(true, false, true, true, false);
 
+/**
+ * The axis-of-advance arrows, which are `MOVEMENT_ARROW` plus the **width read-out**.
+ *
+ * Separate from it because the three direction-of-attack graphics share that preset and carry
+ * no width of their own: `width` without a value renders as the *typed input* rather than the
+ * read-out, so handing it to them would have added an input that changes nothing.
+ *
+ * `widthTyped` is deliberately off. The figure is derived from the base's last coordinate on
+ * the way to the dialog rather than filed beside it, so there is nothing to type into and
+ * nothing to keep in step with the geometry. @see widthFromBase, carriesWidthPointInBase
+ */
+const AXIS_ARROW = f(true, false, true, true, false, {width: true});
+
 /** Movement symbol with identifier only (no dates): crossing sites, convoys, etc. */
 const MOV = f(true, false, false, false, false);
+
+/**
+ * The two counter-attacks: an identifier, and the **width read-out** the axis family shows.
+ *
+ * `width` without `widthTyped`, which is the panel's read-out form: the figure is derived from
+ * the base's last coordinate on the way to the dialog rather than filed beside it, so there is
+ * nothing to type into and nothing to keep in step. @see widthFromBase
+ */
+const COUNTERATTACK = f(true, false, false, false, false, {width: true});
 
 /**
  * Avenue of approach (APP-06 152300): the designation, and **no date-time group**.
@@ -515,7 +537,7 @@ const MOV = f(true, false, false, false, false);
  * rather than a flag. Field N is per-vertex, which this schema does not express.
  */
 /** Avenue of approach: the literal `AA`, field T beside it, and field H set outside. */
-const AVENUE_OF_APPROACH = f(true, false, false, false, false, {additionalInfo: true});
+const AVENUE_OF_APPROACH = f(true, false, false, false, false, {additionalInfo: true, width: true});
 
 /**
  * Tactical mission task (Chapter 6).
@@ -703,14 +725,14 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
     [TacticalGraphicName.AvenueOfApproach]: AVENUE_OF_APPROACH,
-    [TacticalGraphicName.MainAxisOfAdvance]: MOVEMENT_ARROW,
-    [TacticalGraphicName.MainAxisOfAdvanceFeint]: MOVEMENT_ARROW,
-    [TacticalGraphicName.SupportingAxisOfAdvance]: MOVEMENT_ARROW,
-    [TacticalGraphicName.AviationAxisOfAdvance]: MOVEMENT_ARROW,
-    [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: MOVEMENT_ARROW,
+    [TacticalGraphicName.MainAxisOfAdvance]: AXIS_ARROW,
+    [TacticalGraphicName.MainAxisOfAdvanceFeint]: AXIS_ARROW,
+    [TacticalGraphicName.SupportingAxisOfAdvance]: AXIS_ARROW,
+    [TacticalGraphicName.AviationAxisOfAdvance]: AXIS_ARROW,
+    [TacticalGraphicName.AttackHelicopterAxisOfAdvance]: AXIS_ARROW,
     // Table 5-11 (attack/defense planning): identifier only.
-    [TacticalGraphicName.Counterattack]: MOV,
-    [TacticalGraphicName.CounterattackByFire]: MOV,
+    [TacticalGraphicName.Counterattack]: COUNTERATTACK,
+    [TacticalGraphicName.CounterattackByFire]: COUNTERATTACK,
     // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
     // the crossing-site symbols carry no name.
     [TacticalGraphicName.Bridge]: SHAPE_ONLY,
@@ -825,9 +847,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // APP-06 342900's template carries three amplifier boxes -- T over the body and
     // W . W1 inside it -- so unlike FM's badge this one takes a designation and a
     // date-time range. @see FM 1-02.2 table 5-2 for what the letters mean.
-    [TacticalGraphicName.AdvanceToContact]: MOVEMENT_ARROW,
-    [TacticalGraphicName.FrontalAttack]: SHAPE_ONLY,
-    [TacticalGraphicName.TurningMovement]: SHAPE_ONLY,
+    [TacticalGraphicName.AdvanceToContact]: AXIS_ARROW,
+    // 152700 and 152900 carry no amplifier of their own, but they do carry a width the
+    // operator dragged, and it is the same read-out the rest of the family shows.
+    // @see widthFromBase
+    [TacticalGraphicName.FrontalAttack]: f(false, false, false, false, false, {width: true}),
+    [TacticalGraphicName.TurningMovement]: f(false, false, false, false, false, {width: true}),
     [TacticalGraphicName.Pursuit]: SHAPE_ONLY,
     [TacticalGraphicName.Envelopment]: SHAPE_ONLY,
     [TacticalGraphicName.MobileDefense]: SHAPE_ONLY,

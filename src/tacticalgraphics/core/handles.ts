@@ -17,8 +17,10 @@
 import {TacticalGraphicName} from './type';
 import {drawnAnchorFrame} from './drawnAnchors';
 import {drawsTipFirst} from './drawOrder';
-import {reservedLeadPx} from './decorationSizes';
+import {carriesWidthPointInBase} from './axisWidth';
+import {hasAxisAndWidth, reservedLeadPx} from './decorationSizes';
 import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from '../graphics/SecurityOperation';
+import {usesStandoffWidth} from '../graphics/SafeDistanceZone';
 
 /**
  * What dragging a handle does.
@@ -297,6 +299,22 @@ const MOVEMENT_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.AviationAxisOfAdvance,
     TacticalGraphicName.SupportingAxisOfAdvance,
     TacticalGraphicName.Counterattack,
+    /*
+     * **152300 and 340700 joined on 2026-09-10.** Both were in the *symbology* registry's
+     * `MOVEMENT_GRAPHICS` and in neither this list nor any other contract, so
+     * `handleContract` answered `SHAPE_ONLY` for them and their third grip resolved to
+     * `shape`. OpenLayers widened them anyway — it routes a width drag off the
+     * `offsetHandler` flag on the feature, not off the contract — so the gap was invisible
+     * there and total on MapLibre, which dispatches by role alone.
+     *
+     * Measured on the running app, one 90 px drag on the width grip at zoom 8/9, starting
+     * from `width` 40000: OpenLayers wrote 21028 for both, MapLibre left `width` at 40000
+     * and moved **both base points 0.1891 degrees north** — a translate of the whole
+     * graphic. Their nine siblings set the width on both engines from the same gesture.
+     * @see handleRole
+     */
+    TacticalGraphicName.AvenueOfApproach,
+    TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.InfiltrationLane,
     TacticalGraphicName.Bridge,
     TacticalGraphicName.Gap,
@@ -355,9 +373,18 @@ const BLOCK_GRAPHICS: readonly TacticalGraphicName[] = [
      * the back line's two ends, so the bar that was a ratio of the shaft — and the offset
      * grip that dragged it — are two anchor points now. @see firePositionAnchors
      */
-    TacticalGraphicName.Exploitation,
-    // Follow and assume / follow and support are deliberately absent: they are no
-    // longer block arrows and carry their own two-point handles. @see FollowTask
+    /*
+     * **343100 exploit left on 2026-09-10, and the family is now empty.** Its plate gives the
+     * four angled lines their own anchor point — *"Point 3's distance from Point 2 defines the
+     * length of the four angled lines"* — so the perpendicular its leading `offset` grip used
+     * to drag is a point the operator states. Kept as a const rather than deleted because the
+     * contract it describes is real and a graphic may want it again: a *derived* width grip
+     * emitted first, which is the opposite of the movement family's and the reason a renderer
+     * cannot guess a role from an index. @see exploitationAnchors
+     *
+     * Follow and assume / follow and support were deliberately absent before that: they are no
+     * longer block arrows and carry their own two-point handles. @see FollowTask
+     */
 ];
 
 /**
@@ -416,8 +443,9 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Penetration]: 1 / 3,
     // Block's crossbar handle left on 2026-09-06: the crossbar is points 1 and 2 now, so
     // there is no derived width for an offset grip to drag. @see Block
-    // The handle is an arrowhead wing, `size × sin 45°` off the base line.
-    [TacticalGraphicName.Exploitation]: Math.SQRT2,
+    // Exploitation's arrowhead-wing grip left on 2026-09-10: the four angled lines are
+    // point 3 now, so there is no derived length for an offset grip to drag.
+    // @see exploitationAnchors
 };
 
 /**
@@ -583,7 +611,15 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
      * *is* the flip, and a grip that exists only to flip is not a thing the symbol needs. Its
      * own branch returned this same triple and has been folded in. @see MobileDefense.frame
      */
-    if (carriesSeparationInBase(name)) {
+    /*
+     * **The eleven axis arrows are the exception, and they come first.** Their separation is in
+     * the base too, but its grip is not a base vertex a user drags to a place — the plate fixes
+     * the angle and reads the point for a distance across the axis, so the gesture is the
+     * `offset` role and the renderer spends the answer by moving the stored point. Falling into
+     * the branch below called that grip a `shape` handle and MapLibre moved a vertex with it.
+     * @see carriesWidthPointInBase, MOVEMENT_GRAPHICS
+     */
+    if (carriesSeparationInBase(name) && !carriesWidthPointInBase(name)) {
         return {roles: ['shape', 'shape', 'shape'], repeating: 'shape'};
     }
     if (MOVEMENT_GRAPHICS.includes(name)) {
@@ -765,6 +801,50 @@ const PIVOTS_ON_LAST_VERTEX: readonly TacticalGraphicName[] = [
     TacticalGraphicName.TacticalBlock,
 ];
 
+/**
+ * Graphics whose pivot is neither the first vertex nor the last, by index.
+ *
+ * 343100 is the case that needed it. It turned about its rear while it was a two-point
+ * tip-first line, which made the rear its *last* vertex; the rear is point 2 of three now, and
+ * its last vertex is point 3 — a tail stroke's far end, off the axis entirely. Turning about
+ * that would swing the symbol about a corner of its own dashed tail.
+ *
+ * Point 2 is also where the plate puts the thing on the ground: *"The unit's projected
+ * location would be at the base of the symbol."* @see exploitationAnchors
+ */
+const PIVOT_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.Exploitation]: 1,
+};
+
+/**
+ * Which **stored vertex** a drawn line's gestures anchor on, by index.
+ *
+ * Three answers, and the default is the first: *"where the user started drawing, and where
+ * the symbol grows from"*. A tip-first graphic answers its last, because the renumbering into
+ * APP-06's order moved that same physical end from index 0 to index N-1 — and two blocks
+ * answer their last without being tip-first at all, which is why the two questions are asked
+ * separately. {@link PIVOT_VERTEX} carries the rest.
+ *
+ * Stated as an **index** rather than a coordinate so OpenLayers can ask it too: its
+ * `pivotCoordinate` works in projected metres, where re-projecting a base to ask
+ * `rotationAnchor` would be an absurd amount of work for "which end". Both engines reading one
+ * table is what stops a graphic turning about different ends in the two of them.
+ */
+export function pivotVertexIndex(name: TacticalGraphicName | string | undefined, count: number): number {
+    if (count <= 0) return 0;
+    const named = name === undefined ? undefined : PIVOT_VERTEX[name as TacticalGraphicName];
+    if (named !== undefined) return Math.min(named, count - 1);
+    /*
+     * **The last *axis* point, for a base whose last coordinate is a width.** The eleven pivot
+     * on their rear, which was their last coordinate while the width was an amplifier and is
+     * the one before it now. Turning about the width point would swing an axis of advance about
+     * a corner of its own arrowhead. @see carriesWidthPointInBase
+     */
+    const last = count - 1 - (carriesWidthPointInBase(name) && count >= 3 ? 1 : 0);
+    if (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) return Math.max(0, last);
+    return 0;
+}
+
 export function rotationAnchor(
     geometry: {type: string; coordinates: unknown},
     /**
@@ -854,13 +934,9 @@ export function rotationAnchor(
      * same coordinate these pivoted on before the renumbering, so the gesture is
      * unchanged — only the index it lives at moved. @see drawOrder.ts
      */
-    if (
-        (drawsTipFirst(name) || PIVOTS_ON_LAST_VERTEX.includes(name as TacticalGraphicName)) &&
-        (geometry.type === 'LineString' || geometry.type === 'MultiLineString')
-    ) {
-        return positions[positions.length - 1];
+    if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
+        return positions[pivotVertexIndex(name, positions.length)];
     }
-    if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return positions[0];
 
     // Measured in **projected** meters, not degrees. OpenLayers' `getInteriorPoint`
     // runs on EPSG:3857 coordinates, and Mercator's y is not linear in latitude — the
@@ -1112,7 +1188,15 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
      * derived from `size`. @see Disrupt, disruptAnchors
      */
     [TacticalGraphicName.TacticalDisrupt]: 3,
-    [TacticalGraphicName.Exploitation]: 2,
+    /*
+     * **Three, which is what 343100 states**: *"This symbol requires three anchor points.
+     * Point 1 defines the tip of the arrowhead. Point 2 defines the end of the symbol. Point
+     * 3's distance from Point 2 defines the length of the four angled lines making up the
+     * arrowhead and dashed tail."* Held at two until 2026-09-10, with that length carried as a
+     * `size` amplifier and dragged by a width grip hung off an arrowhead wing.
+     * @see exploitationAnchors
+     */
+    [TacticalGraphicName.Exploitation]: 3,
     [TacticalGraphicName.Block]: 3,
     [TacticalGraphicName.Disrupt]: 3,
     /*
@@ -1465,6 +1549,38 @@ export function isRectangular(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * Whether a `width` in the bag **changes what this graphic looks like**.
+ *
+ * Four families answer yes and every one of them states the width in its own terms: the
+ * corridors, whose rails stand off the centre line by half of it; the two-anchor-point
+ * rectangles; the five plates that give a length and a width to one anchor point; and the
+ * multiple-strike safe distance zone, whose width is the standoff between two rings.
+ * Measured, not asserted — `shapedByWidth.test.ts` renders all 318 graphics with and
+ * without a width and compares the geometry, so this list cannot quietly fall out of date.
+ *
+ * The eleven axis arrows are deliberately absent: their width is the last coordinate of
+ * the base, not an amplifier, so a `width` beside it is the second copy
+ * {@link carriesWidthPointInBase} exists to prevent.
+ *
+ * **A renderer needs this before it invents a size.** For the other 284 graphics a width
+ * is a field the generator never reads, and filing one anyway is how a number nobody typed
+ * travels: it rides into a saved file, an engine that replays a scalar on restore picks it
+ * up, and a symbol comes back a different size. That defect has been found five times in
+ * this repository, once per family, each time as its own exception. This is the rule those
+ * exceptions were approximating. @see maplibreAdapter.sizeDefaults
+ *
+ * Reading one is not the same as wanting one **invented**: the standoff zone is here and
+ * still takes no default, because the absence of its width is itself the legacy two-ring
+ * description. @see usesStandoffWidth
+ */
+export function shapedByWidth(name: TacticalGraphicName): boolean {
+    return CORRIDOR_GRAPHICS.includes(name)
+        || isRectangular(name)
+        || hasAxisAndWidth(name)
+        || usesStandoffWidth(name);
+}
+
+/**
  * Graphics whose **edit-mode drag resizes them** when it does not land on a vertex.
  *
  * Dragging a fields-of-fire's leg — not its handle, the line between them — opens or
@@ -1600,6 +1716,10 @@ const NO_EDIT_STRETCH: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Canalize,
     TacticalGraphicName.AttackByFire,
     TacticalGraphicName.SupportByFire,
+    // 343100 joined on 2026-09-10 and needs the same protection as the brackets: points 1 and
+    // 2 set the symbol's length and point 3 sets the length of its four angled lines, so a
+    // stray drag that scaled the whole graphic would move both at once.
+    TacticalGraphicName.Exploitation,
 ];
 
 /**
@@ -1658,6 +1778,17 @@ export function acceptsInsertedVertex(
     basePixels: readonly (readonly [number, number])[],
     at: readonly [number, number],
 ): boolean {
+    /*
+     * **The eleven axis arrows refuse their last segment**, because it is not a segment: it is
+     * the run from the rear to the point that states the width, drawn only because a base is one
+     * LineString. A vertex inserted there splits the width point off the end of the array, and
+     * everything downstream — the generator, the pivot, the grip — then reads a route point as a
+     * width and the width as a route point. There is nothing to correct it to, so it is refused
+     * the way abatis refuses its chevron. @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name) && basePixels.length >= 3 && nearestSegmentIndex(basePixels, at) === basePixels.length - 2) {
+        return false;
+    }
     const lead = reservedLeadPx(name);
     if (lead === undefined || basePixels.length < 2) return true;
 
@@ -1714,6 +1845,27 @@ const INERT_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
+/** Which segment of a pixel path the point `at` lies nearest, by its starting index. */
+function nearestSegmentIndex(path: readonly (readonly [number, number])[], at: readonly [number, number]): number {
+    let best = -1;
+    let nearest = Infinity;
+    for (let i = 1; i < path.length; i++) {
+        const [ax, ay] = path[i - 1];
+        const [bx, by] = path[i];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const span = Math.hypot(dx, dy);
+        if (span === 0) continue;
+        const t = Math.min(1, Math.max(0, ((at[0] - ax) * dx + (at[1] - ay) * dy) / (span * span)));
+        const distance = Math.hypot(at[0] - (ax + t * dx), at[1] - (ay + t * dy));
+        if (distance < nearest) {
+            nearest = distance;
+            best = i - 1;
+        }
+    }
+    return best;
+}
+
 /** Whether every handle this graphic publishes is inert. @see INERT_HANDLE_GRAPHICS */
 export function handlesAreInert(name: TacticalGraphicName): boolean {
     return INERT_HANDLE_GRAPHICS.includes(name);
@@ -1751,6 +1903,16 @@ export function anchorVertex(name: TacticalGraphicName): number | undefined {
  * 2026-09-06.) @see MobileDefense.frame
  */
 export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
+    /*
+     * **The eleven axis arrows, ahead of the vertex-count gate, because they have no count.**
+     *
+     * APP-06 lets them run from 3 to 50 anchor points, so the derivation below — "three base
+     * points, and the third has nowhere else to be" — cannot reach them. What their plates do
+     * fix is the *position*: *"Point N determines the width"*, whatever N is. Stated in
+     * `axisWidth.ts` and read here, so the one question every renderer asks about a second copy
+     * of a width has one answer. @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name)) return true;
     if ((baseVertexCount(name) ?? 2) < 3) return false;
     return (
         isMovementGraphic(name) ||
@@ -1767,6 +1929,18 @@ export function carriesSeparationInBase(name: TacticalGraphicName): boolean {
          * would falsify. @see Pursuit, usesFrontEdgeBase
          */
         name === TacticalGraphicName.Pursuit ||
+        /*
+         * **343100 is named too, on 2026-09-10.** What its point 3 separates is not a pair of
+         * rails but the *length* of the four angled lines — a distance from point 2, at a
+         * fixed 45 degrees. The fact this predicate is about is the same one: the dimension is
+         * a stored coordinate, so a `size` or a `width` filed beside it is a second copy. It
+         * is not a movement graphic, so the derivation above misses it.
+         *
+         * `usesFrontEdgeBase` deliberately does **not** follow it there — three points that
+         * are a tip, an end and a 45 degree arm are not a front edge and a point across it.
+         * @see exploitationAnchors, usesFrontEdgeBase
+         */
+        name === TacticalGraphicName.Exploitation ||
         /*
          * **The two-rail crossings carry their separation in the base as of 2026-09-06.** It
          * was a `radius` amplifier — the gap between the rails as a number with nowhere to

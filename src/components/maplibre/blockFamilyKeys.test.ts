@@ -15,7 +15,8 @@
  * symbol, a third of the size, from a number neither engine renders from directly.
  */
 
-import {TacticalGraphicName, ratioLockOf} from '@zaes/tactical-graphics';
+import type {Position} from 'geojson';
+import {TacticalGraphicName, axisWithWidthPoint, carriesWidthPointInBase, halfWidthFromBase, ratioLockOf} from '@zaes/tactical-graphics';
 import {buildTacticalGraphic} from './maplibreAdapter';
 
 const RES = 2445.98;
@@ -126,13 +127,35 @@ describe('what the block family files', () => {
      * **271100 bridge left on 2026-09-06.** It has rails, but its plate gives their
      * separation an anchor point — *"points 1 and 2 define one side of the gap and points 3
      * and 4 define the opposite side"* — so a `width` beside them is the second copy
-     * `carriesSeparationInBase` exists to prevent. A corridor's and an axis of advance's
-     * widths really are amplifiers, and they still get one. @see parallelRailAnchors
+     * `carriesSeparationInBase` exists to prevent. @see parallelRailAnchors
+     *
+     * **151403 main attack left on 2026-09-10**, with the other ten axis arrows, when their
+     * plates' *"Point N determines the width"* became a stored coordinate. A corridor's width
+     * really is an amplifier — its plate states one in metres and gives it no point — and it
+     * is the last member of this test.
      */
-    it.each([TacticalGraphicName.AirCorridor, TacticalGraphicName.MainAxisOfAdvance])(
-        'still gives %s its width',
+    it.each([TacticalGraphicName.AirCorridor])('still gives %s its width', name => {
+        expect(buildTacticalGraphic(name, LINE, {}, RES)!.properties.width).toBeGreaterThan(0);
+    });
+
+    /**
+     * The eleven axis arrows file none, and carry it as their last coordinate instead.
+     *
+     * The base handed in here is two points and no width at all — a legacy shape — so what the
+     * adapter must *not* do is invent one beside it. What it draws with comes from the
+     * caller's own `radius` while the base states nothing, which is what makes an old file
+     * readable. @see carriesWidthPointInBase
+     */
+    it.each([TacticalGraphicName.MainAxisOfAdvance, TacticalGraphicName.AvenueOfApproach, TacticalGraphicName.Counterattack])(
+        'files no width for %s, because its base carries one',
         name => {
-            expect(buildTacticalGraphic(name, LINE, {}, RES)!.properties.width).toBeGreaterThan(0);
+            expect(carriesWidthPointInBase(name)).toBe(true);
+            expect(buildTacticalGraphic(name, LINE, {}, RES)!.properties.width).toBeUndefined();
+
+            const widened = axisWithWidthPoint(name, LINE.coordinates, 40_000);
+            const built = buildTacticalGraphic(name, {type: 'LineString', coordinates: widened}, {}, RES)!;
+            expect(built.properties.width).toBeUndefined();
+            expect(halfWidthFromBase(name, (built.base.geometry as {coordinates: Position[]}).coordinates)).toBeCloseTo(40_000, 3);
         },
     );
 });

@@ -3,6 +3,7 @@ import * as turf from './turf';
 import {baseGeometryFor, renderTacticalGraphic} from './render';
 import {TacticalGraphicName} from './type';
 import {getSpecifications, TacticalGraphicSpecification} from './specifications';
+import {axisWithWidthPoint} from './axisWidth';
 
 /**
  * Rules taken verbatim from APP-06 Edition E Chapter 8, pinned as behavior.
@@ -146,17 +147,28 @@ describe('APP-06 271201 — demolition readiness states', () => {
  * put them on the wrong side entirely.
  */
 describe('advance to contact is drawn, not dropped', () => {
-    const ROUTE = {type: 'LineString' as const, coordinates: [[-0.42, 51.55], [-0.20, 51.55]]};
-    const BENT = {type: 'LineString' as const, coordinates: [[-0.05, 51.5], [0.06, 51.58], [0.2, 51.6]]};
+    /*
+     * **Each of these carries a width point on the end**, which is what 342900's base has held
+     * since 2026-09-10: *"Point N determines the width"*. Without one the bent fixture's third
+     * click would be read as the width and the route would be two points again, which is
+     * exactly the reading this test exists to rule out. @see axisWithWidthPoint
+     */
+    const WIDTH = 1400;
+    const withWidth = (coordinates: Position[]) => ({
+        type: 'LineString' as const,
+        coordinates: axisWithWidthPoint(TacticalGraphicName.AdvanceToContact, coordinates, WIDTH),
+    });
+    const ROUTE = withWidth([[-0.42, 51.55], [-0.20, 51.55]]);
+    const BENT = withWidth([[-0.05, 51.5], [0.06, 51.58], [0.2, 51.6]]);
 
-    const render = (geometry: typeof ROUTE, radius = 1400) =>
+    const render = (geometry: typeof ROUTE, radius = WIDTH) =>
         renderTacticalGraphic({
             type: 'Feature',
             geometry: geometry as never,
             properties: {tacticalGraphic: {name: TacticalGraphicName.AdvanceToContact, radius}},
         });
 
-    const members = (geometry: typeof ROUTE, radius = 1400) =>
+    const members = (geometry: typeof ROUTE, radius = WIDTH) =>
         (render(geometry, radius).graphic.geometry as {coordinates: Position[][]}).coordinates;
 
     it('takes a LineString base', () => {

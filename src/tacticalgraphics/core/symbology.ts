@@ -40,6 +40,7 @@ import {baseGeometryFor} from './render';
 import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 import {usesDrawnAnchors} from './handles';
+import {carriesWidthPointInBase} from './axisWidth';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -1199,6 +1200,16 @@ const SIDE_POINT_AFTER_RUN = new Set<TacticalGraphicName>([
  */
 export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: readonly T[]): T[] {
     if (SIDE_POINT_AFTER_RUN.has(name) && coordinates.length >= 3) return coordinates.slice(0, 2);
+    /*
+     * **The eleven axis arrows drop their last coordinate, not everything past their second.**
+     *
+     * Same rule as the four above and the same reason — the mark follows the centreline and the
+     * width point is not on it — but their run is free-length, so where it ends is "one before
+     * the end" rather than a fixed index. Measured on the running app: without this the hashed
+     * line ran out of the arrowhead and up to the width grip, a spur no plate draws.
+     * @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name) && coordinates.length >= 3) return coordinates.slice(0, -1);
     return [...coordinates];
 }
 
