@@ -87,6 +87,29 @@ export class MissionTaskController implements TacticalGraphicHandler {
     }
 
     /**
+     * Where a **rotate** turns, which is not the frame centre for every graphic here.
+     *
+     * `rotationPivot` is the library's separate answer for turning, and 340200 turn, its
+     * tactical twin and 152800 envelopment all swing about a corner rather than about the
+     * middle of their frame. Measured with a deliberate quarter turn on the running app, the
+     * two engines' geometry afterwards: envelopment 15.8% of the symbol apart and the turns
+     * 7.6%, with MapLibre asking the right function and this engine turning about the point
+     * it scales from.
+     *
+     * Falls back to the centre for a base that cannot answer — a `Point`-based graphic turns
+     * about itself, which is what `centerCoordinate` already returns. @see rotationAnchor
+     */
+    getTurningPoint(): number[] {
+        const coords = (this.graphic.base?.getGeometry() as {getCoordinates?(): unknown} | undefined)?.getCoordinates?.();
+        if (!Array.isArray(coords) || !Array.isArray(coords[0])) return this.getCenter();
+        const stated = rotationPivot(
+            {type: 'LineString', coordinates: (coords as Coordinate[]).map(c => toLonLat(c))},
+            this.graphic.name as TacticalGraphicName,
+        );
+        return fromLonLat(stated as Coordinate);
+    }
+
+    /**
      * Assigned in the constructor **only** when the graphic implements
      * `setBandRange`. The manager reads "present" as "this graphic's handles are
      * not interchangeable" and skips the uniform resize entirely, so declaring

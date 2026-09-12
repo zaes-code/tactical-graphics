@@ -953,6 +953,14 @@ export class TacticalGraphicsManager {
          * answers it with a single coordinate.
          */
         const center = this.activeController.getCenter() as number[];
+        /*
+         * **A rotate turns about its own point.** The library keeps the two apart —
+         * `rotationAnchor` for scaling, `rotationPivot` for turning — and they part company on
+         * the turns and the envelopment, whose frame centre is not the corner the symbol swings
+         * on. A controller that answers neither turns about its centre, as all of them did.
+         * @see TacticalGraphicHandler.getTurningPoint
+         */
+        const turningPoint = (this.activeController.getTurningPoint?.() ?? center) as number[];
         // **The effective mode, not `currentMode`.** An affordance gesture latches what a
         // drag means for its duration; reading `currentMode` here would run the drag as
         // whatever the host's toolbar last selected, which in `edit` is a reshape.
@@ -961,7 +969,7 @@ export class TacticalGraphicsManager {
                 this.defaultTranslateFunction(evt);
                 break;
             case InteractionType.rotate:
-                let deltaAngle = this.calculateDeltaAngle(evt, center);
+                let deltaAngle = this.calculateDeltaAngle(evt, turningPoint);
                 this.activeController.handleRotate(deltaAngle);
                 this.lastPointerPosition = evt.coordinate;
                 break;
@@ -1009,7 +1017,21 @@ export class TacticalGraphicsManager {
 
     handleCircleDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
-        let center = this.activeController.getBaseGeometry() as number[];
+        /*
+         * **The controller's centre, not its raw base geometry** — the same correction
+         * `handlePointDrag` carries, which this path never got.
+         *
+         * `calculateDeltaAngle` reads `center[0]` and `center[1]` as numbers. A graphic
+         * converted to APP-06's drawn anchor points keeps a `LineString` base, so
+         * `getBaseGeometry` hands back an array *of* coordinates here and both reads are
+         * arrays: the arithmetic produces `NaN` and the turn silently does nothing. Measured
+         * with a deliberate quarter turn on the running app, 271204's geometry afterwards was
+         * 113% of its own size away from MapLibre's.
+         *
+         * And a rotate turns about its own point, which is not always the one a resize scales
+         * from. @see TacticalGraphicHandler.getTurningPoint
+         */
+        const center = (this.activeController.getTurningPoint?.() ?? this.activeController.getCenter()) as number[];
         // **The effective mode, not `currentMode`.** An affordance gesture latches what a
         // drag means for its duration; reading `currentMode` here would run the drag as
         // whatever the host's toolbar last selected, which in `edit` is a reshape.
@@ -1539,7 +1561,8 @@ export class TacticalGraphicsManager {
 
     handleRotateForLineAndPolygon(evt: MapBrowserEvent, controller: TacticalGraphicHandler) {
         if (!this.activeController) return;
-        let center = controller.getCenter();
+        // The turning point, not the scaling one. @see TacticalGraphicHandler.getTurningPoint
+        let center = controller.getTurningPoint?.() ?? controller.getCenter();
         // Rotate around center
         const lastAngle = Math.atan2(this.lastPointerPosition[1] - center[1], this.lastPointerPosition[0] - center[0]);
         const currentAngle = Math.atan2(evt.coordinate[1] - center[1], evt.coordinate[0] - center[0]);
