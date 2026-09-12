@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, rotationAnchor} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -267,15 +267,31 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * grabbable is a real question and a separate one — how many handles a graphic
          * publishes is not the same switch as what a gesture turns about.
          */
-        if (usesCornerAnchors(name) && coords.length >= 2) {
-            const a = coords[0];
-            const b = coords[coords.length - 1];
-            return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as Coordinate;
-        }
-
-        // Otherwise the pivot end, which is p0 for a plain line and the last vertex for a
-        // graphic whose points are stored tip-first. @see pivotCoordinate
-        return pivotCoordinate(name, coords) ?? coords[0];
+        /*
+         * **Asked, not restated.** `rotationAnchor` is the library's whole answer to "what
+         * does a gesture turn and scale about", and it carries three decisions this engine
+         * was not honouring: 141700 ambush turns about point 2 rather than its centre
+         * (user's call, 2026-09-05), and cover, guard and screen turn and scale about their
+         * middle rather than about the arrowhead their first point sits on (user's call,
+         * 2026-09-06 — *"the axis of rotation and resize [...] need to go off the center of
+         * the graphic where the symbol may or may not be"*). MapLibre has always read it.
+         *
+         * Measured with a three-point base at 40 degrees north, the anchor this returned
+         * against the one the library states: the three security operations 336 km out and
+         * ambush 230. Every other one of the 172 graphics on this controller already agreed,
+         * the corner-anchored ones included — which is why the branch that restated their
+         * rule is gone rather than kept beside this.
+         *
+         * The round trip through lon/lat is what `pivotVertexIndex` exists to avoid, and it
+         * is affordable: a base is at most fifty points and this runs once per gesture, not
+         * once per frame.
+         */
+        if (!coords.length) return [0, 0] as Coordinate;
+        const stated = rotationAnchor(
+            {type: 'LineString', coordinates: coords.map(c => toLonLat(c as Coordinate))},
+            name,
+        );
+        return fromLonLat(stated as Coordinate);
     }
 
     getBaseGeometry(): number[] | number[][] | number[][][] {
