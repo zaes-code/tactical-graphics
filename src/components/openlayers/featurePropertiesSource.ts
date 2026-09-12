@@ -15,7 +15,7 @@ import VectorSource from 'ol/source/Vector';
 import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, getColorByHostility, widthFromBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByHostility, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
 import {hiddenAmplifierIds, setAmplifiersHidden} from '../amplifierVisibility';
 import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
@@ -93,6 +93,34 @@ function widthOfSelection(manager: TacticalGraphicsManager, symbolId: string): {
     return width === undefined ? {} : {width};
 }
 
+/**
+ * The size and bearing a **drawn-anchor** graphic's own points state.
+ *
+ * These graphics deliberately file neither: `MissionTaskGraphicBase.writeBase` refuses to,
+ * because the anchor points already carry them and a stamped copy is a second statement of one
+ * number. So the panel derives them here, which is the same move `widthOfSelection` makes for
+ * the eleven axis arrows one field over.
+ *
+ * Without it the read-out showed whatever the *file* happened to carry — 151204 contain
+ * reported 40 km beside a symbol drawn at 29.8 — and after the restore stopped filing the
+ * stale figure it would have shown nothing at all. @see usesDrawnAnchors, drawnAnchorFrame
+ */
+function frameOfSelection(manager: TacticalGraphicsManager, symbolId: string): {radius?: number; rotation?: number} {
+    const handler = manager.graphicControllers.find(c => c.getSymbolId?.() === symbolId);
+    const holder = handler?.graphic as unknown as {
+        graphicName?: TacticalGraphicName;
+        name?: TacticalGraphicName;
+        base?: {getGeometry(): {getCoordinates(): number[][]} | undefined};
+    } | undefined;
+    const name = holder?.graphicName ?? holder?.name;
+    if (!holder || !name || !usesDrawnAnchors(name)) return {};
+
+    const stored = holder.base?.getGeometry()?.getCoordinates()?.map(c => toLonLat(c as [number, number])) as Position[] | undefined;
+    if (!stored || stored.length < 2) return {};
+    const frame = drawnAnchorFrame(name, stored);
+    return frame ? {radius: frame.size, rotation: frame.rotation} : {};
+}
+
 export function createOpenLayersPropertiesSource(
     map: OlMap,
     manager: TacticalGraphicsManager,
@@ -145,7 +173,7 @@ export function createOpenLayersPropertiesSource(
                         graphicName: feature.get('graphicName') as TacticalGraphicName,
                         labels: readGraphicLabels(feature),
                         echelon: (feature.get('echelon') as string) || '',
-                        measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id)},
+                        measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id), ...frameOfSelection(manager, id)},
                         graphicSize: feature.get('graphicSize') as number | undefined,
                     });
                 }, HIT_TEST_DELAY_MS);

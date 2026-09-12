@@ -24,8 +24,10 @@ import {
     axisAndWidth,
     axisWithWidthPoint,
     carriesWidthPointInBase,
+    drawnAnchorFrame,
     hasAxisAndWidth,
     listTacticalGraphicNames,
+    usesDrawnAnchors,
     storedOrder,
     widthFromBase,
 } from '@zaes/tactical-graphics';
@@ -91,6 +93,41 @@ function maplibreSelection(name: TacticalGraphicName, coordinates: Position[]): 
         selection = next;
     });
     handler?.({point: {x: 10, y: 10}});
+    return selection;
+}
+
+/** The OpenLayers panel's payload for a base and a bag of the caller's choosing. */
+function openlayersSelectionFor(name: TacticalGraphicName, coordinates: Position[], bag: Record<string, unknown>): SelectedGraphic | null {
+    const projected = coordinates.map(position => fromLonLat(position as [number, number]));
+    const base = new Feature({geometry: new LineString(projected)});
+    const feature = new Feature({geometry: new LineString(projected)});
+    feature.set('symbolId', 'g1');
+    feature.set('graphicName', name);
+    feature.set('tacticalGraphic', {name, ...bag});
+
+    const manager = {
+        isDrawing: () => false,
+        isEditing: () => false,
+        lastDrawEndedAt: 0,
+        graphicControllers: [{getSymbolId: () => 'g1', graphic: {graphicName: name, base}}],
+    } as unknown as TacticalGraphicsManager;
+
+    let handler: ((event: {pixel: number[]}) => void) | undefined;
+    const map = {
+        on: (_event: string, fn: typeof handler) => {
+            handler = fn;
+        },
+        un: () => {},
+        forEachFeatureAtPixel: (_pixel: number[], fn: (f: Feature) => unknown) => fn(feature),
+        getInteractions: () => ({getArray: () => []}),
+    };
+    const source = createOpenLayersPropertiesSource(map as never, manager);
+    let selection: SelectedGraphic | null = null;
+    source.onSelect(next => {
+        selection = next;
+    });
+    handler?.({pixel: [10, 10]});
+    vi.advanceTimersByTime(HIT_TEST_DELAY_MS + 5);
     return selection;
 }
 
@@ -185,6 +222,30 @@ describe('the width in the properties panel', () => {
 
         const selection = maplibreSelectionFor(graphic!);
         expect(selection?.measured.length).toBeCloseTo(derived!.length, 3);
+    });
+
+    /**
+     * **The same rule for a frame the anchor points carry.**
+     *
+     * `MissionTaskGraphicBase.writeBase` refuses to file `radius` and `rotation` for a
+     * drawn-anchor graphic, because the points already state them. The panel therefore has to
+     * derive them, and until it did it reported whatever the *file* carried: 151204 contain
+     * read 40 km beside a symbol drawn at 29.8, which is what MapLibre reported from its own
+     * rebuild. @see usesDrawnAnchors, drawnAnchorFrame
+     */
+    it.each([
+        TacticalGraphicName.Contain,
+        TacticalGraphicName.Envelopment,
+    ])('derives the radius of %s from its anchor points, not from the bag', name => {
+        expect(usesDrawnAnchors(name)).toBe(true);
+        const stored: Position[] = [[-0.7, 40], [0, 40]];
+        const frame = drawnAnchorFrame(name, stored);
+        expect(frame?.size).toBeGreaterThan(0);
+
+        // A bag stating something else entirely, the way an older file does.
+        const selection = openlayersSelectionFor(name, stored, {radius: 40_000, rotation: 0});
+        expect(selection?.measured.radius).toBeCloseTo(frame!.size, 0);
+        expect(selection!.measured.radius).not.toBeCloseTo(40_000, 0);
     });
 
     /**
