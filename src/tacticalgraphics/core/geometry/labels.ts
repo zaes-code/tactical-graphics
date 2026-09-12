@@ -81,7 +81,6 @@ export function generateLabelGaps(
         const dx = p2[0] - p1[0];
         const dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
-        console.log('Segment length:', segLen, 'Gap size:', options.gapSize, 'Ratio:', options.gapSize / segLen);
 
         if (!gapIndices.has(i)) {
             // Normal segment: add the full segment
