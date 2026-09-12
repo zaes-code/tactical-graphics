@@ -258,11 +258,21 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
     if (!isFinite(ratio) || ratio === 1) return description;
 
     if (description.geometry.type === 'Point') {
+        /*
+         * **A radius is not the only thing a centred graphic can be sized by.** 200700 is
+         * described by two ranges and files no radius at all — measured on the sweep, its bag
+         * carries `startRange` and `stopRange` and nothing else — so bailing out when there is
+         * no radius left it the one graphic of the six this scaling was written for that a
+         * resize still did not touch.
+         */
+        const scaled = scaleStatedDimensions(description.properties, ratio);
         const current = description.properties.radius;
-        if (current === undefined) return description;
+        if (current === undefined) {
+            return scaled === description.properties ? description : {...description, properties: scaled};
+        }
         return {
             ...description,
-            properties: {...description.properties, radius: Math.max(MIN_RADIUS_METERS, current * ratio)},
+            properties: {...scaled, radius: Math.max(MIN_RADIUS_METERS, current * ratio)},
         };
     }
 
@@ -318,6 +328,41 @@ function scaleDrawnSizes(
         ...properties,
         ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
         ...(isArea || properties.decorationSize === undefined ? {} : {decorationSize: scaled(properties.decorationSize)}),
+    };
+}
+
+/**
+ * The dimensions a point-anchored graphic **states** rather than derives, scaled by `ratio`.
+ *
+ * `radius` is not the whole size of every centred symbol. Five plates give a length *and* a
+ * width to one anchor point — the three maritime ellipses, 240802 and 200600 — and 200700 is
+ * described by two ranges; the rectangular target files a length of its own. A resize that
+ * moved only `radius` scaled half of each of those and left the other half at whatever it was
+ * seeded with, so the symbol changed shape as it changed size.
+ *
+ * Measured on `compare:engines` before this: a 1.5x resize of 200101 took its length to
+ * 540,241 m on OpenLayers and left it at the seeded 360,000 here, and 200700's two ranges the
+ * same way.
+ *
+ * A sibling of {@link scaleDrawnSizes}, which does the same job for a drawn base and
+ * deliberately leaves `radius` alone because there it is the same number as the half-width.
+ * These are the fields that one does not touch. @see hasAxisAndWidth, statesShapeAsRangeBands
+ */
+function scaleStatedDimensions(properties: TacticalGraphicProperties, ratio: number): TacticalGraphicProperties {
+    const scaled = (value: number | undefined): number | undefined =>
+        value !== undefined && value > 0 ? value * ratio : value;
+
+    const touches = ['length', 'width', 'startRange', 'stopRange'] as const;
+    // The same object back when there was nothing to scale, so a caller can tell a no-op
+    // from a change by identity — which is what `dragTo` does to decide whether to rebuild.
+    if (!touches.some(key => properties[key] !== undefined)) return properties;
+
+    return {
+        ...properties,
+        ...(properties.length === undefined ? {} : {length: scaled(properties.length)}),
+        ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
+        ...(properties.startRange === undefined ? {} : {startRange: scaled(properties.startRange)}),
+        ...(properties.stopRange === undefined ? {} : {stopRange: scaled(properties.stopRange)}),
     };
 }
 
