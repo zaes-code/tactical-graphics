@@ -60,6 +60,15 @@ export interface TacticalGraphicHandler {
     setBaseFeature(base: Feature): void;
 
     getCenter(): number[];
+    /**
+     * The point a **rotate** turns about, when it is not the point a resize scales from.
+     *
+     * The library keeps the two apart — `rotationAnchor` for scaling, `rotationPivot` for
+     * turning — and they part company on the turns and the envelopment, where the frame's
+     * centre is not the corner the symbol swings on. A controller that does not answer this
+     * turns about its centre, which is what every one of them did before. @see rotationPivot
+     */
+    getTurningPoint?(): number[];
 
     getFeatures(): OLFeature[];
 
