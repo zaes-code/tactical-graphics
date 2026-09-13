@@ -637,7 +637,7 @@ export const CORRIDOR_GRAPHICS: readonly TacticalGraphicName[] = [
  * The bar-stack symbols: the three explosives readiness states and the executed
  * roadblock. `BAR_SYMBOL_DASHES` says which bar of each is broken.
  */
-export const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
+const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
@@ -1179,19 +1179,6 @@ const REGISTRY = buildRegistry();
 export const PAINTABLE_GRAPHICS: readonly TacticalGraphicName[] = Object.keys(REGISTRY) as TacticalGraphicName[];
 
 /** Whether `name` has been ported to a paint function yet. */
-/**
- * Whether this graphic is drawn as a stack of leaning bars.
- *
- * Exported because a renderer that installs its own style for the family has to know the
- * membership, and restating it is how 271204 came to be drawn in the draw-marker grey while
- * its three siblings were obstacle green: the name was added here and not there. **Not the
- * same list as `BAR_SYMBOL_DASHES`**, which says which bar of each is broken and so has three
- * entries rather than four — nothing dashes on the roadblock.
- */
-export function drawsAsBarSymbol(name: TacticalGraphicName): boolean {
-    return BAR_SYMBOL_GRAPHICS.includes(name);
-}
-
 export function isPaintable(name: TacticalGraphicName): boolean {
     return name in REGISTRY;
 }

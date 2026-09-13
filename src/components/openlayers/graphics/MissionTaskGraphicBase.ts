@@ -1,7 +1,8 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {handlesAreInert, drawsAsBarSymbol, publishesAnchorHandleOnly, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import {asStyleFunction} from '../paintToOpenLayers';
+import {handlesAreInert, getPaintFunction, publishesAnchorHandleOnly, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
@@ -40,7 +41,6 @@ import {
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
     escortOrDemonstrationStyleFunc,
-    barSymbolStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
@@ -184,6 +184,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             // resolution has to ride on the base feature too — it is the only one saved.
             this.base.set('drawingResolution', drawingResolution);
         }
+        /*
+         * **The shared paint first, and anything named below overrides it.**
+         *
+         * Every branch that follows sets a style of its own, so the specific cases are
+         * untouched; what changes is the graphic that matches *none* of them. That used to
+         * fall through to `createFeature`'s default line work even when the paint registry
+         * had an entry for it — which is how 271204 came to draw in the host's default
+         * colour while `getPaintFunction` was handing MapLibre its obstacle green, and why
+         * its own generated thumbnail was green the whole time.
+         *
+         * Registering a paint should take one edit, not two. Asking the registry here is
+         * what makes that true for every family rather than for the one that was reported:
+         * the fix as first written added a `drawsAsBarSymbol` predicate to the library and
+         * a fourth name to a hand-written list, which is the same shape of statement that
+         * caused it. @see getPaintFunction, asStyleFunction
+         */
+        const registered = getPaintFunction(name);
+        if (registered?.graphic) this.graphic.setStyle(asStyleFunction(registered.graphic, name));
+
         // The airfield is a one-point static symbol: two crossed arms pinned to a screen
         // size, and its designation set *beside* them rather than through the crossing,
         // which is where the ordinary mission-task label would put it.
@@ -237,17 +256,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // unchanged — only how the geometry gets built moved.
         // The readiness states differ only in which bar is dashed - a stroke property,
         // so it cannot live in the geometry.
-        /*
-         * **Asked, not listed.** This was the three readiness states written out by name, and
-         * 271204 joined the family in the paint registry without joining it here — so the
-         * executed roadblock drew in the draw-marker grey while its three siblings drew in
-         * 8.1.4.3's obstacle green, which the shared paint had been giving it all along. Its
-         * own thumbnail, rendered from that paint, was green the whole time.
-         * @see drawsAsBarSymbol, OBSTACLE_GRAPHICS
-         */
-        if (drawsAsBarSymbol(name)) {
-            this.graphic.setStyle(barSymbolStyleFunc(name));
-        }
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
