@@ -34,10 +34,31 @@ const BAR_BEARING = 45;
  * exactly the half-separation. @see ai/excluded-graphics.md
  */
 export function roadblockAnchors(center: Position, span: number, rotation = 0): Position[] {
+    return anchorsAtBearingOffset(center, span, -rotation);
+}
+
+/**
+ * The same three points, from an offset in the **compass** frame this module works in.
+ *
+ * Everything inside here — `BAR_BEARING`, `frameOf`, the bars themselves — is written in
+ * `turf.destination` bearings, which run clockwise from north. The schema's `rotation`
+ * runs the other way, counter-clockwise from east, which is what `degrees()` produces for
+ * every other member of the drawn-anchor family and what a renderer's rotate gesture adds
+ * to. So the two exported functions negate at the boundary and nothing inside has to
+ * change.
+ *
+ * **This was the last cross-engine gesture difference.** MapLibre turns a drawn graphic by
+ * rotating its coordinates, so it took no notice; OpenLayers turns this one by advancing
+ * `rotation` and rebuilding, so it spent a counter-clockwise drag as a clockwise bearing
+ * and 271204 was the only graphic on the map that turned the wrong way. Measured against
+ * its six siblings, a stated `rotation` of +30 moved its anchors -30 degrees where every
+ * one of them moved +30. @see drawnAnchors, roadblockFrame
+ */
+function anchorsAtBearingOffset(center: Position, span: number, bearingOffset: number): Position[] {
     const half = span / 2;
     const gap = (span * ROADBLOCK_SEPARATION_RATIO) / 2;
     const at = (metres: number, bearing: number): Position =>
-        turf.destination(turf.point(center), metres, bearing + rotation, {units: 'meters'}).geometry.coordinates as Position;
+        turf.destination(turf.point(center), metres, bearing + bearingOffset, {units: 'meters'}).geometry.coordinates as Position;
     // 270 is due west of the symbol's own axis: the crossings sit level with each other, as
     // the bars require, and turn with it.
     return [at(half, BAR_BEARING + 180), at(half, BAR_BEARING), at(gap, 270)];
@@ -51,7 +72,9 @@ export function roadblockAnchors(center: Position, span: number, rotation = 0): 
  */
 export function roadblockFrame(coords: Position[] | undefined): {center: Position; size: number; rotation: number} | undefined {
     const frame = coords && frameOf(coords);
-    return frame && {center: frame.center, size: frame.span, rotation: frame.rotation};
+    // Negated on the way out for the reason `anchorsAtBearingOffset` gives: `frameOf`
+    // answers in compass bearings and the schema's `rotation` runs the other way.
+    return frame && {center: frame.center, size: frame.span, rotation: -frame.rotation};
 }
 
 /** The centre, span and half-separation a stored base describes. @see roadblockAnchors */
@@ -150,7 +173,8 @@ export class RoadblockComplete extends TacticalGraphicsBase<MovementGraphicOptio
         if (coords.length >= 3) return this.asMultiPointFeature(coords.slice(0, 3));
         const frame = frameOf(coords);
         const span = frame?.span ?? Math.max(opts?.radius ?? opts?.size ?? 1, 1);
-        return this.asMultiPointFeature(roadblockAnchors(coords[0] ?? [0, 0], span, frame?.rotation ?? 0));
+        // `frameOf` answers in compass bearings, so this takes the internal door.
+        return this.asMultiPointFeature(anchorsAtBearingOffset(coords[0] ?? [0, 0], span, frame?.rotation ?? 0));
     }
 
     /** No amplifiers: affiliation and nothing else. */
