@@ -17,6 +17,8 @@ import {
     MERCATOR_MAX_LATITUDE,
     latitudeFromMercatorY,
     getInertHandleColor,
+    handlesAreInert,
+    hidesAnchorGrip,
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
@@ -843,7 +845,21 @@ export class NativeLayerRenderer {
     private realizeEditorMarks(): void {
         this.setData('handles', this.handleBearers().flatMap(graphic => {
             const center = centerHandleIndex(graphic);
-            return graphic.handles.map((position, index) => ({
+            // **A handle nothing may drag is drawn gray, whatever else it is.** This engine
+            // already refuses the grab (`handlesAreInert` is read at pointer-down) and went
+            // on painting the dots red, which promises a drag that is then declined — and
+            // the color is the only thing telling the operator which dots answer. 271204 is
+            // the case: OpenLayers draws its three anchors gray and this drew them red.
+            // (User's rule, 2026-09-13: red markers must do something, gray ones need not.)
+            const allInert = handlesAreInert(graphic.name);
+            // **The grip on the first anchor is not drawn on the graphics that only
+            // stretch**, which is the rule OpenLayers stated privately as
+            // `hidesStartHandle`. Skipped rather than removed from `graphic.handles`, so
+            // every index the handle contract is written in stays where it was — and
+            // because `hitTestHandle` reads the rendered layer, not drawing it is also what
+            // stops it answering a grab. @see hidesAnchorGrip
+            const hiddenGrip = anchorGripIndex(graphic);
+            return graphic.handles.flatMap((position, index) => index === hiddenGrip ? [] : [{
                 type: 'Feature' as const,
                 geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
                 properties: {
@@ -855,9 +871,9 @@ export class NativeLayerRenderer {
                     // divides by distance-to-center and a point on the axis carries no
                     // angle. It still moves the graphic, which is what the eye expects of a
                     // center. @see createInertHandleFeature
-                    color: index === center ? getInertHandleColor() : getHandleColor(),
+                    color: allInert || index === center ? getInertHandleColor() : getHandleColor(),
                 },
-            }));
+            }]);
         }));
 
         this.setData('vertexHint', this.vertexHint
@@ -1080,6 +1096,27 @@ export class NativeLayerRenderer {
  * the first or swallow the second's edge handle.
  */
 const CENTER_TOLERANCE_FRACTION = 0.01;
+
+/**
+ * The handle sitting on the graphic's first anchor point, when that one is not drawn.
+ *
+ * **Matched on position, not on index**, for the reason OpenLayers gives in
+ * `visiblePathHandles`: the generators do not agree on an order, and `Fix` emits its two as
+ * `[far, near]`. Only "is this handle on point 1" is stable across all of them.
+ *
+ * @see hidesAnchorGrip
+ */
+function anchorGripIndex(graphic: MapLibreTacticalGraphic): number {
+    if (!hidesAnchorGrip(graphic.name)) return -1;
+    const base = graphic.base.geometry;
+    if (base.type !== 'LineString') return -1;
+    const first = base.coordinates[0] as [number, number] | undefined;
+    if (!first) return -1;
+    const anchor = toMercator(first);
+    // A metre, in projected metres: smaller than any symbol and larger than the round trip
+    // the coordinates have already made.
+    return graphic.handles.findIndex(handle => Math.hypot(handle[0] - anchor[0], handle[1] - anchor[1]) <= 1);
+}
 
 /** @see NativeLayerRenderer.centerHandleOf */
 function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
