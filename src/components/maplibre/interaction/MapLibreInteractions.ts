@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -1754,7 +1754,18 @@ export class MapLibreInteractions {
                 // editable line: dragging a leg opens or closes the V. Translating
                 // instead slid the whole graphic, so the angle could not be changed that
                 // way at all. @see editStretches
-                if (drag.vertex < 0 && editStretches(drag.graphic.name)) return resize(before, drag.origin, to);
+                //
+                // **A grip is not an exception, unless the graphic reshapes.** Grabbing a
+                // handle used to fall through to the vertex move below whatever the symbol
+                // was, and this engine reshapes wherever `modify` is allowed — 272
+                // graphics — while OpenLayers reshapes on the 81 the library now names. On
+                // the 23 that stretch and do not reshape, the same dot therefore scaled the
+                // symbol there and pulled one point out of it here. Measured on the handle
+                // sweep, the bearing lines' second grip landed 37.5 km apart.
+                // @see reshapesByVertex
+                if (editStretches(drag.graphic.name) && !reshapesByVertex(drag.graphic.name)) {
+                    return resize(before, drag.origin, to);
+                }
                 // A graphic that does not reshape and does not stretch is left alone.
                 // Falling through to the move below would make "edit" a second "move" for
                 // the point-anchored symbols, where OpenLayers does nothing at all.
