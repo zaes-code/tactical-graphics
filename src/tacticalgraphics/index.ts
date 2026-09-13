@@ -451,7 +451,7 @@ export {baseGeometryFor} from './core/render';
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
-export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
+export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
 export {
