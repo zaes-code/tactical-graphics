@@ -18,8 +18,9 @@
  * new color comes out of the paint functions on the rebuild.
  */
 
+import type {Position} from 'geojson';
 import type {Map as MapLibreMap} from 'maplibre-gl';
-import {TacticalGraphicName, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, widthFromBase, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import {setAmplifiersHidden} from '../amplifierVisibility';
 import type {GraphicLabels} from '../graphicAmplifiers';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
@@ -66,7 +67,27 @@ export function createMapLibrePropertiesSource(
                     measured: {
                         radius: props.radius,
                         decorationSize: props.decorationSize,
-                        width: props.width,
+                        /*
+                         * **The eleven axis arrows state their width in the base**, so the bag
+                         * holds none and this has to be derived — exactly as the OpenLayers
+                         * source derives it. Without that the panel had no measured figure for
+                         * them and drew the *typed input* instead, which is an empty box on a
+                         * number the operator sets by dragging. (User's report, 2026-09-11.)
+                         *
+                         * The field registry leaves `widthTyped` off for these, so a measured
+                         * value renders as the read-out the other engine shows.
+                         * @see widthFromBase, carriesWidthPointInBase
+                         */
+                        width: widthFromBase(graphic.name, basePositions(graphic.base.geometry)) ?? props.width,
+                        /*
+                         * **`length` is a read-out this half never reported**, so the five plates
+                         * that state a length and a width about one anchor point showed the figure
+                         * on OpenLayers and nothing at all here. Both engines file the same number
+                         * — measured, 80,000 m for 200101 on each — so the panel's silence was
+                         * this line missing rather than anything about the graphic.
+                         * @see GraphicGeometryState, hasAxisAndWidth
+                         */
+                        length: props.length,
                         rotation: props.rotation,
                         bend: props.bend,
                         mirrored: props.mirrored,
@@ -141,6 +162,17 @@ export function createMapLibrePropertiesSource(
             });
         },
     };
+}
+
+/**
+ * A base geometry's own coordinates, in stored order, or nothing if it has none.
+ *
+ * Only a `LineString` answers, which is the shape every graphic that states a width in its
+ * base has. A ring's coordinates are nested one level deeper and mean something else, so
+ * flattening them here would hand `widthFromBase` a list it would read positionally.
+ */
+function basePositions(geometry: {type: string; coordinates?: unknown}): Position[] | undefined {
+    return geometry.type === 'LineString' ? (geometry.coordinates as Position[]) : undefined;
 }
 
 /** The last vertex of a GeoJSON geometry, whatever its depth. */

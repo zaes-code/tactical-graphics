@@ -1,7 +1,8 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {handlesAreInert, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import {asStyleFunction} from '../paintToOpenLayers';
+import {handlesAreInert, getPaintFunction, publishesAnchorHandleOnly, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
@@ -11,8 +12,6 @@ import {handlesAreInert, anchorsFromFrame, bowFromAnchors, frameFromAnchors, run
     drawnAnchorFrame,
     drawnAnchors,
     groundLength,
-    minimumDrawnRadiusPx,
-    screenMeters,
     latitudeFromMercatorY,
     projectedLength,
 } from '@zaes/tactical-graphics';
@@ -42,7 +41,6 @@ import {
     turnStyleFunc,
     envelopmentGraphicStyleFunc,
     escortOrDemonstrationStyleFunc,
-    barSymbolStyleFunc,
 } from "../openlayerStyles";
 import {LineString, MultiLineString, MultiPoint, Point} from "ol/geom";
 import openlayersAdapter from "../openlayersAdapter";
@@ -101,8 +99,6 @@ const ENVELOPMENT_REAR_HANDLE = 2;
  * deliberate move to one side keeps the flip available without that.
  */
 /** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
-
-/** The legibility floor — its list, its size and its history — is `minimumDrawnRadiusPx`. */
 
 /**
  * The mission tasks drawn as two arcs of one circle with a one-letter label in
@@ -188,6 +184,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
             // resolution has to ride on the base feature too — it is the only one saved.
             this.base.set('drawingResolution', drawingResolution);
         }
+        /*
+         * **The shared paint first, and anything named below overrides it.**
+         *
+         * Every branch that follows sets a style of its own, so the specific cases are
+         * untouched; what changes is the graphic that matches *none* of them. That used to
+         * fall through to `createFeature`'s default line work even when the paint registry
+         * had an entry for it — which is how 271204 came to draw in the host's default
+         * colour while `getPaintFunction` was handing MapLibre its obstacle green, and why
+         * its own generated thumbnail was green the whole time.
+         *
+         * Registering a paint should take one edit, not two. Asking the registry here is
+         * what makes that true for every family rather than for the one that was reported:
+         * the fix as first written added a `drawsAsBarSymbol` predicate to the library and
+         * a fourth name to a hand-written list, which is the same shape of statement that
+         * caused it. @see getPaintFunction, asStyleFunction
+         */
+        const registered = getPaintFunction(name);
+        if (registered?.graphic) this.graphic.setStyle(asStyleFunction(registered.graphic, name));
+
         // The airfield is a one-point static symbol: two crossed arms pinned to a screen
         // size, and its designation set *beside* them rather than through the crossing,
         // which is where the ordinary mission-task label would put it.
@@ -241,9 +256,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // unchanged — only how the geometry gets built moved.
         // The readiness states differ only in which bar is dashed - a stroke property,
         // so it cannot live in the geometry.
-        if (name === TacticalGraphicName.ExplosivesPlannedStateOfReadiness || name === TacticalGraphicName.ExplosivesStateOfReadiness1Safe || name === TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable) {
-            this.graphic.setStyle(barSymbolStyleFunc(name));
-        }
         if (name === TacticalGraphicName.Envelopment) {
             this.graphic.setStyle(envelopmentGraphicStyleFunc());
         }
@@ -413,6 +425,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
 
         const onCenter = (c: number[]) => Math.hypot(c[0] - center[0], c[1] - center[1]) <= SAME_POINT_EPSILON_M;
         const draggable = coords.filter(c => !onCenter(c));
+        /*
+         * **The five one-anchor tasks publish a gray dot, not a red one.**
+         *
+         * Their plates read *"requires one anchor point. The centre point defines the centre
+         * of the symbol"*, so the only point they publish is that centre — and a centre
+         * carries neither a scale ratio nor an angle. They move, turn and scale through the
+         * selection box's affordances instead, which is what `allowedGestures` offers.
+         *
+         * The branch below promotes a set with nothing off-centre to the live red handle, on
+         * the reasoning that a graphic should never have nothing to grab. For these that is
+         * the wrong trade: it paints a dot the colour that means "drag me" and then declines
+         * every drag. MapLibre has drawn them gray all along. (User's rule, 2026-09-13: red
+         * markers must do something, gray ones need not.) @see publishesAnchorHandleOnly
+         */
+        if (publishesAnchorHandleOnly(this.name)) {
+            this.handles.setGeometry(new MultiPoint([]));
+            this.centerHandle.setGeometry(new MultiPoint(coords));
+            return;
+        }
         if (draggable.length === 0) {
             this.handles.setGeometry(new MultiPoint(coords));
             this.centerHandle.setGeometry(new MultiPoint([]));
@@ -437,18 +468,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         if (!active) this.measureAnchor = undefined;
         this.refreshMeasure();
     }
-
-    /**
-     * Suspends the minimum-size floor below while a snapshot is rebuilt.
-     *
-     * The floor is `RATIO_LOCKED_MIN_RADIUS_PX * drawingResolution`, and on a restore
-     * that resolution is the *current* view's, not the one the graphic was drawn at. So
-     * restoring zoomed out clamped the size up by exactly the ratio between them — the
-     * crossed four, Turn, TacticalTurn and Envelopment all came back 4x too large in a
-     * 4x-resolution session. The floor is a draw-time affordance; on restore the size is
-     * already final. @see LineGraphicBase.suspendMinimumLength for the twin.
-     */
-    suspendMinimumSize = false;
 
     /**
      * Which side an asymmetric point-anchored graphic hangs its hook on — Pursuit's
@@ -505,6 +524,8 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // @see createMeasureFeature, which reads this
         this.measure.set('measureMeters', this.measureStated());
         this.measure.set('measureLabel', this.measureCaption());
+        this.measure.set('measureDegrees', this.measureAngle());
+        this.measure.set('measureParts', this.measureParts());
         this.measure.setGeometry(new LineString([this.center, edge]));
     }
 
@@ -543,6 +564,30 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * dimensions has to say which is moving. @see createMeasureFeature
      */
     protected measureCaption(): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * The angle the read-out states instead of a distance, in degrees, or nothing.
+     *
+     * Nothing for every graphic sized by a drag, which is what a measure line was built
+     * for. The radar search doctrine has two numbers its plate states in degrees — the
+     * search axis and the stop relative bearing — and the grips that set them had no
+     * read-out at all, because the only one on offer formatted metres. @see measureReadout
+     */
+    protected measureAngle(): number | undefined {
+        return undefined;
+    }
+
+    /**
+     * Everything the read-out states, when one gesture sets more than one number.
+     *
+     * `undefined` for every graphic that sets one thing at a time, which is nearly all of
+     * them — the read-out then shows the single figure it always has. The radar search
+     * doctrine's second click fixes its axis and its start range together, and reporting
+     * one of the two is how the axis came to have no read-out. @see measureReadout
+     */
+    protected measureParts(): MeasurePart[] | undefined {
         return undefined;
     }
 
@@ -608,15 +653,6 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     private screenSizesPlaced = false;
 
     /**
-     * Whether the draw interaction is the thing setting this holder's size right now.
-     *
-     * Set by `MissionTaskController` for the length of the draw, and read by exactly one
-     * rule: the legibility floor, which is a draw-time affordance and was firing on every
-     * later gesture too. @see updateGeom
-     */
-    sizingFromDraw = false;
-
-    /**
      * Converts this graphic's screen-derived sizes now that its place is known.
      *
      * A no-op for most of the family: their one size is the radius, which the draw drag
@@ -639,29 +675,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // at once: the draw drag (which derives one from the cursor bearing),
         // `handleRotate`, and a restore carrying an old non-zero value.
         if (CROSSED_MISSION_TASKS.includes(this.name)) this.rotation = 0;
-        let newSize = size || this.size;
-        /*
-         * **The legibility floor belongs to the draw, and nothing else.**
-         *
-         * It is here so a barely-dragged curve is committed at a readable size rather than
-         * as a kink — but `updateGeom` is the door *every* gesture comes through, so it
-         * also fired on graphics drawn long ago: panning a small turn at a low zoom grew
-         * it, and a restored one was inflated by the first gesture that touched it, 129 km
-         * to 300 km at 6000 m/px. `sizingFromDraw` is only true while the draw interaction
-         * is feeding this holder, which is the moment the affordance is for.
-         *
-         * The list and the constant are the library's now, so MapLibre floors the same
-         * three at the same size instead of having no floor at all. @see minimumDrawnRadiusPx
-         */
-        const floorPx = this.sizingFromDraw ? minimumDrawnRadiusPx(this.name) : undefined;
-        if (floorPx !== undefined && !this.suspendMinimumSize) {
-            const drawingRes = this.label.get('drawingResolution') as number | undefined;
-            if (drawingRes && drawingRes > 0) {
-                const anchor = center ?? this.center;
-                const minSize = screenMeters(floorPx, drawingRes, anchor ? latitudeFromMercatorY(anchor[1]) : 0);
-                if (newSize < minSize) newSize = minSize;
-            }
-        }
+        const newSize = size || this.size;
         this.size = newSize;
         this.center = center || this.center;
         // The first time a center arrives, anything specified in screen pixels can finally
@@ -1041,13 +1055,22 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         const theta = (this.rotation * Math.PI) / 180;
 
         if (handleIndex === TURN_TIP_HANDLE) {
-            // The tip is the far end of the chord, so the cursor gives both of
-            // the chord's inputs directly: how long it is and which way it
-            // points. `bend` is unitless and rides along unchanged.
+            /*
+             * The tip is the far end of the chord, so the cursor gives both of the chord's
+             * inputs directly: how long it is and which way it points. `bend` is unitless
+             * and rides along unchanged.
+             *
+             * **The cursor is measured on the screen and `size` is spent on the ground**,
+             * so the reach is converted before it is written. The two differ by the
+             * Mercator scale factor, which is nothing on the equator and 1.74 at 55° — the
+             * grip was left sitting well beyond the tip it had been dragged to. Same
+             * arithmetic as MapLibre's `setReach`, which has always converted here.
+             * @see mercator.ts, editGeometry.ts
+             */
             const reach = Math.hypot(dx, dy);
             if (reach <= 0) return;
             this.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-            this.updateGeom({size: reach});
+            this.updateGeom({size: groundLength(reach, latitudeFromMercatorY(center[1]))});
             return;
         }
 
@@ -1088,7 +1111,17 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         // point, so the offset is half the bend's own depth.
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
-        this.bend = turnBendFromOffset(dx * perpX + dy * perpY, this.size);
+        /*
+         * **On the ground, because `size` is.** The cursor is measured on the screen and
+         * `size` was converted the moment the tip branch above wrote it, so dividing one by
+         * the other mixed two frames — and `bend` is exactly that ratio. Mercator metres run
+         * 1.31x long at 40 degrees north, which is where the handle sweep measured it: the
+         * same drag on 340200's apex left the two engines' bend point 2.12 km apart, the
+         * clamp having absorbed most of the rest. MapLibre's `setBend` divides by the same
+         * scale factor and says so. @see mercator.ts, editGeometry.ts
+         */
+        const offset = groundLength(Math.abs(dx * perpX + dy * perpY), latitudeFromMercatorY(center[1]));
+        this.bend = turnBendFromOffset(Math.sign(dx * perpX + dy * perpY) * offset, this.size);
         this.republishFromState();
     }
 }
@@ -1263,10 +1296,13 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
             // The line's end carries both of the approach's inputs: how long it
             // runs and which way it points. `bend` is unitless and rides along,
             // so the circle keeps its proportion through a resize.
+            //
+            // Converted out of projected metres for the reason Turn's tip grip spells
+            // out: the cursor is a screen distance and `size` is a ground one.
             const reach = Math.hypot(dx, dy);
             if (reach <= 0) return;
             this.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-            this.updateGeom({size: reach});
+            this.updateGeom({size: groundLength(reach, latitudeFromMercatorY(center[1]))});
             return;
         }
 

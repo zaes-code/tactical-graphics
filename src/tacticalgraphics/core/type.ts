@@ -1497,6 +1497,8 @@ export enum TacticalGraphicEchelon {
     battalionSquadron = 'Battalion/Squadron',
     regimentGroup = 'Regiment/Group',
     brigade = 'Brigade',
+    division = 'Division',
+    corpsMef = 'Corps/MEF',
     unknown = 'Unknown',
 }
 

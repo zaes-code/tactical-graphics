@@ -40,6 +40,7 @@ import {baseGeometryFor} from './render';
 import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 import {usesDrawnAnchors} from './handles';
+import {carriesWidthPointInBase} from './axisWidth';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -347,6 +348,109 @@ export const formatDistance = (meters: number): string => {
     const km = meters / 1000;
     return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
 };
+
+/**
+ * An angle for a user to read, from degrees.
+ *
+ * Three digits and a degree sign, which is how a bearing is written on a map and in every
+ * order that carries one: `043°`, not `43 deg`. Normalized into [0, 360) first, so a
+ * gesture that has swung the long way round still reports a bearing rather than 400 or a
+ * negative.
+ *
+ * **In the core for the same reason as {@link formatDistance}**: a read-out, a dialog field
+ * and a label all state the same quantity, and a user compares them.
+ */
+export const formatBearing = (degrees: number): string => {
+    const normalized = ((Math.round(degrees) % 360) + 360) % 360;
+    return `${String(normalized).padStart(3, '0')}°`;
+};
+
+/**
+ * What a read-out calls each of 200700's four numbers.
+ *
+ * The plate's own words — search axis azimuth, start range, stop range, stop relative
+ * bearing — shortened to what fits beside a grip being dragged. Here rather than in either
+ * renderer because both print them, and both printing "Start" by writing the word twice is
+ * how the two came to disagree about everything else.
+ * @see measureReadout, ai/conventions.md "A symbology fact never lives in a holder"
+ */
+export const RADAR_READOUT_CAPTIONS = {
+    azimuth: 'Azimuth',
+    startRange: 'Start',
+    stopRange: 'Stop',
+    relativeBearing: 'Bearing',
+} as const;
+
+/** One figure in a measure read-out: what it is, and the number. @see measureReadout */
+export interface MeasurePart {
+    /** What is being set — "Azimuth", "Start", "Stop". Omitted where one number needs no name. */
+    caption?: string;
+    /** A distance, in metres on the ground. */
+    meters?: number;
+    /** An angle, in degrees. Takes precedence: a part states one figure, not two. */
+    degrees?: number;
+}
+
+/** How two figures in one read-out are separated. */
+const MEASURE_SEPARATOR = ' · ';
+
+/**
+ * The text beside a measure line: what is being set, then the figure.
+ *
+ * One statement of it because both renderers draw this read-out and a caption written
+ * twice drifts. A gesture that swings an *angle* gives `degrees` and the figure is a
+ * bearing; everything else reports the distance it is dragging out.
+ *
+ * **More than one part, because one gesture can set more than one number.** Aiming the
+ * radar search doctrine's second click fixes its axis *and* its start range at the same
+ * time, and reporting only one of them is how the axis came to have no read-out at all.
+ * @see formatBearing
+ */
+export function measureReadout(parts: MeasurePart[]): string {
+    return parts
+        .map(part => {
+            const figure =
+                part.degrees !== undefined && isFinite(part.degrees)
+                    ? formatBearing(part.degrees)
+                    : part.meters !== undefined && isFinite(part.meters)
+                      ? formatDistance(part.meters)
+                      : undefined;
+            if (figure === undefined) return undefined;
+            return part.caption ? `${part.caption} ${figure}` : figure;
+        })
+        .filter(Boolean)
+        .join(MEASURE_SEPARATOR);
+}
+
+/**
+ * The smallest a read-out may be shrunk to fit its own line, as a share of the label size.
+ *
+ * Half. Below that the figure stops being readable, and a number nobody can read is no
+ * better than the nothing this replaces.
+ */
+export const MEASURE_READOUT_MIN_SCALE = 0.5;
+
+/** How much of the line the text may fill, so it does not run out past both ends at once. */
+const MEASURE_READOUT_SHARE = 0.95;
+
+/**
+ * How far to shrink a read-out so it fits the line it is drawn along.
+ *
+ * **A read-out that does not fit is not drawn at all.** OpenLayers lays line-placed text
+ * along its geometry and drops it when the glyphs run past the ends, so the radar search
+ * doctrine's label — 201 px wide with an azimuth and a range in it — appeared only once the
+ * drag passed 201 px. Everything before that was blind, which is the opposite of what a
+ * read-out is for. (User's report, 2026-09-10.)
+ *
+ * So the text shrinks to the room it has, down to {@link MEASURE_READOUT_MIN_SCALE}. Below
+ * that a caller should stop laying it along the line and place it at the midpoint instead:
+ * shrinking further would trade one unreadable state for another.
+ */
+export function measureReadoutScale(naturalWidthPx: number, linePx: number, desired = 1): number {
+    if (!(naturalWidthPx > 0) || !(linePx > 0)) return desired;
+    const fitted = (linePx * MEASURE_READOUT_SHARE) / naturalWidthPx;
+    return Math.max(MEASURE_READOUT_MIN_SCALE, Math.min(desired, fitted));
+}
 
 /**
  * An altitude or height for a label, from whatever the user typed.
@@ -1096,6 +1200,16 @@ const SIDE_POINT_AFTER_RUN = new Set<TacticalGraphicName>([
  */
 export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: readonly T[]): T[] {
     if (SIDE_POINT_AFTER_RUN.has(name) && coordinates.length >= 3) return coordinates.slice(0, 2);
+    /*
+     * **The eleven axis arrows drop their last coordinate, not everything past their second.**
+     *
+     * Same rule as the four above and the same reason — the mark follows the centreline and the
+     * width point is not on it — but their run is free-length, so where it ends is "one before
+     * the end" rather than a fixed index. Measured on the running app: without this the hashed
+     * line ran out of the arrowhead and up to the width grip, a spur no plate draws.
+     * @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name) && coordinates.length >= 3) return coordinates.slice(0, -1);
     return [...coordinates];
 }
 

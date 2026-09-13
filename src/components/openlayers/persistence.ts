@@ -69,6 +69,8 @@ import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojs
 import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
+    upgradeAxisBase,
+    carriesWidthPointInBase,
     axisFromRectangleRing,
     isRectangular,
     normalizeDrawnBase,
@@ -83,6 +85,15 @@ import {
 } from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
+
+/**
+ * The full width to spend on a version 1 axis arrow that filed none.
+ *
+ * Both engines open one of these at 20 screen pixels of half-width, so a save with no `width`
+ * at all — the shape MapLibre wrote before it stamped one — comes back the size a fresh draw
+ * would be rather than with no arrowhead. @see upgradeAxisBase
+ */
+const defaultWidthMetres = (resolution: number): number => resolution * 20 * 2;
 import type {GraphicLabels, GraphicObject} from '../../utils/graphicLinkRegistry';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -266,6 +277,40 @@ export function serializeOneGraphic(handler: TacticalGraphicHandler): GeoJSONFea
  * own base. A graphic drawn but never registered with the manager is not saved, which
  * matches what the rest of the manager already considers to exist.
  */
+/**
+ * The latitude a restored graphic is going to, in degrees, or the equator if its geometry
+ * cannot say.
+ *
+ * Read off the **saved** feature rather than the map, because the figure it decides is a
+ * property of the symbol's place on the ground and not of where the operator happens to be
+ * looking. @see getController
+ */
+function restoreLatitude(feature: GeoJSONFeature): number {
+    const coordinates = (feature.geometry as {coordinates?: unknown} | undefined)?.coordinates;
+    let node: unknown = coordinates;
+    while (Array.isArray(node) && Array.isArray(node[0])) node = node[0];
+    return Array.isArray(node) && typeof node[1] === 'number' ? node[1] : 0;
+}
+
+/**
+ * The geometry state a restore may stamp, which for a drawn-anchor graphic is not all of it.
+ *
+ * `MissionTaskGraphicBase.writeBase` refuses to file `radius`, `rotation` and `mirrored` for
+ * the graphics whose anchor points carry them — *"stamping them as well is a second copy of
+ * the geometry"*, decided 2026-09-06 after the demolition block and 200700 each shipped one.
+ * The restore was filing exactly those three anyway, straight out of the saved bag, and
+ * `writeGraphicProperties` merges, so the figure stuck: 151204 contain rebuilt its shape from
+ * the points and went on reporting the file's 40 km beside a symbol drawn at 29.8.
+ *
+ * The arrowhead size is deliberately kept. It is a screen distance rather than a place, so the
+ * points cannot carry it, which is the same line `writeBase` draws. @see usesDrawnAnchors
+ */
+function statePublishedFor(name: TacticalGraphicName, state: GraphicGeometryState): GraphicGeometryState {
+    if (!usesDrawnAnchors(name)) return state;
+    const {radius: _radius, rotation: _rotation, mirrored: _mirrored, ...carried} = state;
+    return carried;
+}
+
 export function serializeTacticalGraphics(
     manager: TacticalGraphicsManager,
     opts: SerializeOptions = {},
@@ -369,20 +414,11 @@ export function applyRestoredGeometry(
                 const withHead = handler.graphic as {headSize?: number};
                 if (typeof withHead.headSize === 'number') withHead.headSize = state.decorationSize;
             }
-            // The minimum-size floor is suspended here for the same reason the branch
-            // below suspends it: `RATIO_LOCKED_MIN_RADIUS_PX * drawingResolution` is a
-            // draw-time affordance measured against *this* session's zoom, and the
-            // restored size is already final. Without it an envelopment saved zoomed in
-            // came back exactly 4x too large in a 4x-resolution session — the anchor
-            // points were right and `updateGeom` grew them anyway.
-            const anchored = handler.graphic as {suspendMinimumSize?: boolean};
-            const floorGuarded = typeof anchored.suspendMinimumSize === 'boolean';
-            if (floorGuarded) anchored.suspendMinimumSize = true;
-            try {
-                handler.setBaseFeature(base as Feature<LineString>);
-            } finally {
-                if (floorGuarded) anchored.suspendMinimumSize = false;
-            }
+            // No floor to suspend on the way in any more: the anchor points are the size,
+            // and a restore rebuilds from them. This used to guard against a draw-time
+            // minimum measured at *this* session's zoom, which brought an envelopment saved
+            // zoomed in back 4x too large. @see decorationSizes.ts, "There is no floor"
+            handler.setBaseFeature(base as Feature<LineString>);
             if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
             return;
         }
@@ -419,30 +455,20 @@ export function applyRestoredGeometry(
         if (state.decorationSize !== undefined && typeof withHead.headSize === 'number') {
             withHead.headSize = state.decorationSize;
         }
-        // Same reasoning as the line families: a minimum-size floor is a draw-time
-        // affordance, and re-applying it here scales the restored graphic by the ratio
-        // between the drawing resolution and this session's.
         if (state.mirrored !== undefined) handler.setMirrored?.(state.mirrored);
-        const holder = handler.graphic as {suspendMinimumSize?: boolean};
-        const guarded = typeof holder.suspendMinimumSize === 'boolean';
-        if (guarded) holder.suspendMinimumSize = true;
         // The rectangular target is the one point-anchored graphic whose shape is filed
         // rather than derived: its width is typed, never dragged, so nothing else replays
         // it. Duck-typed for the same reason the flags above are — a future holder that
         // files a width should inherit this without being named here.
         const widthed = handler.graphic as {setOffset?: (n: number) => void};
         if (state.width !== undefined) widthed.setOffset?.(state.width / 2);
-        try {
-            handler.graphic.updateGeom({
-                center: coords as Coordinate,
-                // `size` is a half-length for a graphic that files a length, and a radius
-                // for everything else. A holder files one or the other, never both.
-                size: state.length !== undefined ? state.length / 2 : state.radius,
-                rotation: state.rotation,
-            });
-        } finally {
-            if (guarded) holder.suspendMinimumSize = false;
-        }
+        handler.graphic.updateGeom({
+            center: coords as Coordinate,
+            // `size` is a half-length for a graphic that files a length, and a radius
+            // for everything else. A holder files one or the other, never both.
+            size: state.length !== undefined ? state.length / 2 : state.radius,
+            rotation: state.rotation,
+        });
         return;
     }
 
@@ -490,7 +516,37 @@ export function applyRestoredGeometry(
         //
         // The width families are unaffected: `AirCorridor` and `MovementGraphicBase` stamp
         // a width and no decoration size, so they still take the second branch.
-        const scalar = state.decorationSize ?? (state.width !== undefined ? state.width / 2 : state.radius);
+        /*
+         * **Nothing beside the base may set a width the base itself states.**
+         *
+         * `MovementGraphicBase.setOffset` moves the stored width point for the eleven axis
+         * arrows, which is right for a grip drag and destructive here: the point is already in
+         * the coordinates that were just restored, and replaying a scalar over it republishes
+         * it at whatever number happened to be in the bag. The sample sheet is the case that
+         * showed it — its records carry a `decorationSize`, so every axis arrow on the sweep
+         * came back with its width point 300 km from where MapLibre, which rebuilds from the
+         * geometry and reads the width off it, put the same graphic's.
+         *
+         * A version 1 record is unaffected: `upgradeAxisBase` has already spent the `width`
+         * beside it on the way in, so the coordinate states the saved figure before this runs.
+         * @see carriesWidthPointInBase, optionsFromWidthPoint
+         */
+        /*
+         * **`radius` is not a rectangle's scalar, and must not be spent as one.**
+         *
+         * The chain below is "the holder's own number", and for a rectangle that number is the
+         * half-width. `radius` means *how far does this reach* — a centre-anchored figure — and
+         * no rectangle files one; the library's answer for an un-typed rectangle width is
+         * `rectangleDefaultHalfWidth`, which is what the holder seeds for itself. So a stray
+         * radius arriving in the bag, from a hand-written file or an older format, was being
+         * read as half the box. Measured on 152500 free fire area with `radius` 40,000 and no
+         * width: 80 km wide here against MapLibre's own seed for the same file, which ignores
+         * the field. @see isRectangular, rectangleDefaultHalfWidth
+         */
+        const reach = restoredName && isRectangular(restoredName) ? undefined : state.radius;
+        const scalar = carriesWidthPointInBase(restoredName)
+            ? undefined
+            : state.decorationSize ?? (state.width !== undefined ? state.width / 2 : reach);
         if (scalar !== undefined) handler.setOffset?.(scalar);
         // A width that is an amplifier rather than a half-width. `toLabels` strips it from
         // the bag as a geometry key, so a holder that reads one needs it handed back here or
@@ -568,7 +624,15 @@ export function restoreTacticalGraphics(
                 throw new Error('no resolution available to build the controller with');
             }
 
-            handler = getController(name, resolution);
+            /*
+             * **And where it is going**, which decides what a screen-pixel default costs on
+             * the ground. `getController`'s latitude defaults to the equator, where a projected
+             * metre and a real one agree, and a restore was taking that default: a rectangular
+             * zone with no stated width came back 132 km wide at 40 degrees north where
+             * MapLibre, which converts, built the same file at 101. The error is 1/cos, so it
+             * grows with latitude — half again at 50 degrees. @see RectangularAreaGraphicBase
+             */
+            handler = getController(name, resolution, restoreLatitude(source));
             handler.setSymbolId(symbolId);
             handler.getFeatures().forEach(f => {
                 f.set('graphicName', name);
@@ -605,7 +669,23 @@ export function restoreTacticalGraphics(
             // which every one of its paths goes through; this is the same door on this
             // side. @see normalizeDrawnBase
             if (geometry instanceof LineString) {
-                const tidied = normalizeDrawnBase(name, geometry.getCoordinates().map(c => toLonLat(c)));
+                /*
+                 * **A version 1 base is upgraded before anything else reads it.**
+                 *
+                 * The eleven axis arrows filed their width as an amplifier until 2026-09-10 and
+                 * carry it as their last coordinate now, so an older file is two coordinates and
+                 * a `width` where a current one is three and no width at all. The conversion has
+                 * to happen here rather than in `normalizeDrawnBase`, because it spends a number
+                 * that lives beside the geometry and the normalizer only ever sees the geometry.
+                 *
+                 * A file that declares no version is read as version 1, which is what every
+                 * unversioned collection actually is. @see upgradeAxisBase, snapshotVersionOf
+                 */
+                const stored = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
+                const upgraded = report.version < SNAPSHOT_VERSION
+                    ? upgradeAxisBase(name, stored, state.width, defaultWidthMetres(resolution))
+                    : stored;
+                const tidied = normalizeDrawnBase(name, upgraded);
                 if (tidied.length !== geometry.getCoordinates().length) {
                     geometry.setCoordinates(tidied.map(c => fromLonLat(c as Coordinate)));
                 }
@@ -615,7 +695,7 @@ export function restoreTacticalGraphics(
             const labels = toLabels(bag);
             const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
             if (holder.setLabel) holder.setLabel(labels);
-            else writeGraphicProperties(handler.getFeatures(), name, labels, state);
+            else writeGraphicProperties(handler.getFeatures(), name, labels, statePublishedFor(name, state));
 
             applyRestoredGeometry(handler, handler.graphic.base, state);
 

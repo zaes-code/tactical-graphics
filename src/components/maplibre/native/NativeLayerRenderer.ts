@@ -9,11 +9,16 @@ import {
     getDrawMarkerColor,
     getHandleColor,
     LINE_WIDTH,
-    formatDistance,
+    fontStyle,
+    measureReadout,
+    measureReadoutScale,
+    type MeasurePart,
     groundLength,
     MERCATOR_MAX_LATITUDE,
     latitudeFromMercatorY,
     getInertHandleColor,
+    handlesAreInert,
+    hidesAnchorGrip,
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
@@ -46,8 +51,7 @@ import {
     fillLayer,
     lineLayer,
     renderHatchImage,
-    symbolLayer,
-} from './paintToLayers';
+    symbolLayer, MEASURE_LABEL_PX} from './paintToLayers';
 
 /**
  * # Path B — realize the geometry, then let MapLibre draw it
@@ -664,11 +668,21 @@ export class NativeLayerRenderer {
      * Editor chrome, so it lives in its own source rather than in the paint buckets:
      * it must never reach `snapshot`, a sample sweep or a restored map.
      */
-    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null, caption?: string): void {
+    setMeasure(line: [ProjectedPosition, ProjectedPosition] | null, caption?: string, parts?: MeasurePart[]): void {
         this.measure = line;
         this.measureCaption = caption;
+        this.measureParts = parts;
         this.realizeEditorMarks();
     }
+
+    /**
+     * Everything the read-out states, where the gesture sets more than one number.
+     *
+     * Set instead of `measureCaption` by the radar search doctrine, whose plate names four
+     * numbers and two of them in degrees — a measure line's own length cannot report those.
+     * `RangeFanGraphicBase.measureParts` is the same statement on the other engine.
+     */
+    private measureParts?: MeasurePart[];
 
     /**
      * A word naming which dimension the read-out is reporting, or nothing.
@@ -831,7 +845,21 @@ export class NativeLayerRenderer {
     private realizeEditorMarks(): void {
         this.setData('handles', this.handleBearers().flatMap(graphic => {
             const center = centerHandleIndex(graphic);
-            return graphic.handles.map((position, index) => ({
+            // **A handle nothing may drag is drawn gray, whatever else it is.** This engine
+            // already refuses the grab (`handlesAreInert` is read at pointer-down) and went
+            // on painting the dots red, which promises a drag that is then declined — and
+            // the color is the only thing telling the operator which dots answer. 271204 is
+            // the case: OpenLayers draws its three anchors gray and this drew them red.
+            // (User's rule, 2026-09-13: red markers must do something, gray ones need not.)
+            const allInert = handlesAreInert(graphic.name);
+            // **The grip on the first anchor is not drawn on the graphics that only
+            // stretch**, which is the rule OpenLayers stated privately as
+            // `hidesStartHandle`. Skipped rather than removed from `graphic.handles`, so
+            // every index the handle contract is written in stays where it was — and
+            // because `hitTestHandle` reads the rendered layer, not drawing it is also what
+            // stops it answering a grab. @see hidesAnchorGrip
+            const hiddenGrip = anchorGripIndex(graphic);
+            return graphic.handles.flatMap((position, index) => index === hiddenGrip ? [] : [{
                 type: 'Feature' as const,
                 geometry: {type: 'Point' as const, coordinates: toLonLat(position)},
                 properties: {
@@ -843,9 +871,9 @@ export class NativeLayerRenderer {
                     // divides by distance-to-center and a point on the axis carries no
                     // angle. It still moves the graphic, which is what the eye expects of a
                     // center. @see createInertHandleFeature
-                    color: index === center ? getInertHandleColor() : getHandleColor(),
+                    color: allInert || index === center ? getInertHandleColor() : getHandleColor(),
                 },
-            }));
+            }]);
         }));
 
         this.setData('vertexHint', this.vertexHint
@@ -874,7 +902,12 @@ export class NativeLayerRenderer {
          */
         this.setData('connector', connectorFeatures(this.handleBearers()));
 
-        this.setData('measure', this.measure ? measureFeatures(this.measure, this.measureCaption) : []);
+        this.setData(
+            'measure',
+            this.measure
+                ? measureFeatures(this.measure, this.measureCaption, this.measureParts, this.measureText, resolutionOf(this.map))
+                : [],
+        );
 
         this.setData('sketch', this.sketch && this.sketch.length >= 2
             ? [{
@@ -1028,7 +1061,13 @@ export class NativeLayerRenderer {
         let best: {graphic: MapLibreTacticalGraphic; index: number} | undefined;
         let bestDistance = radiusPx;
         for (const graphic of searched) {
+            // **The grip that is not drawn is not grabbable either.** This walks the handle
+            // array rather than the painted features, so skipping the paint alone left an
+            // invisible dot still answering the pointer — the exact inverse of the rule it
+            // was meant to serve. @see anchorGripIndex, realizeEditorMarks
+            const hidden = anchorGripIndex(graphic);
             graphic.handles.forEach((position, index) => {
+                if (index === hidden) return;
                 const projected = this.map.project(toLonLat(position) as [number, number]);
                 const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
                 if (distance <= bestDistance) {
@@ -1063,6 +1102,27 @@ export class NativeLayerRenderer {
  * the first or swallow the second's edge handle.
  */
 const CENTER_TOLERANCE_FRACTION = 0.01;
+
+/**
+ * The handle sitting on the graphic's first anchor point, when that one is not drawn.
+ *
+ * **Matched on position, not on index**, for the reason OpenLayers gives in
+ * `visiblePathHandles`: the generators do not agree on an order, and `Fix` emits its two as
+ * `[far, near]`. Only "is this handle on point 1" is stable across all of them.
+ *
+ * @see hidesAnchorGrip
+ */
+function anchorGripIndex(graphic: MapLibreTacticalGraphic): number {
+    if (!hidesAnchorGrip(graphic.name)) return -1;
+    const base = graphic.base.geometry;
+    if (base.type !== 'LineString') return -1;
+    const first = base.coordinates[0] as [number, number] | undefined;
+    if (!first) return -1;
+    const anchor = toMercator(first);
+    // A metre, in projected metres: smaller than any symbol and larger than the round trip
+    // the coordinates have already made.
+    return graphic.handles.findIndex(handle => Math.hypot(handle[0] - anchor[0], handle[1] - anchor[1]) <= 1);
+}
 
 /** @see NativeLayerRenderer.centerHandleOf */
 function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
@@ -1281,13 +1341,21 @@ export function connectorFeatures(graphics: readonly MapLibreTacticalGraphic[]):
 }
 
 /** `Start 20 km`, or just `20 km`. The same assembly `createMeasureFeature` uses. */
-function withCaption(caption: string | undefined, distance: string): string {
-    return caption ? `${caption} ${distance}` : distance;
-}
-
-function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition], caption?: string): Feature[] {
+function measureFeatures(
+    [from, to]: [ProjectedPosition, ProjectedPosition],
+    caption?: string,
+    parts?: MeasurePart[],
+    measureText?: (text: string, font: string) => number,
+    resolution = 1,
+): Feature[] {
     const dx = to[0] - from[0];
     const dy = to[1] - from[1];
+
+    const label = measureReadout(
+        parts ?? [{caption, meters: groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))}],
+    );
+    const naturalPx = measureText ? measureText(label, fontStyle) : 0;
+    const linePx = Math.hypot(dx, dy) / resolution;
 
     // **The angle from horizontal, not a compass bearing.** `text-rotate` turns the
     // glyphs clockwise from ordinary left-to-right, so an east-west line wants 0 — a
@@ -1321,10 +1389,13 @@ function measureFeatures([from, to]: [ProjectedPosition, ProjectedPosition], cap
             // one the operator reads and the dialog states. @see mercator.ts
             properties: {
                 ...shared,
-                label: withCaption(
-                    caption,
-                    formatDistance(groundLength(Math.hypot(dx, dy), latitudeFromMercatorY((from[1] + to[1]) / 2))),
-                ),
+                label,
+                // **Sized to the line, the way OpenLayers sizes its own.** MapLibre draws
+                // this one whatever its width — the layer's note says why it is placed on a
+                // point — but a label wider than the line it reports is still unreadable
+                // beside a short drag. Both engines shrink to `measureReadoutScale` and stop
+                // at the same floor, so the two state the same number at the same size.
+                textSize: MEASURE_LABEL_PX * measureReadoutScale(naturalPx, linePx),
                 rotation,
             },
         },

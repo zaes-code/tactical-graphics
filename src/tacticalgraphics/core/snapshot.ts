@@ -21,12 +21,29 @@ import type {Feature, FeatureCollection, Geometry} from 'geojson';
 /**
  * Bumped when the snapshot shape changes in a way a reader must notice.
  *
- * Still 1. The 3.0.0 amplifier renames did not bump it: they are handled on read by
+ * **2 since 2026-09-10**, when the eleven axis arrows stopped filing their width as an
+ * amplifier and started storing it as their last coordinate. That is the structure moving:
+ * a version 1 base holds a run of route points and a `width` beside it, a version 2 base holds
+ * the same run with one more coordinate on the end and no width at all. Both are readable, and
+ * `upgradeAxisBase` is where a version 1 one is converted. @see axisWidth.ts
+ *
+ * The 3.0.0 amplifier renames did not bump it: they are handled on read by
  * `applyAmplifierAliases`, which is the cheaper answer for a rename that leaves the
  * *structure* alone. Bump this when the structure itself moves — a second feature per
  * graphic, a different home for the description, a geometry in another projection.
  */
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
+
+/**
+ * The version a file that declares none is read as.
+ *
+ * **Not {@link SNAPSHOT_VERSION}**, which is what this used to be. Two things wrote unversioned
+ * collections and both of them wrote the *oldest* shape: MapLibre, until the stamp moved here on
+ * 2026-09-04, and any host that assembled a FeatureCollection by hand from the documented
+ * property. Reading those as "current" was harmless while there was only one shape, and became a
+ * silent misreading the moment there were two — an axis arrow's route point taken for a width.
+ */
+export const LEGACY_SNAPSHOT_VERSION = 1;
 
 /** The property every saved feature carries the portable description under. */
 export const SNAPSHOT_PROPERTY = 'tacticalGraphic';
@@ -43,16 +60,18 @@ export interface TacticalGraphicsSnapshot extends FeatureCollection {
 }
 
 /**
- * The version a snapshot declares, defaulting to the current one.
+ * The version a snapshot declares, defaulting to the oldest.
  *
  * **Absent is not invalid.** Two things wrote unversioned collections: MapLibre, until the
  * stamp moved here, and any host that assembled a FeatureCollection by hand from the
  * documented property. Both are readable, and refusing them would break files that are
- * structurally identical to ones this library wrote itself.
+ * structurally identical to ones this library wrote itself. A value that is not a finite
+ * number is treated the same way — "unknown" is the oldest thing it can safely be.
+ * @see LEGACY_SNAPSHOT_VERSION
  */
 export function snapshotVersionOf(snapshot: unknown): number {
     const declared = (snapshot as {tacticalGraphicsVersion?: unknown} | null | undefined)?.tacticalGraphicsVersion;
-    return typeof declared === 'number' && Number.isFinite(declared) ? declared : SNAPSHOT_VERSION;
+    return typeof declared === 'number' && Number.isFinite(declared) ? declared : LEGACY_SNAPSHOT_VERSION;
 }
 
 /**

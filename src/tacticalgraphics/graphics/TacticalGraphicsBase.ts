@@ -12,6 +12,7 @@ import {
 } from "geojson";
 import {ITacticalGraphic} from "../core/type";
 import {featureInGeneratorOrder} from "../core/drawOrder";
+import {axisFeature, optionsFromWidthPoint} from "../core/axisWidth";
 
 
 export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBaseGraphicOptions> implements IGraphicGenerator {
@@ -104,14 +105,26 @@ export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBase
      * caller drew it, saves it, and edits its vertices. @see drawOrder.ts
      */
     generate(base: Feature, opts?: T): ITacticalGraphic {
-        const drawn = featureInGeneratorOrder(this.name, base);
+        /*
+         * **Eleven bases end in a point that is not a route point**, and the generators walk
+         * their coordinates as a path. So it comes off here, beside the reversal and for the
+         * identical reason: one statement at the door rather than an edit in every generator
+         * that reads `coordinates[length - 1]`.
+         *
+         * Its distance across the axis becomes the `radius` the generator is handed, which is
+         * what makes the coordinate the only stored statement of the width. A legacy base
+         * carrying no such point leaves the caller's own radius alone. @see axisWidth.ts
+         */
+        const axis = axisFeature(this.name, base);
+        const drawn = featureInGeneratorOrder(this.name, axis);
+        const options = optionsFromWidthPoint(this.name, base, opts);
         return <ITacticalGraphic>{
             name: this.name,
             type: this.type,
             base: base,
-            graphic: this.generateGraphics(drawn, opts),
-            handles: this.generateHandles(drawn, opts),
-            labels: this.generateLabels(drawn, opts),
+            graphic: this.generateGraphics(drawn, options),
+            handles: this.generateHandles(drawn, options),
+            labels: this.generateLabels(drawn, options),
         }
     }
 

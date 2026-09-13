@@ -3,31 +3,23 @@ import {MovementGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
 import geometryService from "../core/GeometryService";
 import * as turf from '../core/turf';
+import {BY_FIRE_SHAFT, BY_FIRE_STANDOFF, tipOverhangOf, widthPointForBuiltAxis} from '../core/axisWidth';
 
 export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
     type = "LineString";
 
     /**
-     * How far past the end of the arrow *body* the arrowhead's point sits, as a
-     * multiple of `radius`. `getExtendedPoint` overshoots by 1.5 × radius, which
-     * is what every solid-head arrow in this family draws.
-     *
-     * The body is built on the user's line minus this overhang (see
-     * {@link arrowCenterline}) so the point lands exactly on the user's own last
-     * vertex. That vertex is the only thing a renderer's vertex-editing tool can
-     * grab, so a head drawn past it leaves the tip handle floating over nothing.
-     *
-     * Graphics whose head already lands on the last vertex, or that have no head
-     * at all, override this to 0.
-     */
-    protected tipOverhang: number = 1.5;
-
-    /**
      * The center line the arrow body is built from: the user's line with the
      * arrowhead's overhang taken off the far end.
+     *
+     * The overhang was a `protected tipOverhang` field here and on three subclasses until
+     * 2026-09-10. It is a table in the map-agnostic half now, because the width point the
+     * eleven axis arrows store is drawn off this *trimmed* line — so a renderer republishing
+     * that point, a draw seeding one, and a sample sheet laying one out all have to spend the
+     * same number, and none of them can reach a protected field. @see tipOverhangOf
      */
     protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
-        return geometryService.trimLineEnd(base.geometry.coordinates, radius * this.tipOverhang);
+        return geometryService.trimLineEnd(base.geometry.coordinates, radius * tipOverhangOf(this.name));
     }
 
     /**
@@ -54,16 +46,22 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
      * vertex-editing tool can pick it up and it tracks the cursor exactly.
      */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        let radius: number = opts?.radius || 20;
-        let baseCoords = base.geometry.coordinates;
-        const centerline = this.arrowCenterline(base, radius);
-        const headSide: Position[] = geometryService.computeParallelLineString(centerline, -radius);
-        const headBackCorner: Position = geometryService.getPerpendicularPoint(
-            headSide[headSide.length - 1],
-            headSide[headSide.length - 2],
-            -radius,
+        const radius: number = opts?.radius || 20;
+        const baseCoords = base.geometry.coordinates;
+        /*
+         * **Through the library's own statement of that position**, rather than the three
+         * expressions that used to stand here. Eleven of these arrows store the corner as their
+         * last coordinate as of 2026-09-10, so a renderer moving the grip and this method
+         * drawing it have to land on one point — and two copies of `trimLineEnd`,
+         * `computeParallelLineString` and `getPerpendicularPoint` are how they would stop.
+         * @see widthPointForBuiltAxis
+         */
+        const headBackCorner = widthPointForBuiltAxis(baseCoords, radius, tipOverhangOf(this.name));
+        return this.asMultiPointFeature(
+            headBackCorner
+                ? [baseCoords[0], baseCoords[baseCoords.length - 1], headBackCorner]
+                : [baseCoords[0], baseCoords[baseCoords.length - 1]],
         );
-        return this.asMultiPointFeature([baseCoords[0], baseCoords[baseCoords.length - 1], headBackCorner]);
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -283,14 +281,6 @@ export class AvenueOfApproach extends MainAttack {
 export class MainAttackFeint extends MovementGraphicBase {
     name: string = TacticalGraphicName.MainAxisOfAdvanceFeint;
 
-    /**
-     * The dashed chevron's apex, not the solid arrowhead, is the furthest-forward
-     * element — `computeFeintOutline` puts it at 2.25 × radius. Trimming by that
-     * much lands the apex on the user's last vertex, which is where the tip
-     * handle sits.
-     */
-    protected tipOverhang: number = 2.25;
-
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         let radius: number = opts?.radius || 20;
         let baseCoords = this.arrowCenterline(base, radius);
@@ -454,8 +444,6 @@ export class Counterattack extends MovementGraphicBase {
  * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
  * runs about one, and the head is a third of that.
  */
-const BY_FIRE_STANDOFF = 0.8;
-const BY_FIRE_SHAFT = 1.05;
 const BY_FIRE_BAR_HALF = 2.0;
 const BY_FIRE_HEAD = 0.3;
 
@@ -495,10 +483,11 @@ export class CounterattackByFire extends Counterattack {
      *
      * **Stated as the sum, because it is the sum.** Both terms are the ones
      * `generateGraphics` steps along the axis with, so the head cannot drift off the click
-     * if the bracket is ever redrawn. 340600 keeps the inherited value and is untouched.
-     * @see MovementGraphicBase.tipOverhang
+     * if the bracket is ever redrawn — which is why the two of them moved into
+     * `core/axisWidth.ts` with the overhang table rather than the sum being split from its
+     * terms across two modules. 340600 keeps the default and is untouched.
+     * @see TIP_OVERHANG, BY_FIRE_STANDOFF
      */
-    protected tipOverhang: number = 1.5 + BY_FIRE_STANDOFF + BY_FIRE_SHAFT;
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
         const radius: number = opts?.radius || 20;

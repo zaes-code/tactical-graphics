@@ -12,7 +12,9 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import type {Position} from 'geojson';
+
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
 import {Coordinate} from "ol/coordinate";
@@ -709,6 +711,7 @@ export class TacticalGraphicsManager {
     /** Puts back the draw-time floor a resize lifted. @see handleResize */
     private restoreSizeFloor = (): void => {
         this.floorSuspendedOn?.suspendSizeFloor?.(false);
+        this.floorSuspendedOn?.setGestureResolution?.(undefined);
         this.floorSuspendedOn = undefined;
     };
 
@@ -851,6 +854,11 @@ export class TacticalGraphicsManager {
          */
         this.activeController.suspendSizeFloor?.(true);
         this.floorSuspendedOn = this.activeController;
+        // **And the floor that is stated in pixels gets the resolution it is drawn at.**
+        // The holder keeps the draw-time one, which is right for a decoration's size and
+        // wrong for a screen rule the user may have zoomed away from since.
+        // @see LineGraphicBase.gestureResolution
+        this.activeController.setGestureResolution?.(resolution);
 
         // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
         // feature has `base` cleared), so an edit-mode drag would fall through
@@ -951,6 +959,14 @@ export class TacticalGraphicsManager {
          * answers it with a single coordinate.
          */
         const center = this.activeController.getCenter() as number[];
+        /*
+         * **A rotate turns about its own point.** The library keeps the two apart —
+         * `rotationAnchor` for scaling, `rotationPivot` for turning — and they part company on
+         * the turns and the envelopment, whose frame centre is not the corner the symbol swings
+         * on. A controller that answers neither turns about its centre, as all of them did.
+         * @see TacticalGraphicHandler.getTurningPoint
+         */
+        const turningPoint = (this.activeController.getTurningPoint?.() ?? center) as number[];
         // **The effective mode, not `currentMode`.** An affordance gesture latches what a
         // drag means for its duration; reading `currentMode` here would run the drag as
         // whatever the host's toolbar last selected, which in `edit` is a reshape.
@@ -959,7 +975,7 @@ export class TacticalGraphicsManager {
                 this.defaultTranslateFunction(evt);
                 break;
             case InteractionType.rotate:
-                let deltaAngle = this.calculateDeltaAngle(evt, center);
+                let deltaAngle = this.calculateDeltaAngle(evt, turningPoint);
                 this.activeController.handleRotate(deltaAngle);
                 this.lastPointerPosition = evt.coordinate;
                 break;
@@ -1007,7 +1023,21 @@ export class TacticalGraphicsManager {
 
     handleCircleDrag = (evt: MapBrowserEvent) => {
         if (!this.activeController) return;
-        let center = this.activeController.getBaseGeometry() as number[];
+        /*
+         * **The controller's centre, not its raw base geometry** — the same correction
+         * `handlePointDrag` carries, which this path never got.
+         *
+         * `calculateDeltaAngle` reads `center[0]` and `center[1]` as numbers. A graphic
+         * converted to APP-06's drawn anchor points keeps a `LineString` base, so
+         * `getBaseGeometry` hands back an array *of* coordinates here and both reads are
+         * arrays: the arithmetic produces `NaN` and the turn silently does nothing. Measured
+         * with a deliberate quarter turn on the running app, 271204's geometry afterwards was
+         * 113% of its own size away from MapLibre's.
+         *
+         * And a rotate turns about its own point, which is not always the one a resize scales
+         * from. @see TacticalGraphicHandler.getTurningPoint
+         */
+        const center = (this.activeController.getTurningPoint?.() ?? this.activeController.getCenter()) as number[];
         // **The effective mode, not `currentMode`.** An affordance gesture latches what a
         // drag means for its duration; reading `currentMode` here would run the drag as
         // whatever the host's toolbar last selected, which in `edit` is a reshape.
@@ -1413,7 +1443,11 @@ export class TacticalGraphicsManager {
         // cursor had just left, and MapLibre's `setOffset` — which does orient — would
         // have disagreed with this engine on the same gesture. @see drawOrder.ts
         const name = this.activeFeature?.get('graphicName') as TacticalGraphicName | undefined;
-        const coords = generatorOrder(name, stored) as number[][];
+        // **The axis, not the whole base.** Eleven of these carry the width itself as their last
+        // coordinate, and it is a point off to one side: left in, it is a segment for the loop
+        // below to measure against and it reverses into the *front* of the line the width is
+        // read along. @see carriesWidthPointInBase
+        const coords = generatorOrder(name, axisOf(name, stored as Position[]) as number[][]) as number[][];
 
         // Measure against the segment the cursor is nearest to, not always the
         // last one. For a two-point base (block, relief in place, retrograde)
@@ -1533,7 +1567,8 @@ export class TacticalGraphicsManager {
 
     handleRotateForLineAndPolygon(evt: MapBrowserEvent, controller: TacticalGraphicHandler) {
         if (!this.activeController) return;
-        let center = controller.getCenter();
+        // The turning point, not the scaling one. @see TacticalGraphicHandler.getTurningPoint
+        let center = controller.getTurningPoint?.() ?? controller.getCenter();
         // Rotate around center
         const lastAngle = Math.atan2(this.lastPointerPosition[1] - center[1], this.lastPointerPosition[0] - center[0]);
         const currentAngle = Math.atan2(evt.coordinate[1] - center[1], evt.coordinate[0] - center[0]);
@@ -1772,10 +1807,20 @@ export class TacticalGraphicsManager {
         const geometry = e.feature?.getGeometry();
         if (!(geometry instanceof LineString)) return;
 
+        /*
+         * **The eleven axis arrows are already finished, and touching them here would undo
+         * them.** Their base is not the sketch: the holder rebuilds it from every click plus a
+         * seeded width point on each pointer move, through `setSketchBase`, so by the time this
+         * runs the last click has already been through that door. What is left in the sketch is
+         * a run of clicks, and normalizing *those* would read the operator's final click as a
+         * width and pull it square to the axis. @see MovementGraphicBase.setSketchBase
+         */
+        if (carriesWidthPointInBase(name)) return;
+
         const drawn = geometry.getCoordinates().map(c => toLonLat(c));
         // **The resolution matters now**: the S pair's point 2 is held to a pixel range, and
         // a normalizer with no view to ask leaves it where the user put it.
-        const normalized = normalizeDrawnBase(name, drawn, this.map.getView().getResolution());
+        const normalized = normalizeDrawnBase(name, drawn as Position[], this.map.getView().getResolution());
         // Compared by *content*, not by length. This used to bail whenever the vertex count
         // was unchanged, which is every case where a vertex moves rather than appears.
         if (normalized.length === drawn.length
@@ -1848,8 +1893,29 @@ export class TacticalGraphicsManager {
                     let graphicController = this.getFeatureControllerBySymbolId(symbolId);
                     if (!graphicController) return;
 
-                    // re-renders the tactical graphic based on the new geometry.
-                    graphicController.setBaseFeature(feature);
+                    /*
+                     * **A `Modify` drag authors the shape too**, so the floors that guard a
+                     * drawn shape apply to it — which they did not, because this is the one
+                     * door into `setBaseFeature` that never said so. 271400 is the case: the
+                     * only graphic of the three `minimumFirstSegmentPx` names whose grip is
+                     * not a vertex drag on this engine, so its bow-tie was floored on
+                     * MapLibre and on nothing here. @see LineGraphicBase.shapingFromGesture
+                     */
+                    const authoring = graphicController as unknown as {
+                        graphic?: {shapingFromGesture?: boolean};
+                        setGestureResolution?: (resolution: number | undefined) => void;
+                    };
+                    const wasShaping = authoring.graphic?.shapingFromGesture;
+                    if (authoring.graphic) authoring.graphic.shapingFromGesture = true;
+                    authoring.setGestureResolution?.(this.map.getView().getResolution() ?? undefined);
+                    try {
+                        // re-renders the tactical graphic based on the new geometry.
+                        graphicController.setBaseFeature(feature);
+                    } finally {
+                        if (authoring.graphic) authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                        authoring.setGestureResolution?.(undefined);
+                    }
+                    return;
                 }
 
             });

@@ -60,6 +60,15 @@ export interface TacticalGraphicHandler {
     setBaseFeature(base: Feature): void;
 
     getCenter(): number[];
+    /**
+     * The point a **rotate** turns about, when it is not the point a resize scales from.
+     *
+     * The library keeps the two apart — `rotationAnchor` for scaling, `rotationPivot` for
+     * turning — and they part company on the turns and the envelopment, where the frame's
+     * centre is not the corner the symbol swings on. A controller that does not answer this
+     * turns about its centre, which is what every one of them did before. @see rotationPivot
+     */
+    getTurningPoint?(): number[];
 
     getFeatures(): OLFeature[];
 
@@ -122,10 +131,19 @@ export interface TacticalGraphicHandler {
      * during a resize they stop seven of the block family shrinking below the size they
      * happened to be drawn at, which reads as a handle that gives up.
      *
-     * Not the same as `suspendMinimumSize` on the curves: that one is a *readability*
-     * floor, not a draw-time one, and it stays.
+     * The curves used to carry a second, readability floor of their own. It was deleted
+     * on 2026-09-10, so what this lifts is the length floors on the block and line
+     * families. @see decorationSizes.ts, "There is no floor"
      */
     suspendSizeFloor?(active: boolean): void;
+
+    /**
+     * The map's resolution for the length of one gesture, or `undefined` to forget it.
+     *
+     * A floor stated in screen pixels has to be spent at the resolution the screen is at
+     * now, not the one the graphic was drawn at. @see LineGraphicBase.gestureResolution
+     */
+    setGestureResolution?(resolution: number | undefined): void;
 
     /**
      * The graphic's current overall size, in meters — any linear measure of it, as long

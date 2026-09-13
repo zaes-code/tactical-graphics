@@ -190,6 +190,18 @@ const barAndStem = (name: TacticalGraphicName, res: number, sizing: number) =>
 const attackByFire = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new Block(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
+/**
+ * 343100 exploit: three placed points, every one of them grabbable.
+ *
+ * Capped at two until 2026-09-10, with the length of the four angled lines carried as a `size`
+ * amplifier and dragged by a grip hung off an arrowhead wing — so the third anchor point
+ * APP-06 gives it could not be placed, and the two dimensions its Size/Shape cell states
+ * separately were a length and a number filed beside it. Same holder as `block`, which draws
+ * it; only the draw and the grips change. @see exploitationAnchors, Exploitation
+ */
+const exploit = (name: TacticalGraphicName, res: number, sizing: number) =>
+    new LineGraphicController(new Block(name, sizing * 20, res), 3, name).enableVertexDragging(3);
+
 const firePosition = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new Block(name, sizing * 20, res), 4, name).enableVertexDragging(4);
 
@@ -806,7 +818,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.TacticalDisrupt]:     barAndStem,
     // Three placed points, on 340500 clear's own rule. @see BRACKET_GRAPHICS
     [TacticalGraphicName.Penetration]: bracket,
-    [TacticalGraphicName.Exploitation]: block,
+    [TacticalGraphicName.Exploitation]: exploit,
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     /*
