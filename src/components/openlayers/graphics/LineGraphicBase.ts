@@ -274,6 +274,21 @@ export class LineGraphicBase implements LineGraphic {
      */
     shapingFromGesture = false;
 
+    /**
+     * The map's resolution **now**, for the length of one gesture.
+     *
+     * `this.resolution` is the draw-time one, which is what every derived decoration size
+     * is deliberately spent at — and it is the wrong number for a floor stated in screen
+     * pixels, because the user may have zoomed since. Measured on the handle sweep: a Fix
+     * dragged at 1,200 m per pixel was floored against a stale resolution, so the 145 px
+     * rule did not bite where MapLibre's — which reads the live figure every time — did,
+     * and the two engines' far ends finished 21.8 km apart.
+     *
+     * Set by the manager at pointer-down and cleared when the drag ends, so nothing outside
+     * a gesture is affected. @see TacticalGraphicsManager.handleDownEvent
+     */
+    gestureResolution: number | undefined;
+
     setBaseFeature(base: Feature<LineString>): void {
         /*
          * **A floor on the first segment, while the shape is being authored.**
@@ -291,11 +306,27 @@ export class LineGraphicBase implements LineGraphic {
          * ULP below the minimum.
          */
         const minFirstSegmentPx = minimumFirstSegmentPx(this.graphicName);
+        // The live resolution while a gesture is running, the draw-time one otherwise.
+        const floorResolution = this.gestureResolution ?? this.resolution;
+        /*
+         * **`suspendMinimumLength` is the restore flag, and it was doing a second job.**
+         *
+         * It is documented as covering a snapshot rebuild only — *"so draw and modify keep
+         * the protection"* — and `shapingFromGesture` already excludes a restore, which
+         * never sets it. But the manager also raises it on **every handle pointer-down**,
+         * to lift the ratio-locked *size* floor that made Turn's arrowhead stop dead under
+         * the cursor. That is a different floor, and the collateral was this one: a grip
+         * drag could take a Fix below the 145 px its bow-tie needs, where MapLibre — which
+         * has only the one rule — held it. Measured on the handle sweep, 21.8 km between
+         * the two far ends.
+         *
+         * So the guard reads the gesture rather than the switch. A restore is still exempt,
+         * because it is not authoring anything. @see suspendSizeFloor, shapingFromGesture
+         */
         if (
             minFirstSegmentPx !== undefined &&
-            this.resolution &&
+            floorResolution &&
             this.shapingFromGesture &&
-            !this.suspendMinimumLength &&
             !this.enforcingMinLength
         ) {
             this.enforcingMinLength = true;
@@ -303,7 +334,7 @@ export class LineGraphicBase implements LineGraphic {
                 // Projected metres against projected coordinates, which is exactly the
                 // pixel count asked for. MapLibre corrects for latitude because it holds
                 // ground distances; the two agree on the screen.
-                this.enforceMinFirstSegmentLength(base, minFirstSegmentPx * this.resolution);
+                this.enforceMinFirstSegmentLength(base, minFirstSegmentPx * floorResolution);
             } finally {
                 this.enforcingMinLength = false;
             }

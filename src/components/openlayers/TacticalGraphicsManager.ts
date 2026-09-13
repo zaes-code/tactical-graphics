@@ -711,6 +711,7 @@ export class TacticalGraphicsManager {
     /** Puts back the draw-time floor a resize lifted. @see handleResize */
     private restoreSizeFloor = (): void => {
         this.floorSuspendedOn?.suspendSizeFloor?.(false);
+        this.floorSuspendedOn?.setGestureResolution?.(undefined);
         this.floorSuspendedOn = undefined;
     };
 
@@ -853,6 +854,11 @@ export class TacticalGraphicsManager {
          */
         this.activeController.suspendSizeFloor?.(true);
         this.floorSuspendedOn = this.activeController;
+        // **And the floor that is stated in pixels gets the resolution it is drawn at.**
+        // The holder keeps the draw-time one, which is right for a decoration's size and
+        // wrong for a screen rule the user may have zoomed away from since.
+        // @see LineGraphicBase.gestureResolution
+        this.activeController.setGestureResolution?.(resolution);
 
         // A fixed-vertex graphic hands OpenLayers' Modify nothing (its base
         // feature has `base` cleared), so an edit-mode drag would fall through
@@ -1887,8 +1893,29 @@ export class TacticalGraphicsManager {
                     let graphicController = this.getFeatureControllerBySymbolId(symbolId);
                     if (!graphicController) return;
 
-                    // re-renders the tactical graphic based on the new geometry.
-                    graphicController.setBaseFeature(feature);
+                    /*
+                     * **A `Modify` drag authors the shape too**, so the floors that guard a
+                     * drawn shape apply to it — which they did not, because this is the one
+                     * door into `setBaseFeature` that never said so. 271400 is the case: the
+                     * only graphic of the three `minimumFirstSegmentPx` names whose grip is
+                     * not a vertex drag on this engine, so its bow-tie was floored on
+                     * MapLibre and on nothing here. @see LineGraphicBase.shapingFromGesture
+                     */
+                    const authoring = graphicController as unknown as {
+                        graphic?: {shapingFromGesture?: boolean};
+                        setGestureResolution?: (resolution: number | undefined) => void;
+                    };
+                    const wasShaping = authoring.graphic?.shapingFromGesture;
+                    if (authoring.graphic) authoring.graphic.shapingFromGesture = true;
+                    authoring.setGestureResolution?.(this.map.getView().getResolution() ?? undefined);
+                    try {
+                        // re-renders the tactical graphic based on the new geometry.
+                        graphicController.setBaseFeature(feature);
+                    } finally {
+                        if (authoring.graphic) authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                        authoring.setGestureResolution?.(undefined);
+                    }
+                    return;
                 }
 
             });
