@@ -333,7 +333,8 @@ const HOST_DARK_PALETTE = {
     drawMarkerOutlineColor: 'rgb(23,23,23)',
     // A host on a dark ground softens the obstacle green rather than switching the rule
     // off — which is the whole reason `obstacleColor` is a palette entry and
-    // `obstacleColors` is a separate boolean. Pure #00FF00 glares on this background.
+    // `obstacleColors` is a separate boolean. The default softened to `#00AC00` in 4.2.0
+    // for the same reason one step out; a host on a dark ground goes further still.
     obstacleColor: 'rgb(84,196,120)',
 };
 
