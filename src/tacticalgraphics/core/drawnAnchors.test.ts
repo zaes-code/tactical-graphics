@@ -174,3 +174,47 @@ describe('the point these turn about', () => {
         expect(rotationAnchor(line, TacticalGraphicName.PhaseLine)).toEqual([0, 0]);
     });
 });
+
+/**
+ * # Rotation turns one way, and every graphic in the family has to agree
+ *
+ * The schema's `rotation` is **counter-clockwise from east** — the frame the generators
+ * build their local axes in, and the frame `degrees()` converts a planar angle into. A
+ * renderer that turns a graphic by advancing `rotation` and rebuilding is entitled to that.
+ *
+ * 271204 did not honour it. Its module works in `turf.destination` bearings, which run
+ * clockwise from north, and it spent the schema's number as one of those — so a stated +30
+ * moved its anchors **-30** where all six of its siblings moved +30. It was invisible on
+ * MapLibre, which turns a drawn graphic by rotating its coordinates and never touches the
+ * field, and it made 271204 the one graphic on the map that turned the wrong way under
+ * OpenLayers' rotate. It was the last cross-engine gesture difference.
+ *
+ * The comparison is planar because that is the frame the schema names; the small residuals
+ * are the sphere, measured at 45 degrees north where a degree of longitude is not a degree
+ * of latitude.
+ *
+ * @see roadblockAnchors, ai/decisions.md "271204 turned the wrong way"
+ */
+describe('a stated rotation turns counter-clockwise, for the whole family', () => {
+    const CENTRE: [number, number] = [7, 45];
+    const SPAN = 60_000;
+    /** Longitude degrees are short here, and an angle measured in raw degrees would not be one. */
+    const SQUEEZE = Math.cos((CENTRE[1] * Math.PI) / 180);
+    const planar = (point: number[]): number =>
+        (Math.atan2(point[1] - CENTRE[1], (point[0] - CENTRE[0]) * SQUEEZE) * 180) / Math.PI;
+
+    it.each(family)('%s turns +25 degrees for a rotation of +25', name => {
+        const still = drawnAnchors(name, {center: CENTRE, size: SPAN, rotation: 0})!;
+        const turned = drawnAnchors(name, {center: CENTRE, size: SPAN, rotation: 25})!;
+        expect(turned).toHaveLength(still.length);
+
+        // Point 2 on every member of the family is off the centre, so it carries an angle.
+        const moved = ((planar(turned[1]) - planar(still[1]) + 540) % 360) - 180;
+        expect(moved).toBeCloseTo(25, 0);
+    });
+
+    it.each(family)('%s reads its own rotation back out', name => {
+        const anchors = drawnAnchors(name, {center: CENTRE, size: SPAN, rotation: 25})!;
+        expect(drawnAnchorFrame(name, anchors)!.rotation).toBeCloseTo(25, 1);
+    });
+});
