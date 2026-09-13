@@ -49,6 +49,9 @@ import {
     fontStyle,
     formatAltitude,
     formatDistance,
+    measureReadout,
+    measureReadoutScale,
+    type MeasurePart,
     getColorByHostility,
     getDefaultLineColor,
     getDoctrinalHostilityColor,
@@ -654,16 +657,21 @@ export const createMeasureFeature = () => {
     assignRole(feature, 'handle');
     feature.set('measure', true);
 
-    feature.setStyle(f => {
+    feature.setStyle((f, resolution) => {
         const geom = f.getGeometry() as LineString | undefined;
         const coords = geom?.getCoordinates();
         if (!coords || coords.length < 2) return new Style({});
 
         const [a, b] = coords;
         const stated = f.get('measureMeters') as number | undefined;
-        const distance = formatDistance(
-            typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]),
-        );
+        const metres = typeof stated === 'number' && isFinite(stated) ? stated : Math.hypot(b[0] - a[0], b[1] - a[1]);
+        /*
+         * **A gesture that swings an angle reports the angle.** The radar search doctrine's
+         * axis and its sector opening are both stated in degrees by its plate, and the
+         * read-out used to switch itself off for those two rather than print a distance
+         * nobody was dragging. @see measureAngle
+         */
+        const degrees = f.get('measureDegrees') as number | undefined;
         /*
          * **A graphic with more than one dimension has to say which one this is.** A radius
          * read-out needs no caption — a circle has one number — but the rectangular target
@@ -671,29 +679,67 @@ export const createMeasureFeature = () => {
          * one of them does not say which the drag is changing. @see measureCaption
          */
         const caption = f.get('measureLabel') as string | undefined;
-        const text = caption ? `${caption} ${distance}` : distance;
+        /*
+         * A holder that sets more than one number with one gesture states its own parts;
+         * everything else is the single figure this read-out has always shown.
+         * @see MissionTaskGraphicBase.measureParts
+         */
+        const parts = (f.get('measureParts') as MeasurePart[] | undefined) ?? [{caption, meters: metres, degrees}];
+        const text = measureReadout(parts);
 
-        // `placement: 'line'` lays the text along the geometry, so it picks up the
-        // line's own angle and stays upright-relative to it as the user swings the
-        // handle around — no rotation to compute, and none to keep in step.
+        /*
+         * **Shrunk to the room it has, and moved off the line when there is not enough.**
+         *
+         * `placement: 'line'` lays the text along the geometry and OpenLayers drops it when
+         * the glyphs run past the ends — so a 201 px label appeared only once the drag
+         * passed 201 px, and every shorter gesture was blind. The text now fits itself to
+         * the line down to `MEASURE_READOUT_MIN_SCALE`; below that it stops riding the line
+         * and sits at the midpoint instead, turned to the line's own angle, which is the one
+         * placement that cannot be dropped for want of room. (User's report, 2026-09-10.)
+         */
+        const linePx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
+        const naturalPx = getTextWidth(text, fontStyle, 1);
+        const scale = measureReadoutScale(naturalPx, linePx);
+        const ridesTheLine = naturalPx * scale <= linePx;
+        // Upright, however the gesture swung: past a quarter turn the glyphs would read
+        // upside down, and a half turn puts them the right way up along the very same line.
+        let rotation = -Math.atan2(b[1] - a[1], b[0] - a[0]);
+        if (rotation > Math.PI / 2) rotation -= Math.PI;
+        if (rotation < -Math.PI / 2) rotation += Math.PI;
+
+        const label = new Text({
+            text,
+            font: fontStyle,
+            placement: ridesTheLine ? 'line' : 'point',
+            // Along the line it takes the geometry's own angle; off it, the angle has to be
+            // supplied, which is what `rotation` is for here.
+            rotation: ridesTheLine ? 0 : rotation,
+            scale,
+            // The label color, not the handle color: this reads as an amplifier on
+            // the graphic, and a host that re-themes its labels expects this to move
+            // with them. @see getLabelFillColor
+            fill: new Fill({color: getLabelFillColor()}),
+            stroke: getHaloStroke(),
+            textBaseline: 'bottom',
+            offsetY: -4,
+        });
+
         // `lineDash` is in canvas pixels, so the hatching holds its density at any zoom.
-        return new Style({
+        const line = new Style({
             // The inert-handle color: this is a passive read-out, the same class of
             // chrome as the center dot you cannot drag — not a live handle.
             stroke: new Stroke({color: getInertHandleColor(), width: LINE_WIDTH(), lineDash: [8, 6]}),
-            text: new Text({
-                text,
-                font: fontStyle,
-                placement: 'line',
-                // The label color, not the handle color: this reads as an amplifier on
-                // the graphic, and a host that re-themes its labels expects this to move
-                // with them. @see getLabelFillColor
-                fill: new Fill({color: getLabelFillColor()}),
-                stroke: getHaloStroke(),
-                textBaseline: 'bottom',
-                offsetY: -4,
-            }),
+            text: ridesTheLine ? label : undefined,
         });
+        if (ridesTheLine) return line;
+
+        // A point-placed label needs a point to sit on, and a Style's geometry is where that
+        // is said — `Text` has no geometry of its own.
+        const midpoint = new Style({
+            geometry: new Point([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]),
+            text: label,
+        });
+        return [line, midpoint];
     });
     return feature;
 };

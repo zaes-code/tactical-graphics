@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, anchorVertex, drawsTipFirst, editStretches, normalizeDrawnBase, usesCornerAnchors} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, reshapesByVertex, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -26,6 +26,18 @@ export interface LineGraphic extends TacticalGraphic {
      * two vertices; see `visiblePathHandles`.
      */
     hidesStartHandle?: boolean;
+
+    /**
+     * Takes a base that is still a run of clicks, rather than a settled one.
+     *
+     * **The two are the same array of coordinates and only the caller knows which it is
+     * holding**, which is the division `axisBaseFromDraw` already keeps one layer down. It
+     * matters for the eleven axis arrows: their last stored coordinate is the width, so a
+     * holder handed a sketch reads the point under the cursor as a width and previews an
+     * arrow pinched to nothing. Declared optional, so a holder with no such distinction is
+     * reached through `setBaseFeature` exactly as before.
+     */
+    setSketchBase?(base: Feature<LineString>): void;
 }
 
 /**
@@ -96,22 +108,25 @@ function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Co
 /**
  * The end of a drawn line an edit turns, scales and stacks its label about.
  *
- * `coords[0]` for an ordinary line -- where the user started drawing -- and the **last**
- * coordinate for the thirty-four graphics that store their points tip-first, whose first
- * point is the arrowhead. It is the same physical end in both cases; only the index it
- * lives at moved when the bases were renumbered into APP-06's order.
+ * `coords[0]` for an ordinary line -- where the user started drawing -- the **last**
+ * coordinate for the graphics that store their points tip-first, whose first point is the
+ * arrowhead, and a named index for the handful that are neither. It is the same physical end
+ * in every case; only the index it lives at moved when the bases were renumbered into
+ * APP-06's order.
  *
  * Both jobs `hidesStartHandle` does want this end rather than index zero: the redundant
  * handle is the one on the pivot, and the label sits there too. Anchoring a resize on the
  * tip instead would grow an axis of advance backwards out of its own arrowhead.
  *
- * The library's `rotationAnchor` states the same rule for MapLibre and for the adapter's
- * transforms; this is it in OpenLayers' projected coordinates, where re-projecting to ask
- * would be an absurd amount of work for "which end". @see drawOrder.ts
+ * **The index comes from the library**, not from `drawsTipFirst` read here. The two questions
+ * that function answers -- which order the points are stored in, and which end the symbol
+ * turns about -- have been parting company one graphic at a time since 2026-09-06, and this
+ * engine reading the first to answer the second is how they could disagree with MapLibre,
+ * which asks `rotationAnchor`. Same table, two coordinate systems. @see pivotVertexIndex
  */
 export function pivotCoordinate(name: TacticalGraphicName | undefined, coords: Coordinate[] | undefined): Coordinate | undefined {
     if (!coords?.length) return undefined;
-    return drawsTipFirst(name) ? coords[coords.length - 1] : coords[0];
+    return coords[pivotVertexIndex(name, coords.length)];
 }
 
 export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate | undefined, hidesStartHandle?: boolean): Coordinate[] {
@@ -179,6 +194,21 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * that drags the shape inside out. `undefined` means every vertex reshapes.
      */
     anchorVertex: number | undefined;
+
+    /**
+     * The base a vertex drag started on, held for the length of the gesture.
+     *
+     * **Every move is applied to this, not to what the previous move left behind**, and
+     * the difference is not cosmetic. `settle` re-squares a derived point against the
+     * axis the drag is moving, so squaring the already-squared answer once per pointer
+     * event composes: the same drag delivered in four steps put 152901's third point
+     * 21.9 km from where the one-step drag put it, and the step count is whatever the
+     * pointer happened to report. MapLibre reached the same guarantee the same way and
+     * says so in `dragTo`; this is the OpenLayers twin.
+     *
+     * Cleared in `endGesture`, which the manager calls however a drag finishes.
+     */
+    private vertexDragStart: Coordinate[] | undefined;
 
     /**
      * Which graphic this is, kept because two of the rules the library states are
@@ -252,15 +282,50 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * grabbable is a real question and a separate one — how many handles a graphic
          * publishes is not the same switch as what a gesture turns about.
          */
-        if (usesCornerAnchors(name) && coords.length >= 2) {
-            const a = coords[0];
-            const b = coords[coords.length - 1];
-            return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as Coordinate;
-        }
+        /*
+         * **Asked, not restated.** `rotationAnchor` is the library's whole answer to "what
+         * does a gesture turn and scale about", and it carries three decisions this engine
+         * was not honouring: 141700 ambush turns about point 2 rather than its centre
+         * (user's call, 2026-09-05), and cover, guard and screen turn and scale about their
+         * middle rather than about the arrowhead their first point sits on (user's call,
+         * 2026-09-06 — *"the axis of rotation and resize [...] need to go off the center of
+         * the graphic where the symbol may or may not be"*). MapLibre has always read it.
+         *
+         * Measured with a three-point base at 40 degrees north, the anchor this returned
+         * against the one the library states: the three security operations 336 km out and
+         * ambush 230. Every other one of the 172 graphics on this controller already agreed,
+         * the corner-anchored ones included — which is why the branch that restated their
+         * rule is gone rather than kept beside this.
+         *
+         * The round trip through lon/lat is what `pivotVertexIndex` exists to avoid, and it
+         * is affordable: a base is at most fifty points and this runs once per gesture, not
+         * once per frame.
+         */
+        if (!coords.length) return [0, 0] as Coordinate;
+        const stated = rotationAnchor(
+            {type: 'LineString', coordinates: coords.map(c => toLonLat(c as Coordinate))},
+            name,
+        );
+        return fromLonLat(stated as Coordinate);
+    }
 
-        // Otherwise the pivot end, which is p0 for a plain line and the last vertex for a
-        // graphic whose points are stored tip-first. @see pivotCoordinate
-        return pivotCoordinate(name, coords) ?? coords[0];
+    /**
+     * Where a **rotate** turns, which is not always where a resize scales from.
+     *
+     * `rotationPivot` is the library's separate answer for turning, and the two differ on the
+     * graphics whose frame centre is not the corner the symbol swings about. Measured with a
+     * deliberate quarter turn on the running app, the two engines' geometry after the gesture:
+     * 152800 envelopment 15.8% of the symbol apart, both turns 7.6%. MapLibre asked the right
+     * function; this engine turned about the same point it scaled from. @see rotationAnchor
+     */
+    getTurningPoint(): number[] {
+        const coords = this.graphic.base.getGeometry()?.getCoordinates() ?? [];
+        if (!coords.length) return this.getCenter();
+        const stated = rotationPivot(
+            {type: 'LineString', coordinates: coords.map(c => toLonLat(c as Coordinate))},
+            this.resolvedName(),
+        );
+        return fromLonLat(stated as Coordinate);
     }
 
     getBaseGeometry(): number[] | number[][] | number[][][] {
@@ -297,8 +362,18 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * Only the *gesture* scales it. `setOffset` is also how a restore replays a
          * stamped size, and scaling there would compound on every load.
          */
+        /*
+         * **Unless the size is a vertex, in which case the scale below already carries it.**
+         *
+         * The eleven axis arrows keep their width as the last coordinate of their base, so
+         * `resizeFeature` scales it about the pivot along with everything else — exactly what
+         * MapLibre's `scaleDrawnSizes` does by having no `width` to scale. Spending it here as
+         * well moved the point twice, and from the *pre-scale* axis: measured against MapLibre
+         * on the same gesture, five of the eleven moved 29.7 degrees where the other engine
+         * moved 0.8. @see carriesWidthPointInBase, scaleDrawnSizes
+         */
         const holder = this.graphic as unknown as {sizeOverride?: number; setOffset?: (value: number) => void};
-        const current = this.currentDecorationSize();
+        const current = carriesWidthPointInBase(this.resolvedName()) ? undefined : this.currentDecorationSize();
         if (holder.setOffset && current !== undefined && current > 0) holder.setOffset(current * deltaSize);
 
         let resized = openlayersAdapter.resizeFeature(this.graphic.base, deltaSize) as Feature<LineString>;
@@ -329,6 +404,16 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     /**
+     * Forwards the live resolution to whichever holder owns a pixel floor.
+     *
+     * Duck-typed for the same reason `suspendSizeFloor` is: the two line holders do not
+     * share an interface that names it. @see TacticalGraphicHandler.setGestureResolution
+     */
+    setGestureResolution(resolution: number | undefined): void {
+        (this.graphic as {gestureResolution?: number}).gestureResolution = resolution;
+    }
+
+    /**
      * Ends the width read-out. Called by the manager when any drag finishes.
      *
      * `MissionTaskController` has always had this and the line controller never needed
@@ -338,6 +423,8 @@ export class LineGraphicController implements TacticalGraphicHandler {
      */
     endGesture(): void {
         (this.graphic as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
+        // The latched base belongs to one gesture. @see vertexDragStart
+        this.vertexDragStart = undefined;
     }
 
     /**
@@ -387,8 +474,12 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     currentOffset(): number | undefined {
+        // A holder that reads its own width off its base declares it, because the field the
+        // duck-type below finds is only what the generator falls back to there.
+        // @see MovementGraphicBase.currentOffset
+        const declared = (this.graphic as unknown as {currentOffset?: () => number | undefined}).currentOffset?.();
         const holder = this.graphic as unknown as {offset?: number; size?: number};
-        const value = holder.offset ?? holder.size;
+        const value = declared ?? holder.offset ?? holder.size;
         return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
     }
 
@@ -421,8 +512,10 @@ export class LineGraphicController implements TacticalGraphicHandler {
                 coords.pop();
                 (geometry as LineString).setCoordinates(coords);
             }
-            this.graphic.setBaseFeature(originalFeature as Feature<LineString>);
-
+            // **Through the sketch door where the holder has one**, because these coordinates
+            // are clicks and not a base. @see LineGraphic.setSketchBase
+            if (this.graphic.setSketchBase) this.graphic.setSketchBase(originalFeature as Feature<LineString>);
+            else this.graphic.setBaseFeature(originalFeature as Feature<LineString>);
         });
     };
 
@@ -447,6 +540,16 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * route on presence and leave every other line graphic exactly as it was.
      */
     enableVertexDragging(minimumVertices = 2): this {
+        /*
+         * **Whether a grip reshapes at all is the library's answer, not this call's.**
+         *
+         * The call itself was the only statement of it, so MapLibre could not read it —
+         * and that engine reshapes wherever `allowedGestures().modify` is true, which is
+         * 272 graphics against the 81 named here. The 23 that stretch and do not reshape
+         * were the difference: the same dot scaled the symbol here and pulled one point
+         * out of it there. @see reshapesByVertex
+         */
+        if (this.name !== undefined && !reshapesByVertex(this.name)) return this;
         this.dragsVertices = true;
         this.minimumVertices = minimumVertices;
         /*
@@ -480,7 +583,8 @@ export class LineGraphicController implements TacticalGraphicHandler {
         this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
             const geom = this.graphic.base.getGeometry();
             if (!geom) return;
-            const coords = geom.getCoordinates();
+            // Latched on the first move of the gesture. @see vertexDragStart
+            const coords = (this.vertexDragStart ??= geom.getCoordinates());
             if (index < 0 || index >= coords.length) return;
             if (coords.length < this.minimumVertices) return;
 

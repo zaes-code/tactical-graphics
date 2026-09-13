@@ -2,7 +2,7 @@ import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
 import type {RadarSearchFrame, TacticalGraphicName} from '@zaes/tactical-graphics';
-import {allowedGestures, frameFromDrag, groundLength, latitudeFromMercatorY, normalizeDrawnBase, projectedLength, radarSearchFromClicks, rotationPivot, screenMeters} from '@zaes/tactical-graphics';
+import {allowedGestures, frameFromDrag, groundLength, latitudeFromMercatorY, normalizeDrawnBase, projectedLength, radarSearchFromClicks, rotationAnchor, rotationPivot, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -12,6 +12,15 @@ import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../
 import {ObjectEvent} from 'ol/Object';
 import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 import {defaultDrawStyleFunc, drawMarkerStyle} from "../openlayerStyles";
+
+/**
+ * Below this, in projected metres, a graphic's pivot and its centre are the same point.
+ *
+ * A metre is smaller than any symbol here and larger than the round trip through lon/lat
+ * that `getTurningPoint` makes, so it separates "the library named another point" from
+ * "these are the same point, read two ways". @see centerTurnedAboutThePivot
+ */
+const PIVOT_ON_CENTER_M = 1;
 
 export interface MissionTaskGraphic extends TacticalGraphic {
     name: TacticalGraphicName;
@@ -35,16 +44,6 @@ export interface MissionTaskGraphic extends TacticalGraphic {
      * skip it; the controller no-ops when it is absent.
      */
     showMeasure?(active: boolean, anchor?: Coordinate): void;
-
-    /**
-     * Whether the draw interaction is the thing setting the size right now.
-     *
-     * The legibility floor reads it, and nothing else does: it is an affordance for the
-     * gesture that creates the graphic, and applying it to a later one resized a symbol
-     * the user had already drawn. Optional, so a host's own holder need not carry it.
-     * @see minimumDrawnRadiusPx
-     */
-    sizingFromDraw?: boolean;
 
     /** @see TacticalGraphicHandler.setMirrored */
     setMirrored?(mirrored: boolean): void;
@@ -90,10 +89,50 @@ export class MissionTaskController implements TacticalGraphicHandler {
         })
     }
 
-    getCenter() {
-        // Not off the base: a graphic converted to APP-06's drawn anchor points keeps
-        // a LineString there, whose coordinates are an array of them.
-        return this.graphic.centerCoordinate();
+    /**
+     * What a **resize** scales from — the library's answer where the base can give one.
+     *
+     * `centerCoordinate` is the holder's own frame centre, and for all but one graphic here
+     * the two agree: a `Point` base turns and scales about itself, and every drawn-anchor
+     * frame but 271204's is anchored on its middle. 271204 scales about point 3, the
+     * crossing, and asking the holder gave a ratio measured from somewhere else — the last
+     * of the two engines' gesture differences on it. @see rotationAnchor, getTurningPoint
+     *
+     * Falls back to the holder for a base that cannot answer, which is the reason this used
+     * to read the holder outright: a graphic converted to APP-06's drawn anchor points keeps
+     * a `LineString` there, whose coordinates are an array of arrays.
+     */
+    getCenter(): Coordinate {
+        const coords = (this.graphic.base?.getGeometry() as {getCoordinates?(): unknown} | undefined)?.getCoordinates?.();
+        if (!Array.isArray(coords) || !Array.isArray(coords[0])) return this.graphic.centerCoordinate();
+        const stated = rotationAnchor(
+            {type: 'LineString', coordinates: (coords as Coordinate[]).map(c => toLonLat(c))},
+            this.graphic.name as TacticalGraphicName,
+        );
+        return fromLonLat(stated as Coordinate);
+    }
+
+    /**
+     * Where a **rotate** turns, which is not the frame centre for every graphic here.
+     *
+     * `rotationPivot` is the library's separate answer for turning, and 340200 turn, its
+     * tactical twin and 152800 envelopment all swing about a corner rather than about the
+     * middle of their frame. Measured with a deliberate quarter turn on the running app, the
+     * two engines' geometry afterwards: envelopment 15.8% of the symbol apart and the turns
+     * 7.6%, with MapLibre asking the right function and this engine turning about the point
+     * it scales from.
+     *
+     * Falls back to the centre for a base that cannot answer — a `Point`-based graphic turns
+     * about itself, which is what `centerCoordinate` already returns. @see rotationAnchor
+     */
+    getTurningPoint(): number[] {
+        const coords = (this.graphic.base?.getGeometry() as {getCoordinates?(): unknown} | undefined)?.getCoordinates?.();
+        if (!Array.isArray(coords) || !Array.isArray(coords[0])) return this.getCenter();
+        const stated = rotationPivot(
+            {type: 'LineString', coordinates: (coords as Coordinate[]).map(c => toLonLat(c))},
+            this.graphic.name as TacticalGraphicName,
+        );
+        return fromLonLat(stated as Coordinate);
     }
 
     /**
@@ -103,24 +142,6 @@ export class MissionTaskController implements TacticalGraphicHandler {
      * it unconditionally would route every circle graphic into a no-op.
      */
     handleBandResize?: (bandIndex: number, coordinate: Coordinate) => void;
-
-    /**
-     * Lifts the minimum-radius floor for the length of a deliberate resize.
-     *
-     * The floor keeps Turn, TacticalTurn and Envelopment from collapsing into an
-     * unreadable kink, which is a real thing to protect — **while the graphic is being
-     * drawn**. It should not also decide how small a finished one may be: it caps the
-     * shrink at 50 px worth of metres at the drawing zoom, so asking a turn for a tenth
-     * of its size got a third of it and no further.
-     *
-     * The user's rule is that everything except the security operations resizes. A floor
-     * that silently refuses is the same "gesture that does nothing" this mode exists to
-     * get rid of. @see TacticalGraphicHandler.suspendSizeFloor
-     */
-    suspendSizeFloor(active: boolean): void {
-        const holder = this.graphic as unknown as {suspendMinimumSize?: boolean};
-        if ('suspendMinimumSize' in holder) holder.suspendMinimumSize = active;
-    }
 
     /**
      * The radius the graphic is drawn at. @see TacticalGraphicHandler.currentSize
@@ -197,8 +218,6 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const feature = e.feature;
         this.center = (feature.getGeometry() as CircleGeom).getCenter();
         this.graphic.showMeasure?.(true);
-        // The legibility floor is for *this* gesture and no other. @see minimumDrawnRadiusPx
-        this.graphic.sizingFromDraw = true;
 
         feature.getGeometry()?.on('change', () => {
             const circleGeom = feature.getGeometry() as CircleGeom;
@@ -249,10 +268,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
         const circleGeom = e.feature.getGeometry() as CircleGeom;
         const radius = this.drawnRadius(circleGeom);
 
-        // Still the draw: the floor has to reach the size that is *committed*, or a short
-        // drag would be held legible right up until the click that ends it.
         this.graphic.updateGeom(this.drawnFrame(radius, this.rotationAngleDeg));
-        this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
     };
 
@@ -319,7 +335,25 @@ export class MissionTaskController implements TacticalGraphicHandler {
         widthed.scaleWidth?.(deltaSize);
 
         const size = this.graphic.size * deltaSize;
-        this.graphic.updateGeom({size});
+        this.graphic.updateGeom({size, ...this.centerScaledAboutTheAnchor(deltaSize)});
+    }
+
+    /**
+     * The stored centre, moved so the point the library scales from stays put.
+     *
+     * The twin of `centerTurnedAboutThePivot`, and it exists for the same graphic: scaling
+     * `size` alone grows 271204 about its frame centre while the anchor it is supposed to
+     * hold — point 3 — slides out from under the cursor. Empty for every graphic whose
+     * anchor is its centre, which is all the rest. @see getCenter
+     */
+    private centerScaledAboutTheAnchor(factor: number): {center?: Coordinate} {
+        if (!Number.isFinite(factor) || factor <= 0) return {};
+        const anchor = this.getCenter();
+        const center = this.graphic.centerCoordinate();
+        const dx = center[0] - anchor[0];
+        const dy = center[1] - anchor[1];
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < PIVOT_ON_CENTER_M) return {};
+        return {center: [anchor[0] + dx * factor, anchor[1] + dy * factor] as Coordinate};
     }
 
     /** Ends the read-out. Called by the manager when a drag finishes. @see showMeasure */
@@ -341,7 +375,38 @@ export class MissionTaskController implements TacticalGraphicHandler {
             return;
         }
         let rotation = this.graphic.rotation + deltaAngle;
-        this.graphic.updateGeom({rotation});
+        this.graphic.updateGeom({rotation, ...this.centerTurnedAboutThePivot(deltaAngle)});
+    }
+
+    /**
+     * The stored centre, swung about the point the library says this graphic turns on.
+     *
+     * **Advancing `rotation` alone turns the symbol about its own frame centre**, whatever
+     * `rotationPivot` answers — the holder rebuilds its anchors from `{center, size,
+     * rotation}` and the centre is the one thing the gesture never touched. So 271204, whose
+     * pivot is point 3 rather than the middle of its frame (user's call, 2026-09-07), stayed
+     * where it was while MapLibre — which turns the coordinates themselves — swung the whole
+     * figure about that crossing. Measured with a deliberate quarter turn, the two engines
+     * agreed on the angle to within a degree and on the size to within 0.1%, and put the
+     * symbol 5.5 km apart.
+     *
+     * Empty for every graphic whose pivot *is* its centre, which is all but one of them: the
+     * offset is zero, the turn is a no-op, and returning nothing keeps `updateGeom` from
+     * being handed a centre it did not ask for.
+     *
+     * Projected metres throughout, which is the frame the delta was measured in
+     * (`calculateDeltaAngle`) and the one MapLibre's `rotate` turns in.
+     */
+    private centerTurnedAboutThePivot(deltaDegrees: number): {center?: Coordinate} {
+        const pivot = this.getTurningPoint();
+        const center = this.graphic.centerCoordinate();
+        const dx = center[0] - pivot[0];
+        const dy = center[1] - pivot[1];
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < PIVOT_ON_CENTER_M) return {};
+        const radians = (deltaDegrees * Math.PI) / 180;
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+        return {center: [pivot[0] + dx * cos - dy * sin, pivot[1] + dx * sin + dy * cos] as Coordinate};
     }
 
     handleTranslate(deltaX: number, deltaY: number): void {
@@ -448,22 +513,15 @@ export class AnchorClickController extends MissionTaskController {
      */
     onDrawStartFunc = (e: DrawEvent) => {
         /*
-         * **The legibility floor is not armed here, and that is the point.**
+         * **A click-placed draw previews on every pointer move, and nothing damps it.**
          *
-         * It was, to match the circle draw — but a click-placed draw previews on every
-         * pointer move, so flooring the preview pins `size` at the floor while the cursor
-         * keeps going: measured on a turn, the symbol stood still at 478 km through the
-         * first 120 px of drag while the cursor slid from 0.70 to 1.14 of its own bounding
-         * box, then lurched into tracking once the chord outgrew the floor. "The cursor
-         * seems to be in the middle of the graphic making it seem jumpy and not smooth."
-         * (User's report, 2026-09-05.)
-         *
-         * MapLibre applies no floor on this path — `legibleRadius` sits on the
-         * centre-to-edge frame, which the anchor-click family left — and its preview tracks
-         * the cursor exactly, which is the behaviour the user signed off on for ambush. So
-         * the floor moves to `onDrawEndFunc`, where the circle draw already has it and where
-         * this graphic's own doc says it belongs: *committed* at a readable size.
-         * @see minimumDrawnRadiusPx, onDrawEndFunc
+         * There was a legibility floor here once, to match the circle draw, and it pinned
+         * `size` while the cursor kept going: measured on a turn, the symbol stood still at
+         * 478 km through the first 120 px of drag while the cursor slid from 0.70 to 1.14 of
+         * its own bounding box, then lurched into tracking. "The cursor seems to be in the
+         * middle of the graphic making it seem jumpy and not smooth." (User's report,
+         * 2026-09-05.) The floor is gone from both engines now.
+         * @see decorationSizes.ts, "There is no floor"
          */
         /*
          * **And so does the read-out.** The circle draw armed it in its own `onDrawStartFunc`,
@@ -592,21 +650,8 @@ export class AnchorClickController extends MissionTaskController {
         const feature = e.feature as Feature<LineString> | undefined;
         if (!(feature?.getGeometry() instanceof LineString)) return;
 
-        /*
-         * **And it is not armed here either, which leaves the committed geometry exactly as
-         * it was.** The flag used to be cleared on the line above this one, so on this path
-         * the floor already reached nothing that gets stored — it distorted every pointer
-         * move of the draw and then stood down for the one call that decides the symbol.
-         * Arming it now would *change* the finished shape of a barely-dragged curve, and the
-         * user's report is explicit that "the end drawing is perfect".
-         *
-         * So `minimumDrawnRadiusPx` is currently unreachable for this family on **both**
-         * engines — MapLibre's `legibleRadius` sits on the centre-to-edge frame, which these
-         * graphics left when they became click-placed. That is a deliberate hold, not an
-         * oversight: re-arming it belongs on both engines at once and is a change to what the
-         * gesture produces, so it is someone's call rather than a side effect of this fix.
-         */
-        this.graphic.sizingFromDraw = false;
+        // What the operator placed is what is committed: there is no size floor on this
+        // path, on either engine. @see decorationSizes.ts, "There is no floor"
         this.graphic.setBaseFeature?.(feature);
     };
 }
@@ -643,7 +688,6 @@ export class RangeClickController extends AnchorClickController {
     }
 
     onDrawEndFunc = (e: DrawEvent) => {
-        this.graphic.sizingFromDraw = false;
         this.graphic.showMeasure?.(false);
         /*
          * **Clearing the sketch is not bookkeeping, it is the off switch.** This overrides

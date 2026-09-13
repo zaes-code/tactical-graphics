@@ -10,7 +10,8 @@ import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
 import {LineString, MultiLineString, Point} from 'ol/geom';
 import {toLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName, isRectangular} from '@zaes/tactical-graphics';
+import type {Position} from 'geojson';
+import {TacticalGraphicHostility, TacticalGraphicName, halfWidthFromBase, isRectangular} from '@zaes/tactical-graphics';
 
 import {getController} from './controllerRegistry';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
@@ -304,7 +305,16 @@ describe('editable state survives', () => {
         expectMetersClose(baseCoords(to.graphicControllers[0]), baseCoords(original));
     });
 
-    it('keeps a movement graphic’s dragged width', () => {
+    /**
+     * **The width is a coordinate as of 2026-09-10**, so what has to survive the round trip is
+     * the base's last point rather than a number beside it.
+     *
+     * It used to read `holder.offset` back, which is now only what the generator falls back to
+     * when the base states nothing — a legacy save, or a graphic mid-draw. Measured after the
+     * change, the field came back at 96,000 for a width dragged to 9,000: not a regression, a
+     * field that stopped being the answer. @see halfWidthFromBase
+     */
+    it('keeps a movement graphic’s dragged width, which its base now carries', () => {
         const from = fakeManager();
         const handler = build(from, TacticalGraphicName.AttackHelicopterAxisOfAdvance) as LineGraphicController;
         const widened = 9_000;
@@ -313,8 +323,13 @@ describe('editable state survives', () => {
         const {to, report} = roundTrip(from);
         expect(report.failed).toEqual([]);
 
-        const restored = to.graphicControllers[0] as LineGraphicController;
-        expect((restored.graphic as unknown as {offset: number}).offset).toBeCloseTo(widened, 6);
+        const lonLat = (controller: LineGraphicController) => {
+            const projected = (controller.graphic.base.getGeometry() as LineString).getCoordinates();
+            return projected.map(c => toLonLat(c)) as Position[];
+        };
+        const name = TacticalGraphicName.AttackHelicopterAxisOfAdvance;
+        expect(halfWidthFromBase(name, lonLat(handler))).toBeCloseTo(widened, 3);
+        expect(halfWidthFromBase(name, lonLat(to.graphicControllers[0] as LineGraphicController))).toBeCloseTo(widened, 3);
     });
 
     it('keeps amplifiers, including hostility', () => {

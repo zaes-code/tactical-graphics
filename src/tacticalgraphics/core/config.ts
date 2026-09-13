@@ -172,14 +172,19 @@ export interface TacticalGraphicsConfigOptions {
     obstacleColors?: boolean;
 
     /**
-     * The green itself. Default `#00FF00`, which is what the plates print — sampled off
-     * 270501's own Example cell, pure green and unmixed.
+     * The green itself. Default `#00AC00`.
+     *
+     * **Not the plate's own green, and deliberately so.** 270501's Example cell prints
+     * `#00FF00` — pure, unmixed, and what this defaulted to through 4.1.1. Sampled off a
+     * raster it is exact; rendered as line work over a map it is the brightest colour a
+     * screen can make, and it reads as a highlight rather than as a symbol. `#00AC00` is the
+     * same hue at about two thirds the value (user's call, 2026-09-13).
+     *
+     * The rule it serves is unchanged: 8.1.4.3 says obstacles are **green**, and names no
+     * value. A host that wants the plate's literal green sets it back here.
      *
      * A separate field from `obstacleColors` so the boolean says *whether* and this says
-     * *which*, matching how every other colour here works. Doctrinal defaults are literal
-     * rather than comfortable — `defaultLineColor` is `#000000` on the same principle — and
-     * a host on a night display or a busy chart softens it here rather than switching the
-     * rule off.
+     * *which*, matching how every other colour here works.
      */
     obstacleColor?: string;
 
@@ -303,7 +308,7 @@ export const DEFAULT_PALETTE: Readonly<Required<Pick<TacticalGraphicsConfigOptio
     'defaultLineColor' | 'labelFillColor' | 'labelHaloColor' | 'handleColor' | 'inertHandleColor' | 'drawMarkerColor' | 'drawMarkerOutlineColor' | 'obstacleColor'>>> = {
     defaultLineColor: '#000000',
     // APP-06 8.1.4.3's green, sampled off 270501's Example cell: pure, unmixed.
-    obstacleColor: '#00FF00',
+    obstacleColor: '#00AC00',
     labelFillColor: '#000000',
     labelHaloColor: 'rgba(255,255,255,1)',
     handleColor: 'rgba(255,0,0,1)',

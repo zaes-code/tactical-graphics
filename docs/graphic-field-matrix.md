@@ -9,13 +9,13 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | abatis | FM 1-02.2 + APP-06 | 280100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | active maneuver area | APP-06 | 200500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| advance to contact | APP-06 | 342900 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| advance to contact | APP-06 | 342900 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | air corridor | FM 1-02.2 + APP-06 | 170100 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
 | air space coordination area circular | FM 1-02.2 + APP-06 | 240103 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  | Y | Y |  |  |
 | air space coordination area irregular | FM 1-02.2 + APP-06 | 240101 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  | Y |  |  |
 | air space coordination area rectangular | FM 1-02.2 + APP-06 | 240102 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y | Y |  |  | Y |  |  |
 | air to air refueling restricted operations zone | FM 1-02.2 + APP-06 | 171100 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| airborne or aviation axis of advance | FM 1-02.2 + APP-06 | 151401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| airborne or aviation axis of advance | FM 1-02.2 + APP-06 | 151401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | airfield | FM 1-02.2 + APP-06 | 131900 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | airfield zone | APP-06 | 120400 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | airhead line | FM 1-02.2 + APP-06 | 141300 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -37,9 +37,9 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | assault position | FM 1-02.2 + APP-06 | 151500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | assembly area | FM 1-02.2 + APP-06 | 150200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | attack by fire | FM 1-02.2 + APP-06 | 152000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| attack helicopter axis of advance | FM 1-02.2 + APP-06 | 151402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| attack helicopter axis of advance | FM 1-02.2 + APP-06 | 151402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | attack position | FM 1-02.2 + APP-06 | 151600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| avenue of approach | APP-06 | 152300 | Y |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| avenue of approach | APP-06 | 152300 | Y |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | aviation direction of attack | FM 1-02.2 + APP-06 | 140601 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | base camp | FM 1-02.2 + APP-06 | 120500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | base defense zone | FM 1-02.2 + APP-06 | 170800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
@@ -89,8 +89,8 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | cordon and knock | APP-06 | 342600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | cordon and search | FM 1-02.2 + APP-06 | 342700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | corps support area | FM 1-02.2 + APP-06 | 310800 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| counterattack | FM 1-02.2 + APP-06 | 340600 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| counterattack by fire | APP-06 | 340700 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| counterattack | FM 1-02.2 + APP-06 | 340600 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| counterattack by fire | APP-06 | 340700 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | cover | FM 1-02.2 + APP-06 | 342201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | critical friendly zone circular | FM 1-02.2 + APP-06 | 241403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | critical friendly zone irregular | FM 1-02.2 + APP-06 | 241401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -155,7 +155,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | free fire area circular | FM 1-02.2 + APP-06 | 240203 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | free fire area irregular | FM 1-02.2 + APP-06 | 240201 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | free fire area rectangular | FM 1-02.2 + APP-06 | 240202 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| frontal attack | FM 1-02.2 + APP-06 | 152700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| frontal attack | FM 1-02.2 + APP-06 | 152700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | gap | FM 1-02.2 |  | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | group/series of targets | FM 1-02.2 + APP-06 | 240805 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | guard | FM 1-02.2 + APP-06 | 342202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -190,8 +190,8 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | locate | APP-06 | 343900 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | low altitude missile engagement zone | FM 1-02.2 + APP-06 | 171700 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
 | low level transit route | FM 1-02.2 + APP-06 | 170200 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| main axis of advance | FM 1-02.2 + APP-06 | 151403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| main axis of advance feint | FM 1-02.2 + APP-06 | 151406 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| main axis of advance | FM 1-02.2 + APP-06 | 151403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| main axis of advance feint | FM 1-02.2 + APP-06 | 151406 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | main supply route | FM 1-02.2 + APP-06 | 330300 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
 | mine cluster | APP-06 | 290400 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | mined area | FM 1-02.2 + APP-06 | 270800 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
@@ -284,7 +284,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | submarine action area | APP-06 | 150502 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | submarine-generated action area | APP-06 | 150503 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | support by fire | FM 1-02.2 + APP-06 | 152100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| supporting axis of advance | FM 1-02.2 + APP-06 | 151404 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| supporting axis of advance | FM 1-02.2 + APP-06 | 151404 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | suppress | FM 1-02.2 + APP-06 | 342800 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | target area circular | FM 1-02.2 + APP-06 | 240803 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | target area irregular | FM 1-02.2 + APP-06 | 240801 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -302,7 +302,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | trip wire | FM 1-02.2 + APP-06 | 290500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | turn | FM 1-02.2 + APP-06 | 344700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | turn | FM 1-02.2 + APP-06 | 270504 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| turning movement | FM 1-02.2 + APP-06 | 152900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| turning movement | FM 1-02.2 + APP-06 | 152900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | unexploded explosive ordnance (UXO) area | FM 1-02.2 + APP-06 | 271000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | unmanned aircraft (UA) corridor | FM 1-02.2 |  | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
 | unmanned aircraft restricted operations zone | FM 1-02.2 + APP-06 | 171200 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
@@ -326,4 +326,4 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | zone of responsibility irregular | APP-06 | 241901 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | zone of responsibility rectangular | APP-06 | 241902 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 
-| **Totals** | | | 179 | 6 | 20 | 27 | 266 | 84 | 110 | 109 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 35 | 5 | 26 | 3 | 3 | 3 |
+| **Totals** | | | 179 | 6 | 20 | 27 | 266 | 84 | 110 | 109 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 46 | 5 | 26 | 3 | 3 | 3 |

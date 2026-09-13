@@ -27,7 +27,7 @@
 
 import type {Geometry, Position} from 'geojson';
 import type {ProjectedPosition, TacticalGraphicName, TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {drawnAnchorFrame, generatorOrder, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {axisOf, axisWithWidthPoint, carriesWidthPointInBase, drawnAnchorFrame, generatorOrder, rotationToAzimuth, groundLength, latitudeFromMercatorY, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from '../projection';
 
 /** A graphic's editable state: what it was drawn from, and what shapes it. */
@@ -159,7 +159,33 @@ export function rotate(description: GraphicDescription, from: Position, to: Posi
         // Degrees, and **counter-clockwise from east** — the frame the generators
         // build their local axes in, not a compass bearing.
         const current = description.properties.rotation ?? 0;
-        return {...description, properties: {...description.properties, rotation: current + (delta * 180) / Math.PI}};
+        const turned = current + (delta * 180) / Math.PI;
+        /*
+         * **A stated azimuth has to turn with it.** 200700 files its search axis as a
+         * bearing of its own, and the generator prefers that field over `rotation` — so a
+         * rotate that advanced only `rotation` turned nothing at all here, while the same
+         * gesture on OpenLayers restated the azimuth and the symbol swung. Measured: the
+         * bag came away carrying a rotation of -14° and an axis still reading 045°, which
+         * also hands the other engine a graphic that draws where it started.
+         * `RangeFanGraphicBase.syncRadarState` is the same identity on that side.
+         */
+        const azimuth = description.properties.searchAxisAzimuthDeg;
+        /*
+         * Advanced by the same turn, not rebuilt from `rotation`: the two are the same
+         * bearing read opposite ways round — `azimuth = 90 - rotation`, so a turn that adds
+         * to one subtracts from the other — and a graphic that filed an axis without ever
+         * filing a rotation has no rotation to rebuild from. Deriving it from a `rotation`
+         * of 0 put a symbol aimed at 045 on a bearing of 104.
+         */
+        const degrees = (delta * 180) / Math.PI;
+        return {
+            ...description,
+            properties: {
+                ...description.properties,
+                rotation: turned,
+                ...(azimuth === undefined ? {} : {searchAxisAzimuthDeg: rotationToAzimuth(90 - azimuth + degrees)}),
+            },
+        };
     }
 
     const cos = Math.cos(delta);
@@ -232,11 +258,21 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
     if (!isFinite(ratio) || ratio === 1) return description;
 
     if (description.geometry.type === 'Point') {
+        /*
+         * **A radius is not the only thing a centred graphic can be sized by.** 200700 is
+         * described by two ranges and files no radius at all — measured on the sweep, its bag
+         * carries `startRange` and `stopRange` and nothing else — so bailing out when there is
+         * no radius left it the one graphic of the six this scaling was written for that a
+         * resize still did not touch.
+         */
+        const scaled = scaleStatedDimensions(description.properties, ratio);
         const current = description.properties.radius;
-        if (current === undefined) return description;
+        if (current === undefined) {
+            return scaled === description.properties ? description : {...description, properties: scaled};
+        }
         return {
             ...description,
-            properties: {...description.properties, radius: Math.max(MIN_RADIUS_METERS, current * ratio)},
+            properties: {...scaled, radius: Math.max(MIN_RADIUS_METERS, current * ratio)},
         };
     }
 
@@ -292,6 +328,41 @@ function scaleDrawnSizes(
         ...properties,
         ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
         ...(isArea || properties.decorationSize === undefined ? {} : {decorationSize: scaled(properties.decorationSize)}),
+    };
+}
+
+/**
+ * The dimensions a point-anchored graphic **states** rather than derives, scaled by `ratio`.
+ *
+ * `radius` is not the whole size of every centred symbol. Five plates give a length *and* a
+ * width to one anchor point — the three maritime ellipses, 240802 and 200600 — and 200700 is
+ * described by two ranges; the rectangular target files a length of its own. A resize that
+ * moved only `radius` scaled half of each of those and left the other half at whatever it was
+ * seeded with, so the symbol changed shape as it changed size.
+ *
+ * Measured on `compare:engines` before this: a 1.5x resize of 200101 took its length to
+ * 540,241 m on OpenLayers and left it at the seeded 360,000 here, and 200700's two ranges the
+ * same way.
+ *
+ * A sibling of {@link scaleDrawnSizes}, which does the same job for a drawn base and
+ * deliberately leaves `radius` alone because there it is the same number as the half-width.
+ * These are the fields that one does not touch. @see hasAxisAndWidth, statesShapeAsRangeBands
+ */
+function scaleStatedDimensions(properties: TacticalGraphicProperties, ratio: number): TacticalGraphicProperties {
+    const scaled = (value: number | undefined): number | undefined =>
+        value !== undefined && value > 0 ? value * ratio : value;
+
+    const touches = ['length', 'width', 'startRange', 'stopRange'] as const;
+    // The same object back when there was nothing to scale, so a caller can tell a no-op
+    // from a change by identity — which is what `dragTo` does to decide whether to rebuild.
+    if (!touches.some(key => properties[key] !== undefined)) return properties;
+
+    return {
+        ...properties,
+        ...(properties.length === undefined ? {} : {length: scaled(properties.length)}),
+        ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
+        ...(properties.startRange === undefined ? {} : {startRange: scaled(properties.startRange)}),
+        ...(properties.stopRange === undefined ? {} : {stopRange: scaled(properties.stopRange)}),
     };
 }
 
@@ -426,7 +497,12 @@ export function setOffset(
     // way from the one their symbol was built along. Reading the stored order would
     // invert the sign for exactly those graphics: a corridor would flip the instant it
     // was dragged along the side it already hung on. @see drawOrder.ts
-    const drawn = generatorOrder(description.properties.name, positionsOf(description.geometry));
+    const name = description.properties.name;
+    // **The axis, not the whole base.** Eleven of these carry the width itself as their last
+    // coordinate, and it is a point off to one side: left in, it is a segment for the loop below
+    // to measure against and it reverses into the *front* of the line. @see carriesWidthPointInBase
+    const stored = axisOf(name, positionsOf(description.geometry));
+    const drawn = generatorOrder(name, stored);
     const coords = drawn.map(p => toMercator([p[0], p[1]]));
     if (coords.length < 2) return description;
 
@@ -454,6 +530,21 @@ export function setOffset(
     // dragging it. @see mercator.ts
     const ground = groundLength(Math.abs(perpendicular), drawn[0][1]);
     const width = ground * (options.offsetScale ?? DEFAULT_OFFSET_SCALE) * 2;
+
+    /*
+     * **For the eleven axis arrows the answer is a coordinate, not an amplifier.**
+     *
+     * Their width lives at the end of the base as of 2026-09-10, so a `width` written here would
+     * be a second copy that the generator ignores and a save carries anyway. The same number is
+     * spent by moving the stored point instead, which is where `halfWidthFromBase` reads it back
+     * from — and `mirrored` goes with it, because these arrows have no side to fall on and the
+     * point is republished square however the grip was dragged. @see axisWithWidthPoint
+     */
+    if (carriesWidthPointInBase(name)) {
+        const moved = axisWithWidthPoint(name, stored, width / 2);
+        return {...description, geometry: {type: 'LineString', coordinates: moved}};
+    }
+
     const properties = {...description.properties, width};
 
     // **Negative, not positive.** The axis above is the left normal and an

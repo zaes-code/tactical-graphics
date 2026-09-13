@@ -13,7 +13,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon} from '../core/type';
-import {echelonMarks} from './echelonPaints';
+import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {
     centerSegmentIndex,
     endFrame,
@@ -222,7 +222,7 @@ const FORK_ARM_PX = 34;
 /** Half the angle the fork opens through, in degrees. */
 const FORK_HALF_ANGLE_DEG = 30;
 /** Screen-pixel clearance either side of the echelon glyph in the gap cut for it. */
-const ECHELON_GAP_PX = 16;
+const ECHELON_GAP_PX = 8;
 
 /**
  * APP-06 142100 mobility corridor: a line forking open at each end, with the echelon in a
@@ -257,7 +257,12 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
             if (i !== segIdx) outline.push([path[i], path[i + 1]]);
         }
 
-        const halfGap = ECHELON_GAP_PX * scale * context.resolution;
+        // Cut to fit the glyph rather than to a constant: the corridor takes every echelon
+        // from a squad's dot to a corps' XXX, and one figure suits neither end.
+        // @see echelonWidthPx
+        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        const glyphHalfPx = echelonWidthPx(b[0] - a[0], b[1] - a[1], context.resolution, echelon, scale) / 2;
+        const halfGap = (glyphHalfPx + ECHELON_GAP_PX * scale) * context.resolution;
         const at = (u: number): ProjectedPosition => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
         const gapped = segLen > halfGap * 2;
         const t = gapped ? halfGap / segLen : 0;
@@ -272,15 +277,7 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
 
         const paints: Paint[] = [{geometry: {type: 'MultiLineString', coordinates: outline}, stroke}];
 
-        paints.push(...echelonMarks(
-            mid,
-            b[0] - a[0],
-            b[1] - a[1],
-            context.resolution,
-            feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad,
-            color,
-            scale,
-        ));
+        paints.push(...echelonMarks(mid, b[0] - a[0], b[1] - a[1], context.resolution, echelon, color, scale));
 
         const armScale = endMarkScale(path, context.resolution, FORK_ARM_PX);
         if (armScale > 0) {
