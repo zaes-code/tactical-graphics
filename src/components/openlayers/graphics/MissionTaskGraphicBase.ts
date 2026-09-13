@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {handlesAreInert, publishesAnchorHandleOnly, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import {handlesAreInert, drawsAsBarSymbol, publishesAnchorHandleOnly, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
@@ -237,7 +237,15 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // unchanged — only how the geometry gets built moved.
         // The readiness states differ only in which bar is dashed - a stroke property,
         // so it cannot live in the geometry.
-        if (name === TacticalGraphicName.ExplosivesPlannedStateOfReadiness || name === TacticalGraphicName.ExplosivesStateOfReadiness1Safe || name === TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable) {
+        /*
+         * **Asked, not listed.** This was the three readiness states written out by name, and
+         * 271204 joined the family in the paint registry without joining it here — so the
+         * executed roadblock drew in the draw-marker grey while its three siblings drew in
+         * 8.1.4.3's obstacle green, which the shared paint had been giving it all along. Its
+         * own thumbnail, rendered from that paint, was green the whole time.
+         * @see drawsAsBarSymbol, OBSTACLE_GRAPHICS
+         */
+        if (drawsAsBarSymbol(name)) {
             this.graphic.setStyle(barSymbolStyleFunc(name));
         }
         if (name === TacticalGraphicName.Envelopment) {
