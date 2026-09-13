@@ -1061,7 +1061,13 @@ export class NativeLayerRenderer {
         let best: {graphic: MapLibreTacticalGraphic; index: number} | undefined;
         let bestDistance = radiusPx;
         for (const graphic of searched) {
+            // **The grip that is not drawn is not grabbable either.** This walks the handle
+            // array rather than the painted features, so skipping the paint alone left an
+            // invisible dot still answering the pointer — the exact inverse of the rule it
+            // was meant to serve. @see anchorGripIndex, realizeEditorMarks
+            const hidden = anchorGripIndex(graphic);
             graphic.handles.forEach((position, index) => {
+                if (index === hidden) return;
                 const projected = this.map.project(toLonLat(position) as [number, number]);
                 const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
                 if (distance <= bestDistance) {
