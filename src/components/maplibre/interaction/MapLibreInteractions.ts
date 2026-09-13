@@ -1774,15 +1774,24 @@ export class MapLibreInteractions {
                 // graphic about the point the user thinks of as its origin. Moving is
                 // what translate mode is for. @see anchorVertex
                 if (drag.vertex >= 0 && drag.vertex === anchorVertex(drag.graphic.name)) return before;
-                // A modify drag that did not grab a vertex moves the whole graphic, which
-                // is what the OpenLayers Modify interaction does when you drag a line
-                // rather than one of its points.
-                // A vertex drag authors the shape, so it takes the same floor a draw does
-                // — otherwise a graphic that could not be DRAWN below 80 px could be
-                // dragged below it a moment later, and OpenLayers refuses both.
-                return drag.vertex >= 0
-                    ? this.withFirstSegmentFloor(moveVertex(before, drag.vertex, to))
-                    : translate(before, drag.origin, to);
+                /*
+                 * **A drag that grabbed no vertex does nothing**, which is what OpenLayers
+                 * does and not what the comment here used to claim. Its `Modify` drags
+                 * vertices and inserts them; it never translates the feature, and its own
+                 * manager declines an edit-mode drag outright unless the graphic stretches
+                 * or a mirror handle was grabbed. So this fallback had no counterpart:
+                 * pressing inside a rectangular zone and pulling moved it here and did
+                 * nothing there — seventeen rows of the handle sweep, on graphics where
+                 * neither engine even draws a grip at that spot.
+                 *
+                 * Moving is what the selection box's translate affordance is for, on both
+                 * engines. Edit mode shapes.
+                 *
+                 * A vertex drag authors the shape, so it takes the same floor a draw does
+                 * — otherwise a graphic that could not be DRAWN below 80 px could be
+                 * dragged below it a moment later, and OpenLayers refuses both.
+                 */
+                return drag.vertex >= 0 ? this.withFirstSegmentFloor(moveVertex(before, drag.vertex, to)) : before;
 
             default:
                 return before;

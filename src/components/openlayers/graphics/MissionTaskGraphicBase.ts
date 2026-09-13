@@ -1095,7 +1095,17 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
         // point, so the offset is half the bend's own depth.
         const perpX = Math.sin(theta);
         const perpY = -Math.cos(theta);
-        this.bend = turnBendFromOffset(dx * perpX + dy * perpY, this.size);
+        /*
+         * **On the ground, because `size` is.** The cursor is measured on the screen and
+         * `size` was converted the moment the tip branch above wrote it, so dividing one by
+         * the other mixed two frames — and `bend` is exactly that ratio. Mercator metres run
+         * 1.31x long at 40 degrees north, which is where the handle sweep measured it: the
+         * same drag on 340200's apex left the two engines' bend point 2.12 km apart, the
+         * clamp having absorbed most of the rest. MapLibre's `setBend` divides by the same
+         * scale factor and says so. @see mercator.ts, editGeometry.ts
+         */
+        const offset = groundLength(Math.abs(dx * perpX + dy * perpY), latitudeFromMercatorY(center[1]));
+        this.bend = turnBendFromOffset(Math.sign(dx * perpX + dy * perpY) * offset, this.size);
         this.republishFromState();
     }
 }
