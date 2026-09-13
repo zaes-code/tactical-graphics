@@ -134,4 +134,17 @@ describe('the grip on a first anchor is hidden by one rule, read by both engines
         const renderer = fs.readFileSync(path.join(__dirname, 'maplibre/native/NativeLayerRenderer.ts'), 'utf8');
         expect(renderer).toContain('hidesAnchorGrip(graphic.name)');
     });
+
+    it('is skipped by the hit test as well as by the paint', () => {
+        /*
+         * **Both, or the fix is worse than the defect.** `hitTestHandle` walks the handle
+         * array rather than the painted features, so skipping only the paint left an
+         * invisible dot still answering the pointer — a grip that does something and shows
+         * nothing, which is the inverse of the rule. Driven on the running app before this:
+         * a hit test at the hidden grip's pixel returned index 0; after it, -1.
+         */
+        const renderer = fs.readFileSync(path.join(__dirname, 'maplibre/native/NativeLayerRenderer.ts'), 'utf8');
+        const hitTest = renderer.slice(renderer.indexOf('hitTestHandle(point'));
+        expect(hitTest.slice(0, hitTest.indexOf('return best;'))).toContain('anchorGripIndex(graphic)');
+    });
 });
