@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, reshapesByVertex, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -194,6 +194,21 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * that drags the shape inside out. `undefined` means every vertex reshapes.
      */
     anchorVertex: number | undefined;
+
+    /**
+     * The base a vertex drag started on, held for the length of the gesture.
+     *
+     * **Every move is applied to this, not to what the previous move left behind**, and
+     * the difference is not cosmetic. `settle` re-squares a derived point against the
+     * axis the drag is moving, so squaring the already-squared answer once per pointer
+     * event composes: the same drag delivered in four steps put 152901's third point
+     * 21.9 km from where the one-step drag put it, and the step count is whatever the
+     * pointer happened to report. MapLibre reached the same guarantee the same way and
+     * says so in `dragTo`; this is the OpenLayers twin.
+     *
+     * Cleared in `endGesture`, which the manager calls however a drag finishes.
+     */
+    private vertexDragStart: Coordinate[] | undefined;
 
     /**
      * Which graphic this is, kept because two of the rules the library states are
@@ -398,6 +413,8 @@ export class LineGraphicController implements TacticalGraphicHandler {
      */
     endGesture(): void {
         (this.graphic as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
+        // The latched base belongs to one gesture. @see vertexDragStart
+        this.vertexDragStart = undefined;
     }
 
     /**
@@ -513,6 +530,16 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * route on presence and leave every other line graphic exactly as it was.
      */
     enableVertexDragging(minimumVertices = 2): this {
+        /*
+         * **Whether a grip reshapes at all is the library's answer, not this call's.**
+         *
+         * The call itself was the only statement of it, so MapLibre could not read it —
+         * and that engine reshapes wherever `allowedGestures().modify` is true, which is
+         * 272 graphics against the 81 named here. The 23 that stretch and do not reshape
+         * were the difference: the same dot scaled the symbol here and pulled one point
+         * out of it there. @see reshapesByVertex
+         */
+        if (this.name !== undefined && !reshapesByVertex(this.name)) return this;
         this.dragsVertices = true;
         this.minimumVertices = minimumVertices;
         /*
@@ -546,7 +573,8 @@ export class LineGraphicController implements TacticalGraphicHandler {
         this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
             const geom = this.graphic.base.getGeometry();
             if (!geom) return;
-            const coords = geom.getCoordinates();
+            // Latched on the first move of the gesture. @see vertexDragStart
+            const coords = (this.vertexDragStart ??= geom.getCoordinates());
             if (index < 0 || index >= coords.length) return;
             if (coords.length < this.minimumVertices) return;
 
