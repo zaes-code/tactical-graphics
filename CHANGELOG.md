@@ -15,6 +15,10 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+---
+
+## [4.2.0] — 2026-09-13
+
 > ### ⚠️ Twelve graphics change the shape of their base, and the snapshot version is now 2
 >
 > The eleven axis arrows — the five axes of advance, avenue of approach, frontal attack,
@@ -47,6 +51,15 @@ the npm publish dates — when a version actually became installable.
   so OpenLayers can ask it in projected metres and MapLibre in degrees.
 - **`LEGACY_SNAPSHOT_VERSION`** — the version a file that declares none is read as.
 - **A width read-out** in the properties panel for the eleven, derived from their points.
+- **`reshapesByVertex` and `hidesAnchorGrip`** — the two rules a grip obeys. The first says
+  whether dragging a published point moves that point or scales the symbol, which is a
+  different question from `editStretches` and answered differently on 66 graphics; where both
+  are true the grip wins. The second says whether a graphic publishes a grip on its *first*
+  anchor at all, which it does not when the symbol is two points that only stretch. Both lived
+  in an OpenLayers holder, so the other renderer could not read them.
+- **`shapedByWidth` and `widthFromBase`** — which graphics take a default width, and the full
+  width a base states. The first replaced five negative guards a renderer had accumulated; the
+  second is the doubling from half-width to full, which had been written twice.
 
 ### Changed
 
@@ -66,6 +79,29 @@ the npm publish dates — when a version actually became installable.
   says while a gesture runs, so a host and both renderers state a number the same way.
   The radar search doctrine now reports all four values its plate names, two of which are
   angles and had no read-out at all.
+- **A grip drag means the same gesture on both renderers.** `editStretches` says what a drag on
+  a graphic's *body* means and does not answer for a grip, so on the 23 graphics that stretch
+  and do not reshape the same dot scaled the symbol on one engine and pulled a single point out
+  of it on the other — 37.5 km apart on a bearing line. Where a graphic both stretches and
+  reshapes, the grip still wins.
+- **A grip is drawn the same colour on both renderers, and a red one always does something.**
+  25 of 679 published handles were drawn differently. 271204's three anchors are inert and were
+  drawn red on one engine, which promised a drag it then declined. The five one-anchor mission
+  tasks — defeat, destroy, interdict, neutralize, suppress — publish one point, their centre,
+  which carries neither a scale ratio nor an angle, and it is grey now on both. Eighteen
+  two-point lines that only stretch no longer draw a grip on the anchor their gesture is
+  measured from, and that grip does not answer the pointer either.
+- **An edit-mode drag that grabs no vertex does nothing on MapLibre**, which is what OpenLayers
+  does. It used to move the graphic. Moving is the selection box's job on both.
+- **A point-anchored graphic gets its registered paint** when nothing names it specifically.
+  The OpenLayers holder chose from a chain of hand-written names and anything matching none of
+  them fell through to a default, so registering a paint took two edits. It asks the registry
+  first now.
+- **The default obstacle colour is `#00AC00`**, where it was the plate's pure `#00FF00`.
+  8.1.4.3 says obstacles are green and names no value; the Example cell's green is exact as a
+  sample off a raster and reads as a highlight rather than as line work once it is drawn over a
+  map. Same hue, about two thirds the value. A host that wants the literal plate green sets
+  `obstacleColor` back, which is what that entry is for.
 
 ### Fixed
 
@@ -83,6 +119,38 @@ the npm publish dates — when a version actually became installable.
 - **A rotate turns the radar search doctrine on MapLibre.** It advanced `rotation` and left
   the stated axis alone, so the symbol did not turn and the saved graphic disagreed with
   the other engine.
+- **A drag owns the pointer on MapLibre.** That engine stops dispatching its own mouse events
+  partway through a fast gesture, so a drag ended wherever the last delivered move left it —
+  and because the release never arrived, panning stayed switched off for the rest of the
+  session. A drag now reads the pointer from the window, from the moment it goes down.
+- **271204 turns the way the schema says, and about the point its plate names.** A stated
+  rotation is counter-clockwise from east everywhere in this library; the roadblock's module
+  spent it as a compass bearing, so it was the one graphic that turned the wrong way. Behind
+  that, the library's pivot was being used to *measure* the drag and not to place the result, so
+  it swung about its frame centre rather than about the crossing at point 3.
+- **The roadblock draws in the obstacle green it was always assigned.** 8.1.4.3 colours
+  obstacles green and `OBSTACLE_GRAPHICS` has always listed 271204; the shared paint drew it
+  green and one renderer never asked for that paint.
+- **The same drag lands in the same place however many moves it arrives in.** OpenLayers
+  re-derived a graphic's shape on every pointer move, and re-squaring an already-squared base is
+  not a no-op, so a drag delivered in four steps put 152901's third point 21.9 km from where the
+  one-step drag put it. The base is latched for the gesture now.
+- **A floor stated in screen pixels is spent at the resolution the screen is at.** The holder
+  kept the resolution it was drawn at, one holder had no floor at all, and one switch was
+  lifting two different floors — so a grip could take a Fix below the width its bow-tie needs.
+- **A bend is read on the ground, because the size it is a ratio of is.** The cursor arrived in
+  projected metres, so a turn bowed harder the further north it was drawn.
+- **A half-stated file is completed the same way by both renderers**, and a range-band graphic
+  is rebuilt from a radius alone. A saved bag carrying a radius and no width was finished three
+  different ways; one renderer reported no length at all, and the other spent a stray radius as
+  a rectangle's half-width and built its fallback in projected rather than ground metres.
+- **A graphic whose anchor points carry its frame stops filing a stale one.** 151204 contain
+  rebuilt at 29.8 km while the panel went on reporting the 40 km its file had recorded.
+- **A gesture turns and scales about the point the library names.** The OpenLayers line
+  controller restated its own rule, so 141700 ambush and the three security operations turned
+  about the wrong end — 230 and 336 km out. A resize also scales every dimension a symbol
+  states rather than its radius alone, so five plates that give a length *and* a width no longer
+  change shape as they change size.
 
 ### Removed
 
@@ -1376,7 +1444,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...develop
+[4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...v4.0.0
