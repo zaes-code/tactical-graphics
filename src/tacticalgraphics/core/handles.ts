@@ -1745,6 +1745,118 @@ export function editStretches(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * Graphics a **grip reshapes**: dragging one of their published points moves that point,
+ * rather than scaling the whole symbol about its anchor.
+ *
+ * The two questions are separate and a graphic can answer yes to both. `editStretches`
+ * says what a drag on the *body* means; this says what a drag on a *grip* means, and
+ * where both are true the grip wins, because a point the plate places is a decision the
+ * operator is entitled to change one at a time. 270601's rear point *"determines its
+ * length"*; a fields-of-fire's legs are its content; a rectangle's corner is its corner.
+ *
+ * **It lived in the OpenLayers registry**, as an `enableVertexDragging(n)` call on 81 of
+ * the factories, so MapLibre could not see it — and MapLibre reshapes wherever
+ * `allowedGestures().modify` is true, which is 272 graphics. On the 23 that stretch and
+ * do *not* reshape, the same dot therefore scaled the symbol on one engine and pulled a
+ * single point out of it on the other: the bearing lines, the navigational rhumb line,
+ * ferry crossing, trip wire, raft site, mine cluster, fortified position, turn,
+ * envelopment, contain, the linear targets and 270302. Measured on the handle sweep, the
+ * bearing lines' second grip landed 37.5 km apart.
+ *
+ * Distinct from `anchorVertex`, which exempts **one** vertex of a graphic that does
+ * reshape, and from `handlesAreInert`, where no grip answers a drag at all.
+ * @see editStretches, anchorVertex, ai/conventions.md "A symbology fact never lives in a holder"
+ */
+const RESHAPES_BY_VERTEX: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Abatis,
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.FieldsOfFire,
+    TacticalGraphicName.Bridge,
+    TacticalGraphicName.Gap,
+    TacticalGraphicName.AssaultCrossing,
+    TacticalGraphicName.FordEasy,
+    TacticalGraphicName.FordDifficult,
+    TacticalGraphicName.PassageLane,
+    TacticalGraphicName.SafeLaneOrGap,
+    TacticalGraphicName.OverheadWire,
+    TacticalGraphicName.PsyOpsZoneRectangular,
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+    TacticalGraphicName.PositionAreaArtilleryRectangular,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular,
+    TacticalGraphicName.CallForFireZoneRectangular,
+    TacticalGraphicName.TargetBuildUpAreaRectangular,
+    TacticalGraphicName.TargetValueAreaRectangular,
+    TacticalGraphicName.ZoneOfResponsibilityRectangular,
+    TacticalGraphicName.CensorZoneRectangular,
+    TacticalGraphicName.CriticalFriendlyZoneRectangular,
+    TacticalGraphicName.DeadSpaceAreaRectangular,
+    TacticalGraphicName.BlueKillBoxRectangular,
+    TacticalGraphicName.PurpleKillBoxRectangular,
+    TacticalGraphicName.FireSupportAreaRectangular,
+    TacticalGraphicName.AirSpaceCoordinationAreaRectangular,
+    TacticalGraphicName.TargetAreaSingleTargetAegis,
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.ShipAreaOfInterestRectangle,
+    TacticalGraphicName.SearchArea,
+    TacticalGraphicName.MinimumSafeDistanceZone,
+    TacticalGraphicName.MinimumSafeDistanceMultipleStrike,
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+    TacticalGraphicName.Escort,
+    TacticalGraphicName.Demonstration,
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Seize,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
+    TacticalGraphicName.FollowAndAssume,
+    TacticalGraphicName.FollowAndSupport,
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Screen,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.TacticalBlock,
+    TacticalGraphicName.Block,
+    TacticalGraphicName.Breach,
+    TacticalGraphicName.Bypass,
+    TacticalGraphicName.Canalize,
+    TacticalGraphicName.Clear,
+    TacticalGraphicName.TacticalDisrupt,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.TacticalFix,
+    TacticalGraphicName.Fix,
+    TacticalGraphicName.Penetration,
+    TacticalGraphicName.Exploitation,
+    TacticalGraphicName.Delay,
+    TacticalGraphicName.Withdraw,
+    TacticalGraphicName.WithdrawUnderPressure,
+    TacticalGraphicName.Disengage,
+    TacticalGraphicName.Retirement,
+    TacticalGraphicName.ForwardPassageOfLines,
+    TacticalGraphicName.RearwardPassageOfLines,
+    TacticalGraphicName.Pursuit,
+    TacticalGraphicName.MobileDefense,
+    TacticalGraphicName.Infiltration,
+    TacticalGraphicName.InfiltrationLane,
+    TacticalGraphicName.Ambush,
+    TacticalGraphicName.ReliefInPlace,
+    TacticalGraphicName.AttackByFire,
+    TacticalGraphicName.SupportByFire,
+    TacticalGraphicName.Exfiltrate,
+    TacticalGraphicName.MovingConvoy,
+    TacticalGraphicName.HaltedConvoy,
+    TacticalGraphicName.NavigationalLine,
+];
+
+/** Whether dragging a published grip moves that point. @see RESHAPES_BY_VERTEX */
+export function reshapesByVertex(name: TacticalGraphicName): boolean {
+    return RESHAPES_BY_VERTEX.includes(name);
+}
+
+/**
  * Whether a new base vertex may be inserted where the cursor is.
  *
  * **Reported as "abatis should not accept vertices within the triangle opening"** (user,
