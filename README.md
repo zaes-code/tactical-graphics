@@ -854,7 +854,7 @@ configureTacticalGraphics({
     },
     defaultLineColor: '#000000',   // unaffiliated line work, and label text with it
     obstacleColors: true,          // default true — see below
-    obstacleColor: '#00FF00',      // the green itself, default as the plates print it
+    obstacleColor: '#00AC00',      // the green itself
 });
 
 source.forEachFeature(f => f.changed());   // repaint what is already drawn
@@ -892,10 +892,11 @@ configureTacticalGraphics({
 - **`obstacleColors`** (default `true`) turns the rule on and off. Off, obstacles take
   their affiliation color again — black normally, red when hostile — which is the
   fallback 8.1.4.3 names itself, not a compromise.
-- **`obstacleColor`** (default `#00FF00`) is the green. That is what the plates print,
-  sampled off 270501's own Example cell: pure, unmixed. A doctrinal default is literal
-  rather than comfortable, the same reason `defaultLineColor` is `#000000` — a host on a
-  night display or a busy chart softens it here rather than switching the rule off.
+- **`obstacleColor`** (default `#00AC00`) is the green. 8.1.4.3 says obstacles are green and
+  names no value; 270501's Example cell prints pure `#00FF00`, which is exact as a sample and
+  reads as a highlight rather than as line work once it is drawn over a map. The default is
+  the same hue at about two thirds the value. A host that wants the plate's literal green, or
+  something softer again for a night display, sets it here rather than switching the rule off.
 
 `obstacleColor` is part of `DEFAULT_PALETTE`, so a host spreading that into its own set
 gets it like any other color. `obstacleColors` is not — it is a rule, not a color.
