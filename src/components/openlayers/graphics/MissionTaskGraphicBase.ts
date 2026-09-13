@@ -1,7 +1,7 @@
 import {Coordinate} from "ol/coordinate";
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
-import {handlesAreInert, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
+import {handlesAreInert, publishesAnchorHandleOnly, type MeasurePart, anchorsFromFrame, bowFromAnchors, frameFromAnchors, runAndArcFromAnchors, usesDrawnAnchors,
     showsSizeReadout,
     axisAndWidth,
     DEFENDED_AREA_COLOR,
@@ -409,6 +409,25 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
 
         const onCenter = (c: number[]) => Math.hypot(c[0] - center[0], c[1] - center[1]) <= SAME_POINT_EPSILON_M;
         const draggable = coords.filter(c => !onCenter(c));
+        /*
+         * **The five one-anchor tasks publish a gray dot, not a red one.**
+         *
+         * Their plates read *"requires one anchor point. The centre point defines the centre
+         * of the symbol"*, so the only point they publish is that centre — and a centre
+         * carries neither a scale ratio nor an angle. They move, turn and scale through the
+         * selection box's affordances instead, which is what `allowedGestures` offers.
+         *
+         * The branch below promotes a set with nothing off-centre to the live red handle, on
+         * the reasoning that a graphic should never have nothing to grab. For these that is
+         * the wrong trade: it paints a dot the colour that means "drag me" and then declines
+         * every drag. MapLibre has drawn them gray all along. (User's rule, 2026-09-13: red
+         * markers must do something, gray ones need not.) @see publishesAnchorHandleOnly
+         */
+        if (publishesAnchorHandleOnly(this.name)) {
+            this.handles.setGeometry(new MultiPoint([]));
+            this.centerHandle.setGeometry(new MultiPoint(coords));
+            return;
+        }
         if (draggable.length === 0) {
             this.handles.setGeometry(new MultiPoint(coords));
             this.centerHandle.setGeometry(new MultiPoint([]));

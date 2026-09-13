@@ -1857,6 +1857,34 @@ export function reshapesByVertex(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * Whether this graphic publishes a grip on its **first** anchor point.
+ *
+ * It does not when the symbol is two points that only stretch. A graphic fixed at two
+ * vertices *is* a single segment, so a grip on each end is redundant — either one turns and
+ * scales the whole thing about the other — and point 1 is where most of these stack their
+ * label or their symbol, so its dot lands under the text and reads as clutter rather than as
+ * something to grab. The far end carries the gesture; the near end is the anchor it works
+ * from.
+ *
+ * **Derived, like `editStretches`, rather than listed.** The condition is exactly "two
+ * placed points, and a grip does not move one of them", which names the same eighteen
+ * graphics a hand-written list would: the nine bearing lines, the navigational rhumb line,
+ * ferry crossing, mine cluster, trip wire, raft site, fortified position and the three
+ * linear targets.
+ *
+ * It was `hidesStartHandle` on an OpenLayers holder, so MapLibre could not read it and drew
+ * a red grip on all eighteen anchors — a dot the colour that means "drag me" sitting on the
+ * one point the gesture is measured from, which then did nothing. (User's rule, 2026-09-13:
+ * red markers must do something, gray ones need not.)
+ *
+ * The grip is **not** removed from `generateHandles`' output: a renderer skips drawing it,
+ * and the indices every other rule is stated in stay as they are. @see handleRole
+ */
+export function hidesAnchorGrip(name: TacticalGraphicName): boolean {
+    return baseVertexCount(name) === 2 && !reshapesByVertex(name);
+}
+
+/**
  * Whether a new base vertex may be inserted where the cursor is.
  *
  * **Reported as "abatis should not accept vertices within the triangle opening"** (user,
