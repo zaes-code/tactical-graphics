@@ -2,7 +2,7 @@ import {Style} from 'ol/style';
 import {Coordinate} from 'ol/coordinate';
 import {Circle as CircleGeom, Geometry, LineString, Point} from 'ol/geom';
 import type {RadarSearchFrame, TacticalGraphicName} from '@zaes/tactical-graphics';
-import {allowedGestures, frameFromDrag, groundLength, latitudeFromMercatorY, normalizeDrawnBase, projectedLength, radarSearchFromClicks, rotationPivot, screenMeters} from '@zaes/tactical-graphics';
+import {allowedGestures, frameFromDrag, groundLength, latitudeFromMercatorY, normalizeDrawnBase, projectedLength, radarSearchFromClicks, rotationAnchor, rotationPivot, screenMeters} from '@zaes/tactical-graphics';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {DrawEvent} from 'ol/interaction/Draw';
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -12,6 +12,15 @@ import {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../
 import {ObjectEvent} from 'ol/Object';
 import {GraphicLinkRegistry} from "../../../utils/graphicLinkRegistry";
 import {defaultDrawStyleFunc, drawMarkerStyle} from "../openlayerStyles";
+
+/**
+ * Below this, in projected metres, a graphic's pivot and its centre are the same point.
+ *
+ * A metre is smaller than any symbol here and larger than the round trip through lon/lat
+ * that `getTurningPoint` makes, so it separates "the library named another point" from
+ * "these are the same point, read two ways". @see centerTurnedAboutThePivot
+ */
+const PIVOT_ON_CENTER_M = 1;
 
 export interface MissionTaskGraphic extends TacticalGraphic {
     name: TacticalGraphicName;
@@ -80,10 +89,27 @@ export class MissionTaskController implements TacticalGraphicHandler {
         })
     }
 
-    getCenter() {
-        // Not off the base: a graphic converted to APP-06's drawn anchor points keeps
-        // a LineString there, whose coordinates are an array of them.
-        return this.graphic.centerCoordinate();
+    /**
+     * What a **resize** scales from — the library's answer where the base can give one.
+     *
+     * `centerCoordinate` is the holder's own frame centre, and for all but one graphic here
+     * the two agree: a `Point` base turns and scales about itself, and every drawn-anchor
+     * frame but 271204's is anchored on its middle. 271204 scales about point 3, the
+     * crossing, and asking the holder gave a ratio measured from somewhere else — the last
+     * of the two engines' gesture differences on it. @see rotationAnchor, getTurningPoint
+     *
+     * Falls back to the holder for a base that cannot answer, which is the reason this used
+     * to read the holder outright: a graphic converted to APP-06's drawn anchor points keeps
+     * a `LineString` there, whose coordinates are an array of arrays.
+     */
+    getCenter(): Coordinate {
+        const coords = (this.graphic.base?.getGeometry() as {getCoordinates?(): unknown} | undefined)?.getCoordinates?.();
+        if (!Array.isArray(coords) || !Array.isArray(coords[0])) return this.graphic.centerCoordinate();
+        const stated = rotationAnchor(
+            {type: 'LineString', coordinates: (coords as Coordinate[]).map(c => toLonLat(c))},
+            this.graphic.name as TacticalGraphicName,
+        );
+        return fromLonLat(stated as Coordinate);
     }
 
     /**
@@ -309,7 +335,25 @@ export class MissionTaskController implements TacticalGraphicHandler {
         widthed.scaleWidth?.(deltaSize);
 
         const size = this.graphic.size * deltaSize;
-        this.graphic.updateGeom({size});
+        this.graphic.updateGeom({size, ...this.centerScaledAboutTheAnchor(deltaSize)});
+    }
+
+    /**
+     * The stored centre, moved so the point the library scales from stays put.
+     *
+     * The twin of `centerTurnedAboutThePivot`, and it exists for the same graphic: scaling
+     * `size` alone grows 271204 about its frame centre while the anchor it is supposed to
+     * hold — point 3 — slides out from under the cursor. Empty for every graphic whose
+     * anchor is its centre, which is all the rest. @see getCenter
+     */
+    private centerScaledAboutTheAnchor(factor: number): {center?: Coordinate} {
+        if (!Number.isFinite(factor) || factor <= 0) return {};
+        const anchor = this.getCenter();
+        const center = this.graphic.centerCoordinate();
+        const dx = center[0] - anchor[0];
+        const dy = center[1] - anchor[1];
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < PIVOT_ON_CENTER_M) return {};
+        return {center: [anchor[0] + dx * factor, anchor[1] + dy * factor] as Coordinate};
     }
 
     /** Ends the read-out. Called by the manager when a drag finishes. @see showMeasure */
@@ -331,7 +375,38 @@ export class MissionTaskController implements TacticalGraphicHandler {
             return;
         }
         let rotation = this.graphic.rotation + deltaAngle;
-        this.graphic.updateGeom({rotation});
+        this.graphic.updateGeom({rotation, ...this.centerTurnedAboutThePivot(deltaAngle)});
+    }
+
+    /**
+     * The stored centre, swung about the point the library says this graphic turns on.
+     *
+     * **Advancing `rotation` alone turns the symbol about its own frame centre**, whatever
+     * `rotationPivot` answers — the holder rebuilds its anchors from `{center, size,
+     * rotation}` and the centre is the one thing the gesture never touched. So 271204, whose
+     * pivot is point 3 rather than the middle of its frame (user's call, 2026-09-07), stayed
+     * where it was while MapLibre — which turns the coordinates themselves — swung the whole
+     * figure about that crossing. Measured with a deliberate quarter turn, the two engines
+     * agreed on the angle to within a degree and on the size to within 0.1%, and put the
+     * symbol 5.5 km apart.
+     *
+     * Empty for every graphic whose pivot *is* its centre, which is all but one of them: the
+     * offset is zero, the turn is a no-op, and returning nothing keeps `updateGeom` from
+     * being handed a centre it did not ask for.
+     *
+     * Projected metres throughout, which is the frame the delta was measured in
+     * (`calculateDeltaAngle`) and the one MapLibre's `rotate` turns in.
+     */
+    private centerTurnedAboutThePivot(deltaDegrees: number): {center?: Coordinate} {
+        const pivot = this.getTurningPoint();
+        const center = this.graphic.centerCoordinate();
+        const dx = center[0] - pivot[0];
+        const dy = center[1] - pivot[1];
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < PIVOT_ON_CENTER_M) return {};
+        const radians = (deltaDegrees * Math.PI) / 180;
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+        return {center: [pivot[0] + dx * cos - dy * sin, pivot[1] + dx * sin + dy * cos] as Coordinate};
     }
 
     handleTranslate(deltaX: number, deltaY: number): void {
