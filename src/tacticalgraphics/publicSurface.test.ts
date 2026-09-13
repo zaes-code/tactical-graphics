@@ -63,3 +63,21 @@ describe('the public surface', () => {
         expect(affiliation).not.toBe(api.getObstacleColor());
     });
 });
+
+/**
+ * # And the barrel does not carry a name that was only ever a workaround
+ *
+ * `drawsAsBarSymbol` was added on 2026-09-13 so an OpenLayers holder could tell whether a
+ * graphic belonged to the bar-symbol family, and dropped the same day: the holder asks
+ * `getPaintFunction` instead, which was already public and which makes registering a paint a
+ * one-edit job for every family rather than a two-edit job for one. A predicate naming a
+ * family is exactly the second statement that caused the defect it was meant to fix.
+ *
+ * Pinned because an export is a promise. Re-adding this one means someone has gone back to
+ * listing the membership twice.
+ */
+describe('the barrel does not name a paint family', () => {
+    it('has no drawsAsBarSymbol', () => {
+        expect(Object.keys(api)).not.toContain('drawsAsBarSymbol');
+    });
+});
