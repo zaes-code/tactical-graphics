@@ -138,6 +138,14 @@ export interface TacticalGraphicHandler {
     suspendSizeFloor?(active: boolean): void;
 
     /**
+     * The map's resolution for the length of one gesture, or `undefined` to forget it.
+     *
+     * A floor stated in screen pixels has to be spent at the resolution the screen is at
+     * now, not the one the graphic was drawn at. @see LineGraphicBase.gestureResolution
+     */
+    setGestureResolution?(resolution: number | undefined): void;
+
+    /**
      * The graphic's current overall size, in meters — any linear measure of it, as long
      * as the same one is reported every time and a `handleResize(k)` multiplies it by k.
      *

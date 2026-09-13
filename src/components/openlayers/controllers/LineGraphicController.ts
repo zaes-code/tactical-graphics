@@ -404,6 +404,16 @@ export class LineGraphicController implements TacticalGraphicHandler {
     }
 
     /**
+     * Forwards the live resolution to whichever holder owns a pixel floor.
+     *
+     * Duck-typed for the same reason `suspendSizeFloor` is: the two line holders do not
+     * share an interface that names it. @see TacticalGraphicHandler.setGestureResolution
+     */
+    setGestureResolution(resolution: number | undefined): void {
+        (this.graphic as {gestureResolution?: number}).gestureResolution = resolution;
+    }
+
+    /**
      * Ends the width read-out. Called by the manager when any drag finishes.
      *
      * `MissionTaskController` has always had this and the line controller never needed
