@@ -15,7 +15,7 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import {handlesAreInert, DEFAULT_AXIS_HALF_WIDTH_PX, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, screenMeters, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert, minimumFirstSegmentPx, DEFAULT_AXIS_HALF_WIDTH_PX, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, screenMeters, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
@@ -73,6 +73,12 @@ export class MovementGraphicBase implements LineGraphic {
     /** @see LineGraphic.hidesStartHandle — set by LineGraphicController. */
     hidesStartHandle?: boolean;
     resolution: number;
+
+    /** The live resolution for one gesture. @see LineGraphicBase.gestureResolution */
+    gestureResolution: number | undefined;
+
+    /** Set around the gestures that author geometry. @see LineGraphicBase.shapingFromGesture */
+    shapingFromGesture = false;
     /**
      * Whether the generator emits a width handle. Starts true so the feature is
      * registered as it always was; `updateGeometry` corrects it on the first
@@ -290,8 +296,42 @@ export class MovementGraphicBase implements LineGraphic {
      */
     setBaseFeature(base: Feature<LineString>) {
         const incoming = base.getGeometry();
-        this.base.setGeometry(this.squared(incoming) ?? incoming);
+        this.base.setGeometry(this.flooredFirstSegment(this.squared(incoming) ?? incoming));
         this.updateGeometry();
+    }
+
+    /**
+     * The same first-segment floor `LineGraphicBase` applies, which this holder had none of.
+     *
+     * 271400's bow-tie is baked into the geometry near the start of the line and needs room
+     * for itself and for the arrowhead, which is what `minimumFirstSegmentPx` states. This
+     * class does not extend `LineGraphicBase` — it only implements the same interface — so
+     * the floor simply was not here, and the graphic was the only one of the three the rule
+     * names that this engine never floored. MapLibre applies it on every vertex drag, so the
+     * same drag left the two engines' second point 28 km apart on the handle sweep.
+     *
+     * **Only while a gesture is authoring the shape**, and at the resolution the screen is at
+     * now: a restore replays a stored base and must not have it stretched, and a pixel rule
+     * spent at the draw-time resolution is a rule about a zoom the user has left.
+     * @see LineGraphicBase.setBaseFeature, gestureResolution
+     */
+    private flooredFirstSegment(geometry: LineString | undefined): LineString | undefined {
+        const floorPx = minimumFirstSegmentPx(this.graphicName);
+        const resolution = this.gestureResolution;
+        if (floorPx === undefined || !resolution || !this.shapingFromGesture || !geometry) return geometry;
+        const coords = geometry.getCoordinates();
+        if (coords.length < 2) return geometry;
+        const [p0, p1] = coords;
+        const dx = p1[0] - p0[0];
+        const dy = p1[1] - p0[1];
+        const length = Math.hypot(dx, dy);
+        const floor = floorPx * resolution;
+        if (length === 0 || length >= floor) return geometry;
+        // Every later point shifts with it, so the run past the first segment keeps its
+        // shape rather than being stretched — which is what MapLibre's own floor does.
+        const shiftX = dx * (floor / length - 1);
+        const shiftY = dy * (floor / length - 1);
+        return new LineString(coords.map((c, index) => (index === 0 ? c : [c[0] + shiftX, c[1] + shiftY])));
     }
 
     /**
