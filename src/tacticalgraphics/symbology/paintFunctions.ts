@@ -50,6 +50,7 @@ import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
 import {capLabelToGraphic} from './labelFit';
+import {PLANNED_DASH_PX, strokeParts} from './dashFit';
 import {
     centerSegmentIndex,
     crenellatedPath,
@@ -618,8 +619,8 @@ export function missionTaskLabelPaint(
 /** Screen-pixel standoff between a default line and the labels above and below it. */
 const DEFAULT_LINE_LABEL_GAP_PX = 8;
 
-/** Dash pattern, in screen pixels, for a graphic whose status is `planned`. */
-export const PLANNED_DASH_PX = [12, 8];
+/** Declared beside the rule that fits every dash to its graphic. @see withFittedDashes */
+export {PLANNED_DASH_PX};
 
 /**
  * The dash-dot a **circled** control measure's planned ring is drawn with.
@@ -961,11 +962,15 @@ export function areaFillPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
             ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
             : feature.geometry;
         const areal = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
+        const stroke = {color, widthPx: LINE_WIDTH()};
 
+        // Exploitation's tail is dashed, and it reaches this painter through the block
+        // holder's default. @see DASHED_PARTS
+        if (geometry.type === 'MultiLineString') return strokeParts(feature.properties.name, geometry.coordinates, stroke);
         return [{
             geometry,
             ...(areal ? {fill: {color}} : {}),
-            stroke: {color, widthPx: LINE_WIDTH()},
+            stroke,
         }];
     };
 }
