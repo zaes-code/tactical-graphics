@@ -517,3 +517,65 @@ describe('APP-06 290101 — a mineline of mine clusters', () => {
         expect(fitted.map(p => p.stroke!.dashPx)).toEqual(raw.map(p => p.stroke!.dashPx));
     });
 });
+
+/**
+ * The mineline's glyphs follow the line, and the directional mine's arrow points across it
+ * (user's call, 2026-09-21). Upright glyphs on a vertical line laid the antihandling stem on
+ * the line itself, where it vanished. @see MineGlyphFrame
+ */
+describe('APP-06 290101 — a mineline turns its mines to the line', () => {
+    const glyphMarks = (coordinates: ProjectedPosition[], mineType: TacticalGraphicMineType) =>
+        minelinePaint(TacticalGraphicName.Mineline)(feature(TacticalGraphicName.Mineline, coordinates, {mineType}), context(40))
+            .slice(1)
+            .filter(p => !p.text);
+
+    /** The disc centres, from the filled discs' rings. */
+    const discCentres = (marks: Paint[]) =>
+        marks
+            .filter(p => p.geometry.type === 'Polygon' && (p.geometry.coordinates[0] as ProjectedPosition[]).length > 10)
+            .map(p => {
+                const ring = p.geometry.coordinates[0] as ProjectedPosition[];
+                return [ring.reduce((s, q) => s + q[0], 0) / ring.length, ring.reduce((s, q) => s + q[1], 0) / ring.length];
+            });
+
+    it('hangs the antihandling stem off the line, to its right, however the line runs', () => {
+        // Drawn north: right is east. Drawn south: right is west.
+        for (const [coordinates, rightSign] of [
+            [[[0, 0], [0, 40_000]], 1],
+            [[[0, 40_000], [0, 0]], -1],
+        ] as const) {
+            const stems = glyphMarks(coordinates as unknown as ProjectedPosition[], TacticalGraphicMineType.antitankAntihandling).filter(
+                p => p.geometry.type === 'LineString',
+            );
+            expect(stems.length).toBeGreaterThan(2);
+            for (const stem of stems) {
+                const [start, knee] = stem.geometry.coordinates as ProjectedPosition[];
+                // Perpendicular to a vertical line: it runs east or west, not along the line.
+                expect(Math.abs(knee[0] - start[0])).toBeGreaterThan(Math.abs(knee[1] - start[1]) * 5);
+                expect(Math.sign(knee[0] - start[0])).toBe(rightSign);
+            }
+        }
+    });
+
+    it('points the directional arrow across the line, to its right, with the antennae on the left', () => {
+        for (const [coordinates, rightSign] of [
+            [[[0, 0], [40_000, 0]], -1], // drawn east: right is south
+            [[[40_000, 0], [0, 0]], 1], // drawn west: right is north
+        ] as const) {
+            const marks = glyphMarks(coordinates as unknown as ProjectedPosition[], TacticalGraphicMineType.antipersonnelDirectional);
+            const centres = discCentres(marks);
+            const heads = marks.filter(p => p.geometry.type === 'Polygon' && (p.geometry.coordinates[0] as ProjectedPosition[]).length === 4);
+            expect(heads.length).toBe(centres.length);
+            heads.forEach((head, i) => {
+                const tip = (head.geometry.coordinates[0] as ProjectedPosition[])[1];
+                const [cx, cy] = centres[i];
+                expect(Math.abs(tip[0] - cx)).toBeLessThan(Math.abs(tip[1] - cy) / 5);
+                expect(Math.sign(tip[1] - cy)).toBe(rightSign);
+            });
+            const antennae = marks.filter(p => p.geometry.type === 'MultiLineString');
+            for (const pair of antennae) {
+                for (const line of pair.geometry.coordinates as ProjectedPosition[][]) expect(Math.sign(line[1][1] - line[0][1])).toBe(-rightSign);
+            }
+        }
+    });
+});
