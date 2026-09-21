@@ -96,6 +96,8 @@
     "drive:edit": "node scripts/drive-edit-mode.mjs",
     "compare:engines": "node scripts/compare-engines.mjs",
     "sweep:colors": "node scripts/color-sweep.mjs",
+    "sweep:zoom": "node scripts/zoom-cycle-labels.mjs",
+    "sweep:import-export": "node scripts/import-export-roundtrip.mjs",
     "shoot-gallery": "node scripts/shoot-gallery.mjs",
     "gen:catalog": "node scripts/gen-catalog-svgs.js --profile catalog",
     "gen:thumbnails": "node scripts/gen-catalog-svgs.js --profile thumbnail",

@@ -20,6 +20,7 @@
  * output to whichever renderer you use.
  */
 
+import {dashedPartsOf} from './dashedParts';
 import {Feature, FeatureCollection, GeoJsonProperties, Position} from 'geojson';
 import * as turf from './turf';
 import {TacticalGraphicsRegistry} from './TacticalGraphicsRegistry';
@@ -604,6 +605,16 @@ function tag(feature: Feature, props: TacticalGraphicProperties, role: TacticalG
 }
 
 /**
+ * Stamps `dashedParts` on a graphic whose line work is partly dashed as the symbol itself,
+ * so a consumer drawing this GeoJSON directly knows which lines to break. @see DASHED_PARTS
+ */
+function withDashedParts(feature: Feature, name: TacticalGraphicName | string): Feature {
+    const parts = dashedPartsOf(name);
+    if (parts.length) feature.properties = {...feature.properties, dashedParts: [...parts]};
+    return feature;
+}
+
+/**
  * Renders a tactical graphic from a GeoJSON feature. GeoJSON in, GeoJSON out.
  *
  * The feature's `properties.tacticalGraphic.name` selects the graphic; its
@@ -656,7 +667,7 @@ export function renderTacticalGraphic(feature: Feature, overrides?: Partial<Grap
     return {
         name: props.name,
         base: feature,
-        graphic: tag(rendered.graphic, props, 'graphic'),
+        graphic: withDashedParts(tag(rendered.graphic, props, 'graphic'), props.name),
         labels: tag(rendered.labels, props, 'label'),
         handles: tag(rendered.handles, props, 'handle'),
     };

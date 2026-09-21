@@ -15,13 +15,14 @@ import {
 import {MultiPoint, Point} from "ol/geom";
 import LineString from "ol/geom/LineString";
 import {LineGraphic, pivotCoordinate, visiblePathHandles} from '../controllers/LineGraphicController';
-import {handlesAreInert, minimumFirstSegmentPx, DEFAULT_AXIS_HALF_WIDTH_PX, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, screenMeters, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert, minimumFirstSegmentPx, DEFAULT_AXIS_HALF_WIDTH_PX, axisBaseFromDraw, axisOf, axisWithWidthPoint, baseVertexCount, carriesSeparationInBase, carriesWidthPointInBase, dashedPartsOf, groundLength, halfWidthFromBase, latitudeFromMercatorY, normalizeDrawnBase, movementGraphicPaint, screenMeters, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {assignRole, readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 import {decorationMeters} from './decorationPx';
+import {asStyleFunction} from '../paintToOpenLayers';
 
 /**
  * Drag sensitivity for the width handle, where the shared 0.5 default is wrong.
@@ -132,6 +133,12 @@ export class MovementGraphicBase implements LineGraphic {
         // armed. @see BAR_SYMBOL_DASHES, ai/app-6.md "F2"
         if (BAR_SYMBOL_GRAPHIC_NAMES.includes(name)) {
             this.graphic.setStyle(barSymbolStyleFunc(name));
+        }
+        // The members that dash part of their line work as the symbol paint through the
+        // registry's painter, as MapLibre does, rather than the bare stroke `createFeature`
+        // gives every other one. @see DASHED_PARTS
+        if (dashedPartsOf(name).length) {
+            this.graphic.setStyle(asStyleFunction(movementGraphicPaint(), name));
         }
 
         writeGraphicProperties([this.graphic, this.labels, this.handles, this.base], name, this.graphicLabels);

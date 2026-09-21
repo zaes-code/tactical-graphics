@@ -84,9 +84,13 @@ describe('geometry budget', () => {
         expect(overBudget).toEqual([]);
     });
 
-    it('the fords still draw as dashes, not as one solid rail', () => {
-        // The other half of the clamp: a period that is too fine gets widened, and a
-        // clamp set too aggressively would collapse the rails into single lines.
+    /**
+     * The fords used to be the budget's worst case: their bars were cut into dashes here, a
+     * third of the half-separation long, so a narrow gap on a long base meant thousands of
+     * coordinates. The dash is a stroke property now, sized on screen, so each bar is one
+     * line and the renderer is told which to break. @see DASHED_PARTS
+     */
+    it('the fords hand over each bar whole and name both as dashed', () => {
         for (const name of [TacticalGraphicName.FordEasy, TacticalGraphicName.FordDifficult]) {
             /*
              * **Three points, because that is what a ford is now.** Its bars' separation was a
@@ -112,7 +116,8 @@ describe('geometry budget', () => {
 
             const geometry = rendered.graphic.geometry as {type: string; coordinates: unknown[]};
             expect(geometry.type).toBe('MultiLineString');
-            expect(geometry.coordinates.length).toBeGreaterThan(50);
+            expect(geometry.coordinates.length).toBe(name === TacticalGraphicName.FordDifficult ? 3 : 2);
+            expect(rendered.graphic.properties?.dashedParts).toEqual([0, 1]);
         }
     });
 });

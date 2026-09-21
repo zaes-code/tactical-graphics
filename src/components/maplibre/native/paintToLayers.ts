@@ -297,6 +297,29 @@ export function dashInWidths(dashPx: readonly number[], widthPx: number): number
     return dashPx.map(segment => segment / widthPx);
 }
 
+/** How many dash corrections a zoom level is divided into. @see dashZoomStep */
+export const DASH_ZOOM_STEPS = 4;
+
+/**
+ * The fractional zoom a dash layer is corrected for: `zoom`'s fraction rounded **up** to a
+ * quarter. The layer's dash is divided by `2 ^ step`.
+ *
+ * MapLibre lays a dash out in **tile** space, so between two integer zoom levels it grows
+ * with the map by `2 ^ (zoom - floor(zoom))`: measured on the running app, a 12 px dash drew
+ * 12 at zoom 6, 18 at 6.5 and 21 at 6.75, then snapped back to 12 at 7. OpenLayers draws 12
+ * at all of them. Every dash on this engine had that drift from 2.0.0 on, status dashes
+ * included. Rounding up means the correction is never less than the stretch, so a dash never
+ * draws past its cap; it draws at most 16% short, just below a step.
+ *
+ * Stepped because the correction cannot be applied continuously. Rewriting a live layer's
+ * `line-dasharray` crashes MapLibre's line render (see `realize`), so each step is its own
+ * layer with its pattern fixed, and four steps keep that a small constant per pattern.
+ */
+export function dashZoomStep(zoom: number): number {
+    const fraction = zoom - Math.floor(zoom);
+    return Math.ceil(fraction * DASH_ZOOM_STEPS) / DASH_ZOOM_STEPS;
+}
+
 export function lineLayer(id: string, source: string, dashPx: number[] | undefined): LayerSpecification {
     return {
         id,

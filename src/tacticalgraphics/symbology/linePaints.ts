@@ -15,6 +15,7 @@ import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {offsetBelow, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
+import {strokeParts} from './dashFit';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -81,10 +82,8 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         }];
 
         if (allCoords.length > 1) {
-            paints.push({
-                geometry: {type: 'MultiLineString', coordinates: allCoords.slice(1)},
-                stroke: {color, widthPx: LINE_WIDTH()},
-            });
+            // The feint's chevron is dashed as the symbol. @see DASHED_PARTS
+            paints.push(...strokeParts(name, allCoords.slice(1), {color, widthPx: LINE_WIDTH()}, 1));
         }
 
         // The aviation bow-tie: two closed rings appended at indices 2 and 3 by

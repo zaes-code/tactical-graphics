@@ -34,6 +34,8 @@ export {
     uprightRotation,
 } from './decorations';
 
+export {DASH_CAP_PX, DASH_FULL_SIZE_PX, DASH_SCALE_STEPS, dashScale, fitDash, strokeParts, strokedExtentPx, withFittedDashes} from './dashFit';
+
 export {
     PLANNED_DASH_PX,
     arcMissionTaskPaint,

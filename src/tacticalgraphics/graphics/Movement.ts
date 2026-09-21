@@ -335,11 +335,8 @@ export class MainAttackFeint extends MovementGraphicBase {
         const feintTip = turf.destination(last, apexForward, lineBearing, {units: 'meters'})
             .geometry.coordinates as Position;
 
-        const dashed = geometryService.lineStringToDashes(
-            [feintLeftWing, feintTip, feintRightWing],
-            [radius / 3, radius / 3],
-        );
-        return {dashes: dashed.geometry.coordinates, tip: feintTip};
+        // Whole, not cut: the dash is a stroke property sized on screen. @see DASHED_PARTS
+        return {dashes: [[feintLeftWing, feintTip, feintRightWing]], tip: feintTip};
     }
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -419,7 +416,8 @@ export class Counterattack extends MovementGraphicBase {
             rightArrowHeadBase,
             rightArrowBase[rightArrowBase.length - 1]
         ];
-        return geometryService.lineStringToDashes([leftArrowBase, arrowCoords, rightArrowBase.reverse()].flat(), [radius / 3, radius / 3]);
+        // One outline, dashed when painted. @see DASHED_PARTS
+        return this.asMultiLineStringFeature([[leftArrowBase, arrowCoords, rightArrowBase.reverse()].flat()]);
     }
 
     /**
@@ -515,7 +513,7 @@ export class CounterattackByFire extends Counterattack {
 
         return this.asMultiLineStringFeature([
             ...arrow.geometry.coordinates,
-            ...geometryService.lineStringToDashes(bracket, [radius / 3, radius / 3]).geometry.coordinates,
+            bracket,
             [bracketAt, shaftEnd],
             head,
         ]);

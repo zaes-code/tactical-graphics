@@ -28,6 +28,7 @@ import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {alignAlong, offsetAbove, uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
 import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {strokeParts} from './dashFit';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -599,12 +600,18 @@ export function movementLabelPaint(): MovementPaint {
  * line work and are not routed here.
  */
 export function movementGraphicPaint(): MovementPaint {
-    return feature => [{
-        geometry: feature.geometry.type === 'GeometryCollection'
-            ? {type: 'MultiLineString', coordinates: []}
-            : feature.geometry,
-        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
-    }];
+    return feature => {
+        const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH()};
+        // The counterattacks, the feint and the fords dash some of their parts as the
+        // symbol itself, whatever their status. @see DASHED_PARTS
+        if (feature.geometry.type === 'MultiLineString') return strokeParts(feature.properties.name, feature.geometry.coordinates, stroke);
+        return [{
+            geometry: feature.geometry.type === 'GeometryCollection'
+                ? {type: 'MultiLineString', coordinates: []}
+                : feature.geometry,
+            stroke,
+        }];
+    };
 }
 
 // ── the three that draw their own line work ─────────────────────────────────
