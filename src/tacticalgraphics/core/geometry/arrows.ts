@@ -1,7 +1,6 @@
 import {Feature, LineString, Point, Polygon, Position} from 'geojson';
 import * as turf from '../turf';
 import {getExtendedPoint, getPerpendicularPoint, project, reflectAcrossYAxis, unproject} from './primitives';
-import {lineStringToDashes} from './wavesBendsDashes';
 
 /**
  * Generate an arrow head at the end of a line
@@ -164,12 +163,8 @@ export const createDirectionOfFeintAttackArrow = (baseCoords: Position[], size: 
     let arrowCoords = computeArrowheadPoints(secondToLastLinePoint, lastLinePoint, size, 45);
 
     let mainAttackArrow = createDirectionOfMainAttackArrow(baseCoords, size);
-    let feintArrow = lineStringToDashes(
-        createExtendedArrow(arrowCoords, size * 1.75, lineBearing),
-        [size / 3, size / 3]
-    );
-
-    return [mainAttackArrow, ...feintArrow.geometry.coordinates];
+    // The chevron whole; it is dashed when painted. @see DASHED_PARTS
+    return [mainAttackArrow, createExtendedArrow(arrowCoords, size * 1.75, lineBearing)];
 }
 
 export function getSearchArrowLine(base: Feature<Point>, centerPadding: number, arrowLength: number, arrowDepth: number): Position[] {
