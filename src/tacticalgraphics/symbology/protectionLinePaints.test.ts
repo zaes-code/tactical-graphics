@@ -20,6 +20,7 @@ import {
     raftSitePaint,
     tripWirePaint,
 } from './protectionLinePaints';
+import {DASH_SCALE_STEPS, PLANNED_DASH_PX, fitDash, withFittedDashes} from './dashFit';
 
 const context = (resolution = 40): PaintContext => ({
     resolution,
@@ -465,5 +466,54 @@ describe('APP-06 291000 — fortified position', () => {
         const fine = Math.abs(bracket(20)[0][1]);
         const coarse = Math.abs(bracket(40)[0][1]);
         expect(coarse).toBeCloseTo(fine * 2, 6);
+    });
+});
+
+/**
+ * The mine cluster glyph dashes against its own size, not the line's (user's report,
+ * 2026-09-21). Sized against the whole mineline it took the full 12/8 dash, and a dome about
+ * 20 px wide carried a dash and a half: a broken arc, not a dashed one.
+ */
+describe('APP-06 290101 — a mineline of mine clusters', () => {
+    const domes = (resolution: number) =>
+        withFittedDashes(
+            minelinePaint(TacticalGraphicName.Mineline)(
+                feature(TacticalGraphicName.Mineline, EAST, {mineType: TacticalGraphicMineType.mineCluster}),
+                context(resolution),
+            ),
+            context(resolution),
+        ).filter(p => p.stroke?.dashSized);
+
+    it('puts several dashes on every dome, at any zoom the line draws mines at', () => {
+        for (const resolution of [10, 40, 150]) {
+            const marks = domes(resolution);
+            expect(marks.length).toBeGreaterThan(0);
+            for (const mark of marks) {
+                const [dome] = (mark.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+                let arcPx = 0;
+                for (let i = 1; i < dome.length; i++) arcPx += Math.hypot(dome[i][0] - dome[i - 1][0], dome[i][1] - dome[i - 1][1]) / resolution;
+                const period = mark.stroke!.dashPx!.reduce((a, b) => a + b, 0);
+                expect(arcPx / period).toBeGreaterThanOrEqual(4);
+            }
+        }
+    });
+
+    it('keeps the dash to one of the stepped patterns, so MapLibre keeps one layer per step', () => {
+        const allowed = DASH_SCALE_STEPS.map(s => JSON.stringify(fitDash(PLANNED_DASH_PX, s)));
+        for (const resolution of [7, 23, 40, 97, 150]) {
+            const marks = domes(resolution);
+            expect(marks.length).toBeGreaterThan(0);
+            for (const mark of marks) expect(allowed).toContain(JSON.stringify(mark.stroke!.dashPx));
+        }
+    });
+
+    it('is not shrunk a second time by the fit for the whole line', () => {
+        const raw = minelinePaint(TacticalGraphicName.Mineline)(
+            feature(TacticalGraphicName.Mineline, [[0, 0], [2_000, 0]], {mineType: TacticalGraphicMineType.mineCluster}),
+            context(40),
+        ).filter(p => p.stroke?.dashSized);
+        expect(raw.length).toBeGreaterThan(0);
+        const fitted = withFittedDashes(raw, context(40));
+        expect(fitted.map(p => p.stroke!.dashPx)).toEqual(raw.map(p => p.stroke!.dashPx));
     });
 });

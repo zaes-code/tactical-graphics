@@ -37,6 +37,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicMineType} from '../core/type';
 import {PLANNED_DASH_PX, amplifierText, hostilityOf, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+import {dashScale, fitDash} from './dashFit';
 import {DECORATION_MIN_PX, centredRun, decorationScale, splitAtCorners} from './decorations';
 import {fitSymbolScale} from './symbolFit';
 
@@ -100,6 +101,31 @@ function disc(at: ProjectedPosition, radius: number): ProjectedPosition[] {
 }
 
 /**
+ * A glyph radius, in screen pixels, times this gives the `dashScale` input that puts about
+ * six dashes on the mine cluster's dome.
+ *
+ * The dome's arc is `1.2 * PI` radii, so six periods of the planned pattern (20 px at full
+ * size) need a radius of about 32 px. `dashScale` is full size at 160, and 160 / 32 is 5.
+ * A mineline glyph is at most 9 px in radius and comes out at the 3/2 floor, seven or eight
+ * dashes on the dome; a mine area zoomed in draws the full pattern.
+ */
+const CLUSTER_DASH_PER_RADIUS_PX = 5;
+
+/**
+ * The mine cluster glyph's dash, sized to the glyph rather than to the graphic it sits in.
+ *
+ * Sized against the graphic, a mineline's cluster domes took the line's full 12/8 dash: a
+ * dome 20 px wide carried a dash and a half, and read as a broken arc rather than a dashed
+ * one (user's report, 2026-09-21). Without a resolution there is no screen size to go on,
+ * and it falls back to the planned dash for the graphic-wide fit to size. @see dashSized
+ */
+function clusterDash(radius: number, resolution?: number): {dashPx: number[]; dashSized?: boolean} {
+    if (!(resolution && resolution > 0)) return {dashPx: [...PLANNED_DASH_PX]};
+    const scale = dashScale((radius / resolution) * CLUSTER_DASH_PER_RADIUS_PX);
+    return {dashPx: fitDash(PLANNED_DASH_PX, scale), dashSized: true};
+}
+
+/**
  * One mine glyph, centered on `at`. Returns the paints for it.
  *
  * Everything is expressed against the disc's radius, so the seven stay in proportion with
@@ -114,6 +140,7 @@ export function mineGlyph(
     radius: number,
     type: TacticalGraphicMineType,
     color: string,
+    resolution?: number,
 ): Paint[] {
     const p = (dx: number, dy: number): ProjectedPosition => [at[0] + dx * radius, at[1] + dy * radius];
     const stroke = {color, widthPx: LINE_WIDTH()};
@@ -128,7 +155,7 @@ export function mineGlyph(
         }
         return [{
             geometry: {type: 'MultiLineString', coordinates: [dome, [p(-1.2, 0), p(1.2, 0)]]},
-            stroke: {...stroke, dashPx: PLANNED_DASH_PX},
+            stroke: {...stroke, ...clusterDash(radius, resolution)},
         }];
     }
 
@@ -186,13 +213,14 @@ export function mineRowMarks(
     type: TacticalGraphicMineType,
     color: string,
     gap = 0,
+    resolution?: number,
 ): Paint[] {
     const radius = DISC_RADIUS * scale;
     const pitch = mineGlyphPitch(type, radius, gap);
     const paints: Paint[] = [];
     for (let i = 0; i < SLOTS; i++) {
         const x = at[0] + (i - (SLOTS - 1) / 2) * pitch;
-        paints.push(...mineGlyph([x, at[1]], radius, type, color));
+        paints.push(...mineGlyph([x, at[1]], radius, type, color, resolution));
     }
     return paints;
 }
@@ -300,7 +328,7 @@ export function mineFillPaint(): MinePaint {
         const glyphGap = MINE_GLYPH_GAP_PX * context.resolution;
         const room = rowHalfExtent(type, glyphGap);
         const scale = fitSymbolScale(feature, center, room.width, room.height, []) * INSET;
-        const paints = mineRowMarks(center, scale, type, color, glyphGap * scale);
+        const paints = mineRowMarks(center, scale, type, color, glyphGap * scale, context.resolution);
 
         const textScale = scaleOf(feature, context);
         const gap = AREA_TEXT_GAP_PX * textScale * context.resolution;

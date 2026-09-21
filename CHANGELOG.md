@@ -24,6 +24,9 @@ the npm publish dates — when a version actually became installable.
   18 px dash-dot is now 12), the dashes that are the symbol, and the crossed mission tasks'
   hash. Each graphic gets one scale, so it never shows two dash sizes. `withFittedDashes`
   applies it, and both renderers call it where they already call `withHiddenAmplifiers`.
+  The one exception is a small glyph repeated inside a larger graphic: the mine cluster glyph
+  on a mineline or in a mine area sizes its dash to itself (`StrokeSpec.dashSized`), so each
+  dome carries several dashes instead of one and a half.
 - **Seven graphics hand their dashed lines over whole.** Counterattack, counterattack by fire,
   main axis of advance feint, direction of main attack feint, exploitation and both fords used
   to cut their dashes into the GeoJSON in meters, so a dash grew without limit as the map

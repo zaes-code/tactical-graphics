@@ -95,6 +95,15 @@ describe('withFittedDashes', () => {
         expect(withFittedDashes(paints, at(20))[0].stroke?.dashPx).toEqual([3, 2]);
     });
 
+    it('caps a dash a mark sized for itself, and does not rescale it', () => {
+        const own: Paint = {...lineOf(1000, [6, 4]), stroke: {color: '#000', widthPx: 2, dashPx: [6, 4], dashSized: true}};
+        const fitted = withFittedDashes([lineOf(20, PLANNED_DASH_PX), own], at(1));
+        expect(fitted[0].stroke?.dashPx).toEqual([12, 8]);
+        expect(fitted[1].stroke?.dashPx).toEqual([6, 4]);
+        const long: Paint = {...own, stroke: {...own.stroke!, dashPx: [30, 10]}};
+        expect(withFittedDashes([long], at(1))[0].stroke?.dashPx).toEqual([12, 4]);
+    });
+
     it('leaves a list with no dash untouched', () => {
         const paints = [lineOf(40)];
         expect(withFittedDashes(paints, at(1))).toBe(paints);
@@ -204,9 +213,10 @@ describe('every dashed line in the catalog', () => {
                 for (const half of fittedHalves(name, TacticalGraphicStatus.planned, resolution)) {
                     // Every pattern in the half, put back to full size, must have been scaled
                     // by the same factor. The planned dash is the common case.
+                    // A mark that sizes its own dash is the stated exception. @see dashSized
                     const scales = new Set(
                         half
-                            .filter(p => p.stroke?.dashPx?.length)
+                            .filter(p => p.stroke?.dashPx?.length && !p.stroke.dashSized)
                             .map(p => (p.stroke!.dashPx![0] / fitDash([...PLANNED_DASH_PX], 1)[0]).toFixed(3))
                             .filter(s => DASH_SCALE_STEPS.map(x => x.toFixed(3)).includes(s)),
                     );
