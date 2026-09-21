@@ -49,6 +49,7 @@ import {
     circleLayer,
     featureCollection,
     fillLayer,
+    dashZoomStep,
     lineLayer,
     renderHatchImage,
     symbolLayer, MEASURE_LABEL_PX} from './paintToLayers';
@@ -518,14 +519,25 @@ export class NativeLayerRenderer {
         // whose data merely went empty would churn the style on every zoom.
         // `Array.from`, not a for-of over the Map: the build targets es5, where
         // iterating a Map needs --downlevelIteration.
+        // **A dash layer's pattern is fixed for its lifetime.** The zoom correction picks
+        // one of a few layers per pattern rather than rewriting the pattern in place:
+        // `setPaintProperty('line-dasharray')` on a live layer leaves tiles already built
+        // pointing at the old pattern's slot in MapLibre's dash atlas, the line render
+        // throws in `setConstantDashPositions`, and the frame aborts before the labels are
+        // drawn. Zooming in and out a few times left the map without a single label.
+        // @see dashZoomStep
+        const step = dashZoomStep(this.map.getZoom());
+        const used = new Set<string>();
         for (const [key, list] of Array.from(buckets.lines)) {
             features += list.length;
-            const id = lineSourceId(key);
-            if (!this.lineLayerKeys.has(key)) {
+            const layerKey = key === 'solid' ? key : `${key}#${step}`;
+            used.add(layerKey);
+            const id = lineSourceId(layerKey);
+            if (!this.lineLayerKeys.has(layerKey)) {
+                const dash = key === 'solid' ? undefined : key.split('@')[0].split(',').map(n => Number(n) / Math.pow(2, step));
                 this.map.addSource(id, {type: 'geojson', data: featureCollection(list)});
-                const dash = key === 'solid' ? undefined : key.split('@')[0].split(',').map(Number);
                 this.map.addLayer(lineLayer(id, id, dash), 'tg-symbol');
-                this.lineLayerKeys.add(key);
+                this.lineLayerKeys.add(layerKey);
                 this.layerIds.push(id);
             } else {
                 (this.map.getSource(id) as GeoJSONSource | undefined)?.setData(featureCollection(list));
@@ -537,9 +549,10 @@ export class NativeLayerRenderer {
         // created them — so a pattern that stopped appearing kept drawing whatever it
         // held last. Clearing the map left 87% of the ink on screen with no graphics
         // behind it, and the same stale draw happened whenever the last graphic using a
-        // pattern was deleted or panned out of view.
+        // pattern was deleted or panned out of view. The zoom step is part of the key, so
+        // this is also what hands a pattern from one step's layer to the next.
         for (const key of Array.from(this.lineLayerKeys)) {
-            if (buckets.lines.has(key)) continue;
+            if (used.has(key)) continue;
             (this.map.getSource(lineSourceId(key)) as GeoJSONSource | undefined)?.setData(featureCollection([]));
         }
 

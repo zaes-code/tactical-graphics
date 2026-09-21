@@ -300,6 +300,17 @@ export {
     uprightRotation,
 } from './symbology/decorations';
 export {
+    DASH_CAP_PX,
+    DASH_FULL_SIZE_PX,
+    DASH_SCALE_STEPS,
+    dashScale,
+    fitDash,
+    strokeParts,
+    strokedExtentPx,
+    withFittedDashes,
+} from './symbology/dashFit';
+export {DASHED_PARTS, dashedPartsOf} from './core/dashedParts';
+export {
     PLANNED_DASH_PX,
     arcMissionTaskPaint,
     areaFillPaint,

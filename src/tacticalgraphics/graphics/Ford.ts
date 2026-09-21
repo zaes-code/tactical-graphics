@@ -51,9 +51,8 @@ export class Ford extends TacticalGraphicsBase {
 
         const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, radius);
         const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, -radius);
-        return this.asMultiLineStringFeature([
-            ...geometryService.lineStringToDashes(leftArrowBase, [radius / 3, radius / 3]).geometry.coordinates,
-            ...geometryService.lineStringToDashes(rightArrowBase, [radius / 3, radius / 3]).geometry.coordinates]);
+        // Both bars whole; they are dashed when painted. @see DASHED_PARTS
+        return this.asMultiLineStringFeature([leftArrowBase, rightArrowBase]);
     }
 
     /** A grip on each of the three points 271500's Template letters. @see parallelRailAnchors */
@@ -83,14 +82,9 @@ export class FordHard extends TacticalGraphicsBase {
         const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, radius);
         const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, -radius);
 
-        let upperDash = geometryService.lineStringToDashes(leftArrowBase, [radius / 3, radius / 3]);
-        let lowerDash = geometryService.lineStringToDashes(rightArrowBase, [radius / 3, radius / 3]);
         let zigzag = geometryService.generateZigZag(centre, 10, radius / 2.5, 5);
-        return this.asMultiLineStringFeature([
-            ...upperDash.geometry.coordinates,
-            ...lowerDash.geometry.coordinates,
-            zigzag
-        ]);
+        // Both bars whole; they are dashed when painted. @see DASHED_PARTS
+        return this.asMultiLineStringFeature([leftArrowBase, rightArrowBase, zigzag]);
     }
 
     /** A grip on each of the three points 271500's Template letters. @see parallelRailAnchors */

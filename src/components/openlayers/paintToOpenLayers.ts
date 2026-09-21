@@ -8,6 +8,7 @@ import {
     TacticalGraphicEchelon,
     TacticalGraphicName,
     hatchTileSegments,
+    withFittedDashes,
     withHiddenAmplifiers,
 } from '@zaes/tactical-graphics';
 import type {
@@ -373,10 +374,12 @@ export function asStyleFunction(
     return (feature: FeatureLike, resolution: number): Style[] => {
         const paintFeature = toPaintFeature(feature, name);
         if (!paintFeature) return [];
-        // Every OpenLayers paint passes through here, so the hide-amplifiers toggle is
-        // applied once rather than per family. @see withHiddenAmplifiers
+        // Every OpenLayers paint passes through here, so the hide-amplifiers toggle and
+        // the dash fit are applied once rather than per family.
+        // @see withHiddenAmplifiers, withFittedDashes
+        const context = paintContext(resolution);
         return paintToOlStyles(
-            withHiddenAmplifiers(paint(paintFeature, paintContext(resolution)), paintFeature.hideAmplifiers),
+            withFittedDashes(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers), context),
         );
     };
 }
