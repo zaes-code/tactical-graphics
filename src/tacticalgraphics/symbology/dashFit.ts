@@ -123,7 +123,8 @@ export function withFittedDashes(paints: Paint[], context: PaintContext): Paint[
     return paints.map(paint => {
         const dashPx = paint.stroke?.dashPx;
         if (!dashPx?.length) return paint;
-        return {...paint, stroke: {...paint.stroke!, dashPx: fitDash(dashPx, scale)}};
+        // A mark that sized its own dash keeps it, capped. @see StrokeSpec.dashSized
+        return {...paint, stroke: {...paint.stroke!, dashPx: fitDash(dashPx, paint.stroke!.dashSized ? 1 : scale)}};
     });
 }
 

@@ -201,7 +201,7 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
 
         if (mines) {
             for (const center of mines.centers) {
-                paints.push(...mineGlyph(center, mines.radius, type, color));
+                paints.push(...mineGlyph(center, mines.radius, type, color, context.resolution));
             }
         }
 
