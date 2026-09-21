@@ -42,6 +42,14 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **Mineline mines follow the line.** Each Table 8-24 glyph strung along a mineline is turned
+  to the line where it sits, its top to the left of the drawing direction. Upright glyphs on
+  a steep line laid the antihandling mine's stem along the line itself, where it vanished,
+  and pointed antennae and arrows at fixed screen directions. The directional mine's arrow
+  points across the line, to its right. Mine areas still draw the row upright, as the table
+  does.
+- **The directional mine's arrow is APP-06's**: a solid shaft to 1.5 radii, a break, and a
+  small filled head from 1.74 to 2.1. It was a solid shaft to 2.2 under an open chevron.
 - **MapLibre drew every dash up to twice too long between integer zoom levels.** It lays a
   dash out in tile space, so a 12 px dash measured 12 at zoom 6, 18 at 6.5 and 21 at 6.75.
   The renderer now corrects for it in quarter-zoom steps, each its own dash layer, so a dash
