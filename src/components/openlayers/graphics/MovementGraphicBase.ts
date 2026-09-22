@@ -54,6 +54,7 @@ const BAR_SYMBOL_GRAPHIC_NAMES: TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
 export class MovementGraphicBase implements LineGraphic {

@@ -44,6 +44,7 @@ import {
     runAndArcFromAnchors,
 } from './anchors';
 import {securityOperationAnchors} from '../graphics/SecurityOperation';
+import {clampRoadblockBase} from '../graphics/RoadblockComplete';
 import {firePositionAnchors} from '../graphics/AdditionalMissionTasks';
 import * as turf from './turf';
 
@@ -336,11 +337,15 @@ export const EXPLOSIVES_ACROSS = EXPLOSIVES_ACROSS_OF_EDGE * 2;
  */
 export const EXPLOSIVES_ROTATION_DEG = 45;
 
-/** The three that share that plate's wording. 271204 roadblock is dropped, not drawn. */
+/**
+ * The four that share that plate's wording: the three states of readiness and, since
+ * 2026-09-21, 271204 roadblock, which inherits 271201's rule. @see RoadblockComplete
+ */
 const EXPLOSIVES_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
 export const FRONT_EDGE_ACROSS = 2;
@@ -908,6 +913,16 @@ function anchorsFromClicks(
             return mobileDefenceAnchors(clicks);
 
         /*
+         * **271204 reads its clicks as the demolition block below does, then holds point 3
+         * inside its width limits** so the stored point is where the bar is drawn.
+         * @see clampRoadblockBase
+         */
+        case TacticalGraphicName.RoadblockCompleteExecuted: {
+            const squared = sideAnchors(clicks);
+            return squared && clampRoadblockBase(squared);
+        }
+
+        /*
          * **The demolition block — three clicks: the two ends, then the separation.**
          *
          * 271201, and 271204 by inheritance: *"Points 1 and 2 define the endpoints of the
@@ -920,7 +935,6 @@ function anchorsFromClicks(
         case TacticalGraphicName.ExplosivesPlannedStateOfReadiness:
         case TacticalGraphicName.ExplosivesStateOfReadiness1Safe:
         case TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable:
-        case TacticalGraphicName.RoadblockCompleteExecuted:
         // 140800 states the same rule in the same words — *"points 1 and 2 define the
         // endpoints of the infiltration lane and point 3 defines one side of the lane"* —
         // so it reads its clicks the same way. (User's call, 2026-09-05.)
