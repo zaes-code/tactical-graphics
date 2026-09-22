@@ -306,6 +306,12 @@ The rendered output carries the same `properties.tacticalGraphic` plus a `role` 
 `graphic`, `label` or `handle`, so your styling code can read a graphic's amplifiers
 straight off the feature it is drawing.
 
+Seven graphics are dashed as part of the symbol itself, whatever their status: counterattack,
+counterattack by fire, the two feints, exploitation's tail and both fords. Their `graphic`
+feature also carries `dashedParts`, the indexes of the `MultiLineString` lines to draw dashed.
+The dash is a style, not geometry, so the lines arrive whole. Both bundled renderers size every
+dash to the graphic on screen, from 12/8 px down to 3/2 px (`withFittedDashes`).
+
 ### Sizing a graphic
 
 Three fields size a graphic, and which one applies depends on what the symbol *is*. They

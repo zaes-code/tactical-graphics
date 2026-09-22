@@ -43,6 +43,7 @@ import {
     type ProjectedPosition,
     type TacticalGraphicProperties,
     usesDrawnAnchors,
+    withFittedDashes,
     withHiddenAmplifiers,
 } from '@zaes/tactical-graphics';
 import {toLonLat, toMercator} from './projection';
@@ -973,9 +974,12 @@ export function paintTacticalGraphic(graphic: MapLibreTacticalGraphic, context: 
 
     // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
     // function in `asStyleFunction`. @see withHiddenAmplifiers
-    const paints = withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers);
+    //
+    // The dash fit runs once per half, as OpenLayers' does, because OpenLayers styles the
+    // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
+    const paints = withFittedDashes(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers));
+        paints.push(...withFittedDashes(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers), context));
     }
     return paints;
 }

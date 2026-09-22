@@ -17,6 +17,68 @@ the npm publish dates — when a version actually became installable.
 
 ---
 
+## [4.2.1] — 2026-09-21
+
+### Changed
+
+- **Roadblock complete (executed) is a demolition obstacle now, built and edited like the
+  three explosives states of readiness.** FM 1-02.2 lists it fourth in that group and APP-06
+  gives it 271201's centreline-and-width rule, so it is drawn with three clicks at any angle
+  and length: points 1 and 2 are the centreline, point 3 the width, and all three are grips.
+  Its first pair of bars is exactly the readiness states' pair, and the second is that pair
+  turned a quarter-turn about the midpoint. It used to be dropped at a fixed size and a
+  45 degree lean, with every grip inert. The width is held between
+  `ROADBLOCK_MIN_HALF_WIDTH_RATIO` and `ROADBLOCK_MAX_HALF_WIDTH_RATIO` of the centreline, so
+  the crossings reach at most halfway to the bar ends. Files saved with the old three points
+  open unchanged, since those points already meant centreline, centreline and side; a 3.4.0
+  file with one dropped point opens at its old size and angle.
+- **Every dash is sized to its graphic and capped at the planned dash.** A graphic at least
+  160 px across on screen draws 12/8 px dashes and never more. A smaller one steps down through
+  ¾, ½ and ¼ of that, and never goes solid: a planned line drawn solid would state the wrong
+  status. The rule covers status dashes (planned, suspected hostile, the circled ring, whose
+  18 px dash-dot is now 12), the dashes that are the symbol, and the crossed mission tasks'
+  hash. Each graphic gets one scale, so it never shows two dash sizes. `withFittedDashes`
+  applies it, and both renderers call it where they already call `withHiddenAmplifiers`.
+  The one exception is a small glyph repeated inside a larger graphic: the mine cluster glyph
+  on a mineline or in a mine area sizes its dash to itself (`StrokeSpec.dashSized`), so each
+  dome carries several dashes instead of one and a half.
+- **Seven graphics hand their dashed lines over whole.** Counterattack, counterattack by fire,
+  main axis of advance feint, direction of main attack feint, exploitation and both fords used
+  to cut their dashes into the GeoJSON in meters, so a dash grew without limit as the map
+  zoomed in and fell under a pixel as it zoomed out. Each dashed line is now one continuous
+  line, and the `graphic` feature carries `dashedParts`, the line indexes to draw dashed. A
+  consumer drawing `renderTacticalGraphic` output without either renderer has to dash those
+  lines itself, the same way it already handles `status: planned`.
+
+### Added
+
+- `withFittedDashes`, `dashScale`, `fitDash`, `strokedExtentPx`, `strokeParts`, `DASH_CAP_PX`,
+  `DASH_FULL_SIZE_PX`, `DASH_SCALE_STEPS`, `DASHED_PARTS` and `dashedPartsOf`.
+- `StrokeSpec.dashSized`, for a mark that sizes its own dash: `withFittedDashes` caps it and
+  leaves it otherwise alone.
+- `ROADBLOCK_MIN_HALF_WIDTH_RATIO`, `ROADBLOCK_MAX_HALF_WIDTH_RATIO` and
+  `clampRoadblockHalfWidth`.
+
+### Fixed
+
+- **Mineline mines follow the line.** Each Table 8-24 glyph strung along a mineline is turned
+  to the line where it sits, its top to the left of the drawing direction. Upright glyphs on
+  a steep line laid the antihandling mine's stem along the line itself, where it vanished,
+  and pointed antennae and arrows at fixed screen directions. The directional mine's arrow
+  points across the line, to its right. Mine areas still draw the row upright, as the table
+  does.
+- **The directional mine's arrow is APP-06's**: a solid shaft to 1.5 radii, a break, and a
+  small filled head from 1.74 to 2.1. It was a solid shaft to 2.2 under an open chevron.
+- **MapLibre drew every dash up to twice too long between integer zoom levels.** It lays a
+  dash out in tile space, so a 12 px dash measured 12 at zoom 6, 18 at 6.5 and 21 at 6.75.
+  The renderer now corrects for it in quarter-zoom steps, each its own dash layer, so a dash
+  stays between 84% and 100% of its length across the whole level, matching OpenLayers.
+- **Counterattack, the feint and the fords drew through a bare stroke on OpenLayers** rather
+  than the shared paint function MapLibre used. They now go through `movementGraphicPaint`
+  on both engines.
+
+---
+
 ## [4.2.0] — 2026-09-13
 
 > ### ⚠️ Twelve graphics change the shape of their base, and the snapshot version is now 2
@@ -1444,7 +1506,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...develop
+[4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...v4.1.0
