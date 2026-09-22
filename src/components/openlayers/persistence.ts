@@ -122,6 +122,19 @@ export {SNAPSHOT_VERSION};
 const MAP_PROJECTION = 'EPSG:3857';
 const GEOJSON_PROJECTION = 'EPSG:4326';
 
+/**
+ * Two bases that are the same base, in degrees.
+ *
+ * About a millimetre, which is far below anything a normalizer means by moving a point and
+ * far above the 3857 round trip the coordinates have already made. It exists so a restore
+ * writes the tidied base back when it differs and leaves the feature alone when it does not.
+ */
+const SAME_BASE_EPSILON_DEG = 1e-8;
+
+const samePath = (a: Position[], b: Position[]): boolean =>
+    a.length === b.length &&
+    a.every((p, i) => Math.abs(p[0] - b[i][0]) < SAME_BASE_EPSILON_DEG && Math.abs(p[1] - b[i][1]) < SAME_BASE_EPSILON_DEG);
+
 /*
  * The snapshot type is the library's too, and **its version field is optional** — which is
  * the honest shape for a value a *reader* takes. Files written before the stamp was shared
@@ -689,7 +702,24 @@ export function restoreTacticalGraphics(
                 // And a demolition obstacle saved with two points gets its third, whatever the
                 // version: the draw that allowed it was current. @see completeDemolitionBase
                 const tidied = normalizeDrawnBase(name, completeDemolitionBase(name, upgraded));
-                if (tidied.length !== geometry.getCoordinates().length) {
+                /*
+                 * **Written back whenever it changed, not only when the count did.**
+                 *
+                 * The guard used to test `length`, from the one fault it was added for: a base
+                 * saved with fewer points than its graphic needs. But the normalizer also
+                 * *re-places* points — the demolition family's third point onto the
+                 * perpendicular, the axis arrows' width point onto the arrowhead's back corner
+                 * — and that answer was being computed and thrown away.
+                 *
+                 * The effect was two engines holding different saves of one file. MapLibre
+                 * squares inside `buildTacticalGraphic`, so a restored 271201-271204 had a
+                 * square point 3 there and the raw click here; the shape matched, because the
+                 * generator projects again on every render, but the stored base did not — and
+                 * the first endpoint drag turned that into a visible difference, since each
+                 * engine re-squared from a different point 3. Measured on the running app:
+                 * 197 m apart after a point 1 drag, 981 m after a point 2 drag.
+                 */
+                if (!samePath(tidied, stored)) {
                     geometry.setCoordinates(tidied.map(c => fromLonLat(c as Coordinate)));
                 }
             }
