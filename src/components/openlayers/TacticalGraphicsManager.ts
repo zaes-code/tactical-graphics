@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -1735,9 +1735,29 @@ export class TacticalGraphicsManager {
         // Disable double-click zoom so finishing a draw with double-click doesn't zoom the map
         this.suspendDoubleClickZoom();
 
+        // The feature being drawn, so `finishCondition` can count what has been placed.
+        let sketch: Feature | undefined;
         this.draw = new Draw({
             source: drawingVectorSource,
             type: tacticalGraphicHandler.type,
+            /*
+             * **A double-click ends the draw only once the symbol has its points**, by the rule
+             * MapLibre has always applied. Without it OpenLayers ended any line at two, so a
+             * demolition obstacle or roadblock drawn with two clicks and a double-click stored
+             * two points and its side grip had no vertex to move. (User's report, 2026-09-21.)
+             *
+             * OpenLayers only asks when the click lands on the last placed point, so the
+             * sketch's trailing coordinate, the one under the cursor, *is* that point: every
+             * coordinate counts, with a repeated one dropped as the same click. Measured: two
+             * clicks and a double-click hand this `[p1, p2]`. @see drawIsComplete
+             */
+            finishCondition: () => {
+                const geometry = sketch?.getGeometry();
+                if (!(geometry instanceof LineString)) return true;
+                const placed = geometry.getCoordinates();
+                const distinct = placed.filter((c, i) => i === 0 || Math.hypot(c[0] - placed[i - 1][0], c[1] - placed[i - 1][1]) > 1e-6);
+                return drawIsComplete(name, distinct.map(c => toLonLat(c)) as Position[]);
+            },
             // Falls back to the shared draw style rather than to OpenLayers' built-in
             // editing style, so the configured draw-marker colors apply to every
             // graphic — not just the point-anchored ones whose controller styles itself.
@@ -1761,6 +1781,7 @@ export class TacticalGraphicsManager {
             this.setInteractionMode(InteractionType.drawing);
 
             const originalFeature = e.feature;
+            sketch = originalFeature;
 
             // add a unique id to the graphic
             let symbolId = crypto.randomUUID();

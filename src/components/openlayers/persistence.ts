@@ -70,6 +70,7 @@ import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
     upgradeAxisBase,
+    completeDemolitionBase,
     carriesWidthPointInBase,
     axisFromRectangleRing,
     isRectangular,
@@ -685,7 +686,9 @@ export function restoreTacticalGraphics(
                 const upgraded = report.version < SNAPSHOT_VERSION
                     ? upgradeAxisBase(name, stored, state.width, defaultWidthMetres(resolution))
                     : stored;
-                const tidied = normalizeDrawnBase(name, upgraded);
+                // And a demolition obstacle saved with two points gets its third, whatever the
+                // version: the draw that allowed it was current. @see completeDemolitionBase
+                const tidied = normalizeDrawnBase(name, completeDemolitionBase(name, upgraded));
                 if (tidied.length !== geometry.getCoordinates().length) {
                     geometry.setCoordinates(tidied.map(c => fromLonLat(c as Coordinate)));
                 }
