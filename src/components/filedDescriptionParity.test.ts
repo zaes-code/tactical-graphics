@@ -28,7 +28,7 @@ import type {TacticalGraphicHandler} from './openlayers/openlayersAdapter';
 import type {TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
 import {applyBaseGeometry} from './openlayers/sampleGallery';
 import {serializeTacticalGraphics} from './openlayers/persistence';
-import {buildTacticalGraphic} from './maplibre/maplibreAdapter';
+import {buildTacticalGraphic, descriptionOf} from './maplibre/maplibreAdapter';
 
 const RES = 1200;
 const CX = 500_000;
@@ -94,5 +94,51 @@ describe(`one file, whichever engine wrote it (${NAMES.length} names)`, () => {
          */
         const added = Object.keys(mlb).filter(key => !(key in ol.bag) && !FROM_THE_DRAWING_ZOOM.has(key));
         expect(added).toEqual([]);
+    });
+});
+
+/**
+ * # And it holds after the graphic is touched
+ *
+ * The first version of the strip did not. `buildTacticalGraphic` filed the description, but
+ * every path that *rebuilds* a graphic — a gesture's starting shape, the properties dialog's
+ * apply — handed the completed bag back in as the caller's own properties, so everything the
+ * adapter had derived looked stated and went straight back into the file. The strip held for a
+ * graphic nobody touched and came undone on the first drag.
+ *
+ * Nothing caught it: the import/export sweep draws its samples and exports them without
+ * gesturing, and the unit suite above builds once. This is the assertion that would have.
+ * @see descriptionOf
+ */
+describe('the description survives a rebuild', () => {
+    /** The keys that only ever get into a file by being derived from the points. */
+    const FROM_THE_POINTS = ['labelGapDegrees', 'labelGap', 'rotation', 'bend', 'mirrored'];
+
+    it.each(NAMES.map(n => [String(n), n] as const))('%s', (_label, name) => {
+        let ol;
+        try {
+            ol = openLayersFiles(name);
+        } catch {
+            return;
+        }
+        const properties = {...ol.bag};
+        delete properties.name;
+        const built = buildTacticalGraphic(name, ol.geometry as never, properties as never, RES);
+        if (!built) return;
+
+        const filed = (graphic: NonNullable<typeof built>) =>
+            (graphic.base.properties?.[TACTICAL_GRAPHIC_KEY] ?? {}) as Record<string, unknown>;
+        const before = filed(built);
+
+        // Rebuilt the way a gesture and the dialog rebuild it: from the description this
+        // graphic carries, which is what both now start from.
+        const again = buildTacticalGraphic(name, built.base.geometry, descriptionOf(built) as never, RES);
+        expect(again).toBeDefined();
+
+        const after = filed(again!);
+        const gained = FROM_THE_POINTS.filter(key => !(key in before) && key in after);
+        expect(gained).toEqual([]);
+        // And the description is stable, so a graphic rebuilt twice files what it filed once.
+        expect(Object.keys(after).sort()).toEqual(Object.keys(before).sort());
     });
 });

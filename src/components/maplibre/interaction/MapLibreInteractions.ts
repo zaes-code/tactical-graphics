@@ -38,7 +38,7 @@ import {
     handleRole,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
-import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, descriptionOf, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
 import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
@@ -593,7 +593,7 @@ export class MapLibreInteractions {
             onPivot: false,
             handle: -1,
             origin,
-            start: {geometry: graphic.base.geometry, properties: graphic.properties},
+            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
             // Already past the threshold: the host decided a drag began by pressing the
             // affordance, and re-measuring it against a pixel distance would swallow the
             // first few degrees of every rotate.
@@ -1391,7 +1391,7 @@ export class MapLibreInteractions {
             vertex,
             insertAt,
             origin: [event.lngLat.lng, event.lngLat.lat],
-            start: {geometry: graphic.base.geometry, properties: graphic.properties},
+            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
