@@ -11,6 +11,7 @@ import {
     boundsOf,
     carriesRectangleLength,
     decorationMeters,
+    describedProperties,
     usesStandoffWidth,
     drawnAnchorFrame,
     drawnAnchors,
@@ -874,15 +875,53 @@ export function buildTacticalGraphic(
         ...anchorFrameProperties(name, baseGeometry),
     };
 
-    const base: GeoJSONFeature = {
+    /*
+     * **The base carries the description; `props` above is the render input.**
+     *
+     * Everything in this function's literal that is spread *after* the caller's own
+     * properties is worked out from the points, and the label-gap pair at the top is an
+     * instruction to the paint layer rather than anything a file should state. The base is
+     * what `snapshot()` writes, so filing them made a MapLibre-written file differ from an
+     * OpenLayers-written one describing the same symbol — `labelGapDegrees` on 192 graphics,
+     * `radius` and `rotation` on 249 — and a figure filed beside the points it came from can
+     * go stale against them, which is how 151204 contain came to report a 40 km radius next
+     * to a symbol drawn at 29.8.
+     *
+     * The screen-sized defaults are deliberately **not** in this list: `sizeDefaults` and
+     * `arrowheadDefault` spend the drawing resolution, and a snapshot carries no viewport,
+     * so the metre value they produce is the only record of that size there will ever be.
+     * @see describedProperties, ai/conventions.md "A base is the library's reading of it"
+     */
+    const derivedFromGeometry: (keyof TacticalGraphicProperties)[] = [
+        ...(getPaintFunction(name)?.label ? (['labelGapDegrees'] as const) : []),
+        ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) ? (['labelGap'] as const) : []),
+        ...(Object.keys(ratioLockedSize(name, baseGeometry)) as (keyof TacticalGraphicProperties)[]),
+        ...(Object.keys(rectangleAmplifiers(name, ringOf(baseGeometry))) as (keyof TacticalGraphicProperties)[]),
+        ...(Object.keys(rectangleAxisLength(name, baseGeometry, properties)) as (keyof TacticalGraphicProperties)[]),
+        ...(Object.keys(anchorFrameProperties(name, baseGeometry)) as (keyof TacticalGraphicProperties)[]),
+    ];
+
+    /** What is drawn from: the completed bag, with everything this function worked out in it. */
+    const renderInput: GeoJSONFeature = {
         type: 'Feature',
         geometry: baseGeometry,
         properties: {[TACTICAL_GRAPHIC_KEY]: props},
     };
 
+    /**
+     * What is **kept**, and therefore what `snapshot()` writes and a later gesture rebuilds
+     * from. Handing it back through this function re-derives everything stripped here, which
+     * is the property that makes the description enough.
+     */
+    const base: GeoJSONFeature = {
+        type: 'Feature',
+        geometry: baseGeometry,
+        properties: {[TACTICAL_GRAPHIC_KEY]: describedProperties(props, properties, derivedFromGeometry)},
+    };
+
     let rendered;
     try {
-        rendered = renderTacticalGraphic(base);
+        rendered = renderTacticalGraphic(renderInput);
     } catch {
         // A generator that cannot draw this base — too few vertices mid-draw, most
         // often. The caller shows nothing rather than a half-graphic.

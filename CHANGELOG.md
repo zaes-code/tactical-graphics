@@ -17,6 +17,23 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **`renderTacticalGraphic` threw a turf error for a bag with no `rotation` in it.** The
+  property is optional in the schema and required by the generators, and the ones that read it
+  most directly spend it without a guard — so `{name, radius}`, the most ordinary bag a
+  point-based graphic can be handed, came back as `coordinates must contain numbers` from
+  inside `@turf/destination`, naming neither the field nor the graphic. It defaults to zero,
+  which is what every generator that does guard already falls back to; no output changes.
+- **A file's contents no longer depend on which renderer wrote it.** The MapLibre adapter
+  completes the amplifier bag before drawing — a zero label gap for the arc mission tasks, a
+  rectangle's width read back off its ring, a drawn-anchor graphic's `radius` and `rotation`
+  recovered from its own points — and was filing that completed bag, so a MapLibre-written
+  snapshot carried `labelGapDegrees` for 192 graphics that an OpenLayers-written one did not.
+  Half of it was an instruction to the paint layer and half a second copy of the geometry,
+  which is what let 151204 contain report a 40 km radius beside a symbol drawn at 29.8. A
+  snapshot now carries the description: what the caller stated, plus what a renderer derived
+  from something the file does not hold — a screen-sized default spent at the drawing
+  resolution stays, since that metre value is the only record of it.
+
 - **A restored base was tidied only when it gained a point.** `restoreTacticalGraphics` ran
   the library's `normalizeDrawnBase` over an incoming base and then wrote the result back only
   if the point count had changed — but the normalizer also *re-places* points, which for the
@@ -30,6 +47,10 @@ the npm publish dates — when a version actually became installable.
   Measured over the registry: 35 graphics, up to 902 m after one rotate-resize-translate. The
   OpenLayers line controller now settles the base when a gesture ends, once, which is the
   guarantee MapLibre has always had from normalizing on every build.
+
+### Added
+
+- `describedProperties`, the rule a renderer applies before filing a bag.
 
 ---
 
