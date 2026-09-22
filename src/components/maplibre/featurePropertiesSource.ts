@@ -24,7 +24,7 @@ import {TacticalGraphicName, widthFromBase, type TacticalGraphicProperties} from
 import {setAmplifiersHidden} from '../amplifierVisibility';
 import type {GraphicLabels} from '../graphicAmplifiers';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
-import {buildTacticalGraphic, carryPaintFlags} from './maplibreAdapter';
+import {buildTacticalGraphic, carryPaintFlags, descriptionOf} from './maplibreAdapter';
 import type {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {resolutionOf} from './projection';
 
@@ -123,7 +123,10 @@ export function createMapLibrePropertiesSource(
             // The whole edit, as one bag. `name` is re-asserted rather than spread from
             // `labels`, which is the amplifier half and does not carry it.
             const properties: TacticalGraphicProperties = {
-                ...graphic.properties,
+                // **The description, not the bag it was drawn with.** Spreading the completed
+                // bag made every value this adapter derived look like one the caller stated,
+                // so an amplifier edit put them all back into the file. @see descriptionOf
+                ...descriptionOf(graphic),
                 ...(labels as Partial<TacticalGraphicProperties>),
                 name: graphic.name as TacticalGraphicName,
                 ...(echelon ? {echelon: echelon as TacticalGraphicProperties['echelon']} : {}),

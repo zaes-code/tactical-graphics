@@ -32,7 +32,9 @@ the npm publish dates — when a version actually became installable.
   which is what let 151204 contain report a 40 km radius beside a symbol drawn at 29.8. A
   snapshot now carries the description: what the caller stated, plus what a renderer derived
   from something the file does not hold — a screen-sized default spent at the drawing
-  resolution stays, since that metre value is the only record of it.
+  resolution stays, since that metre value is the only record of it. It holds after the
+  graphic is touched, too: a gesture and the properties dialog both rebuild from the
+  description rather than from the bag the last draw rendered with.
 
 - **A restored base was tidied only when it gained a point.** `restoreTacticalGraphics` ran
   the library's `normalizeDrawnBase` over an incoming base and then wrote the result back only

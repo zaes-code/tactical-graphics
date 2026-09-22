@@ -181,6 +181,21 @@ export function withDrawingResolution(
  * paint feature and not to this is the same defect again, so the fix is a place for them to
  * be listed rather than a fix for this one.
  */
+/**
+ * A graphic's **description** — what it would be saved as, and what a rebuild starts from.
+ *
+ * `graphic.properties` is the completed bag this adapter drew with, and it holds values it
+ * worked out from the points plus a couple aimed at the paint layer. Handing *that* back in
+ * as a caller's properties makes every one of them look stated, so they go straight back into
+ * the file: the strip held for a graphic nobody touched and came undone on the first gesture
+ * or amplifier edit. Re-deriving them is what `buildTacticalGraphic` does at its top, so the
+ * description is the honest input. @see describedProperties
+ */
+export function descriptionOf(graphic: MapLibreTacticalGraphic): TacticalGraphicProperties {
+    const filed = graphic.base.properties?.[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
+    return filed ?? graphic.properties;
+}
+
 export function carryPaintFlags(
     previous: MapLibreTacticalGraphic,
     rebuilt: MapLibreTacticalGraphic,
