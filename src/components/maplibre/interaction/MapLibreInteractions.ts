@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -1019,29 +1019,9 @@ export class MapLibreInteractions {
      * a one-segment fields-of-fire is a line with an arrowhead at each end, which is
      * a different graphic. @see baseVertexCount
      */
+    /** The shared rule, so the two engines finish a draw at the same click. @see drawIsComplete */
     private sketchIsComplete(): boolean {
-        const name = this.drawing;
-        if (!name) return false;
-        /*
-         * **How many clicks the draw asks for, where the library says so.**
-         *
-         * `DRAW_CLICKS` exists to state exactly this, and asking it directly is both simpler
-         * and safer than inferring it. The rule below infers: it normalizes the sketch and
-         * calls the draw finished once the base is *implied* — right for a fields of fire,
-         * whose two points are a whole V because the second leg follows from them, and wrong
-         * for any graphic whose normalizer also **upgrades an older base**. 342201's does:
-         * two points are an old save that lays out as four, so an inferred rule ended its
-         * draw on the second of four clicks.
-         *
-         * Equivalent wherever `drawClickCount` is already defined — ambush 2 of 3, envelop 3
-         * of 4, the hairpins 3 of 4 — since each of those normalizes exactly its click count
-         * up to its vertex count. It only changes the answer where the two disagree, which
-         * is the case this is for. @see drawClickCount, normalizeDrawnBase
-         */
-        const clicks = drawClickCount(name);
-        if (clicks !== undefined) return this.sketch.length >= clicks;
-        const wanted = baseVertexCount(name);
-        return wanted === undefined ? this.sketch.length >= 2 : normalizeDrawnBase(name, this.sketch).length === wanted;
+        return this.drawing ? drawIsComplete(this.drawing, this.sketch) : false;
     }
 
     private readonly onKeyDown = (event: KeyboardEvent): void => {
