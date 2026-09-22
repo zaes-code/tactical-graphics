@@ -425,6 +425,33 @@ export class LineGraphicController implements TacticalGraphicHandler {
         (this.graphic as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
         // The latched base belongs to one gesture. @see vertexDragStart
         this.vertexDragStart = undefined;
+        this.settleBase();
+    }
+
+    /**
+     * The base put back through the library's reading of it, **once, when the gesture is over**.
+     *
+     * A rotate, a resize and a translate all transform the base wholesale in projected metres,
+     * and a point the library derives is a *geodesic* fact: the demolition family's third point
+     * sits on the perpendicular at the centreline's midpoint, and a planar transform shears that
+     * perpendicular. So a gesture left the base off the shape its own plate describes — measured
+     * over the registry, 35 graphics and up to 902 m after one rotate-resize-translate.
+     *
+     * MapLibre never had it, because `buildTacticalGraphic` normalizes on every build and its
+     * gestures are absolute — applied to the shape the drag started from, so one settle per move
+     * gives the same answer as one at the end. This is that guarantee on this side, and it has to
+     * be **at the end**: settling each delta would compose, which is the trap `vertexDragStart`
+     * exists for. @see normalizeDrawnBase, ai/decisions.md "Idempotent is not the same as
+     * path-independent"
+     */
+    private settleBase(): void {
+        const geometry = this.graphic.base?.getGeometry();
+        if (!(geometry instanceof LineString)) return;
+        const coords = geometry.getCoordinates();
+        const settled = settle(this.resolvedName(), coords);
+        if (settled.length !== coords.length || settled.some((c, i) => Math.hypot(c[0] - coords[i][0], c[1] - coords[i][1]) > SAME_POINT_EPSILON_M)) {
+            this.graphic.setBaseFeature(new Feature(new LineString(settled)));
+        }
     }
 
     /**

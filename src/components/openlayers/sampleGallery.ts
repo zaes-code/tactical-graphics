@@ -698,6 +698,19 @@ export function measureSample(name: TacticalGraphicName, resolution: number): Bo
     return {dx0: extent[0], dy0: extent[1], dx1: extent[2], dy1: extent[3]};
 }
 
+/**
+ * A hand-laid path put through the library's reading of it, in projected metres.
+ *
+ * **Through 4326 and back, because the library speaks degrees.** `normalizeDrawnBase` is
+ * turf all the way down and these are projected metres; handed metres its distance and
+ * bearing guards fail and it returns the path untouched, which looks exactly like a
+ * graphic that needed no normalising. The manager's own `normalizeDrawnGeometry` converts
+ * for the same reason. @see ai/conventions.md, "no turf on projected coords"
+ */
+function settled(name: TacticalGraphicName, path: Coordinate[]): Coordinate[] {
+    return normalizeDrawnBase(name, path.map(c => toLonLat(c)) as Position[]).map(c => fromLonLat(c as Coordinate)) as Coordinate[];
+}
+
 /** Feeds a handler the base geometry its controller expects, centered on (cx, cy). */
 export function applyBaseGeometry(
     handler: TacticalGraphicHandler,
@@ -724,11 +737,15 @@ export function applyBaseGeometry(
             // sample spans the same 2 x LINE_HALF every other line sample does. Nudging
             // them inward reads as a bypass drawn small rather than as a narrower one.
             const half = LINE_HALF * grow;
-            handler.setBaseFeature(lineFeature([
+            // Through the normalizer like every other layout below: these three are laid out
+            // by hand, and a hand-laid rear point is square only on the plane. The library
+            // squares it on the ground, 7.5 m away at this latitude — enough that a restore,
+            // which does normalize, moved a base the sheet had drawn. @see normalizeDrawnBase
+            handler.setBaseFeature(lineFeature(settled(name, [
                 [cx + half, cy + half * 0.55],
                 [cx + half, cy - half * 0.55],
                 [cx - half, cy],
-            ] as Coordinate[], symbolId, name));
+            ] as Coordinate[]), symbolId, name));
             return;
         }
         // **A rectangular zone's width is stamped, not left to the holder's seed.**
@@ -764,13 +781,6 @@ export function applyBaseGeometry(
          * `drawend`, so this is that base rather than one that merely resembles it.
          */
         /*
-         * **Through 4326 and back, because the library speaks degrees.** `normalizeDrawnBase`
-         * is turf all the way down and these are projected metres; handed metres its distance
-         * and bearing guards fail and it returns the path untouched, which looks exactly like
-         * a graphic that needed no normalising. The manager's own `normalizeDrawnGeometry`
-         * converts for the same reason. @see ai/conventions.md, "no turf on projected coords"
-         */
-        /*
          * **Every base, not only the anchor-click ones.** `normalizeDrawnBase` is the door
          * every draw and every restore comes in by and it is idempotent, so a layout that is
          * already right passes through untouched — while one that is short of what its
@@ -783,10 +793,7 @@ export function applyBaseGeometry(
          * no such handle. The sweep and the restore disagreed about the same symbol.
          * @see sheetBase, which is this rule on the MapLibre side.
          */
-        const stored = normalizeDrawnBase(name, path.map(c => toLonLat(c)) as Position[]).map(
-            c => fromLonLat(c as Coordinate),
-        ) as Coordinate[];
-        handler.setBaseFeature(lineFeature(stored, symbolId, name));
+        handler.setBaseFeature(lineFeature(settled(name, path), symbolId, name));
     } else {
         throw new Error('unclassified controller');
     }

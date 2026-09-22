@@ -15,6 +15,22 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A restored base was tidied only when it gained a point.** `restoreTacticalGraphics` ran
+  the library's `normalizeDrawnBase` over an incoming base and then wrote the result back only
+  if the point count had changed — but the normalizer also *re-places* points, which for the
+  demolition obstacles is its whole job. So the same file opened as two different saves:
+  MapLibre squared point 3 onto the perpendicular its plate describes, OpenLayers kept the raw
+  click, and the first drag of either endpoint then moved the symbol to two different places
+  (197 m apart on point 1, 981 m on point 2). The base is written back whenever it differs.
+- **A rotate, a resize or a translate left the base off its own construction.** Those gestures
+  transform it wholesale in projected metres while the constraint being transformed — a point
+  square to an axis, a stem on a perpendicular — is geodesic, so a planar transform shears it.
+  Measured over the registry: 35 graphics, up to 902 m after one rotate-resize-translate. The
+  OpenLayers line controller now settles the base when a gesture ends, once, which is the
+  guarantee MapLibre has always had from normalizing on every build.
+
 ---
 
 ## [4.2.2] — 2026-09-21
