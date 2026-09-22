@@ -98,7 +98,8 @@ describe('which graphics hash a line between their anchor points', () => {
     it('names only registered graphics', () => {
         const registered: string[] = listTacticalGraphicNames();
         const listed = registered.filter(name => drawsAnchorConnector(name as TacticalGraphicName));
-        expect(listed).toHaveLength(27);
+        // 28 since 2026-09-21, when 271204 joined the demolition family.
+        expect(listed).toHaveLength(28);
     });
 });
 

@@ -52,12 +52,14 @@ function sideOffset(coords: Position[]): {across: number; middle: Position; axis
  * are dragged around it. Handing back `coords[2]` untouched left it hanging in space the
  * moment either end moved. @see sideOffset
  */
-export function sidePoint(coords: Position[], opts?: MovementGraphicOptions): Position {
+export function sidePoint(coords: Position[], opts?: MovementGraphicOptions, half?: number): Position {
     const side = sideOffset(coords);
     if (side) {
+        // `half` is a width the caller has already held to its own limits, as the roadblock
+        // does, so the grip sits on the bar it draws rather than where it was dragged to.
         return turf.destination(
             turf.point(side.middle),
-            Math.abs(side.across),
+            half ?? Math.abs(side.across),
             side.axis + Math.sign(side.across) * 90,
             {units: 'meters'},
         ).geometry.coordinates as Position;
@@ -93,11 +95,10 @@ export function sidePoint(coords: Position[], opts?: MovementGraphicOptions): Po
  * state of readiness 2 (armed)    two bars, both solid
  * ```
  *
- * **Roadblock complete is not in this class** and is deliberately left point-anchored.
- * It shares the family's amplifiers and its `BAR_SYMBOL_DASHES` lookup, but APP-06 draws
- * it as *two overlapping X's* — four strokes, not two rails — and that shape is already
- * right. Its draw-rule cell is inherited rather than stated, so nothing in the standard
- * says how a centerline would lay those four strokes out. @see RoadblockComplete
+ * **Roadblock complete is the fourth member**, in its own class because it draws four bars
+ * rather than two: this pair, from the same centreline and side point, and the same pair
+ * turned a quarter-turn about the midpoint. It was point-anchored at a fixed lean until
+ * 2026-09-21. @see RoadblockComplete
  *
  * The dashing is a stroke property and a MultiLineString cannot say "this part dashed,
  * that one not", so the geometry is emitted here in a fixed order — **left rail first**
