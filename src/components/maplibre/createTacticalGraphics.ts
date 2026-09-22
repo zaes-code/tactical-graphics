@@ -20,6 +20,7 @@ import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
     upgradeAxisBase,
+    completeDemolitionBase,
     snapshotVersionOf,
     SNAPSHOT_VERSION,
     type AllowedGestures,
@@ -162,6 +163,12 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
                     geometry = migrated.geometry;
                 }
                 if (!properties?.name || !geometry) continue;
+                // A demolition obstacle saved with two points (OpenLayers allowed it until
+                // 2026-09-21) gets its third, whatever the version. @see completeDemolitionBase
+                if (geometry.type === 'LineString') {
+                    const completed = completeDemolitionBase(properties.name, geometry.coordinates);
+                    if (completed !== geometry.coordinates) geometry = {...geometry, coordinates: completed};
+                }
                 if (version < SNAPSHOT_VERSION && geometry.type === 'LineString') {
                     const upgraded = upgradeAxisBase(
                         properties.name,

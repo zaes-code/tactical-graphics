@@ -311,6 +311,8 @@ export {
     withFittedDashes,
 } from './symbology/dashFit';
 export {DASHED_PARTS, dashedPartsOf} from './core/dashedParts';
+export {drawIsComplete} from './core/drawCompletion';
+export {completeDemolitionBase} from './core/drawnBase';
 export {
     PLANNED_DASH_PX,
     arcMissionTaskPaint,

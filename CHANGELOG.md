@@ -17,6 +17,27 @@ the npm publish dates — when a version actually became installable.
 
 ---
 
+## [4.2.2] — 2026-09-21
+
+### Fixed
+
+- **OpenLayers ended a three-point draw at two points.** Its `Draw` interaction finished any
+  line on a double-click once it had two, so roadblock complete and the three explosives
+  states of readiness could be saved with two points, and their side grip then had no vertex
+  to move. MapLibre always waited for the third click. Both engines now ask one rule,
+  `drawIsComplete`, so every graphic finishes at the same click on both.
+- **Files already saved that way are repaired when they load.** A demolition obstacle with two
+  points gets its third, square off the centreline's midpoint at a tenth of its length, on
+  either engine and whatever the file's version (`completeDemolitionBase`).
+- **The README listed roadblock complete (executed) as upcoming.** Its tracker row still
+  carried an old exclusion; it is listed as supported now, and appears in the sample gallery.
+
+### Added
+
+- `drawIsComplete` and `completeDemolitionBase`.
+
+---
+
 ## [4.2.1] — 2026-09-21
 
 ### Changed
@@ -1506,7 +1527,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...develop
+[4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
 [4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1

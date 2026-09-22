@@ -348,6 +348,37 @@ const EXPLOSIVES_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
+/**
+ * The half-width a repaired two-point demolition base is given, as a share of its centreline.
+ * @see completeDemolitionBase
+ */
+const REPAIRED_HALF_WIDTH_RATIO = 0.1;
+
+/**
+ * A demolition obstacle's base with its missing point 3 put back, when it was saved with two.
+ *
+ * **Repairs a file, not a draw.** Until 2026-09-21 OpenLayers ended these draws on a
+ * double-click at two points, so a three-point symbol could be saved with two: it drew, from a
+ * fallback width, but its side grip had no vertex behind it and did nothing. MapLibre never
+ * allowed it. Both engines call this on every restore, whatever the file's version, since a
+ * current-version file can carry the defect. Point 3 goes square off the centreline's midpoint
+ * at a tenth of its length, on the right of point 1 to point 2, and the roadblock holds it
+ * inside its own limits. Any other base comes back as it went in.
+ * (User's report, 2026-09-21.) @see drawIsComplete
+ */
+export function completeDemolitionBase(name: TacticalGraphicName, coords: Position[]): Position[] {
+    if (!EXPLOSIVES_GRAPHICS.includes(name) || coords.length !== 2) return coords;
+    const [start, end] = coords;
+    const span = turf.distance(turf.point(start), turf.point(end), {units: 'meters'});
+    if (!isFinite(span) || span <= 0) return coords;
+    const axis = turf.bearing(turf.point(start), turf.point(end));
+    const middle = turf.destination(turf.point(start), span / 2, axis, {units: 'meters'});
+    const side = turf.destination(middle, span * REPAIRED_HALF_WIDTH_RATIO, axis + 90, {units: 'meters'}).geometry
+        .coordinates as Position;
+    const repaired = [start, end, side];
+    return name === TacticalGraphicName.RoadblockCompleteExecuted ? clampRoadblockBase(repaired) : repaired;
+}
+
 export const FRONT_EDGE_ACROSS = 2;
 
 /**
