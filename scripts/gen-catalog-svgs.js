@@ -120,6 +120,8 @@ const {
     listTacticalGraphicNames,
     renderTacticalGraphic,
     getPaintFunction,
+    carriesWidthPointInBase,
+    axisWithWidthPoint,
     withFittedDashes,
     isPaintable,
     baseGeometryFor,
@@ -511,6 +513,19 @@ function makeBase(name) {
      * @see CATALOG_ACROSS, FRONT_EDGE_ACROSS
      */
     const stated = synthesizedBase ? synthesizedBase(name, [LON, LAT], D * 1.4, n, CATALOG_ACROSS) : undefined;
+    /*
+     * **The axis arrows at the catalog's own width.** Since 4.2.0 their width is the base's last
+     * point, and the library's sample layout sets it two fifths of the run out: right for the
+     * in-app sheet, several times the 500 m `width` these tiles were drawn at before. Their
+     * label is sized from the width, so it grew with the body while the run did not, overran
+     * the tail, and the tile shrank the arrow to fit the text. Restated here at `AMPLIFIERS.width`,
+     * the width this catalog chose, through the library's own writer. (Found regenerating the
+     * site catalog for 4.2.1.) @see axisWithWidthPoint
+     */
+    // Catalog only, for the same reason as `amplifiersFor`'s: the thumbnails read well as shipped.
+    if (!IS_THUMB && stated && carriesWidthPointInBase && axisWithWidthPoint && carriesWidthPointInBase(name)) {
+        return {type: 'LineString', coordinates: axisWithWidthPoint(name, stated.slice(0, -1), AMPLIFIERS.width / 2)};
+    }
     if (stated) return {type: 'LineString', coordinates: stated};
 
     if (carriesSeparationInBase && carriesSeparationInBase(name) && frontEdgeBase) {
@@ -716,6 +731,19 @@ function amplifiersFor(name, drop) {
         for (const field of TEXT_AMPLIFIERS) if (!keep.includes(field)) delete amp[field];
     }
 
+    /*
+     * **The axis arrows carry their width as their last coordinate** since 4.2.0, so the bag's
+     * `radius` and `width` are a second, disagreeing statement of it. Left in, the head was
+     * sized from the 900 m `radius` while the body followed the base, and the catalog drew a
+     * tiny main axis of advance and an avenue of approach with a head three times its body.
+     * The thumbnail profile never showed it. Found regenerating the site catalog for 4.2.1.
+     * @see carriesWidthPointInBase
+     */
+    // Catalog only: the thumbnails were drawn this way when they shipped and read well.
+    if (!IS_THUMB && carriesWidthPointInBase && carriesWidthPointInBase(name)) {
+        delete amp.radius;
+        delete amp.width;
+    }
     if (isRectangular && isRectangular(name)) amp.width = RECTANGLE_WIDTH_M;
     if (name === TacticalGraphicName.FordEasy || name === TacticalGraphicName.FordDifficult) amp.width = FORD_WIDTH_M;
     return amp;
