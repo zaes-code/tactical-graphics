@@ -17,6 +17,20 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **Roadblock complete (executed) is a demolition obstacle now, built and edited like the
+  three explosives states of readiness.** FM 1-02.2 lists it fourth in that group and APP-06
+  gives it 271201's centreline-and-width rule, so it is drawn with three clicks at any angle
+  and length: points 1 and 2 are the centreline, point 3 the width, and all three are grips.
+  Its first pair of bars is exactly the readiness states' pair, and the second is that pair
+  turned a quarter-turn about the midpoint. It used to be dropped at a fixed size and a
+  45 degree lean, with every grip inert. The width is held between
+  `ROADBLOCK_MIN_HALF_WIDTH_RATIO` and `ROADBLOCK_MAX_HALF_WIDTH_RATIO` of the centreline, so
+  the crossings reach at most halfway to the bar ends. Files saved with the old three points
+  open unchanged, since those points already meant centreline, centreline and side; a 3.4.0
+  file with one dropped point opens at its old size and angle.
+
+### Changed
+
 - **Every dash is sized to its graphic and capped at the planned dash.** A graphic at least
   160 px across on screen draws 12/8 px dashes and never more. A smaller one steps down through
   ¾, ½ and ¼ of that, and never goes solid: a planned line drawn solid would state the wrong

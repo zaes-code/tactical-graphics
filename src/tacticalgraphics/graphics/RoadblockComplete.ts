@@ -1,180 +1,144 @@
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {MovementGraphicOptions, TacticalGraphicName} from '../core/type';
 import {Feature, LineString, MultiLineString, MultiPoint, Position} from 'geojson';
+import geometryService from '../core/GeometryService';
 import * as turf from '../core/turf';
+import {halfWidthFromSide, sidePoint} from './ExplosivesReadiness';
 
 /**
- * Horizontal distance between the two crosses, as a fraction of a bar's span.
+ * The half-width point 3 may set, as a share of the centreline's length.
  *
- * Set from the plate's proportions rather than picked: at 45 degrees the symbol is
- * `span * cos45 + 2 * gap` wide and `span * sin45` tall, so its aspect ratio is
- * `1 + SEPARATION_RATIO / cos45`. The plate reads about 1.28 wide to tall, which puts the
- * ratio at 0.2 — the readiness states' 0.42 pushed the crosses far enough apart to read as
- * two separate X's rather than one overlapping symbol.
+ * **The ceiling keeps arms beyond the crossings.** The two pairs cross in a square `2w` on a
+ * side, centred on the centreline's midpoint, and each bar runs half the centreline's length
+ * either side of it. So the crossings reach the bar ends at `w = L / 2`, where the four bars
+ * close into a bare square. The user's call was to stop well short of that: at most halfway
+ * from the centre to the ends, `w <= L / 4`. (User's call, 2026-09-21.)
+ *
+ * **The floor keeps two crosses.** At no width each pair collapses onto one line and the
+ * symbol is a single X.
  */
-export const ROADBLOCK_SEPARATION_RATIO = 0.2;
-
-/** The bars lean at 45 degrees off the symbol's own axis. */
-const BAR_BEARING = 45;
+export const ROADBLOCK_MAX_HALF_WIDTH_RATIO = 0.25;
+export const ROADBLOCK_MIN_HALF_WIDTH_RATIO = 0.025;
 
 /**
- * The three anchor points 271204 stores, from the centre and span of a dropped symbol.
- *
- * **Points 1 and 2 are not on a stroke.** They are the two extremes of the symbol's own
- * 45-degree axis — the line running *between* the two parallel leaning bars — so their
- * midpoint is the centre of the whole figure and the distance between them is the span.
- * Point 3 is one of the two crossings, which sits off that axis by the half-separation.
- * (User's call, 2026-09-07, against a drawing of the three: *"point 1 and 2 are not on the
- * line but in between the 2"*.)
- *
- * That is what makes three points enough to rebuild the picture: the midpoint gives the
- * centre, the separation gives the span, and the offset to point 3 gives the gap. It also
- * matches what the plate reading established before the symbol was switched off — *PT 3 at
- * a crossing 48.5 px off the PT1–PT2 midpoint on the 460×460 raster* — since that offset is
- * exactly the half-separation. @see ai/excluded-graphics.md
+ * The half-width a 3.4.0 roadblock was dropped with, as a share of its span: a separation of
+ * a fifth of the span between the two crosses, measured level, which is `0.1 / sqrt(2)` across
+ * the bars. Used only to open a file saved as a single dropped point.
  */
-export function roadblockAnchors(center: Position, span: number, rotation = 0): Position[] {
-    return anchorsAtBearingOffset(center, span, -rotation);
+const LEGACY_HALF_WIDTH_RATIO = 0.1 / Math.SQRT2;
+
+/** `half` held between the floor and the ceiling for a centreline `length` long. */
+export function clampRoadblockHalfWidth(half: number, length: number): number {
+    return Math.min(length * ROADBLOCK_MAX_HALF_WIDTH_RATIO, Math.max(length * ROADBLOCK_MIN_HALF_WIDTH_RATIO, half));
+}
+
+const lengthOf = (ends: Position[]): number => turf.distance(turf.point(ends[0]), turf.point(ends[1]), {units: 'meters'});
+
+/**
+ * The three points with point 3 put back inside the limits, on the side it was dragged to.
+ *
+ * The drawing clamps the width whatever the base says, so this is what keeps a saved file
+ * agreeing with the picture: dragged far out, point 3 was stored 1.3 centrelines off while the
+ * symbol stopped at a quarter. (Found driving it, 2026-09-21.) @see clampRoadblockHalfWidth
+ */
+export function clampRoadblockBase(points: Position[]): Position[] {
+    if (points.length < 3) return points;
+    const length = lengthOf(points);
+    if (!(length > 0)) return points;
+    const half = halfWidthFromSide(points);
+    const clamped = clampRoadblockHalfWidth(half, length);
+    return clamped === half ? points : [points[0], points[1], sidePoint(points, undefined, clamped)];
 }
 
 /**
- * The same three points, from an offset in the **compass** frame this module works in.
- *
- * Everything inside here — `BAR_BEARING`, `frameOf`, the bars themselves — is written in
- * `turf.destination` bearings, which run clockwise from north. The schema's `rotation`
- * runs the other way, counter-clockwise from east, which is what `degrees()` produces for
- * every other member of the drawn-anchor family and what a renderer's rotate gesture adds
- * to. So the two exported functions negate at the boundary and nothing inside has to
- * change.
- *
- * **This was the last cross-engine gesture difference.** MapLibre turns a drawn graphic by
- * rotating its coordinates, so it took no notice; OpenLayers turns this one by advancing
- * `rotation` and rebuilding, so it spent a counter-clockwise drag as a clockwise bearing
- * and 271204 was the only graphic on the map that turned the wrong way. Measured against
- * its six siblings, a stated `rotation` of +30 moved its anchors -30 degrees where every
- * one of them moved +30. @see drawnAnchors, roadblockFrame
+ * The three points a roadblock saved by 3.4.0 as one dropped point stands for: a centreline
+ * running 45 degrees through it, `span` long, and a side point at the width it was drawn with.
  */
-function anchorsAtBearingOffset(center: Position, span: number, bearingOffset: number): Position[] {
-    const half = span / 2;
-    const gap = (span * ROADBLOCK_SEPARATION_RATIO) / 2;
-    const at = (metres: number, bearing: number): Position =>
-        turf.destination(turf.point(center), metres, bearing + bearingOffset, {units: 'meters'}).geometry.coordinates as Position;
-    // 270 is due west of the symbol's own axis: the crossings sit level with each other, as
-    // the bars require, and turn with it.
-    return [at(half, BAR_BEARING + 180), at(half, BAR_BEARING), at(gap, 270)];
-}
-
-/**
- * The centre and span a stored base describes — the inverse of {@link roadblockAnchors}.
- *
- * Exported because `drawnAnchorFrame` is how both engines read a stored base back into the
- * frame a gesture acts on, and a drop that cannot be read back cannot be resized.
- */
-export function roadblockFrame(coords: Position[] | undefined): {center: Position; size: number; rotation: number} | undefined {
-    const frame = coords && frameOf(coords);
-    // Negated on the way out for the reason `anchorsAtBearingOffset` gives: `frameOf`
-    // answers in compass bearings and the schema's `rotation` runs the other way.
-    return frame && {center: frame.center, size: frame.span, rotation: -frame.rotation};
-}
-
-/** The centre, span and half-separation a stored base describes. @see roadblockAnchors */
-function frameOf(coords: Position[]): {center: Position; span: number; gap: number; rotation: number} | undefined {
-    if (coords.length < 3) return undefined;
-    const [one, two, three] = coords;
-    const center = turf.midpoint(turf.point(one), turf.point(two)).geometry.coordinates as Position;
-    /*
-     * **Measured from the centre, because that is where the anchors were measured from.**
-     *
-     * Both readings below are the exact inverse of `roadblockAnchors`, which spokes each
-     * point out of the centre — and on a sphere that is not the same as reading point 1 to
-     * point 2. A great circle's bearing changes along its length, so an *unturned* symbol
-     * read end-to-end came back at −0.2 degrees and a span a hair short, and the picture
-     * drifted a little further on every pass: this graphic is rebuilt from its own base on
-     * each render, so a reader that is only nearly an inverse walks the symbol.
-     */
-    const rotation = turf.bearing(turf.point(center), turf.point(two)) - BAR_BEARING;
-    const span =
-        turf.distance(turf.point(center), turf.point(one), {units: 'meters'}) +
-        turf.distance(turf.point(center), turf.point(two), {units: 'meters'});
-    if (!(span > 0)) return undefined;
-    return {
-        center,
-        span,
-        rotation,
-        gap: turf.distance(turf.point(center), turf.point(three), {units: 'meters'}),
-    };
+function legacyBase(center: Position, span: number): Position[] {
+    const at = (m: number, bearing: number) =>
+        turf.destination(turf.point(center), m, bearing, {units: 'meters'}).geometry.coordinates as Position;
+    return [at(span / 2, 225), at(span / 2, 45), at(span * LEGACY_HALF_WIDTH_RATIO, 315)];
 }
 
 /**
  * Roadblock complete (executed) — FM 1-02.2 table 5-19, APP-06 271204.
  *
- * Two overlapping crosses: four bars, a leaning pair each way, displaced east and west so
- * the crosses sit side by side and share their middle. It is the explosives readiness pair
- * plus its mirror, drawn all solid, and it follows the same rules — dropped whole on one
- * click at a default size, resizable and turnable afterwards, affiliation only.
+ * **One of the demolition obstacles, built as they are.** FM 1-02.2 lists it fourth under
+ * *"Demolition Obstacle Symbol — obstacles created using explosives"*, after the three states
+ * of readiness; APP-06 puts it directly after 271201-271203 with an empty Draw Rules cell, so
+ * it takes 271201's: *"Points 1 and 2 determine the centreline of the symbol and point 3
+ * determines its width."* Its Template marks the points where theirs do. (User's call,
+ * 2026-09-21: *"they don't look from the same family and they should be"*.)
  *
- * **The picture is 3.4.0's exactly; what changed is what gets stored.** It used to file the
- * dropped point alone and derive everything from a `size` amplifier. It stores the three
- * anchor points the standard names now, so a file carries them and the operator can see
- * where they are — while none of them answers a drag, because 271204's own construction is
- * still unsettled and a grip on each would promise a shape the reading does not support.
- * @see roadblockAnchors, handlesAreInert, ai/excluded-graphics.md
+ * So the first pair of bars **is** the readiness states' pair, from the same centreline and
+ * side point, drawn solid. The second pair is that pair turned a quarter-turn about the
+ * centreline's midpoint, which is the doubled X the plate draws. Drawn with three clicks at
+ * any angle and length, and every point is a grip: the ends move the centreline and point 3
+ * sets the width, held between `ROADBLOCK_MIN_HALF_WIDTH_RATIO` and
+ * `ROADBLOCK_MAX_HALF_WIDTH_RATIO` of the centreline.
  *
- * Bars come out west-to-east within each lean, which is the order `BAR_SYMBOL_DASHES`
- * indexes. Nothing dashes here, but the ordering is what makes that table meaningful.
+ * It used to be dropped at a fixed size and a 45 degree lean, with its bars slid along their
+ * length so their ends sat level, which is what made it read as a different family.
+ *
+ * Bars come out `[left, right]` for the first pair, then the second, the order
+ * `BAR_SYMBOL_DASHES` indexes. Nothing dashes here.
  */
 export class RoadblockComplete extends TacticalGraphicsBase<MovementGraphicOptions> {
     name: string = TacticalGraphicName.RoadblockCompleteExecuted;
     type: string = 'LineString';
 
-    /**
-     * The four bars: both west-leaning first, then both east-leaning.
-     *
-     * Displaced east and west rather than perpendicular to each bar's own bearing. A
-     * perpendicular offset slides the second bar *along* its lean, so the two crosses would
-     * sit diagonally apart instead of level — the same trap the readiness states hit.
-     */
-    private bars(base: Feature<LineString>, opts?: MovementGraphicOptions): Position[][] {
-        const frame = frameOf(base.geometry.coordinates as Position[]);
-        // A base saved before the anchor points, or a one-point sketch mid-drop, still has a
-        // centre and a size to draw from.
+    /** The three points, whatever shape of base they arrived in. */
+    private points(base: Feature<LineString>, opts?: MovementGraphicOptions): Position[] {
         const coords = base.geometry.coordinates as Position[];
-        const center = frame?.center ?? coords[0];
-        const span = frame?.span ?? Math.max(opts?.radius ?? opts?.size ?? 1, 1);
-        const gap = frame?.gap ?? (span * ROADBLOCK_SEPARATION_RATIO) / 2;
-        const half = span / 2;
+        // A single point is a 3.4.0 drop: its centre, with the span in `size`.
+        if (coords.length === 1) return legacyBase(coords[0], Math.max(opts?.size ?? opts?.radius ?? 1, 1));
+        return coords;
+    }
 
-        // Every bearing is relative to the symbol's own axis, so the whole figure turns
-        // together — the crossings stay level with each other and the leans stay square.
-        const turn = frame?.rotation ?? 0;
-        const bar = (bearingToAnchor: number, lean: number): Position[] => {
-            const anchor = turf.destination(turf.point(center), gap, bearingToAnchor + turn, {units: 'meters'});
-            return [
-                turf.destination(anchor, half, lean + turn + 180, {units: 'meters'}).geometry.coordinates as Position,
-                turf.destination(anchor, half, lean + turn, {units: 'meters'}).geometry.coordinates as Position,
-            ];
-        };
-        return [bar(270, BAR_BEARING), bar(90, BAR_BEARING), bar(270, -BAR_BEARING), bar(90, -BAR_BEARING)];
+    /** The half-width, clamped. @see clampRoadblockHalfWidth */
+    private halfWidth(points: Position[], opts?: MovementGraphicOptions): number {
+        const length = lengthOf(points);
+        const stated = points.length >= 3 ? halfWidthFromSide(points, opts) : opts?.radius ?? length * LEGACY_HALF_WIDTH_RATIO;
+        return clampRoadblockHalfWidth(stated, length);
+    }
+
+    /** The four bars: the readiness states' pair, then the same pair turned a quarter. */
+    private bars(points: Position[], opts?: MovementGraphicOptions): Position[][] {
+        const ends = [points[0], points[1]];
+        const length = lengthOf(ends);
+        if (!(length > 0)) return [];
+        const half = this.halfWidth(points, opts);
+
+        const axis = turf.bearing(turf.point(ends[0]), turf.point(ends[1]));
+        const middle = turf.destination(turf.point(ends[0]), length / 2, axis, {units: 'meters'});
+        const across = [
+            turf.destination(middle, length / 2, axis - 90, {units: 'meters'}).geometry.coordinates as Position,
+            turf.destination(middle, length / 2, axis + 90, {units: 'meters'}).geometry.coordinates as Position,
+        ];
+        const pair = (line: Position[]) => [
+            geometryService.computeParallelLineString(line, half) as Position[],
+            geometryService.computeParallelLineString(line, -half) as Position[],
+        ];
+        return [...pair(ends), ...pair(across)];
     }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
-        if (base.geometry.coordinates.length < 1) return this.asMultiLineStringFeature([]);
-        return this.asMultiLineStringFeature(this.bars(base, opts));
+        const points = this.points(base, opts);
+        // Mid-draw the interaction hands over a one-point sketch on every pointer move.
+        if (points.length < 2) return this.asMultiLineStringFeature([]);
+        return this.asMultiLineStringFeature(this.bars(points, opts));
     }
 
     /**
-     * The three stored points, every one of them inert.
-     *
-     * Published so the operator can see the symbol's anchors; none answers a drag, because
-     * the whole graphic moves, turns and scales instead. @see handlesAreInert
+     * `[start, end, side]`, all three grips, as the readiness states publish them. The side
+     * grip sits square off the centreline's midpoint at the clamped width, on the first bar.
+     * @see sidePoint
      */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const coords = base.geometry.coordinates as Position[];
-        if (coords.length >= 3) return this.asMultiPointFeature(coords.slice(0, 3));
-        const frame = frameOf(coords);
-        const span = frame?.span ?? Math.max(opts?.radius ?? opts?.size ?? 1, 1);
-        // `frameOf` answers in compass bearings, so this takes the internal door.
-        return this.asMultiPointFeature(anchorsAtBearingOffset(coords[0] ?? [0, 0], span, frame?.rotation ?? 0));
+        const points = this.points(base, opts);
+        if (points.length < 2) return this.asMultiPointFeature(points);
+        const half = this.halfWidth(points, opts);
+        return this.asMultiPointFeature([points[0], points[1], sidePoint(points, opts, half)]);
     }
 
     /** No amplifiers: affiliation and nothing else. */
