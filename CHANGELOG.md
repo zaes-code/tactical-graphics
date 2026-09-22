@@ -15,6 +15,10 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+---
+
+## [4.2.2] — 2026-09-21
+
 ### Fixed
 
 - **OpenLayers ended a three-point draw at two points.** Its `Draw` interaction finished any
@@ -1523,7 +1527,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...develop
+[4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
 [4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1
