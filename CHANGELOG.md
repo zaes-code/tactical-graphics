@@ -15,6 +15,23 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Fixed
+
+- **OpenLayers ended a three-point draw at two points.** Its `Draw` interaction finished any
+  line on a double-click once it had two, so roadblock complete and the three explosives
+  states of readiness could be saved with two points, and their side grip then had no vertex
+  to move. MapLibre always waited for the third click. Both engines now ask one rule,
+  `drawIsComplete`, so every graphic finishes at the same click on both.
+- **Files already saved that way are repaired when they load.** A demolition obstacle with two
+  points gets its third, square off the centreline's midpoint at a tenth of its length, on
+  either engine and whatever the file's version (`completeDemolitionBase`).
+- **The README listed roadblock complete (executed) as upcoming.** Its tracker row still
+  carried an old exclusion; it is listed as supported now, and appears in the sample gallery.
+
+### Added
+
+- `drawIsComplete` and `completeDemolitionBase`.
+
 ---
 
 ## [4.2.1] — 2026-09-21
