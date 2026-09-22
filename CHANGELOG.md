@@ -15,6 +15,10 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+---
+
+## [4.2.1] — 2026-09-21
+
 ### Changed
 
 - **Roadblock complete (executed) is a demolition obstacle now, built and edited like the
@@ -28,9 +32,6 @@ the npm publish dates — when a version actually became installable.
   the crossings reach at most halfway to the bar ends. Files saved with the old three points
   open unchanged, since those points already meant centreline, centreline and side; a 3.4.0
   file with one dropped point opens at its old size and angle.
-
-### Changed
-
 - **Every dash is sized to its graphic and capped at the planned dash.** A graphic at least
   160 px across on screen draws 12/8 px dashes and never more. A smaller one steps down through
   ¾, ½ and ¼ of that, and never goes solid: a planned line drawn solid would state the wrong
@@ -53,6 +54,10 @@ the npm publish dates — when a version actually became installable.
 
 - `withFittedDashes`, `dashScale`, `fitDash`, `strokedExtentPx`, `strokeParts`, `DASH_CAP_PX`,
   `DASH_FULL_SIZE_PX`, `DASH_SCALE_STEPS`, `DASHED_PARTS` and `dashedPartsOf`.
+- `StrokeSpec.dashSized`, for a mark that sizes its own dash: `withFittedDashes` caps it and
+  leaves it otherwise alone.
+- `ROADBLOCK_MIN_HALF_WIDTH_RATIO`, `ROADBLOCK_MAX_HALF_WIDTH_RATIO` and
+  `clampRoadblockHalfWidth`.
 
 ### Fixed
 
@@ -1501,7 +1506,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...develop
+[4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...v4.1.0
