@@ -20,6 +20,7 @@ import {
     raftSitePaint,
     tripWirePaint,
 } from './protectionLinePaints';
+import {DASH_SCALE_STEPS, PLANNED_DASH_PX, fitDash, withFittedDashes} from './dashFit';
 
 const context = (resolution = 40): PaintContext => ({
     resolution,
@@ -465,5 +466,116 @@ describe('APP-06 291000 — fortified position', () => {
         const fine = Math.abs(bracket(20)[0][1]);
         const coarse = Math.abs(bracket(40)[0][1]);
         expect(coarse).toBeCloseTo(fine * 2, 6);
+    });
+});
+
+/**
+ * The mine cluster glyph dashes against its own size, not the line's (user's report,
+ * 2026-09-21). Sized against the whole mineline it took the full 12/8 dash, and a dome about
+ * 20 px wide carried a dash and a half: a broken arc, not a dashed one.
+ */
+describe('APP-06 290101 — a mineline of mine clusters', () => {
+    const domes = (resolution: number) =>
+        withFittedDashes(
+            minelinePaint(TacticalGraphicName.Mineline)(
+                feature(TacticalGraphicName.Mineline, EAST, {mineType: TacticalGraphicMineType.mineCluster}),
+                context(resolution),
+            ),
+            context(resolution),
+        ).filter(p => p.stroke?.dashSized);
+
+    it('puts several dashes on every dome, at any zoom the line draws mines at', () => {
+        for (const resolution of [10, 40, 150]) {
+            const marks = domes(resolution);
+            expect(marks.length).toBeGreaterThan(0);
+            for (const mark of marks) {
+                const [dome] = (mark.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+                let arcPx = 0;
+                for (let i = 1; i < dome.length; i++) arcPx += Math.hypot(dome[i][0] - dome[i - 1][0], dome[i][1] - dome[i - 1][1]) / resolution;
+                const period = mark.stroke!.dashPx!.reduce((a, b) => a + b, 0);
+                expect(arcPx / period).toBeGreaterThanOrEqual(4);
+            }
+        }
+    });
+
+    it('keeps the dash to one of the stepped patterns, so MapLibre keeps one layer per step', () => {
+        const allowed = DASH_SCALE_STEPS.map(s => JSON.stringify(fitDash(PLANNED_DASH_PX, s)));
+        for (const resolution of [7, 23, 40, 97, 150]) {
+            const marks = domes(resolution);
+            expect(marks.length).toBeGreaterThan(0);
+            for (const mark of marks) expect(allowed).toContain(JSON.stringify(mark.stroke!.dashPx));
+        }
+    });
+
+    it('is not shrunk a second time by the fit for the whole line', () => {
+        const raw = minelinePaint(TacticalGraphicName.Mineline)(
+            feature(TacticalGraphicName.Mineline, [[0, 0], [2_000, 0]], {mineType: TacticalGraphicMineType.mineCluster}),
+            context(40),
+        ).filter(p => p.stroke?.dashSized);
+        expect(raw.length).toBeGreaterThan(0);
+        const fitted = withFittedDashes(raw, context(40));
+        expect(fitted.map(p => p.stroke!.dashPx)).toEqual(raw.map(p => p.stroke!.dashPx));
+    });
+});
+
+/**
+ * The mineline's glyphs follow the line, and the directional mine's arrow points across it
+ * (user's call, 2026-09-21). Upright glyphs on a vertical line laid the antihandling stem on
+ * the line itself, where it vanished. @see MineGlyphFrame
+ */
+describe('APP-06 290101 — a mineline turns its mines to the line', () => {
+    const glyphMarks = (coordinates: ProjectedPosition[], mineType: TacticalGraphicMineType) =>
+        minelinePaint(TacticalGraphicName.Mineline)(feature(TacticalGraphicName.Mineline, coordinates, {mineType}), context(40))
+            .slice(1)
+            .filter(p => !p.text);
+
+    /** The disc centres, from the filled discs' rings. */
+    const discCentres = (marks: Paint[]) =>
+        marks
+            .filter(p => p.geometry.type === 'Polygon' && (p.geometry.coordinates[0] as ProjectedPosition[]).length > 10)
+            .map(p => {
+                const ring = p.geometry.coordinates[0] as ProjectedPosition[];
+                return [ring.reduce((s, q) => s + q[0], 0) / ring.length, ring.reduce((s, q) => s + q[1], 0) / ring.length];
+            });
+
+    it('hangs the antihandling stem off the line, to its right, however the line runs', () => {
+        // Drawn north: right is east. Drawn south: right is west.
+        for (const [coordinates, rightSign] of [
+            [[[0, 0], [0, 40_000]], 1],
+            [[[0, 40_000], [0, 0]], -1],
+        ] as const) {
+            const stems = glyphMarks(coordinates as unknown as ProjectedPosition[], TacticalGraphicMineType.antitankAntihandling).filter(
+                p => p.geometry.type === 'LineString',
+            );
+            expect(stems.length).toBeGreaterThan(2);
+            for (const stem of stems) {
+                const [start, knee] = stem.geometry.coordinates as ProjectedPosition[];
+                // Perpendicular to a vertical line: it runs east or west, not along the line.
+                expect(Math.abs(knee[0] - start[0])).toBeGreaterThan(Math.abs(knee[1] - start[1]) * 5);
+                expect(Math.sign(knee[0] - start[0])).toBe(rightSign);
+            }
+        }
+    });
+
+    it('points the directional arrow across the line, to its right, with the antennae on the left', () => {
+        for (const [coordinates, rightSign] of [
+            [[[0, 0], [40_000, 0]], -1], // drawn east: right is south
+            [[[40_000, 0], [0, 0]], 1], // drawn west: right is north
+        ] as const) {
+            const marks = glyphMarks(coordinates as unknown as ProjectedPosition[], TacticalGraphicMineType.antipersonnelDirectional);
+            const centres = discCentres(marks);
+            const heads = marks.filter(p => p.geometry.type === 'Polygon' && (p.geometry.coordinates[0] as ProjectedPosition[]).length === 4);
+            expect(heads.length).toBe(centres.length);
+            heads.forEach((head, i) => {
+                const tip = (head.geometry.coordinates[0] as ProjectedPosition[])[1];
+                const [cx, cy] = centres[i];
+                expect(Math.abs(tip[0] - cx)).toBeLessThan(Math.abs(tip[1] - cy) / 5);
+                expect(Math.sign(tip[1] - cy)).toBe(rightSign);
+            });
+            const antennae = marks.filter(p => p.geometry.type === 'MultiLineString');
+            for (const pair of antennae) {
+                for (const line of pair.geometry.coordinates as ProjectedPosition[][]) expect(Math.sign(line[1][1] - line[0][1])).toBe(-rightSign);
+            }
+        }
     });
 });

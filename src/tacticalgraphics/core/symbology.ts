@@ -1162,10 +1162,11 @@ const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.MovingConvoy,
     TacticalGraphicName.HaltedConvoy,
 
-    // The demolition bar symbols — APP-06 271201's centreline and width.
+    // The demolition bar symbols — APP-06 271201's centreline and width, roadblock included.
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
 ]);
 
 /** @see ANCHOR_CONNECTOR_GRAPHICS */
@@ -1187,6 +1188,7 @@ const SIDE_POINT_AFTER_RUN = new Set<TacticalGraphicName>([
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
 ]);
 
 /**
@@ -1290,15 +1292,6 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     // symbol was fixed and the operator placed only its position. 343300 names four anchor
     // points and each is placed now, so the draw takes four clicks and finishes on the last.
     // @see Demonstration, BASE_VERTEX_COUNT
-    // **Roadblock complete is not dropped either, as of 2026-09-05**, for the same reason
-    // and with the same consequence: 271204's plate letters three anchor points and its
-    // inherited rule gives it a centreline, so the draw waits for the second click rather
-    // than finishing on the first. It sat here at 100 px — twice the crossed tasks', which
-    // was only the number it was specified from rather than a size it landed on.
-    // Twice the crossed tasks', which was only the number these were specified from
-    // rather than the size they landed on. 271204 is dropped on one click and expands to
-    // the three anchor points its plate names. @see roadblockAnchors
-    [TacticalGraphicName.RoadblockCompleteExecuted]: 100,
     // The security operations are **not dropped** as of 2026-08-29: the operator draws one
     // arrow and the other is derived, so there is no one-click size to state. Removing
     // them from here is what tells a renderer to wait for the second point instead of
@@ -1461,9 +1454,6 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * (User's call, 2026-09-06.) @see firePositionAnchors
      */
     [TacticalGraphicName.AttackByFire]: 3,
-    // 271204 is dropped whole on one click and expands to the three points it stores.
-    // @see roadblockAnchors
-    [TacticalGraphicName.RoadblockCompleteExecuted]: 1,
     /*
      * **Named even though it equals its stored count**, which this table usually omits. The
      * reader previews a two-click sketch as four points now, and MapLibre asks the

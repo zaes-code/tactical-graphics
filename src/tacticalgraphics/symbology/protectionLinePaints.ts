@@ -132,7 +132,7 @@ function minelineMines(
     path: ProjectedPosition[],
     resolution: number,
     type: TacticalGraphicMineType,
-): {centers: ProjectedPosition[]; radius: number; gaps: {at: number; halfGap: number}[]} | undefined {
+): {centers: ProjectedPosition[]; tangents: ProjectedPosition[]; radius: number; gaps: {at: number; halfGap: number}[]} | undefined {
     const availablePx = pathLength(path) / resolution;
     const scale = Math.max(0, Math.min(1, (availablePx * MINELINE_MINE_SHARE) / MINELINE_MINE_PX));
     if (MINELINE_MINE_PX * scale < DECORATION_MIN_PX) return undefined;
@@ -141,7 +141,8 @@ function minelineMines(
     if (radius <= 0) return undefined;
 
     const gap = MINE_GLYPH_GAP_PX * resolution;
-    const pitch = mineGlyphPitch(type, radius, gap);
+    // Measured along the line in the glyph's own frame, arrow across. @see MineGlyphFrame
+    const pitch = mineGlyphPitch(type, radius, gap, true);
     const total = pathLength(path);
     const count = Math.floor(total / pitch);
     if (count < 1) return undefined;
@@ -149,19 +150,21 @@ function minelineMines(
     // Half a pitch in from each end of the centred run, so the first and last mine sit
     // *on* the line rather than hanging off it.
     const lead = (total - (count - 1) * pitch) / 2;
-    const extent = mineGlyphExtent(type);
+    const extent = mineGlyphExtent(type, true);
     const centers: ProjectedPosition[] = [];
+    const tangents: ProjectedPosition[] = [];
     const gaps: {at: number; halfGap: number}[] = [];
     for (let i = 0; i < count; i++) {
         const along = lead + i * pitch;
         const at = walkPath(path, along);
         if (!at) continue;
         centers.push(at.point);
+        tangents.push(at.tangent);
         // Cut the line to the glyph's own reach, so a hollow disc reads hollow instead of
         // wearing the stroke as a diameter. (User's call, 2026-08-27.)
         gaps.push({at: along, halfGap: Math.max(extent.left, extent.right) * radius});
     }
-    return centers.length ? {centers, radius, gaps} : undefined;
+    return centers.length ? {centers, tangents, radius, gaps} : undefined;
 }
 
 /**
@@ -200,9 +203,11 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         const paints: Paint[] = [{geometry: {type: 'MultiLineString', coordinates: runs}, stroke}];
 
         if (mines) {
-            for (const center of mines.centers) {
-                paints.push(...mineGlyph(center, mines.radius, type, color));
-            }
+            // Each mine turned to the line where it sits, its arrow (if any) across it.
+            // @see MineGlyphFrame
+            mines.centers.forEach((center, i) => {
+                paints.push(...mineGlyph(center, mines.radius, type, color, context.resolution, {along: mines.tangents[i], arrowAcross: true}));
+            });
         }
 
         // **`N` is a placeholder, not a letter.** The Template's box says *where the

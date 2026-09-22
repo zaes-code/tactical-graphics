@@ -15,6 +15,8 @@ import {
     minedAreaPaint,
     minedAreaFencedPaint,
     minefieldAreaPaint,
+    mineGlyph,
+    mineGlyphExtent,
     mineRowMarks,
 } from './minePaints';
 
@@ -124,26 +126,27 @@ describe('APP-06 Table 8-24 — the mine-type icons', () => {
  * default, so nothing said so. @see MINE_GLYPH_EXTENT
  */
 describe('APP-06 Table 8-24 — a row of any type clears itself', () => {
-    /** The horizontal extents of each glyph in a row, merged from its own marks. */
+    /**
+     * The horizontal extent of each glyph in a row of three.
+     *
+     * Grouped by position in the list, not by touching: every glyph in a row emits the same
+     * marks, and the directional mine's arrow is **broken** before its head, as APP-06 draws
+     * it, so its head does not touch its own disc and merging touching spans counted it as a
+     * fourth glyph. @see DIRECTIONAL_ARROW
+     */
     const glyphSpans = (marks: Paint[]): [number, number][] => {
-        const spans = marks.map(mark => {
+        const per = marks.length / 3;
+        expect(Number.isInteger(per)).toBe(true);
+        return [0, 1, 2].map(g => {
             const xs: number[] = [];
             const walk = (value: unknown): void => {
                 if (!Array.isArray(value)) return;
                 if (typeof value[0] === 'number') return void xs.push(value[0] as number);
                 value.forEach(walk);
             };
-            walk((mark.geometry as {coordinates: unknown}).coordinates);
+            marks.slice(g * per, (g + 1) * per).forEach(mark => walk((mark.geometry as {coordinates: unknown}).coordinates));
             return [Math.min(...xs), Math.max(...xs)] as [number, number];
         }).sort((a, b) => a[0] - b[0]);
-
-        const merged: [number, number][] = [[spans[0][0], spans[0][1]]];
-        for (const [lo, hi] of spans.slice(1)) {
-            const last = merged[merged.length - 1];
-            if (lo <= last[1] + 1) last[1] = Math.max(last[1], hi);
-            else merged.push([lo, hi]);
-        }
-        return merged;
     };
 
     it.each(ALL.map(t => [String(t), t] as const))('%s', (_label, type) => {
@@ -537,5 +540,47 @@ describe('APP-06 270801 — the fence marks are sized to the area', () => {
                 expect(Math.hypot(mid[0] - corner[0], mid[1] - corner[1])).toBeGreaterThanOrEqual(halfSpan - 1e-6);
             }
         }
+    });
+});
+
+/**
+ * The directional mine's arrow as APP-06 Table 8-24 draws it (user's call, 2026-09-21): a
+ * solid shaft from the disc to 1.5 radii, a break, and a small filled head from 1.74 to 2.1.
+ * It was a solid shaft to 2.2 under an open chevron. Inside an area it points right, upright,
+ * as the table draws the row.
+ */
+describe('APP-06 Table 8-24 — the directional mine arrow', () => {
+    const R = 1000;
+    const marks = mineGlyph([0, 0], R, TacticalGraphicMineType.antipersonnelDirectional, '#000');
+
+    it('is a shaft, a break, then a filled head, pointing right', () => {
+        const shaft = marks.find(p => p.geometry.type === 'LineString')!;
+        const [a, b] = shaft.geometry.coordinates as [number, number][];
+        expect(a[0] / R).toBeCloseTo(1, 5);
+        expect(b[0] / R).toBeCloseTo(1.5, 5);
+        expect(a[1]).toBeCloseTo(0, 5);
+
+        const head = marks.find(p => p.geometry.type === 'Polygon' && (p.geometry.coordinates[0] as unknown[]).length === 4)!;
+        expect(head.fill).toBeDefined();
+        expect(head.stroke).toBeUndefined();
+        const ring = head.geometry.coordinates[0] as [number, number][];
+        expect(Math.min(...ring.map(q => q[0])) / R).toBeCloseTo(1.74, 5);
+        expect(Math.max(...ring.map(q => q[0])) / R).toBeCloseTo(2.1, 5);
+        expect(Math.max(...ring.map(q => q[1])) / R).toBeCloseTo(0.19, 5);
+        // The break: the head starts past where the shaft ends.
+        expect(Math.min(...ring.map(q => q[0]))).toBeGreaterThan(b[0]);
+    });
+
+    it('reaches as far as the extent table says, so rows stay clear', () => {
+        const xs = marks.flatMap(p => {
+            const out: number[] = [];
+            (function walk(n: unknown): void {
+                if (!Array.isArray(n)) return;
+                if (typeof n[0] === 'number') out.push(n[0] as number);
+                else n.forEach(walk);
+            })((p.geometry as {coordinates: unknown}).coordinates);
+            return out;
+        });
+        expect(Math.max(...xs) / R).toBeCloseTo(mineGlyphExtent(TacticalGraphicMineType.antipersonnelDirectional).right, 5);
     });
 });

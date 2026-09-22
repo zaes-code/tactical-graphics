@@ -37,6 +37,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicMineType} from '../core/type';
 import {PLANNED_DASH_PX, amplifierText, hostilityOf, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+import {dashScale, fitDash} from './dashFit';
 import {DECORATION_MIN_PX, centredRun, decorationScale, splitAtCorners} from './decorations';
 import {fitSymbolScale} from './symbolFit';
 
@@ -63,19 +64,38 @@ export const MINE_GLYPH_GAP_PX = 10;
  * Read by every caller that lays glyphs out — the row inside an area and the string along
  * a mineline — so that "no two overlap" is one fact rather than two guesses.
  */
+/**
+ * The directional mine's arrow, in disc radii from the centre, measured off APP-06 Table 8-24
+ * (sector 1 modifier 15) at 600 dpi: a solid shaft from the disc's edge to 1.5, a break, then
+ * a small **filled** head from 1.74 to its tip at 2.1, 0.19 either side of the axis.
+ *
+ * It was a solid shaft to 2.2 under an open chevron, which is neither publication's drawing:
+ * FM 1-02.2 draws the shaft dashed, APP-06 draws it broken before a filled head. The
+ * mineline is APP-06 only, so APP-06 decides. (User's call, 2026-09-21.)
+ */
+const DIRECTIONAL_ARROW = {shaftStart: 1, shaftEnd: 1.5, headBase: 1.74, tip: 2.1, headHalf: 0.19};
+
 const MINE_GLYPH_EXTENT: Record<TacticalGraphicMineType, {left: number; right: number; top: number; bottom: number}> = {
     [TacticalGraphicMineType.unspecified]: {left: 1, right: 1, top: 1, bottom: 1},
     [TacticalGraphicMineType.antipersonnel]: {left: 1.5, right: 1.5, top: 2.2, bottom: 1},
-    [TacticalGraphicMineType.antipersonnelDirectional]: {left: 1.5, right: 2.2, top: 2.2, bottom: 1},
+    [TacticalGraphicMineType.antipersonnelDirectional]: {left: 1.5, right: DIRECTIONAL_ARROW.tip, top: 2.2, bottom: 1},
     [TacticalGraphicMineType.antitank]: {left: 1, right: 1, top: 1, bottom: 1},
     [TacticalGraphicMineType.antitankAntihandling]: {left: 1, right: 1, top: 1, bottom: 2.2},
     [TacticalGraphicMineType.wideAreaAntitank]: {left: 1.2, right: 1.2, top: 1, bottom: 2},
     [TacticalGraphicMineType.mineCluster]: {left: 1.2, right: 1.2, top: 1.2, bottom: 0.2},
 };
 
-/** @see MINE_GLYPH_EXTENT */
-export function mineGlyphExtent(type: TacticalGraphicMineType) {
-    return MINE_GLYPH_EXTENT[type] ?? MINE_GLYPH_EXTENT[TacticalGraphicMineType.unspecified];
+/**
+ * The glyph's reach, in its own frame. With `arrowAcross` the directional mine's arrow points
+ * down (across a mineline, to its right) rather than to the right, so it reaches below the
+ * disc instead of beside it. @see MineGlyphFrame
+ */
+export function mineGlyphExtent(type: TacticalGraphicMineType, arrowAcross = false) {
+    const extent = MINE_GLYPH_EXTENT[type] ?? MINE_GLYPH_EXTENT[TacticalGraphicMineType.unspecified];
+    if (arrowAcross && type === TacticalGraphicMineType.antipersonnelDirectional) {
+        return {left: 1.5, right: 1.5, top: extent.top, bottom: DIRECTIONAL_ARROW.tip};
+    }
+    return extent;
 }
 
 /**
@@ -84,8 +104,8 @@ export function mineGlyphExtent(type: TacticalGraphicMineType) {
  * The glyph's own width plus the clear space asked for, so the gap between two of them is
  * what it says whichever of the seven is drawn.
  */
-export function mineGlyphPitch(type: TacticalGraphicMineType, radius: number, gap: number): number {
-    const {left, right} = mineGlyphExtent(type);
+export function mineGlyphPitch(type: TacticalGraphicMineType, radius: number, gap: number, arrowAcross = false): number {
+    const {left, right} = mineGlyphExtent(type, arrowAcross);
     return (left + right) * radius + gap;
 }
 
@@ -97,6 +117,51 @@ function disc(at: ProjectedPosition, radius: number): ProjectedPosition[] {
         ring.push([at[0] + Math.cos(t) * radius, at[1] + Math.sin(t) * radius]);
     }
     return ring;
+}
+
+/**
+ * How a glyph sits on a line, for the mineline. @see mineGlyph
+ *
+ * **Aligned with the line, its "up" to the left of the drawing direction.** Upright glyphs on a
+ * steep line put the antihandling mine's stem on the line itself, where it vanished and the
+ * glyph read as a plain antitank mine, and turned the antennae and arrows to fixed screen
+ * directions whatever way the line ran. Every other repeating decoration along a line follows
+ * it. Neither publication rules on this: 290101's Example draws plain discs, which show no
+ * rotation. (User's call, 2026-09-21.)
+ *
+ * **`arrowAcross` points the directional mine's arrow across the line, to its right**, the
+ * side this library puts an ambiguous mark on, opposite the antennae. Along the line it would
+ * say nothing about which way the charge faces. (User's call, 2026-09-21.)
+ */
+export interface MineGlyphFrame {
+    /** Unit vector along the line at the glyph, in the drawing direction. */
+    along: ProjectedPosition;
+    arrowAcross?: boolean;
+}
+
+/**
+ * A glyph radius, in screen pixels, times this gives the `dashScale` input that puts about
+ * six dashes on the mine cluster's dome.
+ *
+ * The dome's arc is `1.2 * PI` radii, so six periods of the planned pattern (20 px at full
+ * size) need a radius of about 32 px. `dashScale` is full size at 160, and 160 / 32 is 5.
+ * A mineline glyph is at most 9 px in radius and comes out at the 3/2 floor, seven or eight
+ * dashes on the dome; a mine area zoomed in draws the full pattern.
+ */
+const CLUSTER_DASH_PER_RADIUS_PX = 5;
+
+/**
+ * The mine cluster glyph's dash, sized to the glyph rather than to the graphic it sits in.
+ *
+ * Sized against the graphic, a mineline's cluster domes took the line's full 12/8 dash: a
+ * dome 20 px wide carried a dash and a half, and read as a broken arc rather than a dashed
+ * one (user's report, 2026-09-21). Without a resolution there is no screen size to go on,
+ * and it falls back to the planned dash for the graphic-wide fit to size. @see dashSized
+ */
+function clusterDash(radius: number, resolution?: number): {dashPx: number[]; dashSized?: boolean} {
+    if (!(resolution && resolution > 0)) return {dashPx: [...PLANNED_DASH_PX]};
+    const scale = dashScale((radius / resolution) * CLUSTER_DASH_PER_RADIUS_PX);
+    return {dashPx: fitDash(PLANNED_DASH_PX, scale), dashSized: true};
 }
 
 /**
@@ -114,8 +179,16 @@ export function mineGlyph(
     radius: number,
     type: TacticalGraphicMineType,
     color: string,
+    resolution?: number,
+    frame?: MineGlyphFrame,
 ): Paint[] {
-    const p = (dx: number, dy: number): ProjectedPosition => [at[0] + dx * radius, at[1] + dy * radius];
+    // The glyph's own x runs along `frame.along` and its y to the left of it; with no frame,
+    // along the map's axes, which is how a row sits inside an area.
+    const [ux, uy] = frame?.along ?? [1, 0];
+    const p = (dx: number, dy: number): ProjectedPosition => [
+        at[0] + (dx * ux - dy * uy) * radius,
+        at[1] + (dx * uy + dy * ux) * radius,
+    ];
     const stroke = {color, widthPx: LINE_WIDTH()};
     const paints: Paint[] = [];
 
@@ -128,7 +201,7 @@ export function mineGlyph(
         }
         return [{
             geometry: {type: 'MultiLineString', coordinates: [dome, [p(-1.2, 0), p(1.2, 0)]]},
-            stroke: {...stroke, dashPx: PLANNED_DASH_PX},
+            stroke: {...stroke, ...clusterDash(radius, resolution)},
         }];
     }
 
@@ -151,13 +224,15 @@ export function mineGlyph(
     }
 
     if (type === TacticalGraphicMineType.antipersonnelDirectional) {
-        // The arrow that says which way the charge faces, on the disc's own axis.
+        // The arrow that says which way the charge faces: to the right on the disc's own
+        // axis, or down (across a mineline) when the frame says so. @see DIRECTIONAL_ARROW
+        const [dx, dy] = frame?.arrowAcross ? [0, -1] : [1, 0];
+        const a = (along: number, side = 0) => p(dx * along - dy * side, dy * along + dx * side);
+        const {shaftStart, shaftEnd, headBase, tip, headHalf} = DIRECTIONAL_ARROW;
+        paints.push({geometry: {type: 'LineString', coordinates: [a(shaftStart), a(shaftEnd)]}, stroke});
         paints.push({
-            geometry: {type: 'MultiLineString', coordinates: [
-                [p(1.0, 0), p(2.2, 0)],
-                [p(1.7, 0.4), p(2.2, 0), p(1.7, -0.4)],
-            ]},
-            stroke,
+            geometry: {type: 'Polygon', coordinates: [[a(headBase, headHalf), a(tip), a(headBase, -headHalf), a(headBase, headHalf)]]},
+            fill: {color},
         });
     }
 
@@ -186,13 +261,14 @@ export function mineRowMarks(
     type: TacticalGraphicMineType,
     color: string,
     gap = 0,
+    resolution?: number,
 ): Paint[] {
     const radius = DISC_RADIUS * scale;
     const pitch = mineGlyphPitch(type, radius, gap);
     const paints: Paint[] = [];
     for (let i = 0; i < SLOTS; i++) {
         const x = at[0] + (i - (SLOTS - 1) / 2) * pitch;
-        paints.push(...mineGlyph([x, at[1]], radius, type, color));
+        paints.push(...mineGlyph([x, at[1]], radius, type, color, resolution));
     }
     return paints;
 }
@@ -300,7 +376,7 @@ export function mineFillPaint(): MinePaint {
         const glyphGap = MINE_GLYPH_GAP_PX * context.resolution;
         const room = rowHalfExtent(type, glyphGap);
         const scale = fitSymbolScale(feature, center, room.width, room.height, []) * INSET;
-        const paints = mineRowMarks(center, scale, type, color, glyphGap * scale);
+        const paints = mineRowMarks(center, scale, type, color, glyphGap * scale, context.resolution);
 
         const textScale = scaleOf(feature, context);
         const gap = AREA_TEXT_GAP_PX * textScale * context.resolution;

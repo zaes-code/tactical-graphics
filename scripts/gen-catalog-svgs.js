@@ -120,6 +120,7 @@ const {
     listTacticalGraphicNames,
     renderTacticalGraphic,
     getPaintFunction,
+    withFittedDashes,
     isPaintable,
     baseGeometryFor,
     baseVertexCount,
@@ -774,7 +775,8 @@ function paintsFor(name, resolution, drop) {
         if (!fn || !geom) return null;
         try {
             const r = fn({geometry: geom, properties: paintProps, graphicSize: props.radius, ring, bounds}, ctx);
-            return Array.isArray(r) ? r : [];
+            // Each half fitted on its own, as both renderers do. @see withFittedDashes
+            return Array.isArray(r) ? withFittedDashes(r, ctx) : [];
         } catch (e) {
             return null;
         }

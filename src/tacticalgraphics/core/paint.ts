@@ -100,6 +100,17 @@ export interface StrokeSpec {
     widthPx: number;
     /** Dash pattern in screen pixels, e.g. `[10, 8]`. Omit for solid. */
     dashPx?: number[];
+    /**
+     * The dash is already sized to its own mark, not to the graphic it sits in.
+     *
+     * `withFittedDashes` sizes every dash against the whole graphic, which is right for a
+     * line or an outline and wrong for a small glyph repeated along a long one: a mineline's
+     * mine cluster dome is 20 px wide on a line hundreds long, and a full-size dash left it
+     * with one and a half dashes. A paint that sizes its own dash sets this, and the fit then
+     * only caps it. Pick the dash from `dashScale` so it stays one of the stepped patterns
+     * MapLibre keeps a layer for. @see withFittedDashes
+     */
+    dashSized?: boolean;
     cap?: 'butt' | 'round' | 'square';
     join?: 'bevel' | 'round' | 'miter';
 }

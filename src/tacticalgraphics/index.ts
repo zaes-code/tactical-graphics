@@ -160,6 +160,7 @@ export {
 export {WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX} from './graphics/WireObstacle';
 export type {WireStyle} from './graphics/WireObstacle';
 export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
+export {ROADBLOCK_MAX_HALF_WIDTH_RATIO, ROADBLOCK_MIN_HALF_WIDTH_RATIO, clampRoadblockHalfWidth} from './graphics/RoadblockComplete';
 export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from './graphics/AntiTankDitch';
 export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
 
@@ -299,6 +300,17 @@ export {
     textWidth,
     uprightRotation,
 } from './symbology/decorations';
+export {
+    DASH_CAP_PX,
+    DASH_FULL_SIZE_PX,
+    DASH_SCALE_STEPS,
+    dashScale,
+    fitDash,
+    strokeParts,
+    strokedExtentPx,
+    withFittedDashes,
+} from './symbology/dashFit';
+export {DASHED_PARTS, dashedPartsOf} from './core/dashedParts';
 export {
     PLANNED_DASH_PX,
     arcMissionTaskPaint,
