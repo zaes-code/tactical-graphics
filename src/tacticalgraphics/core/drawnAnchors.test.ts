@@ -13,8 +13,7 @@
  * would drift the symbol every time it was touched.
  */
 
-import {allowedGestures,TacticalGraphicName, drawnAnchorFrame, drawnAnchors, listTacticalGraphicNames, rotationAnchor,
-    rotationPivot, usesDrawnAnchors} from '../index';
+import {allowedGestures,TacticalGraphicName, drawnAnchorFrame, drawnAnchors, listTacticalGraphicNames, rotationAnchor, usesDrawnAnchors} from '../index';
 
 const CENTER: [number, number] = [12, 34];
 const SIZE = 40_000;
@@ -108,11 +107,11 @@ describe('the point these turn about', () => {
         .filter(usesDrawnAnchors);
 
     /*
-     * **Two doctrinal exceptions, not one.** 141700 turns about point 2 and 271204 about
-     * point 3; each is documented beside its own assertion below. Everything else in the
-     * family turns about the centre its anchors describe.
+     * **One doctrinal exception.** 141700 turns about point 2, documented beside its own
+     * assertion below. 271204 turned about point 3 until 2026-09-21, when it left this family
+     * for the demolition obstacles'. Everything else turns about the centre its anchors describe.
      */
-    const PIVOTS_ELSEWHERE = [TacticalGraphicName.Ambush, TacticalGraphicName.RoadblockCompleteExecuted];
+    const PIVOTS_ELSEWHERE = [TacticalGraphicName.Ambush];
 
     it.each(family.filter(n => !PIVOTS_ELSEWHERE.includes(n)))(
         'is the centre of %s, not its first anchor',
@@ -130,25 +129,6 @@ describe('the point these turn about', () => {
             expect(rotationAnchor(geometry)).toEqual(anchors[0]);
         },
     );
-
-    /**
-     * **271204 turns and scales about point 3 — the crossing.**
-     *
-     * Its points 1 and 2 are the two extremes of the symbol's own 45-degree axis, so their
-     * midpoint *is* the figure's centre — which makes the centre rule look right and be
-     * wrong. The crossing is the thing on the ground the symbol marks and the one anchor an
-     * operator places against a road; scaling about the centre would slide it off.
-     * (User's call, 2026-09-07: "resize and rotate icons can use point 3 as pivot".)
-     */
-    it('is point 3 for RoadblockCompleteExecuted, the crossing it marks', () => {
-        const anchors = drawnAnchors(TacticalGraphicName.RoadblockCompleteExecuted, {center: [7, 45], size: 60_000})!;
-        const geometry = {type: 'LineString', coordinates: anchors};
-        expect(rotationAnchor(geometry, TacticalGraphicName.RoadblockCompleteExecuted)).toEqual(anchors[2]);
-        expect(rotationPivot(geometry, TacticalGraphicName.RoadblockCompleteExecuted)).toEqual(anchors[2]);
-        // Not the centre, which is where points 1 and 2 put their midpoint — the distinction
-        // this exception exists for.
-        expect(rotationAnchor(geometry, TacticalGraphicName.RoadblockCompleteExecuted)[0]).not.toBeCloseTo(7, 2);
-    });
 
     /**
      * **Ambush is the exception, and it is a doctrinal one.**

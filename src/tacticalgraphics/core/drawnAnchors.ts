@@ -1,5 +1,4 @@
 import {Position} from 'geojson';
-import {roadblockAnchors, roadblockFrame} from '../graphics/RoadblockComplete';
 import {TacticalGraphicName} from './type';
 import {
     anchorsForArcAndArrow,
@@ -80,13 +79,6 @@ export function drawnAnchors(name: TacticalGraphicName, frame: DrawnAnchorFrame)
     if (!(size > 0)) return undefined;
 
     switch (name) {
-        /*
-         * **271204 — one click, three stored points.** Dropped whole at a default size, as it
-         * always was, but the base it writes is the three anchor points the standard names
-         * rather than the dropped centre. `size` is the span of a bar. @see roadblockAnchors
-         */
-        case TacticalGraphicName.RoadblockCompleteExecuted:
-            return roadblockAnchors(center, size, rotation);
 
         case TacticalGraphicName.Turn:
         case TacticalGraphicName.TacticalTurn:
@@ -146,13 +138,6 @@ export function drawnAnchorFrame(name: TacticalGraphicName, coords: Position[] |
     if (!coords || coords.length < 2) return undefined;
 
     switch (name) {
-        /*
-         * **The inverse of `roadblockAnchors`.** Points 1 and 2 are the two extremes of the
-         * symbol's own 45-degree axis, so their midpoint is the centre and the distance
-         * between them is the span. The symbol never rotates. @see roadblockAnchors
-         */
-        case TacticalGraphicName.RoadblockCompleteExecuted:
-            return roadblockFrame(coords);
 
         case TacticalGraphicName.Turn:
         case TacticalGraphicName.TacticalTurn: {

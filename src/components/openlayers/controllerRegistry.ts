@@ -859,27 +859,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * is the same defect that moved the three readiness states off a fixed 45 degrees.
      * @see RoadblockComplete for how the three points are read.
      */
-    // Excluded — see ai/excluded-graphics.md
-    /*
-     * **One click, three stored points, none of them draggable.**
-     *
-     * Dropped whole at a default size exactly as 3.4.0 shipped it — same picture — but the
-     * base it writes is the three anchor points 271204 names rather than the dropped centre.
-     * `writeBase` already does that for a `usesDrawnAnchors` graphic; this entry only has to
-     * be the drop. The points publish as inert: 271204's construction is unsettled, so a grip
-     * on each would promise a shape the reading does not support, and the operator moves and
-     * scales the whole symbol instead. (User's call, 2026-09-07.)
-     * @see roadblockAnchors, handlesAreInert, drawnAnchors
-     */
-    [TacticalGraphicName.RoadblockCompleteExecuted]: (name, res, sizing) => {
-        const controller = pointDrop(name, res, sizing);
-        // An edit-mode drag resizes it rather than panning the map, which is the only
-        // shaping gesture it has now that its points do not answer one. The library says so
-        // — `editStretches` is true for anything storing vertices — and this is the engine
-        // agreeing. @see editStretches
-        controller.editStretches = true;
-        return controller;
-    },
+    // Drawn and edited as the three readiness states are, since 2026-09-21: three clicks, a
+    // centreline and a side point, every one a grip. (User's call.) @see RoadblockComplete
+    [TacticalGraphicName.RoadblockCompleteExecuted]: demolition,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),
