@@ -17,6 +17,10 @@ the npm publish dates — when a version actually became installable.
 
 ### Fixed
 
+- **MapLibre's selection box missed the graphic on a turned or tilted camera.** It projected two
+  corners of the graphic's bounds, which spans the whole box only north-up. It projects all
+  four now.
+
 - **`renderTacticalGraphic` threw a turf error for a bag with no `rotation` in it.** The
   property is optional in the schema and required by the generators, and the ones that read it
   most directly spend it without a guard — so `{name, radius}`, the most ordinary bag a
