@@ -448,7 +448,7 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
 export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag, statesShapeAsRangeBands} from './core/symbology';
-export {LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
+export {describedProperties, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
