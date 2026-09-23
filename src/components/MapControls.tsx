@@ -39,7 +39,7 @@ import type {MapEngineCapabilities} from './mapEngine';
 import {getDisplayName, isRectangular, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 import {getSpecifications, TacticalGraphicSpecification} from '@zaes/tactical-graphics';
-import {DEFAULT_PALETTE, drawsAsObstacle} from '@zaes/tactical-graphics';
+import {DEFAULT_PALETTE} from '@zaes/tactical-graphics';
 import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {getGraphicThumbnailSvg, getGraphicThumbnailUrl} from '@zaes/tactical-graphics/thumbnails';
 
@@ -68,8 +68,8 @@ interface Props {
     isModifying: boolean;
     isRepositioning: boolean;
     defaultShape: TacticalGraphicName;
-    /** The color obstacle thumbnails are recolored to. @see obstacleThumbnailColor */
-    obstacleColor: string;
+    /** The colors the thumbnails are recolored to. @see thumbnailInkFor */
+    thumbnailInk: ThumbnailInk;
     onToggleInteraction(mode: EditMode): void;
     /**
      * What the live engine can actually do.
@@ -207,36 +207,82 @@ const ALL_OPTIONS: GraphicOption[] = Object.values(TacticalGraphicName)
     });
 
 /**
- * The picture beside each option, at the thumbnail's own 260x170 aspect, on a white plate
- * so the black line work reads in dark mode too. Spearhead UI's picker does the same.
+ * The picture beside each option, at the thumbnail's own 260x170 aspect. Spearhead UI's
+ * picker does the same.
  */
 const THUMBNAIL_WIDTH_PX = 52;
 const THUMBNAIL_HEIGHT_PX = 34;
 
-// The green the obstacle graphics are baked in: the generator paints with the default palette.
-const BAKED_OBSTACLE_GREEN = (DEFAULT_PALETTE.obstacleColor ?? '#00AC00').toUpperCase();
+/** The colors the thumbnails are baked in: the generator paints with the default palette. */
+const BAKED = {
+    line: DEFAULT_PALETTE.defaultLineColor,
+    label: DEFAULT_PALETTE.labelFillColor,
+    halo: DEFAULT_PALETTE.labelHaloColor,
+    obstacle: DEFAULT_PALETTE.obstacleColor,
+};
 
-/**
- * What obstacle thumbnails should be drawn in, from the same merge the host applies to the
- * library. Thumbnails are baked at build time, so they cannot follow the settings panel on
- * their own. Off is black, the fallback APP-06 8.1.4.3 names.
- */
-export function obstacleThumbnailColor(config: TacticalGraphicsConfigOptions): string {
-    if (config.obstacleColors === false) return '#000000';
-    return config.obstacleColor ?? BAKED_OBSTACLE_GREEN;
+/** What the thumbnails are redrawn in, and the plate behind them. */
+export interface ThumbnailInk {
+    line: string;
+    label: string;
+    halo: string;
+    obstacle: string;
 }
 
-// Keyed by name and color: the library's own cache keys on name alone.
+/**
+ * The thumbnails' colors, from the same merge the host applies to the library.
+ *
+ * Thumbnails are baked at build time in the default palette, so they cannot follow the
+ * dark palette or the settings panel on their own; this is what they are recolored to.
+ * The plate behind each one is the **halo** color: white under black ink by default, and
+ * near-black under light ink in dark mode, so a thumbnail reads like a label on the map.
+ * Obstacles turned off draw black, the fallback APP-06 8.1.4.3 names, or the line color
+ * where black would vanish into a dark plate.
+ */
+export function thumbnailInkFor(config: TacticalGraphicsConfigOptions): ThumbnailInk {
+    const line = config.defaultLineColor ?? BAKED.line;
+    return {
+        line,
+        label: config.labelFillColor ?? BAKED.label,
+        halo: config.labelHaloColor ?? BAKED.halo,
+        obstacle: config.obstacleColors === false ? line : config.obstacleColor ?? BAKED.obstacle,
+    };
+}
+
+const attr = (name: string, value: string) => `${name}="${value}"`;
+
+/**
+ * Swaps the baked colors for `ink`. Text is its own case: a `<text>` carries the label
+ * fill and the halo, and every other black in the file is line work.
+ */
+function recolorThumbnail(svg: string, ink: ThumbnailInk): string {
+    const swap = (tag: string, from: string, to: string) => tag.split(from).join(to);
+    return svg
+        .replace(/<text[^>]*>/g, tag => swap(swap(tag, attr('fill', BAKED.line), attr('fill', ink.label)), attr('stroke', BAKED.halo), attr('stroke', ink.halo)))
+        .replace(/<(?!text)[a-z]+[^>]*>/g, tag => {
+            let out = swap(tag, attr('stroke', BAKED.line), attr('stroke', ink.line));
+            out = swap(out, attr('fill', BAKED.line), attr('fill', ink.line));
+            // White fills are knockouts against the plate, so they follow it.
+            out = swap(out, attr('fill', BAKED.halo), attr('fill', ink.halo));
+            out = swap(out, attr('stroke', BAKED.obstacle), attr('stroke', ink.obstacle));
+            return swap(out, attr('fill', BAKED.obstacle), attr('fill', ink.obstacle));
+        });
+}
+
+const isBaked = (ink: ThumbnailInk) =>
+    ink.line === BAKED.line && ink.label === BAKED.label && ink.halo === BAKED.halo && ink.obstacle === BAKED.obstacle;
+
+// Keyed by name and ink: the library's own cache keys on name alone.
 const recoloredThumbnails = new Map<string, string>();
 
-function graphicThumbnailUrl(name: TacticalGraphicName, obstacleColor: string): string | undefined {
-    if (obstacleColor.toUpperCase() === BAKED_OBSTACLE_GREEN || !drawsAsObstacle(name)) return getGraphicThumbnailUrl(name);
-    const key = `${name}:${obstacleColor}`;
+function graphicThumbnailUrl(name: TacticalGraphicName, ink: ThumbnailInk): string | undefined {
+    if (isBaked(ink)) return getGraphicThumbnailUrl(name);
+    const key = `${name}|${ink.line}|${ink.label}|${ink.halo}|${ink.obstacle}`;
     const cached = recoloredThumbnails.get(key);
     if (cached) return cached;
     const svg = getGraphicThumbnailSvg(name);
     if (!svg) return undefined;
-    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(new RegExp(BAKED_OBSTACLE_GREEN, 'gi'), obstacleColor));
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(recolorThumbnail(svg, ink));
     recoloredThumbnails.set(key, url);
     return url;
 }
@@ -253,7 +299,7 @@ const MapControls: React.FC<Props> = ({
     interactionMode,
     onToggleInteraction,
     defaultShape,
-    obstacleColor,
+    thumbnailInk,
 }) => {
     // Hostility applied to the sample sweep. '' = leave every sample at its
     // default, which is the normal gallery view.
@@ -492,7 +538,7 @@ const MapControls: React.FC<Props> = ({
                         {/* Items */}
                         {options.map(opt => {
                             const isSelected = selected?.value === opt.value;
-                            const thumbnail = graphicThumbnailUrl(opt.value, obstacleColor);
+                            const thumbnail = graphicThumbnailUrl(opt.value, thumbnailInk);
                             return (
                                 <Box
                                     key={opt.value}
@@ -527,7 +573,7 @@ const MapControls: React.FC<Props> = ({
                                             height: THUMBNAIL_HEIGHT_PX,
                                             flex: 'none',
                                             objectFit: 'contain',
-                                            bgcolor: '#fff',
+                                            bgcolor: thumbnailInk.halo,
                                             borderRadius: 0.5,
                                             visibility: thumbnail ? 'visible' : 'hidden',
                                         }}
