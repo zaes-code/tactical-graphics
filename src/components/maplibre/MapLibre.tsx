@@ -19,7 +19,7 @@ import {SPIKE_SAMPLES} from '../spikeSamples';
 import {drawSpikeSamples} from './spikeDriver';
 import {buildSampleGraphics} from './sampleGallery';
 import {readViewport, writeViewport} from '../mapViewport';
-import type {MapEngineHandle} from '../mapEngine';
+import type {MapEngineHandle, ViewCamera} from '../mapEngine';
 import {FULL_CAPABILITIES} from '../mapEngine';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
@@ -297,7 +297,15 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
             onReady(handle);
         });
 
+        const camera: ViewCamera = {
+            tilt: degrees => map.easeTo({pitch: Math.min(80, Math.max(0, map.getPitch() + degrees)), duration: 300}),
+            turn: degrees => map.easeTo({bearing: map.getBearing() + degrees, duration: 300}),
+            resetNorth: () => map.easeTo({bearing: 0, duration: 500}),
+            bearing: () => map.getBearing(),
+        };
+
         const handle: MapEngineHandle = {
+            camera,
             /*
              * **Every verb delegates; nothing is spread.**
              *
