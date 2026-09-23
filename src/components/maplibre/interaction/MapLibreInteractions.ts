@@ -653,13 +653,21 @@ export class MapLibreInteractions {
         const bounds = unionBounds(graphic?.graphic.bounds, boundsOf(graphic?.labels?.geometry));
         if (!bounds) return undefined;
 
-        // Two opposite corners: the projection counts y upward and the screen counts it
-        // downward, so min and max are re-derived after converting rather than assumed.
-        const topLeft = this.map.project(toLonLat([bounds.minX, bounds.maxY]));
-        const bottomRight = this.map.project(toLonLat([bounds.maxX, bounds.minY]));
-        const x = Math.min(topLeft.x, bottomRight.x);
-        const y = Math.min(topLeft.y, bottomRight.y);
-        return {x, y, width: Math.abs(bottomRight.x - topLeft.x), height: Math.abs(bottomRight.y - topLeft.y)};
+        // All four corners, and min and max re-derived on screen. Flat and north-up two
+        // opposite corners were enough; a turned or tilted camera maps the box to a
+        // rotated quadrilateral, and two corners of that span only part of it.
+        const corners: ProjectedPosition[] = [
+            [bounds.minX, bounds.minY],
+            [bounds.minX, bounds.maxY],
+            [bounds.maxX, bounds.minY],
+            [bounds.maxX, bounds.maxY],
+        ];
+        const onScreen = corners.map(corner => this.map.project(toLonLat(corner)));
+        const xs = onScreen.map(p => p.x);
+        const ys = onScreen.map(p => p.y);
+        const x = Math.min(...xs);
+        const y = Math.min(...ys);
+        return {x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y};
     }
 
     /**

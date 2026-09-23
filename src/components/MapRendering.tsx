@@ -4,7 +4,7 @@ import ms from 'milsymbol';
 import {useMilsymbolSecurityOperationSymbols} from './openlayers/securityOperationSymbol';
 import OpenLayersMap from './openlayers/OpenLayers';
 import MapLibreMap from './maplibre/MapLibre';
-import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typography} from '@mui/material';
+import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
@@ -32,6 +32,15 @@ const LS_SETTINGS = 'tg_graphicsSettings';
 const LS_LEGACY_LABELSIZE = 'tg_defaultLabelSize';
 const LS_LEGACY_LINEWIDTH = 'tg_defaultLineWidth';
 const LS_ENGINE = 'tg_mapEngine';
+const LS_TILTED = 'tg_mapTilted';
+
+function loadTilted(): boolean {
+    try {
+        return localStorage.getItem(LS_TILTED) === 'true';
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Which renderer draws the map.
@@ -132,6 +141,18 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [engine, setEngine] = useState<MapEngine>(loadEngine);
+    /** MapLibre's 3D view. OpenLayers has no tilted mode, so the toggle shows on MapLibre only. */
+    const [tilted, setTilted] = useState<boolean>(loadTilted);
+    const handleTiltChange = (_: React.MouseEvent<HTMLElement>, next: '2d' | '3d' | null) => {
+        if (!next) return;
+        const value = next === '3d';
+        try {
+            localStorage.setItem(LS_TILTED, String(value));
+        } catch {
+            // Storage blocked: the toggle still works for this visit.
+        }
+        setTilted(value);
+    };
 
     /**
      * The live map's handle, and its capabilities mirrored into state.
@@ -309,6 +330,21 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         ))}
                     </ToggleButtonGroup>
 
+                    {engine === 'maplibre' && (
+                        <Tooltip title={tilted ? 'Right-drag or Ctrl+drag to turn and tilt' : 'Tilt the map over terrain'}>
+                            <ToggleButtonGroup
+                                value={tilted ? '3d' : '2d'}
+                                exclusive
+                                onChange={handleTiltChange}
+                                size="small"
+                                aria-label="map view"
+                            >
+                                <ToggleButton value="2d" aria-label="2D" sx={{px: 1.25, py: 0.25, fontSize: '0.75rem'}}>2D</ToggleButton>
+                                <ToggleButton value="3d" aria-label="3D" sx={{px: 1.25, py: 0.25, fontSize: '0.75rem'}}>3D</ToggleButton>
+                            </ToggleButtonGroup>
+                        </Tooltip>
+                    )}
+
                     <IconButton
                         onClick={() => setSettingsOpen(true)}
                         size="small"
@@ -344,6 +380,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                     : <MapLibreMap
                         key="maplibre"
                         darkMode={darkMode}
+                        tilted={tilted}
                         graphicsSettings={settings}
                         onReady={handleEngineReady}
                         onInteractionModeChange={setInteractionMode}
