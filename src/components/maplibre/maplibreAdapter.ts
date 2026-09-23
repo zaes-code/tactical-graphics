@@ -910,6 +910,16 @@ export function buildTacticalGraphic(
     const derivedFromGeometry: (keyof TacticalGraphicProperties)[] = [
         ...(getPaintFunction(name)?.label ? (['labelGapDegrees'] as const) : []),
         ...(GLYPH_CUT_GAP_GRAPHICS.includes(name) ? (['labelGap'] as const) : []),
+        /*
+         * **`bakedDecorationSize` states the same number twice.** It exists to put a baked
+         * decoration's size where `toGraphicOptions` looks for it, which is `radius` — so for
+         * the 29 graphics with one, a file came out carrying a `radius` and a `decorationSize`
+         * holding the identical figure. OpenLayers files only the second, reads only the
+         * second, and drops the first on the next save; two names for one size is the second
+         * copy this whole rule exists to stop. A caller who stated a `radius` still keeps it,
+         * which is what `describedProperties` is for. @see bakedDecorationSize
+         */
+        ...(Object.keys(bakedDecorationSize(name, properties, sizingResolution)) as (keyof TacticalGraphicProperties)[]),
         ...(Object.keys(ratioLockedSize(name, baseGeometry)) as (keyof TacticalGraphicProperties)[]),
         ...(Object.keys(rectangleAmplifiers(name, ringOf(baseGeometry))) as (keyof TacticalGraphicProperties)[]),
         ...(Object.keys(rectangleAxisLength(name, baseGeometry, properties)) as (keyof TacticalGraphicProperties)[]),

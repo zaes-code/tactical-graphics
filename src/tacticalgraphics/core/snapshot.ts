@@ -116,9 +116,19 @@ export function describedProperties<T extends {name: unknown}>(
 ): T {
     const filed = {...completed};
     for (const key of derived) {
-        // A caller who stated it keeps it, whatever the renderer then made of it: the value
-        // is theirs and the file is where they put it.
+        /*
+         * A caller who stated it keeps it, **and keeps their own number** — whatever the
+         * renderer then made of it. The value is theirs and the file is where they put it.
+         *
+         * Keeping `completed[key]` here was the same defect one level down: these keys are
+         * spread *after* the caller's properties precisely so the renderer draws with its own
+         * figure, so filing the completed bag filed the overwrite. A bag stating
+         * `radius: 180000` for a bridge came back filed at 146,485 — the tick size this engine
+         * had substituted to draw with — and the caller's own number was gone from their file
+         * after a round trip they never asked for.
+         */
         if (supplied[key] === undefined) delete filed[key];
+        else filed[key] = supplied[key] as T[typeof key];
     }
     return filed;
 }

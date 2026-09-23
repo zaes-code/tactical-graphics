@@ -36,6 +36,25 @@ the npm publish dates — when a version actually became installable.
   graphic is touched, too: a gesture and the properties dialog both rebuild from the
   description rather than from the bag the last draw rendered with.
 
+- **Opening a file on OpenLayers that another renderer wrote lost, and could misread, what it
+  said.** Three faults in one sentence, and the twenty rectangular areas had all three. A
+  `decorationSize` arriving beside a `width` **outranked it** when the base was rebuilt — the
+  precedence was written against the files this engine writes, which state one size per holder,
+  and MapLibre states both — so a box saved 87,465 m wide came back at 45,733 and drew 20.7 km
+  from where the same file draws on the other engine. A save then walked the holders and asked
+  each what it knew, which drops any field this engine does not itself manage: that was
+  `decorationSize` on 146 of the 318, each one a screen-sized default spent at the zoom the
+  graphic was drawn at, which is the one derived value a snapshot has to carry because it holds
+  no viewport. And a figure the *caller* stated could be replaced by the one a renderer had
+  substituted to draw with, so a bag stating `radius: 180000` came back filed at the tick size
+  MapLibre uses for a bridge.
+
+  A snapshot now survives a re-save on either engine: what the file said is kept, what the
+  caller stated is theirs, and the figures the library refuses to file beside the points that
+  already carry them — a drawn-anchor graphic's `radius` and `rotation`, and a radius sitting
+  next to the `length` and `width` that are the whole of the five axis-and-width plates' shape
+  — are refused at *both* doors rather than only on restore.
+
 - **A restored base was tidied only when it gained a point.** `restoreTacticalGraphics` ran
   the library's `normalizeDrawnBase` over an incoming base and then wrote the result back only
   if the point count had changed — but the normalizer also *re-places* points, which for the
