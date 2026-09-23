@@ -11,6 +11,7 @@ import {AttributionControl, Map as MapLibreMap, ScaleControl, setWorkerUrl} from
 import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
 import {BASEMAP_LAYER_ID, basemapPaint, createBasemapStyle} from './basemapStyle';
+import {enterTiltView, exitTiltView, repaintTiltView} from './tiltView';
 import {resolutionOf, zoomForResolution, toLonLat} from './projection';
 import {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
@@ -40,6 +41,8 @@ import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 
 interface Props {
     darkMode: boolean;
+    /** Tilted over terrain rather than flat and north-up. @see tiltView.ts */
+    tilted: boolean;
     /** The user's config overrides. Used as an invalidation trigger, not read directly. */
     graphicsSettings: TacticalGraphicsConfigOptions;
     /** Hands the controls panel something to drive. @see mapEngine.ts */
@@ -150,7 +153,8 @@ function exportGraphics(snapshot: {type: string; features: unknown[]}): void {
     URL.revokeObjectURL(url);
 }
 
-const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onReady, onInteractionModeChange}) => {
+const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettings, onReady, onInteractionModeChange}) => {
+    const [loaded, setLoaded] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MapLibreMap | null>(null);
     const [, setReady] = useState(false);
@@ -174,14 +178,15 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             style: createBasemapStyle(darkMode),
             center: storedView ? [storedView.lon, storedView.lat] : START_CENTER,
             zoom: storedView ? zoomForResolution(storedView.resolution) : START_ZOOM,
-            // The paint model assumes a north-up, unpitched view: every screen-pixel
-            // decoration is sized against a single meters-per-pixel, and a pitched
-            // camera does not have one. OpenLayers' 2D renderer has no other mode
-            // either, so disabling these keeps the two engines comparable rather than
-            // taking something away. @see projection.ts, ViewTransform
-            pitchWithRotate: false,
+            // Flat and north-up until the 3D toggle frees the camera: every screen-pixel
+            // decoration is sized against a single meters-per-pixel, and OpenLayers' 2D
+            // renderer has no other mode, so the flat view is the one the two engines
+            // are compared in. `pitchWithRotate` is on so that, once `dragRotate` is
+            // enabled, one right-drag both turns and tilts. @see tiltView.ts
+            pitchWithRotate: true,
             dragRotate: false,
             touchZoomRotate: false,
+            touchPitch: false,
             // Added explicitly below instead, so the compact form is unambiguous.
             attributionControl: false,
             // Never a backing store smaller than the element it fills — the same clamp
@@ -256,6 +261,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
             // whatever the engine switch was handing over — `load` clears first. The
             // fixture is still reachable from the dev hook for comparison runs.
             setReady(true);
+            if (!disposed) setLoaded(true);
             // The dialog only works against the native path: it hit-tests through
             // `queryRenderedFeatures`, and the canvas overlay puts nothing in the style
             // for that to find. The overlay is a comparison tool, not a working view.
@@ -429,6 +435,20 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, onRe
         });
         map.triggerRepaint();
     }, [graphicsSettings, darkMode]);
+
+    // The 3D view. Only the native path can be tilted: the canvas overlay projects through
+    // a flat north-up transform and would draw every graphic in the wrong place.
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !loaded || INITIAL_MODE !== 'native') return;
+        // darkMode is read once on entry; the effect below re-tints on a mode change.
+        if (tilted) enterTiltView(map, darkMode);
+        else if (map.getPitch() !== 0 || map.getTerrain()) exitTiltView(map);
+    }, [tilted, loaded]);
+
+    useEffect(() => {
+        if (mapRef.current && loaded) repaintTiltView(mapRef.current, darkMode);
+    }, [darkMode, loaded]);
 
     return (
         <>
