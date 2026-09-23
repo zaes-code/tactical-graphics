@@ -23,8 +23,9 @@ export interface RestoredGraphic {
  * the generators.
  *
  * **One reading of a file for every renderer that builds from this adapter.** It lived
- * inline in the MapLibre façade's `restore`, and the Cesium view needs exactly the same
- * four repairs; a second copy is how two engines come to disagree about an old file.
+ * inline in the MapLibre façade's `restore`, where nothing else could reach it; any other
+ * renderer building from the adapter needs the same four repairs, and a second copy is how
+ * two engines come to disagree about an old file.
  *
  * `resolution` is projected meters per pixel, spent only where an old file forces a
  * screen size to be invented (a version 1 axis arrow's width point).
