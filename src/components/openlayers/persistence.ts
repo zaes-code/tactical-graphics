@@ -74,8 +74,13 @@ import {
     carriesWidthPointInBase,
     axisFromRectangleRing,
     isRectangular,
+    hasAxisAndWidth,
+    hasBakedDecoration,
     normalizeDrawnBase,
+    statesShapeAsRangeBands,
+    shapedByWidth,
     TacticalGraphicName,
+    usesStandoffWidth,
     usesDrawnAnchors,
     baseGeometryFor,
     drawnAnchors,
@@ -121,6 +126,29 @@ export {SNAPSHOT_VERSION};
 /** Map projection the OL features live in. Snapshots are written in 4326. */
 const MAP_PROJECTION = 'EPSG:3857';
 const GEOJSON_PROJECTION = 'EPSG:4326';
+
+/**
+ * Where a restored graphic keeps **the description it arrived with**.
+ *
+ * A save walks the holders and asks each what it knows, which is the right question for a
+ * graphic the user drew here and the wrong one for a file someone else wrote: a holder that
+ * owns no `decorationSize` answers nothing, and the figure the file stated is gone on the
+ * first re-save. Measured against MapLibre's own output, that is `decorationSize` on 146 of
+ * the 318 — every one of them a screen-sized default spent at the zoom the graphic was drawn
+ * at, which is the one value a snapshot carries that nothing else can re-derive, because a
+ * snapshot holds no viewport.
+ *
+ * So the incoming bag is kept beside the holder and a save reads *under* it. Anything the
+ * holder states wins, on every key, which is what keeps this from resurrecting an amplifier
+ * the user cleared — `writeGraphicProperties` replaces the bag wholesale, so a field the
+ * holder manages is always present in its answer, blank or not. Only a key no holder has an
+ * opinion about falls through.
+ *
+ * It is the mirror of `descriptionOf` on the MapLibre side, and the two together are what
+ * make a file mean the same thing whichever engine last wrote it. @see describedProperties,
+ * ai/conventions.md "A file carries the description, not the render input"
+ */
+const FILED_DESCRIPTION_KEY = 'filedDescription';
 
 /**
  * Two bases that are the same base, in degrees.
@@ -229,6 +257,40 @@ function findProp<T>(handler: TacticalGraphicHandler, prop: string): T | undefin
 }
 
 /**
+ * A bag with the figures this engine refuses to file taken out of it.
+ *
+ * **`statePublishedFor` is the rule; this applies it to a whole bag**, so the two doors that
+ * both had to know it cannot drift. Those doors are a restore, which keeps what the file
+ * stated, and a save, which publishes what the holders stamped — and each was separately
+ * capable of putting back a figure the library had already decided not to keep beside the
+ * points that carry it. The reason has a name: 151204 contain went on reporting the file's
+ * 40 km next to a symbol drawn at 29.8, because a number filed beside the geometry it came
+ * from is then trusted over it.
+ *
+ * Both were live. Carrying the description forward without this re-filed `radius` and
+ * `rotation` for the eight drawn-anchor graphics the sample sheet states a radius for; saving
+ * without it filed the holder's own derived `radius` beside the `length` and `width` that are
+ * the whole of the five axis-and-width plates' shape, contradicting them by 150 km.
+ */
+function describedBy(name: TacticalGraphicName, bag: Record<string, unknown>): Record<string, unknown> {
+    // `readGeometryState` is defined as the `GEOMETRY_KEYS` subset and nothing else, so the
+    // three figures 200700 states its shape as have to be read across by hand. They are not
+    // *removed* by any rule here — they are what makes a `radius` beside them redundant.
+    const state: GraphicGeometryState = {
+        ...readGeometryState(bag),
+        startRange: bag.startRange as number | undefined,
+        stopRange: bag.stopRange as number | undefined,
+        searchAxisAzimuthDeg: bag.searchAxisAzimuthDeg as number | undefined,
+    };
+    const published = statePublishedFor(name, state) as Record<string, unknown>;
+    const described = {...bag};
+    for (const key of GEOMETRY_KEYS) {
+        if (state[key] !== undefined && published[key] === undefined) delete described[key];
+    }
+    return described;
+}
+
+/**
  * Reads back the properties a graphic needs to be rebuilt.
  *
  * Assembled from the handler rather than trusted off the base feature, because not
@@ -251,8 +313,12 @@ function collectProperties(handler: TacticalGraphicHandler): Record<string, unkn
         }
     }
 
+    // **Under** the holder's answer, never over it: a value this engine manages is the live
+    // one, and a value it does not manage is the file's to keep. @see FILED_DESCRIPTION_KEY
+    const filed = (base.get(FILED_DESCRIPTION_KEY) ?? {}) as Record<string, unknown>;
+
     return {
-        tacticalGraphic: {...bag, name},
+        tacticalGraphic: describedBy(name, {...filed, ...bag, name}),
         role: 'base',
         // Mirrors `tacticalGraphic.name` for the OL-side dialog, which reads this
         // property directly. Restore prefers `tacticalGraphic.name`; this is a fallback
@@ -320,8 +386,68 @@ function restoreLatitude(feature: GeoJSONFeature): number {
  * points cannot carry it, which is the same line `writeBase` draws. @see usesDrawnAnchors
  */
 function statePublishedFor(name: TacticalGraphicName, state: GraphicGeometryState): GraphicGeometryState {
-    if (!usesDrawnAnchors(name)) return state;
-    const {radius: _radius, rotation: _rotation, mirrored: _mirrored, ...carried} = state;
+    /*
+     * **And a radius is a third copy for the five drawn about an axis and a width.**
+     *
+     * 240802, the three maritime ellipses and 200600 state a `length` *and* a `width` about
+     * one anchor point, which is the whole of their shape — `axisAndWidth` is the library's
+     * statement of the pair and both engines build from it. A `radius` arriving beside the two
+     * is the older, partial way of saying the same thing, and once the pair is present nothing
+     * reads it: `applyRestoredGeometry` spends `length / 2` and ignores the radius entirely.
+     * Filing this holder's own derived one anyway put a number in the file that contradicted
+     * the two beside it — a bag stating 180,000 came back filed at 30,600 — which is the
+     * defect `usesDrawnAnchors` is guarded against, one family over.
+     *
+     * Only when the pair is actually there. A legacy bag carrying a radius and no length still
+     * needs it, because for that file the radius *is* the description. @see hasAxisAndWidth
+     */
+    let published = state;
+
+    /*
+     * **A `radius` is the older, partial way of saying three other things**, and once the
+     * thing it is partial to is present, filing it too is a second copy of the shape. Each
+     * of these was measured after a carried description started keeping figures this engine
+     * had previously dropped on the floor:
+     *
+     * - **An axis and a width.** 240802, the three maritime ellipses and 200600 state a
+     *   `length` *and* a `width` about one anchor point, which is the whole of their shape —
+     *   `applyRestoredGeometry` spends `length / 2` and never looks at the radius. A bag
+     *   stating 180,000 came back filed at 30,600, contradicting the pair beside it.
+     * - **A baked decoration.** For these the radius *is* the decoration size — that is what
+     *   `bakedDecorationSize` reads and what `LineGraphicBase.setOffset` replays — so a
+     *   `decorationSize` and a `radius` in one bag are two names for one number, and the
+     *   engines disagreed over which: 180,000 here against 89,832 on MapLibre for a bridge.
+     * - **A search axis and its range bands.** 200700's plate names a start range, a stop
+     *   range *and* a search azimuth, and against all four a `radius` is the outer ring said
+     *   less precisely and a `rotation` is the azimuth said less precisely. Neither is
+     *   updated by a gesture, so a rotate left the file saying 0 where the graphic had turned
+     *   26.1 degrees.
+     *
+     *   **Keyed on the azimuth, not on the bands.** The weapon and sensor range fans state
+     *   bands too, and theirs are *derived from* a stated `radius` — `sizeDefaults` spends
+     *   the radius as the outer ring and `RSD_DEFAULT_START_SHARE` as the inner. Dropping the
+     *   radius there would keep the derived pair and throw away what it was derived from,
+     *   which is this rule pointed backwards. The azimuth is what only 200700 states.
+     *
+     * Only when the fuller statement is actually there. A legacy bag carrying a radius and
+     * nothing else still needs it, because for that file the radius *is* the description.
+     * @see hasAxisAndWidth, hasBakedDecoration, statesShapeAsRangeBands
+     */
+    const statedMorePrecisely =
+        (hasAxisAndWidth(name) && published.length !== undefined)
+        || (hasBakedDecoration(name) && published.decorationSize !== undefined)
+        || (statesShapeAsRangeBands(name) && published.searchAxisAzimuthDeg !== undefined);
+    if (statedMorePrecisely) {
+        const {radius: _radius, ...withoutReach} = published;
+        published = withoutReach;
+    }
+    if (statesShapeAsRangeBands(name) && published.searchAxisAzimuthDeg !== undefined) {
+        const {rotation: _rotation, ...withoutTurn} = published;
+        published = withoutTurn;
+    }
+
+    if (!usesDrawnAnchors(name)) return published;
+    const {radius: _reach, rotation: _rotation, mirrored: _mirrored, ...carried} = published;
     return carried;
 }
 
@@ -558,9 +684,34 @@ export function applyRestoredGeometry(
          * the field. @see isRectangular, rectangleDefaultHalfWidth
          */
         const reach = restoredName && isRectangular(restoredName) ? undefined : state.radius;
+        /*
+         * **A width outranks a decoration size for the families whose scalar *is* the width.**
+         *
+         * The order above was written against the files this engine writes. OpenLayers stamps
+         * one number per holder, so a corridor or a rectangle arrived carrying a `width` and
+         * nothing else and the decoration branch never fired — which is what the note above
+         * means by "the width families are unaffected". It is only true of a file OpenLayers
+         * wrote. MapLibre states both: a width, because the shape is built from one, and the
+         * 20 px `decorationSize` every drawn graphic gets. Reading that file here spent the
+         * decoration as the half-width and threw the stated one away — measured on the twenty
+         * rectangular areas, a box saved at 87,465 m came back 45,733 wide and drew **20.7 km**
+         * from where the same file draws on MapLibre.
+         *
+         * `shapedByWidth` is the library's own answer to "is this graphic built from a width",
+         * which is the question, and it is the same predicate MapLibre files one against. The
+         * standoff zone is excluded for the reason the note above gives: its `width` is a gap
+         * between two rings rather than the holder's scalar, and it is replayed through
+         * `setStandoff` a few lines down. @see shapedByWidth, usesStandoffWidth
+         */
+        const widthIsTheScalar = restoredName !== undefined
+            && shapedByWidth(restoredName)
+            && !usesStandoffWidth(restoredName)
+            && state.width !== undefined;
         const scalar = carriesWidthPointInBase(restoredName)
             ? undefined
-            : state.decorationSize ?? (state.width !== undefined ? state.width / 2 : reach);
+            : widthIsTheScalar
+                ? (state.width as number) / 2
+                : state.decorationSize ?? (state.width !== undefined ? state.width / 2 : reach);
         if (scalar !== undefined) handler.setOffset?.(scalar);
         // A width that is an amplifier rather than a half-width. `toLabels` strips it from
         // the bag as a geometry key, so a holder that reads one needs it handed back here or
@@ -724,6 +875,17 @@ export function restoreTacticalGraphics(
                 }
             }
             handler.graphic.base.setGeometry(geometry);
+            /*
+             * **Kept before anything rebuilds**, because the rebuild is what loses it: the
+             * holder re-stamps its own bag over the features and a key it does not manage is
+             * simply not in the replacement. Stored on the base, which is the feature that
+             * survives every regenerate, and read back by `collectProperties` on save.
+             *
+             * `bag` rather than `props.tacticalGraphic`: the aliases and the retirement
+             * rewrite have already run on it, so what is kept is the description as this
+             * version of the library reads it and not as some older writer spelled it.
+             */
+            handler.graphic.base.set(FILED_DESCRIPTION_KEY, describedBy(name, bag));
 
             const labels = toLabels(bag);
             const holder = handler.graphic as {setLabel?: (l: GraphicLabels) => void};
