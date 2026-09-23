@@ -39,6 +39,9 @@ import type {MapEngineCapabilities} from './mapEngine';
 import {getDisplayName, isRectangular, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 import {getSpecifications, TacticalGraphicSpecification} from '@zaes/tactical-graphics';
+import {DEFAULT_PALETTE, drawsAsObstacle} from '@zaes/tactical-graphics';
+import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
+import {getGraphicThumbnailSvg, getGraphicThumbnailUrl} from '@zaes/tactical-graphics/thumbnails';
 
 interface Props {
     onDrawTacticalGraphics(): void;
@@ -65,6 +68,8 @@ interface Props {
     isModifying: boolean;
     isRepositioning: boolean;
     defaultShape: TacticalGraphicName;
+    /** The color obstacle thumbnails are recolored to. @see obstacleThumbnailColor */
+    obstacleColor: string;
     onToggleInteraction(mode: EditMode): void;
     /**
      * What the live engine can actually do.
@@ -201,6 +206,41 @@ const ALL_OPTIONS: GraphicOption[] = Object.values(TacticalGraphicName)
         return order !== 0 ? order : a.label.localeCompare(b.label);
     });
 
+/**
+ * The picture beside each option, at the thumbnail's own 260x170 aspect, on a white plate
+ * so the black line work reads in dark mode too. Spearhead UI's picker does the same.
+ */
+const THUMBNAIL_WIDTH_PX = 52;
+const THUMBNAIL_HEIGHT_PX = 34;
+
+// The green the obstacle graphics are baked in: the generator paints with the default palette.
+const BAKED_OBSTACLE_GREEN = (DEFAULT_PALETTE.obstacleColor ?? '#00AC00').toUpperCase();
+
+/**
+ * What obstacle thumbnails should be drawn in, from the same merge the host applies to the
+ * library. Thumbnails are baked at build time, so they cannot follow the settings panel on
+ * their own. Off is black, the fallback APP-06 8.1.4.3 names.
+ */
+export function obstacleThumbnailColor(config: TacticalGraphicsConfigOptions): string {
+    if (config.obstacleColors === false) return '#000000';
+    return config.obstacleColor ?? BAKED_OBSTACLE_GREEN;
+}
+
+// Keyed by name and color: the library's own cache keys on name alone.
+const recoloredThumbnails = new Map<string, string>();
+
+function graphicThumbnailUrl(name: TacticalGraphicName, obstacleColor: string): string | undefined {
+    if (obstacleColor.toUpperCase() === BAKED_OBSTACLE_GREEN || !drawsAsObstacle(name)) return getGraphicThumbnailUrl(name);
+    const key = `${name}:${obstacleColor}`;
+    const cached = recoloredThumbnails.get(key);
+    if (cached) return cached;
+    const svg = getGraphicThumbnailSvg(name);
+    if (!svg) return undefined;
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(new RegExp(BAKED_OBSTACLE_GREEN, 'gi'), obstacleColor));
+    recoloredThumbnails.set(key, url);
+    return url;
+}
+
 const MapControls: React.FC<Props> = ({
     capabilities,
     onDrawTacticalGraphics,
@@ -213,6 +253,7 @@ const MapControls: React.FC<Props> = ({
     interactionMode,
     onToggleInteraction,
     defaultShape,
+    obstacleColor,
 }) => {
     // Hostility applied to the sample sweep. '' = leave every sample at its
     // default, which is the normal gallery view.
@@ -451,6 +492,7 @@ const MapControls: React.FC<Props> = ({
                         {/* Items */}
                         {options.map(opt => {
                             const isSelected = selected?.value === opt.value;
+                            const thumbnail = graphicThumbnailUrl(opt.value, obstacleColor);
                             return (
                                 <Box
                                     key={opt.value}
@@ -474,6 +516,22 @@ const MapControls: React.FC<Props> = ({
                                         },
                                     }}
                                 >
+                                    {/* Empty alt: the name is in the same row. */}
+                                    <Box
+                                        component="img"
+                                        src={thumbnail}
+                                        alt=""
+                                        loading="lazy"
+                                        sx={{
+                                            width: THUMBNAIL_WIDTH_PX,
+                                            height: THUMBNAIL_HEIGHT_PX,
+                                            flex: 'none',
+                                            objectFit: 'contain',
+                                            bgcolor: '#fff',
+                                            borderRadius: 0.5,
+                                            visibility: thumbnail ? 'visible' : 'hidden',
+                                        }}
+                                    />
                                     <Typography sx={{
                                         fontSize: '0.78rem',
                                         flexGrow: 1,

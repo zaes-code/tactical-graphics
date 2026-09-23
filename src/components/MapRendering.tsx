@@ -8,7 +8,7 @@ import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typog
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
-import MapControls from './MapControls';
+import MapControls, {obstacleThumbnailColor} from './MapControls';
 import EditAffordances from './EditAffordances';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
@@ -389,6 +389,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         isRepositioning={interactionMode === 'translate'}
                         isModifying={interactionMode === 'modify'}
                         defaultShape={selectedShape}
+                        obstacleColor={obstacleThumbnailColor({...paletteFor(darkMode), ...settings})}
                     />
                 )}
             </Box>
