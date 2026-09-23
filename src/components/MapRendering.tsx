@@ -10,6 +10,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
 import MapControls, {thumbnailInkFor} from './MapControls';
 import EditAffordances from './EditAffordances';
+import ViewControls from './ViewControls';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
@@ -394,6 +395,9 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                   * pixels and knows nothing else about it. @see EditAffordances
                   */}
                 <EditAffordances engine={engineHandle} active={interactionMode === 'edit'}/>
+
+                {/* Tilt and turn from clicks, for anyone without a right mouse button. */}
+                {engineHandle?.camera && engine === 'maplibre' && tilted && <ViewControls camera={engineHandle.camera}/>}
 
                 {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
