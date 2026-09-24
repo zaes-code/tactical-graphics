@@ -1,14 +1,14 @@
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import type {ProjectedPosition} from '@zaes/tactical-graphics';
-import {clampToMercator} from '@zaes/tactical-graphics';
+import {lonLatToMercator as toMercator} from '@zaes/tactical-graphics';
 
 /**
  * # EPSG:3857 ↔ lon/lat, and MapLibre's camera expressed as a `resolution`
  *
  * The paint layer works in **projected meters** — the same EPSG:3857 frame the
  * OpenLayers style functions have always used — because that is what makes a
- * ported decoration character-for-character the same math as the original. This
- * module is the only place that converts.
+ * ported decoration character-for-character the same math as the original. The
+ * conversion itself is the root's (`lonLatToMercator`), shared with every renderer.
  *
  * MapLibre wants lon/lat, so the reprojection the OpenLayers adapter does on the
  * way *in* happens here on the way *out*. It is exact and cheap: the inverse
@@ -30,24 +30,9 @@ export const MERCATOR_WORLD_SIZE = 2 * MERCATOR_HALF_WORLD;
 // to what a graphic near a pole looks like. Import it from the root, not from here: a name
 // re-exported by one subpath and not the other is exactly what `engineFacade` forbids.
 
-/** lon/lat degrees → EPSG:3857 meters. */
-export function toMercator(lonLat: [number, number]): ProjectedPosition {
-    const [lon, lat] = lonLat;
-    const clamped = clampToMercator(lat);
-    return [
-        (lon * Math.PI / 180) * R,
-        Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI / 180) / 2)) * R,
-    ];
-}
-
-/** EPSG:3857 meters → lon/lat degrees. */
-export function toLonLat(position: ProjectedPosition): [number, number] {
-    const [x, y] = position;
-    return [
-        (x / R) * 180 / Math.PI,
-        (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * 180 / Math.PI,
-    ];
-}
+// The lon/lat <-> EPSG:3857 pair is the root's, which every renderer shares; these are
+// its MapLibre-side names. @see lonLatToMercator
+export {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from '@zaes/tactical-graphics';
 
 /**
  * MapLibre's zoom as an OpenLayers **resolution**: projected meters per screen

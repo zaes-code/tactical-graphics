@@ -15,6 +15,79 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.3.0] — 2026-09-23
+
+### Added
+
+- **The graphic builder is on the root entry point**: `buildPaintedGraphic`, `paintGraphic`,
+  `PaintedGraphic`, `projectToMercator`, `restoreSnapshotGraphics` and `centerSymbolPlacement`,
+  plus `lonLatToMercator` / `mercatorToLonLat`. They turn a saved base into the paint layer's
+  input, with no map library involved, so any renderer can build its graphics the way the
+  MapLibre one does. `/maplibre` still exports them under their old names
+  (`buildTacticalGraphic`, `MapLibreTacticalGraphic`, `toMercator`, ...), so nothing breaks.
+  The helpers that came with them are exported too: `carryPaintFlags`, `DEFAULT_OFFSET_PX`,
+  `descriptionOf`, `withDrawingResolution`, `followTaskCenter`, `securityOperationCenter`, and
+  the `RestoredGraphic` type.
+- `describedProperties`, the rule a renderer applies before filing a bag.
+
+### Fixed
+
+- **MapLibre's selection box missed the graphic on a turned or tilted camera.** It projected two
+  corners of the graphic's bounds, which spans the whole box only north-up. It projects all
+  four now.
+
+- **`renderTacticalGraphic` threw a turf error for a bag with no `rotation` in it.** The
+  property is optional in the schema and required by the generators, and the ones that read it
+  most directly spend it without a guard — so `{name, radius}`, the most ordinary bag a
+  point-based graphic can be handed, came back as `coordinates must contain numbers` from
+  inside `@turf/destination`, naming neither the field nor the graphic. It defaults to zero,
+  which is what every generator that does guard already falls back to; no output changes.
+- **A file's contents no longer depend on which renderer wrote it.** The MapLibre adapter
+  completes the amplifier bag before drawing — a zero label gap for the arc mission tasks, a
+  rectangle's width read back off its ring, a drawn-anchor graphic's `radius` and `rotation`
+  recovered from its own points — and was filing that completed bag, so a MapLibre-written
+  snapshot carried `labelGapDegrees` for 192 graphics that an OpenLayers-written one did not.
+  Half of it was an instruction to the paint layer and half a second copy of the geometry,
+  which is what let 151204 contain report a 40 km radius beside a symbol drawn at 29.8. A
+  snapshot now carries the description: what the caller stated, plus what a renderer derived
+  from something the file does not hold — a screen-sized default spent at the drawing
+  resolution stays, since that metre value is the only record of it. It holds after the
+  graphic is touched, too: a gesture and the properties dialog both rebuild from the
+  description rather than from the bag the last draw rendered with.
+
+- **Opening a file on OpenLayers that another renderer wrote lost, and could misread, what it
+  said.** Three faults in one sentence, and the twenty rectangular areas had all three. A
+  `decorationSize` arriving beside a `width` **outranked it** when the base was rebuilt — the
+  precedence was written against the files this engine writes, which state one size per holder,
+  and MapLibre states both — so a box saved 87,465 m wide came back at 45,733 and drew 20.7 km
+  from where the same file draws on the other engine. A save then walked the holders and asked
+  each what it knew, which drops any field this engine does not itself manage: that was
+  `decorationSize` on 146 of the 318, each one a screen-sized default spent at the zoom the
+  graphic was drawn at, which is the one derived value a snapshot has to carry because it holds
+  no viewport. And a figure the *caller* stated could be replaced by the one a renderer had
+  substituted to draw with, so a bag stating `radius: 180000` came back filed at the tick size
+  MapLibre uses for a bridge.
+
+  A snapshot now survives a re-save on either engine: what the file said is kept, what the
+  caller stated is theirs, and the figures the library refuses to file beside the points that
+  already carry them — a drawn-anchor graphic's `radius` and `rotation`, and a radius sitting
+  next to the `length` and `width` that are the whole of the five axis-and-width plates' shape
+  — are refused at *both* doors rather than only on restore.
+
+- **A restored base was tidied only when it gained a point.** `restoreTacticalGraphics` ran
+  the library's `normalizeDrawnBase` over an incoming base and then wrote the result back only
+  if the point count had changed — but the normalizer also *re-places* points, which for the
+  demolition obstacles is its whole job. So the same file opened as two different saves:
+  MapLibre squared point 3 onto the perpendicular its plate describes, OpenLayers kept the raw
+  click, and the first drag of either endpoint then moved the symbol to two different places
+  (197 m apart on point 1, 981 m on point 2). The base is written back whenever it differs.
+- **A rotate, a resize or a translate left the base off its own construction.** Those gestures
+  transform it wholesale in projected metres while the constraint being transformed — a point
+  square to an axis, a stem on a perpendicular — is geodesic, so a planar transform shears it.
+  Measured over the registry: 35 graphics, up to 902 m after one rotate-resize-translate. The
+  OpenLayers line controller now settles the base when a gesture ends, once, which is the
+  guarantee MapLibre has always had from normalizing on every build.
+
 ---
 
 ## [4.2.2] — 2026-09-21
@@ -1527,7 +1600,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...develop
+[4.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...v4.3.0
 [4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
 [4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0

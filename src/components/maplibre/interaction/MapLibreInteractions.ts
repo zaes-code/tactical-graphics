@@ -38,7 +38,7 @@ import {
     handleRole,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
-import {buildTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {buildTacticalGraphic, descriptionOf, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
 import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
@@ -593,7 +593,7 @@ export class MapLibreInteractions {
             onPivot: false,
             handle: -1,
             origin,
-            start: {geometry: graphic.base.geometry, properties: graphic.properties},
+            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
             // Already past the threshold: the host decided a drag began by pressing the
             // affordance, and re-measuring it against a pixel distance would swallow the
             // first few degrees of every rotate.
@@ -653,13 +653,21 @@ export class MapLibreInteractions {
         const bounds = unionBounds(graphic?.graphic.bounds, boundsOf(graphic?.labels?.geometry));
         if (!bounds) return undefined;
 
-        // Two opposite corners: the projection counts y upward and the screen counts it
-        // downward, so min and max are re-derived after converting rather than assumed.
-        const topLeft = this.map.project(toLonLat([bounds.minX, bounds.maxY]));
-        const bottomRight = this.map.project(toLonLat([bounds.maxX, bounds.minY]));
-        const x = Math.min(topLeft.x, bottomRight.x);
-        const y = Math.min(topLeft.y, bottomRight.y);
-        return {x, y, width: Math.abs(bottomRight.x - topLeft.x), height: Math.abs(bottomRight.y - topLeft.y)};
+        // All four corners, and min and max re-derived on screen. Flat and north-up two
+        // opposite corners were enough; a turned or tilted camera maps the box to a
+        // rotated quadrilateral, and two corners of that span only part of it.
+        const corners: ProjectedPosition[] = [
+            [bounds.minX, bounds.minY],
+            [bounds.minX, bounds.maxY],
+            [bounds.maxX, bounds.minY],
+            [bounds.maxX, bounds.maxY],
+        ];
+        const onScreen = corners.map(corner => this.map.project(toLonLat(corner)));
+        const xs = onScreen.map(p => p.x);
+        const ys = onScreen.map(p => p.y);
+        const x = Math.min(...xs);
+        const y = Math.min(...ys);
+        return {x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y};
     }
 
     /**
@@ -1391,7 +1399,7 @@ export class MapLibreInteractions {
             vertex,
             insertAt,
             origin: [event.lngLat.lng, event.lngLat.lat],
-            start: {geometry: graphic.base.geometry, properties: graphic.properties},
+            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
