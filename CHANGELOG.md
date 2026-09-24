@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.3.0] — 2026-09-23
+
 ### Added
 
 - **The graphic builder is on the root entry point**: `buildPaintedGraphic`, `paintGraphic`,
@@ -23,6 +25,10 @@ the npm publish dates — when a version actually became installable.
   input, with no map library involved, so any renderer can build its graphics the way the
   MapLibre one does. `/maplibre` still exports them under their old names
   (`buildTacticalGraphic`, `MapLibreTacticalGraphic`, `toMercator`, ...), so nothing breaks.
+  The helpers that came with them are exported too: `carryPaintFlags`, `DEFAULT_OFFSET_PX`,
+  `descriptionOf`, `withDrawingResolution`, `followTaskCenter`, `securityOperationCenter`, and
+  the `RestoredGraphic` type.
+- `describedProperties`, the rule a renderer applies before filing a bag.
 
 ### Fixed
 
@@ -81,10 +87,6 @@ the npm publish dates — when a version actually became installable.
   Measured over the registry: 35 graphics, up to 902 m after one rotate-resize-translate. The
   OpenLayers line controller now settles the base when a gesture ends, once, which is the
   guarantee MapLibre has always had from normalizing on every build.
-
-### Added
-
-- `describedProperties`, the rule a renderer applies before filing a bag.
 
 ---
 
@@ -1598,7 +1600,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...develop
+[4.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...v4.3.0
 [4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
 [4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
