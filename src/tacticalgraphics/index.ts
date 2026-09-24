@@ -539,3 +539,27 @@ export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/reg
 export type {GraphicPainters} from './symbology/registry';
 
 export {amplifierText, withHiddenAmplifiers} from './symbology/paintFunctions';
+
+/**
+ * ## Building a graphic's paint input, for any renderer
+ *
+ * A saved base and its description in, a {@link PaintedGraphic} out: the geometry in
+ * projected meters, the completed amplifier bag, and what the paint functions read. Every
+ * renderer that draws from the shared paint layer builds through here, so they agree on
+ * sizes, defaults and old-file repairs. `restoreSnapshotGraphics` is the file door;
+ * `centerSymbolPlacement` places a host's unit symbol on the six graphics that carry one.
+ */
+export {
+    buildPaintedGraphic,
+    carryPaintFlags,
+    DEFAULT_OFFSET_PX,
+    descriptionOf,
+    paintGraphic,
+    projectToMercator,
+    withDrawingResolution,
+} from './core/paintedGraphic';
+export type {PaintedGraphic} from './core/paintedGraphic';
+export {restoreSnapshotGraphics} from './core/restoreGraphic';
+export type {RestoredGraphic} from './core/restoreGraphic';
+export {centerSymbolPlacement, followTaskCenter, securityOperationCenter} from './core/centerSymbol';
+export {lonLatToMercator, mercatorToLonLat} from './core/mercator';

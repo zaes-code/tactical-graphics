@@ -39,7 +39,8 @@
     // kept in sync with this.
     "baseUrl": ".",
     "paths": {
-      "@zaes/tactical-graphics": ["src/tacticalgraphics/index.ts"]
+      "@zaes/tactical-graphics": ["src/tacticalgraphics/index.ts"],
+      "@zaes/tactical-graphics/thumbnails": ["src/tacticalgraphics/assets/graphicThumbnails.ts"]
     }
   },
   // `vite.config.ts` is included so the build configuration is typechecked too; it sat

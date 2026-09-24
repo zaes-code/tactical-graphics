@@ -17,12 +17,23 @@ import {fileURLToPath} from 'node:url';
  */
 const LIBRARY_NAME = '@zaes/tactical-graphics';
 const LIBRARY_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/index.ts', import.meta.url));
+const THUMBNAILS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/assets/graphicThumbnails.ts', import.meta.url));
+
+/**
+ * Anchored, because a plain `{name: path}` alias is a prefix match: the root's entry would
+ * swallow `@zaes/tactical-graphics/thumbnails` and resolve it to `index.ts/thumbnails`.
+ * The subpath comes first for the same reason.
+ */
+const LIBRARY_ALIASES = [
+    {find: new RegExp(`^${LIBRARY_NAME}/thumbnails$`), replacement: THUMBNAILS_ENTRY},
+    {find: new RegExp(`^${LIBRARY_NAME}$`), replacement: LIBRARY_ENTRY},
+];
 
 export default defineConfig(() => ({
     plugins: [react()],
 
     resolve: {
-        alias: {[LIBRARY_NAME]: LIBRARY_ENTRY},
+        alias: LIBRARY_ALIASES,
     },
 
     /**
@@ -71,7 +82,7 @@ export default defineConfig(() => ({
         // Vite resolves ESM natively, so the ESM_DEPS allow-list `craco.config.js` carried
         // for turf v7, polyclip-ts and the rest is gone rather than translated. That list
         // existed only because CRA's Jest excluded node_modules from Babel.
-        alias: {[LIBRARY_NAME]: LIBRARY_ENTRY},
+        alias: LIBRARY_ALIASES,
         include: ['src/**/*.test.{ts,tsx}'],
         // The Playwright drivers under `scripts/` and `tmp/` drive a running app and are not
         // unit tests; `dist/` holds built copies of the same suites.
