@@ -10,6 +10,7 @@ import {
     DialogTitle,
     Divider,
     FormControlLabel,
+    Menu,
     FormGroup,
     IconButton,
     InputAdornment,
@@ -60,6 +61,8 @@ interface Props {
     onClearAll(): void;
     /** Downloads every graphic on the map as a .geojson file. */
     onExportGeoJson(): void;
+    /** Formats beyond GeoJSON the engine can write; the Export button becomes a menu. */
+    exportFormats?: Array<{label: string; run(): void}>;
     /** Replaces everything on the map with the graphics in `file`. */
     onImportGeoJson(file: File): void;
     interactionMode: EditMode;
@@ -295,6 +298,7 @@ const MapControls: React.FC<Props> = ({
     onDrawSamples,
     onClearAll,
     onExportGeoJson,
+    exportFormats,
     onImportGeoJson,
     interactionMode,
     onToggleInteraction,
@@ -309,6 +313,7 @@ const MapControls: React.FC<Props> = ({
         ALL_OPTIONS.find(o => o.value === defaultShape) ?? null
     );
     const [search, setSearch] = useState('');
+    const [exportMenu, setExportMenu] = useState<HTMLElement | null>(null);
     const [filterOpen, setFilterOpen] = useState(false);
     const [enabledCategories, setEnabledCategories] = useState<Set<TacticalGraphicCategory>>(loadEnabledCategories);
     const [specificationFilter, setSpecificationFilter] = useState<SpecificationFilter>(loadSpecificationFilter);
@@ -819,7 +824,7 @@ const MapControls: React.FC<Props> = ({
                     <Box sx={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75}}>
                         <Box
                             component="button"
-                            onClick={onExportGeoJson}
+                            onClick={(event: React.MouseEvent<HTMLElement>) => (exportFormats?.length ? setExportMenu(event.currentTarget) : onExportGeoJson())}
                             sx={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
                                 py: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, cursor: 'pointer',
@@ -831,6 +836,12 @@ const MapControls: React.FC<Props> = ({
                             <FileDownloadIcon sx={{fontSize: 15}}/>
                             Export
                         </Box>
+                        <Menu anchorEl={exportMenu} open={!!exportMenu} onClose={() => setExportMenu(null)}>
+                            <MenuItem dense onClick={() => { setExportMenu(null); onExportGeoJson(); }}>GeoJSON</MenuItem>
+                            {exportFormats?.map(format => (
+                                <MenuItem key={format.label} dense onClick={() => { setExportMenu(null); format.run(); }}>{format.label}</MenuItem>
+                            ))}
+                        </Menu>
                         <Box
                             component="button"
                             onClick={() => importInputRef.current?.click()}

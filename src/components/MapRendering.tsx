@@ -14,6 +14,8 @@ import ViewControls from './ViewControls';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
+// Empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
+import {demoAddons} from '@demo/addons';
 import {
     DEFAULT_PALETTE,
     TacticalGraphicHostility,
@@ -52,15 +54,18 @@ function loadTilted(): boolean {
  * views take the same props and read the same config singleton, so anything that
  * differs between them is a renderer bug.
  */
-export type MapEngine = 'openlayers' | 'maplibre';
+export type MapEngine = 'openlayers' | 'maplibre' | (string & {});
 
 const ENGINE_LABELS: Record<MapEngine, string> = {
     openlayers: 'OpenLayers',
     maplibre: 'MapLibre',
+    ...Object.fromEntries(demoAddons.map(addon => [addon.id, addon.label])),
 };
 
+/** A stored choice only counts while that engine is on offer: an add-on may not be loaded. */
 function loadEngine(): MapEngine {
-    return localStorage.getItem(LS_ENGINE) === 'maplibre' ? 'maplibre' : 'openlayers';
+    const stored = localStorage.getItem(LS_ENGINE);
+    return stored && stored in ENGINE_LABELS ? stored : 'openlayers';
 }
 
 /**
@@ -142,6 +147,7 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [engine, setEngine] = useState<MapEngine>(loadEngine);
+    const addonEngine = demoAddons.find(addon => addon.id === engine);
     /** MapLibre's 3D view. OpenLayers has no tilted mode, so the toggle shows on MapLibre only. */
     const [tilted, setTilted] = useState<boolean>(loadTilted);
     const handleTiltChange = (_: React.MouseEvent<HTMLElement>, next: '2d' | '3d' | null) => {
@@ -370,7 +376,17 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
               * a clean map at the same center and zoom.
               */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
-                {engine === 'openlayers'
+                {addonEngine
+                    ? <React.Suspense fallback={null}>
+                        <addonEngine.View
+                            key={addonEngine.id}
+                            darkMode={darkMode}
+                            graphicsSettings={settings}
+                            onReady={handleEngineReady}
+                            onInteractionModeChange={setInteractionMode}
+                        />
+                    </React.Suspense>
+                    : engine === 'openlayers'
                     ? <OpenLayersMap
                         key="openlayers"
                         darkMode={darkMode}
@@ -397,7 +413,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 <EditAffordances engine={engineHandle} active={interactionMode === 'edit'}/>
 
                 {/* Tilt and turn from clicks, for anyone without a right mouse button. */}
-                {engineHandle?.camera && engine === 'maplibre' && tilted && <ViewControls camera={engineHandle.camera}/>}
+                {engineHandle?.camera && (addonEngine || (engine === 'maplibre' && tilted)) && <ViewControls camera={engineHandle.camera}/>}
 
                 {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
@@ -423,6 +439,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         onDrawSamples={(hostility, names) => engineRef.current?.drawSamples(hostility, names)}
                         onClearAll={() => engineRef.current?.clearAll()}
                         onExportGeoJson={() => engineRef.current?.exportGeoJson()}
+                        exportFormats={engineHandle?.exportFormats}
                         onImportGeoJson={file => engineRef.current?.importGeoJson(file)}
                         interactionMode={interactionMode}
                         isRotating={interactionMode === 'rotate'}
