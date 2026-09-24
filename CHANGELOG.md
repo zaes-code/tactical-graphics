@@ -88,6 +88,18 @@ the npm publish dates — when a version actually became installable.
   OpenLayers line controller now settles the base when a gesture ends, once, which is the
   guarantee MapLibre has always had from normalizing on every build.
 
+### Documentation
+
+- **The README's counts are current again**, recomputed from the built library: 225 graphics in
+  both publications (it said 224, and 214 in a second place), twenty rectangular zones (eighteen,
+  and seventeen in the thumbnail section), 318 thumbnails (293), labels kept on the graphic
+  feature for 114 of 318 graphics (127 of 317), and 312 graphics without a center symbol
+  (280-odd). It also documents the graphic builder, and no longer points at notes that are not
+  published.
+- `docs/app6-field-validation.md` says plainly that it records the 2026-09-03 sweep rather than
+  today's field sets, and no longer cites line numbers that have drifted or paths that are not
+  in this repository.
+
 ---
 
 ## [4.2.2] — 2026-09-21
