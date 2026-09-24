@@ -4,6 +4,12 @@ Does each graphic offer the amplifiers APP-06 says it carries? **Sweep complete*
 graphics that carry a distinctive field have had their APP-06 Chapter 8 plate read against the
 registry.
 
+> **A record of the sweep as it stood, not a description of the code today.** The field sets it
+> quotes are the registry's at the time, and several of the rulings below have been applied
+> since, so a set shown here as off may be on now. What each graphic offers today is in
+> `src/components/openlayers/graphicFieldRegistry.ts`, and the generated
+> [graphic field matrix](graphic-field-matrix.md) lists it for every graphic.
+
 This is the third leg of the audit. The other two are automated and already done: the
 registry says which fields a graphic *offers*, and the catalog sweep says which it *draws*.
 Neither can tell you whether doctrine agrees, or whether the amplifier is in the place the
@@ -16,11 +22,10 @@ APP-06 Chapter 8 puts amplifier eligibility in the **Template** column as labell
 constraints in prose. Both are images or table text, which is why no grep found them: of 649
 symbol-set-25 entries, only 19 name an amplifier letter in extractable text.
 
-`tmp/pdfs/crop_app6_rows.py` crops one whole table row per entity code to PNG — name,
-template, draw rules and example together, which is the unit a person reads.
-`tmp/pdfs/sheet_app6_rows.py` then stacks four to a review sheet, which is what made 84 plates
-readable in one pass. Both use PyMuPDF rather than the pdfplumber path in
-`build_app6_only_reference.py`, which cannot run here: pdfplumber and reportlab are not installed.
+Two working scripts, not part of this repository, did the reading: one crops a whole table
+row per entity code to PNG (name, template, draw rules and example together, which is the unit
+a person reads), and one stacks four of those to a review sheet, which is what made 84 plates
+readable in one pass. Both use PyMuPDF.
 
 **Read the registry, not the caption.** The `[...]` in each sheet caption is the *distinctive-field
 subset* — the fields that made the graphic interesting enough to crop. It is not the full field
@@ -68,7 +73,7 @@ first makes no sense to an operator, and field `AP` already routes to the design
 target graphics, so this is the existing convention rather than a new one. `FIRE_SUPPORT_AREA`
 was split — position area for artillery has its own constant and keeps its plain `T`.
 
-`FIRE_SUPPORT_AREA` (`graphicFieldRegistry.ts:282`) is `f(true, false, true, true, true)` —
+`FIRE_SUPPORT_AREA` (in `graphicFieldRegistry.ts`) was `f(true, false, true, true, true)` —
 `identifier1` on, `identifier2` and `countryCodes` off. Twelve graphics share it. The plates
 split those twelve in two:
 
@@ -168,8 +173,8 @@ the mistake `isDarkMode` was. `AP` maps to `identifier1`, as it already did else
 - **`AN` has no field at all.** Orientation is doctrinally an amplifier in mils here; we carry
   `rotation` in degrees as geometry and do not offer it.
 
-`output/reports/APP-06E2-vs-FM-1-02.2-tactical-graphics.md` already listed this graphic as the one
-confirmed non-1:1 shared symbol. This confirms it at field level.
+An earlier comparison of APP-06 Edition E with FM 1-02.2, not published here, already listed this
+graphic as the one confirmed non-1:1 shared symbol. This confirms it at field level.
 
 ## Deliberate divergences — confirmed, no action
 
@@ -181,8 +186,8 @@ break, `T1/AS1` below, `N` at each end. That is exactly `identifier1 + countryCo
 `identifier2 + secondCountryCode`, with `N` coming from the hostility rather than a field.
 
 **Airspace coordination areas ×3 (240101/240102/240103) omit `T2`.** The APP-06 template carries
-it; we do not offer `identifier2`. This is not an oversight — `graphicFieldRegistry.ts:286-291`
-documents the call and its source: *"FM 1-02.2 Table 5-23 template lists T, X, X1, W, W1 only —
+it; we do not offer `identifier2`. This was not an oversight: the registry's comment at the time
+documented the call and its source: *"FM 1-02.2 Table 5-23 template lists T, X, X1, W, W1 only —
 no second identifier (Field AS is not specified for engagement zones or ACAs)."* A real FM/APP-06
 divergence someone already adjudicated.
 
@@ -240,5 +245,5 @@ Nothing from this sweep. Two things it deliberately did not cover:
   each amplifier sits where the plate puts it. The free fire areas are the visible example: their
   plate stacks `FFA` on its own line above the designation, and we render the literal as a prefix
   on the same line. That is a layout question across the whole area family, not a field one.
-- **The seven graphics with no APP-06 counterpart.** FM 1-02.2 only; nothing in Chapter 8 to read
-  them against. @see `ai/app-6.md`
+- **The graphics with no APP-06 counterpart**, eight today. FM 1-02.2 only; nothing in Chapter 8
+  to read them against. `getSpecifications(name)` names them.

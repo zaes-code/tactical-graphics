@@ -367,7 +367,7 @@ rather than a broken shape.
 | Base geometry | Graphics | Example |
 |---|---|---|
 | `LineString` | arrows, phase lines, boundaries, corridors | `MainAxisOfAdvance`, `PhaseLine` |
-| `LineString` **+ `width`** | the eighteen rectangular zones | `FreeFireAreaRectangular`, `TargetAreaRectangular` |
+| `LineString` **+ `width`** | the twenty rectangular zones | `FreeFireAreaRectangular`, `TargetAreaRectangular` |
 | `Point` | mission tasks, range fans, fighting positions | `Secure`, `Occupy`, `BaseDefenseZone` |
 | `Polygon` | areas | `ObjectiveArea`, `NamedAreaOfInterest` |
 
@@ -418,7 +418,7 @@ getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02
 ```
 
 **Every graphic says which standard defines it, and carries the identifier that standard
-gives it.** `getSpecifications(name)` answers with one or both — 224 graphics are in both
+gives it.** `getSpecifications(name)` answers with one or both — 225 graphics are in both
 FM 1-02.2 and APP-06, 85 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
 returns APP-06's six-digit entity code **as a string**, or `undefined` for those 8, since
 FM 1-02.2 publishes no identifiers of its own. `getNameByEntityCode('140300')` goes the
@@ -682,7 +682,7 @@ the way it supplies `graphicSize`. On MapLibre the same flag goes on the `PaintF
 
 ### A picture for a menu
 
-A list of names does not tell an operator what is about to land on their map, and 293 of
+A list of names does not tell an operator what is about to land on their map, and 318 of
 them do not tell them apart. `@zaes/tactical-graphics/thumbnails` carries one small SVG
 per graphic for exactly that:
 
@@ -735,7 +735,7 @@ graphic carries no amplifier at all, a point graphic carries its designation and
 else, and only an area keeps the full stack, held clear of its own boundary. The doctrinal
 abbreviation always stays, because `PL` against `LD` against `FSCL` is the whole difference
 between forty otherwise identical strokes. Areas are drawn as a free-form blob, since a
-rectangle is a *different symbol* in this standard — the seventeen genuinely rectangular
+rectangle is a *different symbol* in this standard — the twenty genuinely rectangular
 zones and the nineteen circular ones keep their true shapes.
 
 **Nothing here is fetched.** The subpath is plain inline markup with no external
@@ -759,7 +759,7 @@ const {graphic, labels} = prepareFeatures(rendered);
 
 source.addFeature(graphic);
 
-// `labels` is undefined for 127 of the 317 graphics — the ones that keep every glyph
+// `labels` is undefined for 114 of the 318 graphics — the ones that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
 // Adding a label feature for one of those draws its designation twice.
 if (labels) source.addFeature(labels);
@@ -807,6 +807,30 @@ exported from the root entry point for exactly this — `getPaintFunction(name)`
 returns the marks to draw, in projected meters, with no renderer in them. That is
 how both of the renderers above are built, and it is the supported way to build a
 third.
+
+**Start from the builder rather than the paint functions.** `buildPaintedGraphic` takes a
+graphic's name, its base geometry in lon/lat and its `tacticalGraphic` fields, and returns
+the paint layer's input with the base tidied and every default filled in, the same way the
+MapLibre renderer builds its graphics. `paintGraphic` then returns the marks:
+
+```ts
+import {buildPaintedGraphic, paintGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+const resolution = 20;                                          // meters per screen pixel
+const context = document.createElement('canvas').getContext('2d')!;  // only to measure text
+
+const graphic = buildPaintedGraphic(TacticalGraphicName.FieldsOfFire, geometry, {designation: 'A'}, resolution);
+const paints = graphic
+    ? paintGraphic(graphic, {resolution, measureText: (text, font) => ((context.font = font), context.measureText(text).width)})
+    : [];
+
+for (const paint of paints) {
+    // paint.geometry is in EPSG:3857 meters; draw its stroke, fill, text or circle.
+}
+```
+
+`restoreSnapshotGraphics(snapshot, resolution)` builds a whole saved map the same way, and
+`lonLatToMercator` / `mercatorToLonLat` convert between the two coordinate spaces.
 
 ### Drawing the label text
 
@@ -1050,7 +1074,7 @@ them holds a fixed pixel size — and all six stop growing at the same 96 px cei
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
-dependency: a consumer who wants the geometry, or the other 280-odd graphics, never
+dependency: a consumer who wants the geometry, or the other 312 graphics, never
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
@@ -1337,7 +1361,7 @@ band ranges are in **kilometers**.
 
 The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
 
-**Which plate that is depends on the graphic, and each one records its own answer.** 214 are defined by both FM 1-02.2 and NATO APP-06, 69 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
+**Which plate that is depends on the graphic, and each one records its own answer.** 225 are defined by both FM 1-02.2 and NATO APP-06, 85 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Suppress, …) resize, but refuse to **rotate** — their X turned 45° is a different symbol. Cover, Guard and Screen were fixed-size badges until 2.0.0; APP-06 gives them four anchor points, so they are drawn from two now — one arrow, with the other derived — and they take every gesture. Ask `allowedGestures(name)` rather than guessing.*
 
@@ -1712,7 +1736,9 @@ src/components/
 The demo runs on **either renderer** — there is a picker in the app bar, and a
 graphic drawn in one survives the switch to the other. It shows drawing, editing,
 rotating, resizing, modifying and a Feature Properties dialog, on a keyless
-OpenStreetMap basemap (no API key needed). Start it with `npm start`.
+OpenStreetMap basemap (no API key needed). Its graphic picker shows each symbol's
+[thumbnail](#a-picture-for-a-menu), and on MapLibre a 2D/3D toggle tilts the map over keyless
+terrain, with drawing and editing still working tilted. Start it with `npm start`.
 
 **Where the shared code lives, and why it matters.** The geometry layer never
 imports `ol` or `maplibre-gl` — the build asserts it — but it carries more than
@@ -1720,8 +1746,8 @@ geometry: `symbology/` holds the paint functions that say what marks to draw, an
 `core/symbology.ts` and `core/handles.ts` hold the per-graphic rules that decide a
 label's font, a decoration's size, which handle sets a width and where a rotate
 pivots. Both renderers read all of it. A rule that lives in one renderer instead
-is how the two silently drift apart, which is a mistake this repo has made and
-written up: `ai/conventions.md`, "A symbology fact never lives in a holder".
+is how the two silently drift apart, which is a mistake this repo has made more than
+once. So the rule is that a symbology fact never lives in a renderer.
 
 ---
 
@@ -1768,7 +1794,9 @@ a crossed task like Destroy resizes, but has no rotation to offer, because its X
 
 ## Roadmap
 
-- Complete the remaining graphics from FM 1-02.2.
+- Keep pace with FM 1-02.2 and APP-06 as they are revised. Every graphic this library tracks is
+  complete today, so a new edition's additions are what [Upcoming graphics](#upcoming-graphics)
+  will list next.
 - **Leaflet is scoped as a third rendering engine.** The groundwork is done: symbology
   now lives in the map-agnostic half as paint functions — geometry, colors, and text
   described in projected meters — and both shipping engines are consumers of it rather

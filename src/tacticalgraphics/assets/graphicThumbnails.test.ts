@@ -132,7 +132,7 @@ describe('graphic thumbnails', () => {
 
     /**
      * The bean. A traced area must not arrive as the four-corner box the catalog uses —
-     * that is the shape the seventeen genuinely rectangular zones own, and the picker's
+     * that is the shape the twenty genuinely rectangular zones own, and the picker's
      * whole job is telling them apart.
      */
     it('draws free-form areas as a curve, not a box', () => {
