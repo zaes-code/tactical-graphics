@@ -15,7 +15,20 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **The graphic builder is on the root entry point**: `buildPaintedGraphic`, `paintGraphic`,
+  `PaintedGraphic`, `projectToMercator`, `restoreSnapshotGraphics` and `centerSymbolPlacement`,
+  plus `lonLatToMercator` / `mercatorToLonLat`. They turn a saved base into the paint layer's
+  input, with no map library involved, so any renderer can build its graphics the way the
+  MapLibre one does. `/maplibre` still exports them under their old names
+  (`buildTacticalGraphic`, `MapLibreTacticalGraphic`, `toMercator`, ...), so nothing breaks.
+
 ### Fixed
+
+- **MapLibre's selection box missed the graphic on a turned or tilted camera.** It projected two
+  corners of the graphic's bounds, which spans the whole box only north-up. It projects all
+  four now.
 
 - **`renderTacticalGraphic` threw a turf error for a bag with no `rotation` in it.** The
   property is optional in the schema and required by the generators, and the ones that read it
