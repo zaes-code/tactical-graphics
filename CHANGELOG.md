@@ -15,6 +15,25 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.3.1] — 2026-09-23
+
+Documentation only: the npm page shows the README of the latest version, and 4.3.0 shipped
+before these fixes landed. No code changed.
+
+### Documentation
+
+- **The README's counts are current again**, recomputed from the built library: 225 graphics in
+  both publications (it said 224, and 214 in a second place), twenty rectangular zones (eighteen,
+  and seventeen in the thumbnail section), 318 thumbnails (293), labels kept on the graphic
+  feature for 114 of 318 graphics (127 of 317), and 312 graphics without a center symbol
+  (280-odd). It also documents the graphic builder, and no longer points at notes that are not
+  published.
+- `docs/app6-field-validation.md` says plainly that it records the 2026-09-03 sweep rather than
+  today's field sets, and no longer cites line numbers that have drifted or paths that are not
+  in this repository.
+
+---
+
 ## [4.3.0] — 2026-09-23
 
 ### Added
@@ -87,18 +106,6 @@ the npm publish dates — when a version actually became installable.
   Measured over the registry: 35 graphics, up to 902 m after one rotate-resize-translate. The
   OpenLayers line controller now settles the base when a gesture ends, once, which is the
   guarantee MapLibre has always had from normalizing on every build.
-
-### Documentation
-
-- **The README's counts are current again**, recomputed from the built library: 225 graphics in
-  both publications (it said 224, and 214 in a second place), twenty rectangular zones (eighteen,
-  and seventeen in the thumbnail section), 318 thumbnails (293), labels kept on the graphic
-  feature for 114 of 318 graphics (127 of 317), and 312 graphics without a center symbol
-  (280-odd). It also documents the graphic builder, and no longer points at notes that are not
-  published.
-- `docs/app6-field-validation.md` says plainly that it records the 2026-09-03 sweep rather than
-  today's field sets, and no longer cites line numbers that have drifted or paths that are not
-  in this repository.
 
 ---
 
@@ -1612,7 +1619,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...develop
+[4.3.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...v4.3.0
 [4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
 [4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
