@@ -68,6 +68,12 @@ export interface MapEngineHandle extends TacticalGraphicsEngine {
 
     /** Present on an engine with a tilted camera. @see ViewCamera */
     camera?: ViewCamera;
+
+    /**
+     * Formats an engine can save to beyond GeoJSON, which every engine writes. The panel
+     * turns its Export button into a menu when there are any.
+     */
+    exportFormats?: Array<{label: string; run(): void}>;
 }
 
 /** What a fully-featured engine declares. Both engines pass this today. */

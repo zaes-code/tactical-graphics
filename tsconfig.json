@@ -40,7 +40,9 @@
     "baseUrl": ".",
     "paths": {
       "@zaes/tactical-graphics": ["src/tacticalgraphics/index.ts"],
-      "@zaes/tactical-graphics/thumbnails": ["src/tacticalgraphics/assets/graphicThumbnails.ts"]
+      "@zaes/tactical-graphics/thumbnails": ["src/tacticalgraphics/assets/graphicThumbnails.ts"],
+      // An add-on engine's slot in the demo: empty here. @see src/components/demoAddons.ts
+      "@demo/addons": ["src/components/demoAddonsNone.ts"]
     }
   },
   // `vite.config.ts` is included so the build configuration is typechecked too; it sat
