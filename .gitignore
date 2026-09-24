@@ -54,6 +54,9 @@ __pycache__/
 /public/maplibre-gl-worker.mjs
 /public/maplibre-gl-shared.mjs
 .devserver.log
+# Which add-on engines this machine's demo loads under `npm run start:addons`. Local by design:
+# an add-on is licensed separately and never part of this repo. @see src/components/demoAddons.ts
+/demo-addons.local.json
 
 # Scratch output from analysis runs — never part of the repo. The APP-06 extracts
 # under here are standard-derived material and must not reach the public mirror.

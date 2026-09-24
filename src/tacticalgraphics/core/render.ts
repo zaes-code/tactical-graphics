@@ -576,7 +576,20 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
         // deriving it from two anchor points, and it never reached the generator — the
         // dialog accepted a number that changed nothing. @see RectangularTargetOptions
         length: props.length,
-        rotation: props.rotation,
+        /*
+         * **Zero, not absent.** `PointGraphicOptions.rotation` is declared as a required
+         * `number` and the generators that read it most directly spend it without a guard —
+         * `CrossedMissionTask` puts `arm.angleDeg + rotation` straight into a bearing. The
+         * public property is optional, and dropping an undefined left those generators
+         * handing turf a `NaN`, so `renderTacticalGraphic` threw `coordinates must contain
+         * numbers` out of `@turf/destination` for a bag as ordinary as `{name, radius}`. A
+         * consumer reading that has nothing to go on: the message names neither the field
+         * nor the graphic.
+         *
+         * Zero is the value every generator that *does* guard already falls back to, so this
+         * states once what a dozen of them state separately, and changes no output.
+         */
+        rotation: props.rotation ?? 0,
         mirrored: props.mirrored,
         bend: props.bend,
         labelGapDegrees: props.labelGapDegrees,

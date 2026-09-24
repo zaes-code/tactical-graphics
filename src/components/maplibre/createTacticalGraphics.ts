@@ -14,15 +14,8 @@
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import type {FeatureCollection} from 'geojson';
 import {
-    TACTICAL_GRAPHIC_KEY,
     TacticalGraphicName,
     allowedGestures,
-    applyAmplifierAliases,
-    migrateRetiredGraphic,
-    upgradeAxisBase,
-    completeDemolitionBase,
-    snapshotVersionOf,
-    SNAPSHOT_VERSION,
     type AllowedGestures,
     type EditMode,
     type GestureKind,
@@ -30,13 +23,12 @@ import {
     type SelectionBox,
     type EngineCallbacks,
     type EngineCapabilities,
-    type TacticalGraphicProperties,
     type TacticalGraphicsEngine,
 } from '@zaes/tactical-graphics';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {MapLibreInteractions, type EditMode as InteractionMode} from './interaction/MapLibreInteractions';
 import {amplifiersHidden} from '../amplifierVisibility';
-import {DEFAULT_OFFSET_PX, buildTacticalGraphic} from './maplibreAdapter';
+import {restoreSnapshotGraphics} from './restoreGraphic';
 import {resolutionOf} from './projection';
 
 /** Options for {@link createTacticalGraphics}. */
@@ -132,66 +124,7 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
 
         restore(snapshot: FeatureCollection) {
             renderer.clear();
-            const resolution = resolutionOf(map);
-            /*
-             * **The file's own version, because a version 1 axis arrow is a different shape.**
-             *
-             * The eleven filed their width as an amplifier until 2026-09-10 and carry it as
-             * their last coordinate now, so an older record is a run of route points and a
-             * `width` where a current one is that run plus a coordinate. A collection that
-             * declares no version is read as version 1, which is what every unversioned one
-             * actually is — MapLibre wrote them itself until 2026-09-04.
-             * @see upgradeAxisBase, snapshotVersionOf
-             */
-            const version = snapshotVersionOf(snapshot);
-            for (const feature of snapshot.features ?? []) {
-                const props = feature.properties ?? {};
-                const stored = props[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
-                // @see applyAmplifierAliases — a snapshot may predate the 3.0.0 rename.
-                let properties = stored && applyAmplifierAliases(stored);
-                let geometry = feature.geometry;
-                /*
-                 * **And it may name a graphic that no longer exists.** `FightingPosition` was
-                 * retired into `FortifiedPosition`, and the two drew from different point
-                 * models, so the record needs its geometry rewritten and not just its name.
-                 * Stated in the library so this engine and OpenLayers migrate a file the same
-                 * way. @see migrateRetiredGraphic
-                 */
-                const migrated = properties && geometry && migrateRetiredGraphic(properties, geometry);
-                if (migrated) {
-                    properties = migrated.properties;
-                    geometry = migrated.geometry;
-                }
-                if (!properties?.name || !geometry) continue;
-                // A demolition obstacle saved with two points (OpenLayers allowed it until
-                // 2026-09-21) gets its third, whatever the version. @see completeDemolitionBase
-                if (geometry.type === 'LineString') {
-                    const completed = completeDemolitionBase(properties.name, geometry.coordinates);
-                    if (completed !== geometry.coordinates) geometry = {...geometry, coordinates: completed};
-                }
-                if (version < SNAPSHOT_VERSION && geometry.type === 'LineString') {
-                    const upgraded = upgradeAxisBase(
-                        properties.name,
-                        geometry.coordinates,
-                        properties.width,
-                        resolution * DEFAULT_OFFSET_PX * 2,
-                    );
-                    if (upgraded !== geometry.coordinates) {
-                        geometry = {...geometry, coordinates: upgraded};
-                        // **And the amplifier goes with it**, because the point now says what it
-                        // said. Left in the bag it is the second copy the whole change exists to
-                        // remove, and it rides straight back out into the next save.
-                        const {width, ...rest} = properties;
-                        void width;
-                        properties = rest as typeof properties;
-                    }
-                }
-                // Rebuilt through the generator from the saved description rather than
-                // restored as drawn output, which is what makes a graphic saved in the
-                // other engine arrive **editable** rather than as a picture of itself.
-                const graphic = buildTacticalGraphic(properties.name, geometry, properties, resolution);
-                if (!graphic) continue;
-
+            for (const {graphic, symbolId} of restoreSnapshotGraphics(snapshot, resolutionOf(map))) {
                 /*
                  * **The saved `symbolId` is the graphic's identity, and it was being thrown
                  * away here.** `buildTacticalGraphic` mints a fresh `mlb-N`, so a graphic
@@ -203,7 +136,7 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
                  * Which is exactly what happened to the "name only" choice: it is remembered
                  * per graphic id, so it survived OpenLayers → MapLibre and not the way back.
                  */
-                const id = typeof props.symbolId === 'string' && props.symbolId ? props.symbolId : graphic.id;
+                const id = symbolId ?? graphic.id;
                 renderer.add({...graphic, id, graphic: {...graphic.graphic, hideAmplifiers: amplifiersHidden(id) || undefined},
                     labels: graphic.labels ? {...graphic.labels, hideAmplifiers: amplifiersHidden(id) || undefined} : undefined});
             }

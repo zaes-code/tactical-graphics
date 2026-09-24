@@ -40,6 +40,8 @@
     // Demo-only: the React view and the spike's fixture loader. `MapLibre.tsx`
     // is excluded by the .ts-only include above; `spikeDriver.ts` is not, so it
     // is named here. It reads a FeatureCollection the demo happens to define.
-    "src/components/maplibre/spikeDriver.ts"
+    "src/components/maplibre/spikeDriver.ts",
+    // Demo-only too: terrain, sky and camera are the host's basemap, not symbology.
+    "src/components/maplibre/tiltView.ts"
   ]
 }

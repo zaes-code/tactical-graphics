@@ -4,15 +4,18 @@ import ms from 'milsymbol';
 import {useMilsymbolSecurityOperationSymbols} from './openlayers/securityOperationSymbol';
 import OpenLayersMap from './openlayers/OpenLayers';
 import MapLibreMap from './maplibre/MapLibre';
-import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Typography} from '@mui/material';
+import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography} from '@mui/material';
 import MapIcon from '@mui/icons-material/Map';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SettingsModal from './SettingsModal';
-import MapControls from './MapControls';
+import MapControls, {thumbnailInkFor} from './MapControls';
 import EditAffordances from './EditAffordances';
+import ViewControls from './ViewControls';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
+// Empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
+import {demoAddons} from '@demo/addons';
 import {
     DEFAULT_PALETTE,
     TacticalGraphicHostility,
@@ -32,6 +35,15 @@ const LS_SETTINGS = 'tg_graphicsSettings';
 const LS_LEGACY_LABELSIZE = 'tg_defaultLabelSize';
 const LS_LEGACY_LINEWIDTH = 'tg_defaultLineWidth';
 const LS_ENGINE = 'tg_mapEngine';
+const LS_TILTED = 'tg_mapTilted';
+
+function loadTilted(): boolean {
+    try {
+        return localStorage.getItem(LS_TILTED) === 'true';
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Which renderer draws the map.
@@ -42,15 +54,18 @@ const LS_ENGINE = 'tg_mapEngine';
  * views take the same props and read the same config singleton, so anything that
  * differs between them is a renderer bug.
  */
-export type MapEngine = 'openlayers' | 'maplibre';
+export type MapEngine = 'openlayers' | 'maplibre' | (string & {});
 
 const ENGINE_LABELS: Record<MapEngine, string> = {
     openlayers: 'OpenLayers',
     maplibre: 'MapLibre',
+    ...Object.fromEntries(demoAddons.map(addon => [addon.id, addon.label])),
 };
 
+/** A stored choice only counts while that engine is on offer: an add-on may not be loaded. */
 function loadEngine(): MapEngine {
-    return localStorage.getItem(LS_ENGINE) === 'maplibre' ? 'maplibre' : 'openlayers';
+    const stored = localStorage.getItem(LS_ENGINE);
+    return stored && stored in ENGINE_LABELS ? stored : 'openlayers';
 }
 
 /**
@@ -132,6 +147,19 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [engine, setEngine] = useState<MapEngine>(loadEngine);
+    const addonEngine = demoAddons.find(addon => addon.id === engine);
+    /** MapLibre's 3D view. OpenLayers has no tilted mode, so the toggle shows on MapLibre only. */
+    const [tilted, setTilted] = useState<boolean>(loadTilted);
+    const handleTiltChange = (_: React.MouseEvent<HTMLElement>, next: '2d' | '3d' | null) => {
+        if (!next) return;
+        const value = next === '3d';
+        try {
+            localStorage.setItem(LS_TILTED, String(value));
+        } catch {
+            // Storage blocked: the toggle still works for this visit.
+        }
+        setTilted(value);
+    };
 
     /**
      * The live map's handle, and its capabilities mirrored into state.
@@ -309,6 +337,21 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         ))}
                     </ToggleButtonGroup>
 
+                    {engine === 'maplibre' && (
+                        <Tooltip title={tilted ? 'Right-drag or Ctrl+drag to turn and tilt' : 'Tilt the map over terrain'}>
+                            <ToggleButtonGroup
+                                value={tilted ? '3d' : '2d'}
+                                exclusive
+                                onChange={handleTiltChange}
+                                size="small"
+                                aria-label="map view"
+                            >
+                                <ToggleButton value="2d" aria-label="2D" sx={{px: 1.25, py: 0.25, fontSize: '0.75rem'}}>2D</ToggleButton>
+                                <ToggleButton value="3d" aria-label="3D" sx={{px: 1.25, py: 0.25, fontSize: '0.75rem'}}>3D</ToggleButton>
+                            </ToggleButtonGroup>
+                        </Tooltip>
+                    )}
+
                     <IconButton
                         onClick={() => setSettingsOpen(true)}
                         size="small"
@@ -333,7 +376,17 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
               * a clean map at the same center and zoom.
               */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
-                {engine === 'openlayers'
+                {addonEngine
+                    ? <React.Suspense fallback={null}>
+                        <addonEngine.View
+                            key={addonEngine.id}
+                            darkMode={darkMode}
+                            graphicsSettings={settings}
+                            onReady={handleEngineReady}
+                            onInteractionModeChange={setInteractionMode}
+                        />
+                    </React.Suspense>
+                    : engine === 'openlayers'
                     ? <OpenLayersMap
                         key="openlayers"
                         darkMode={darkMode}
@@ -344,6 +397,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                     : <MapLibreMap
                         key="maplibre"
                         darkMode={darkMode}
+                        tilted={tilted}
                         graphicsSettings={settings}
                         onReady={handleEngineReady}
                         onInteractionModeChange={setInteractionMode}
@@ -357,6 +411,9 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                   * pixels and knows nothing else about it. @see EditAffordances
                   */}
                 <EditAffordances engine={engineHandle} active={interactionMode === 'edit'}/>
+
+                {/* Tilt and turn from clicks, for anyone without a right mouse button. */}
+                {engineHandle?.camera && (addonEngine || (engine === 'maplibre' && tilted)) && <ViewControls camera={engineHandle.camera}/>}
 
                 {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
@@ -382,6 +439,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         onDrawSamples={(hostility, names) => engineRef.current?.drawSamples(hostility, names)}
                         onClearAll={() => engineRef.current?.clearAll()}
                         onExportGeoJson={() => engineRef.current?.exportGeoJson()}
+                        exportFormats={engineHandle?.exportFormats}
                         onImportGeoJson={file => engineRef.current?.importGeoJson(file)}
                         interactionMode={interactionMode}
                         isRotating={interactionMode === 'rotate'}
@@ -389,6 +447,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         isRepositioning={interactionMode === 'translate'}
                         isModifying={interactionMode === 'modify'}
                         defaultShape={selectedShape}
+                        thumbnailInk={thumbnailInkFor({...paletteFor(darkMode), ...settings})}
                     />
                 )}
             </Box>

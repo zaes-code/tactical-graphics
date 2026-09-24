@@ -144,3 +144,28 @@ export function clampGeometryToMercator<T>(geometry: T): T {
     const coordinates = walk(shape.coordinates);
     return coordinates === shape.coordinates ? geometry : ({...shape, coordinates} as unknown as T);
 }
+
+/** Earth's radius as EPSG:3857 defines it: a sphere, not the WGS-84 ellipsoid. */
+const MERCATOR_RADIUS = 6378137;
+
+/**
+ * lon/lat degrees to EPSG:3857 meters, the frame the paint layer works in. The latitude is
+ * clamped to the projectable world first. @see clampToMercator
+ */
+export function lonLatToMercator(lonLat: [number, number]): [number, number] {
+    const [lon, lat] = lonLat;
+    const clamped = clampToMercator(lat);
+    return [
+        ((lon * Math.PI) / 180) * MERCATOR_RADIUS,
+        Math.log(Math.tan(Math.PI / 4 + ((clamped * Math.PI) / 180) / 2)) * MERCATOR_RADIUS,
+    ];
+}
+
+/** EPSG:3857 meters to lon/lat degrees. Exact: both frames are on the same sphere. */
+export function mercatorToLonLat(position: [number, number]): [number, number] {
+    const [x, y] = position;
+    return [
+        ((x / MERCATOR_RADIUS) * 180) / Math.PI,
+        ((2 * Math.atan(Math.exp(y / MERCATOR_RADIUS)) - Math.PI / 2) * 180) / Math.PI,
+    ];
+}

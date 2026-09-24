@@ -166,6 +166,53 @@ describe('renderTacticalGraphic errors', () => {
         const bad = {...secureFeature(), geometry: {type: 'LineString', coordinates: [[0, 0], [1, 1]]}} as Feature;
         expect(() => renderTacticalGraphic(bad)).toThrow(/expects a Point base geometry, got LineString/);
     });
+
+    /**
+     * **`rotation` is optional in the schema and required by the generators**, and the gap
+     * between those two reached a consumer as `coordinates must contain numbers` thrown from
+     * inside turf — a message naming neither the field nor the graphic. `{name, radius}` is
+     * the most ordinary bag a point-based graphic can be handed, and every one of them now
+     * draws from it. @see toGraphicOptions
+     */
+    it('draws a point-based graphic from a bag with no rotation in it', () => {
+        const pointBased = (listTacticalGraphicNames() as TacticalGraphicName[])
+            .filter(name => baseGeometryFor(name) === 'Point');
+        expect(pointBased.length).toBeGreaterThan(30);
+
+        const failures: string[] = [];
+        for (const name of pointBased) {
+            const feature: Feature = {
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [-0.35, 40]},
+                properties: {tacticalGraphic: {name, radius: 180_000}},
+            };
+            try {
+                const rendered = renderTacticalGraphic(feature);
+                if (!rendered.graphic) failures.push(`${name}: nothing drawn`);
+            } catch (e) {
+                failures.push(`${name}: ${(e as Error).message}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    /**
+     * And the value it defaults to is the one an explicit zero gives, not merely some value.
+     *
+     * **Geometry only.** The bag is stamped back onto every output feature, so comparing the
+     * whole feature compares the input: the two differ by the `rotation: 0` one of them was
+     * handed, whatever the symbol looks like.
+     */
+    it('draws the same symbol whether rotation is zero or absent', () => {
+        const at = (bag: Record<string, unknown>) =>
+            JSON.stringify(renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'Point', coordinates: [-0.35, 40]},
+                properties: {tacticalGraphic: {name: TacticalGraphicName.Destroy, radius: 180_000, ...bag}},
+            }).graphic?.geometry);
+
+        expect(at({})).toEqual(at({rotation: 0}));
+    });
 });
 
 describe('toFeatureCollection', () => {

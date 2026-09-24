@@ -10,8 +10,6 @@
  * (`tmp/probe-two-click.mjs`, `tmp/sweep-draw-finish.mjs`); this pins the rule, the repair, and
  * the restore that applies it.
  */
-import fs from 'fs';
-import path from 'path';
 import VectorSource from 'ol/source/Vector';
 import LineString from 'ol/geom/LineString';
 import {toLonLat} from 'ol/proj';
@@ -25,6 +23,7 @@ import {
 import type {TacticalGraphicHandler} from './openlayers/openlayersAdapter';
 import type {TacticalGraphicsManager} from './openlayers/TacticalGraphicsManager';
 import {restoreTacticalGraphics} from './openlayers/persistence';
+import {restoreSnapshotGraphics} from './maplibre/restoreGraphic';
 
 const ROADBLOCK = TacticalGraphicName.RoadblockCompleteExecuted;
 const DEMOLITION = [
@@ -107,10 +106,11 @@ describe('a demolition obstacle saved with two points', () => {
         expect(base).toHaveLength(3);
     });
 
-    it('is repaired by MapLibre’s restore too', () => {
-        // Source-level: that restore needs a live map. It must run the same repair, before the
-        // version-gated upgrade, on every file.
-        const restore = fs.readFileSync(path.join(__dirname, 'maplibre/createTacticalGraphics.ts'), 'utf8');
-        expect(restore).toContain('completeDemolitionBase(properties.name, geometry.coordinates)');
+    // MapLibre reads files through `restoreSnapshotGraphics`, which needs no
+    // map, so the repair is checked by what it builds rather than by reading the source.
+    it.each(DEMOLITION)('restores %s on MapLibre with its third point', name => {
+        const [restored] = restoreSnapshotGraphics(savedWithTwo(name), 1200);
+        expect((restored.graphic.base.geometry as {coordinates: Position[]}).coordinates).toHaveLength(3);
+        expect(restored.symbolId).toBe(`two-${name}`);
     });
 });

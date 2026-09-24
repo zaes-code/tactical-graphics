@@ -83,3 +83,52 @@ export function snapshotVersionOf(snapshot: unknown): number {
 export function toSnapshot(features: Feature<Geometry>[]): TacticalGraphicsSnapshot {
     return {type: 'FeatureCollection', features, tacticalGraphicsVersion: SNAPSHOT_VERSION};
 }
+
+/**
+ * The description a file carries, out of the bag a renderer rendered with.
+ *
+ * **A renderer completes the bag before it draws and the completed bag is not the
+ * description.** MapLibre fills in a label gap of zero for the arc mission tasks, reads a
+ * rectangle's width back off the ring it was handed, and recovers a drawn-anchor graphic's
+ * `radius` and `rotation` from the points themselves — every one of which is either an
+ * instruction to a renderer or a second copy of the geometry. Filing them made the *same
+ * file* open as two different saves depending on which engine last wrote it: measured on the
+ * import/export sweep, MapLibre wrote `labelGapDegrees` for 192 graphics and `radius` plus
+ * `rotation` for 249 that OpenLayers wrote nothing for.
+ *
+ * A second copy is worse than redundant, because the two can disagree. 151204 contain
+ * reported a 40 km radius beside a symbol drawn at 29.8, from exactly this: a figure filed
+ * next to the points it was derived from, and then trusted over them.
+ *
+ * So what is filed is what the *caller* stated, plus whatever a renderer derived from
+ * something the file does not carry — the drawing resolution, most often, which is the only
+ * record of a screen-sized default and travels nowhere else. @see ai/context.md, "A saved
+ * graphic carries one object"
+ *
+ * @param completed what the renderer drew with
+ * @param supplied what it was handed, which is the caller's own statement
+ * @param derived the keys this renderer worked out from the geometry, or added for itself
+ */
+export function describedProperties<T extends {name: unknown}>(
+    completed: T,
+    supplied: Partial<Record<keyof T, unknown>>,
+    derived: Iterable<keyof T>,
+): T {
+    const filed = {...completed};
+    for (const key of derived) {
+        /*
+         * A caller who stated it keeps it, **and keeps their own number** — whatever the
+         * renderer then made of it. The value is theirs and the file is where they put it.
+         *
+         * Keeping `completed[key]` here was the same defect one level down: these keys are
+         * spread *after* the caller's properties precisely so the renderer draws with its own
+         * figure, so filing the completed bag filed the overwrite. A bag stating
+         * `radius: 180000` for a bridge came back filed at 146,485 — the tick size this engine
+         * had substituted to draw with — and the caller's own number was gone from their file
+         * after a round trip they never asked for.
+         */
+        if (supplied[key] === undefined) delete filed[key];
+        else filed[key] = supplied[key] as T[typeof key];
+    }
+    return filed;
+}

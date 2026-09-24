@@ -65,9 +65,35 @@ export interface MapEngineHandle extends TacticalGraphicsEngine {
 
     /** Replaces the map from a file the user picked. The on-disk twin of `restore`. */
     importGeoJson(file: File): Promise<void>;
+
+    /** Present on an engine with a tilted camera. @see ViewCamera */
+    camera?: ViewCamera;
+
+    /**
+     * Formats an engine can save to beyond GeoJSON, which every engine writes. The panel
+     * turns its Export button into a menu when there are any.
+     */
+    exportFormats?: Array<{label: string; run(): void}>;
 }
 
 /** What a fully-featured engine declares. Both engines pass this today. */
+/**
+ * Tilt and turn from buttons, for a view that has a tilted camera.
+ *
+ * The demo's 3D views take a right-drag or Ctrl+drag to tilt, which a trackpad or touch user
+ * may not have. Degrees throughout; a bearing is clockwise from north, as MapLibre's is.
+ */
+export interface ViewCamera {
+    /** Leans the camera toward the horizon by `degrees`, or back toward overhead if negative. */
+    tilt(degrees: number): void;
+    /** Turns the view clockwise by `degrees`, about the point at the center of the screen. */
+    turn(degrees: number): void;
+    /** Turns back to north-up, keeping the tilt. */
+    resetNorth(): void;
+    /** Where the top of the screen points. */
+    bearing(): number;
+}
+
 export const FULL_CAPABILITIES: MapEngineCapabilities = {
     draw: true,
     edit: true,

@@ -68,6 +68,12 @@ describe(`a manipulated graphic restores as it was left (${NAMES.length} names)`
         h.handleResize?.(1.4);
         h.handleTranslate?.(1500, -900);
         h.setOffset?.(7777);
+        // **A gesture in the app always ends**, and the end is where the line controller puts
+        // the base back through the library's reading of it — a planar rotate shears the
+        // geodesic perpendicular a derived point stands on, so without this the graphic is
+        // left in a shape its own plate does not describe and the restore, which normalizes,
+        // moves it. @see LineGraphicController.settleBase
+        (h as {endGesture?: () => void}).endGesture?.();
 
         const left = shape(h);
         from.renderingVectorSource.addFeatures(h.getFeatures());
