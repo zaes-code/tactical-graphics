@@ -118,10 +118,9 @@ Everything the library needs lives in one object on the feature's `properties`:
 ```
 
 `name` is always required, and **38 of the 318 graphics need a geometry input as well**:
-the point-anchored ones (mission tasks, range fans, fighting positions, the circular
-areas) want `radius` *and* `rotation`, and several line graphics want `radius` or
-`decorationSize`. Without them you get a turf error rather than a default — see
-[Errors](#errors). Every other field is optional, and each graphic ignores the ones that
+the one-point mission tasks and circular areas take their size from `radius`, since a
+single point has none. Without it you get a `TacticalGraphicError` naming the field rather
+than an invented size — see [Errors](#errors). Every other field is optional, and each graphic ignores the ones that
 do not apply to it, so there is no per-graphic options type to look up:
 
 ```ts
@@ -1342,7 +1341,18 @@ the 318 supported names.
 Graphic "Secure" expects a Point base geometry, got LineString.
 
 Graphic "FreeFireAreaRectangular" expects a LineString base geometry, got Polygon.
+
+Graphic "Destroy" is drawn from one point and needs "properties.tacticalGraphic.radius"
+(meters) to size it.
+
+Graphic "FerryCrossing" cannot be drawn from this base: it produced positions that are
+not coordinates. Check that its control points are distinct.
 ```
+
+Invalid GeoJSON never leaves the library: a base the generator cannot draw from throws
+rather than returning `NaN` or `null` positions. Two graphics are the exception in the
+other direction: an ambush or a pursuit under a meter across draws an **empty** geometry,
+because below that size their control points are read as a single click.
 
 ---
 

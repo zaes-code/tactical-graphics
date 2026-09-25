@@ -1,3 +1,5 @@
+import {readFileSync} from 'fs';
+import {join} from 'path';
 import {GRAPHIC_CATEGORIES} from './categories';
 import {GRAPHIC_SPECIFICATIONS, TacticalGraphicSpecification, getSpecifications, hasSpecification, listNamesBySpecification} from './specifications';
 import {TacticalGraphicName} from './type';
@@ -234,6 +236,19 @@ describe('graphic specifications', () => {
     it('lists only the pinned exceptions as absent from APP-06', () => {
         const absent = names.filter((name) => !hasSpecification(name, TacticalGraphicSpecification.APP6));
         expect(absent.sort()).toEqual(FM_ONLY_GRAPHICS.slice().sort());
+    });
+
+    /**
+     * The count in the table's own doc comment. It said nine FM-only for three weeks after
+     * `FightingPosition` was retired, and the NVG add-on noticed from `GRAPHIC_ENTITY_CODES`
+     * rather than anything here. It is published, so it is checked.
+     */
+    it('quotes the real counts in its doc comment', () => {
+        const source = readFileSync(join(__dirname, 'specifications.ts'), 'utf8');
+        const quoted = source.match(/\*\*(\d+) graphics: (\d+) in both catalogs, (\d+) FM 1-02\.2 only, (\d+) APP-06 only\*\*/);
+        expect(quoted).not.toBeNull();
+        const both = names.filter(n => hasSpecification(n, TacticalGraphicSpecification.APP6) && hasSpecification(n, TacticalGraphicSpecification.FM1_02_2));
+        expect(quoted!.slice(1).map(Number)).toEqual([names.length, both.length, FM_ONLY_GRAPHICS.length, APP6_ONLY_GRAPHICS.length]);
     });
 
     it('partitions the registry both ways', () => {

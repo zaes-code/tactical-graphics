@@ -49,7 +49,7 @@ const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
  * Table A-32, so a claim can be checked against the standard rather than taken on
  * trust.
  *
- * **293 graphics: 221 in both catalogs, 9 FM 1-02.2 only, 63 APP-06 only.** The axis
+ * **318 graphics: 225 in both catalogs, 8 FM 1-02.2 only, 85 APP-06 only** (2026-09-24). The axis
  * runs both ways, which it did not when it was first added -- every graphic was then
  * in FM 1-02.2, so filtering by that specification hid nothing. Count it, don't trust
  * it. See `ai/app-6.md` for the source document and how the mapping was derived.

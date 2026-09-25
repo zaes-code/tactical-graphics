@@ -43,6 +43,8 @@ const ARMS: readonly {angleDeg: number; reach: number}[] = [
 export class Airfield extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Airfield;
     type: string = 'Point';
+    /** A dropped point has no size; it comes from `radius`. @see IGraphicGenerator.requiresRadius */
+    readonly requiresRadius = true;
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<MultiLineString> {
         const center = base.geometry.coordinates;
