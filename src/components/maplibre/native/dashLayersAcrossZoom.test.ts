@@ -41,6 +41,7 @@ class FakeMap {
     private readonly center = [10, 40];
 
     getZoom = () => this.zoom;
+    getBearing = () => 0;
     on = () => undefined;
     off = () => undefined;
     setGlyphs = () => undefined;
