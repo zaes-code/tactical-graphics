@@ -20,6 +20,7 @@ import {drawSpikeSamples} from './spikeDriver';
 import {buildSampleGraphics} from './sampleGallery';
 import {readViewport, writeViewport} from '../mapViewport';
 import type {MapEngineHandle, ViewCamera} from '../mapEngine';
+import {createMapLibreOverlay} from '../overlay/mapLibreOverlay';
 import {FULL_CAPABILITIES} from '../mapEngine';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
@@ -304,8 +305,10 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
             bearing: () => map.getBearing(),
         };
 
+        const overlay = createMapLibreOverlay(map);
         const handle: MapEngineHandle = {
             camera,
+            showOverlay: collection => overlay.show(collection),
             /*
              * **Every verb delegates; nothing is spread.**
              *
