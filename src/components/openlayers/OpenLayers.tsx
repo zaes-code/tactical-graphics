@@ -24,6 +24,7 @@ import type {FeatureCollection} from 'geojson';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import type {MapEngineHandle} from '../mapEngine';
 import {FULL_CAPABILITIES} from '../mapEngine';
+import {createOpenLayersOverlay} from '../overlay/openLayersOverlay';
 
 interface Props {
     darkMode: boolean;
@@ -65,6 +66,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         const olMap = createMap(mapRef.current);
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
+        const overlay = createOpenLayersOverlay(olMap, () => tacticalGraphicManager.current?.renderingVectorLayer);
 
         // Open where the other engine — or the last visit — left off. Applied before
         // the first frame, so there is no visible jump from the default view.
@@ -167,6 +169,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 engine.current?.restore(sampleFeatureCollection(hostility, names));
                 fitToGraphics();
             },
+            showOverlay: collection => overlay.show(collection),
             exportGeoJson: () => {
                 const snapshot = engine.current?.snapshot();
                 if (!snapshot) return;
