@@ -25,6 +25,8 @@
  * Not exported here: the React demo (`MapControls`, `OpenLayers.tsx`) and the
  * sample gallery, which exist to exercise the library rather than to be
  * consumed.
+ *
+ * @module @zaes/tactical-graphics/openlayers
  */
 
 // The entry point: wires draw / modify / pointer interactions onto a map.
