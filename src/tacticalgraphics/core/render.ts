@@ -21,7 +21,7 @@
  */
 
 import {dashedPartsOf} from './dashedParts';
-import {Feature, FeatureCollection, GeoJsonProperties, Position} from 'geojson';
+import {Feature, FeatureCollection, GeoJsonProperties, Geometry, Position} from 'geojson';
 import * as turf from './turf';
 import {TacticalGraphicsRegistry} from './TacticalGraphicsRegistry';
 import {
@@ -607,14 +607,31 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
     return {...cleaned, ...overrides} as GraphicOptions;
 }
 
-/** Stamps the graphic config and a role onto a generated feature. */
+/**
+ * A copy of a generated feature with the graphic config and a role stamped on it.
+ *
+ * A copy because a generator may hand back the base itself (every simple line does), and
+ * writing into that wrote `role: 'graphic'` into the caller's own feature, which `base` is
+ * documented to leave unchanged. The geometry is shared, not cloned; nothing here writes it.
+ */
 function tag(feature: Feature, props: TacticalGraphicProperties, role: TacticalGraphicRole): Feature {
-    feature.properties = {
-        ...(feature.properties ?? {}),
-        [TACTICAL_GRAPHIC_KEY]: props,
-        role,
+    return {
+        ...feature,
+        properties: {
+            ...(feature.properties ?? {}),
+            [TACTICAL_GRAPHIC_KEY]: props,
+            role,
+        },
     };
-    return feature;
+}
+
+/** True when every position in the geometry is an array of finite numbers. */
+function hasValidPositions(geometry: Geometry | null): boolean {
+    if (!geometry) return true;
+    if (geometry.type === 'GeometryCollection') return geometry.geometries.every(hasValidPositions);
+    const walk = (c: unknown): boolean =>
+        Array.isArray(c) && (typeof c[0] === 'number' ? c.length >= 2 && c.every(Number.isFinite) : c.every(walk));
+    return walk(geometry.coordinates);
 }
 
 /**
@@ -641,7 +658,9 @@ function withDashedParts(feature: Feature, name: TacticalGraphicName | string): 
  * @param feature   A Feature with `properties.tacticalGraphic` set.
  * @param overrides Generator options that win over the feature's properties.
  * @throws {TacticalGraphicError} if the config is missing, names an unknown
- *         graphic, or the geometry type doesn't suit that graphic.
+ *         graphic, the geometry type doesn't suit that graphic, a one-point graphic
+ *         has no `radius`, or the base cannot be drawn (every control point on one
+ *         spot, for instance). Invalid GeoJSON is never returned.
  */
 export function renderTacticalGraphic(feature: Feature, overrides?: Partial<GraphicOptions>): TacticalGraphicRender {
     const props = readTacticalGraphicProperties(feature);
@@ -675,7 +694,30 @@ export function renderTacticalGraphic(feature: Feature, overrides?: Partial<Grap
         );
     }
 
-    const rendered = generator.generate(feature, toGraphicOptions(props, overrides));
+    const options = toGraphicOptions(props, overrides);
+    // The editors always stamp a radius; a hand-built feature or an imported file may not,
+    // and turf's "coordinates must contain numbers" names neither the field nor the graphic.
+    if (generator.requiresRadius && feature.geometry.type === 'Point' && !Number.isFinite(options.size)) {
+        throw new TacticalGraphicError(
+            `Graphic "${props.name}" is drawn from one point and needs "properties.${TACTICAL_GRAPHIC_KEY}.radius" (meters) to size it.`,
+            props.name,
+        );
+    }
+
+    // A base a generator cannot draw from (every control point on one spot, most often) either
+    // throws from deep inside turf or comes back with `NaN` and `null` positions. Both leave as
+    // one error that names the graphic, and invalid GeoJSON never leaves at all.
+    const cannotDraw = (why: string) =>
+        new TacticalGraphicError(`Graphic "${props.name}" cannot be drawn from this base: ${why}. Check that its control points are distinct.`, props.name);
+    let rendered;
+    try {
+        rendered = generator.generate(feature, options);
+    } catch (e) {
+        throw cannotDraw((e as Error)?.message ?? String(e));
+    }
+    for (const part of [rendered.graphic, rendered.labels, rendered.handles]) {
+        if (!hasValidPositions(part.geometry)) throw cannotDraw('it produced positions that are not coordinates');
+    }
 
     return {
         name: props.name,
