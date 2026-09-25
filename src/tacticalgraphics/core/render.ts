@@ -197,11 +197,12 @@ export interface TacticalGraphicProperties {
      */
     length?: number;
     /**
-     * **Read only from files saved before 2026-09-06; nothing sets it now.** It put a cane
-     * arrow's hook, Pursuit's hook or Mobile Defense's arc on the other side of the line, and
-     * each of those states its side with its third point today. A file that still carries it
-     * draws as it was saved. Abatis used it too until 2026-09-25, and now ignores it: its
-     * tooth stands on the line's north side whichever way it was drawn.
+     * Puts an abatis tooth on the right of its line instead of the left.
+     *
+     * Set once, when the line is drawn, so the tooth starts out pointing north whichever way
+     * the line ran (`drawnSide`); after that it turns with the line, and no gesture flips it.
+     * Files saved before 2026-09-06 also carry it for the cane arrows, Pursuit and Mobile
+     * Defense, which state their side with a third point now; those still draw as saved.
      */
     mirrored?: boolean;
     /** Rotation in degrees, for point-based graphics. */

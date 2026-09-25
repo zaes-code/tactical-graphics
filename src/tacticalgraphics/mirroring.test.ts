@@ -14,7 +14,7 @@
  * wrong is silent and looks plausible — it sat on the arrowhead of the retrograde tasks for
  * a while, which flips the graphic from the one part of it that does not move.
  *
- * **None is left.** Abatis went last (2026-09-25): its tooth faces north, so its side follows the line. Mobile defence and the seven cane arrows gave the job to an
+ * **None is left.** Abatis went last (2026-09-25): its side is set when it is drawn. Mobile defence and the seven cane arrows gave the job to an
  * anchor point instead: their plates all read *"Point 3 defines which side of the line the
  * arc is on"*, so the flip is a place rather than a flag. @see RetrogradeTask
  */
@@ -64,9 +64,9 @@ describe('mirroring', () => {
          * did something different on this one symbol. (User's report, 2026-09-06: "I'm trying
          * to have consistency across similar graphics".)
          *
-         * Abatis was the last, on 2026-09-25: its tooth stands on the north side of the line
-         * whichever way it was drawn, so its side follows the line too (user's call).
-         * @see MobileDefense.frame, RetrogradeTask, Pursuit.generateHandles, northSide
+         * Abatis was the last, on 2026-09-25: its side is set once, when the line is drawn,
+         * and then turns with the line, with no grip to flip it (user's call).
+         * @see MobileDefense.frame, RetrogradeTask, Pursuit.generateHandles, drawnSide
          */
         expect(mirrorable()).toEqual([]);
     });

@@ -474,6 +474,20 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
+     * Which side of its line the graphic's decoration stands on: the abatis tooth, the only
+     * one in this family with a side. Set once, when the line is drawn (`drawnSide`), or from
+     * a file, and never by a gesture, so rotating the graphic turns the tooth with it.
+     */
+    mirrored = false;
+
+    /** @see mirrored, TacticalGraphicHandler.setMirrored */
+    setMirrored(mirrored: boolean): void {
+        if (mirrored === this.mirrored) return;
+        this.mirrored = mirrored;
+        this.updateGraphic();
+    }
+
+    /**
      * How many handles `visiblePathHandles` dropped off the front.
      *
      * `handleRole` is indexed against the *generator's* list, and this holder renders a
@@ -501,6 +515,7 @@ export class LineGraphicBase implements LineGraphic {
             this.base,
             {
                 size: this.graphicSize(),
+                mirrored: this.mirrored,
                 // Halved, because that is what `toGraphicOptions` hands a generator for a
                 // public `width` and the generator doubles it straight back. Passing the
                 // whole distance here would have made a graphic drawn in the app twice the
@@ -522,6 +537,8 @@ export class LineGraphicBase implements LineGraphic {
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, bag, {
             decorationSize: this.graphicSize(),
+            // Filed only when set, so the lines with no side do not all carry a `false`.
+            ...(this.mirrored ? {mirrored: true} : {}),
             // The same number the shape was just built from, filed so a restore replays a
             // distance instead of re-deriving one from whatever zoom the file is opened at.
             ...(standoff !== undefined ? {width: standoff} : {}),

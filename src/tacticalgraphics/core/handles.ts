@@ -152,10 +152,10 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     // (User's report: "pursuit point 3 drag still doesn't behave like other cane graphics
     // […] I'm trying to have consistency across similar graphics".)
     //
-    // 280100 abatis left on 2026-09-25, the last one. Its tooth stands on the north side of
-    // the line whichever way it was drawn, so there is no side left to choose (user's call).
-    // The list is kept, empty, because the gesture is real and `supportsMirror` is still
-    // the question a panel or a test asks. @see Abatis.northSide
+    // 280100 abatis left on 2026-09-25, the last one. Its side is set when the line is drawn,
+    // so the tooth starts out pointing north, and then turns with the line; no grip flips it
+    // (user's call). The list is kept, empty, because `supportsMirror` is still the question a
+    // panel or a test asks. @see drawnSide
     // 152800 left this list on 2026-09-06: its point 3 states which side the arc falls on,
     // so the flip is a placed point rather than an amplifier and there is no mirror gesture
     // left to advertise. @see MobileDefense.frame
