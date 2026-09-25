@@ -60,6 +60,8 @@ class SolidManeuverArrow extends MovementGraphicBase {
 export class MovementToContact extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.MovementToContact;
     type: string = 'Point';
+    /** A dropped point has no size; it comes from `radius`. @see IGraphicGenerator.requiresRadius */
+    readonly requiresRadius = true;
 
     generateGraphics(base: Feature<any>, opts: PointGraphicOptions): Feature<MultiLineString> {
         const center = base.geometry.coordinates;
@@ -447,6 +449,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiLineString> {
         const frame = this.frame(base, opts);
+        // One click, or a hook under a meter across: nothing to draw. @see MIN_SIZE_M
         if (!frame) return this.asMultiLineStringFeature([]);
 
         const arc = this.arc(frame);
@@ -1315,6 +1318,7 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         const read = this.frame(base, opts);
         // One click is a draw that has only just started, and draws nothing rather than a
         // default-sized symbol parked where the cursor happened to be.
+        // A chord under a meter reads the same way, and so draws nothing too. @see MIN_SIZE_M
         if (!read) return this.asMultiLineStringFeature([]);
         const {center, rotation, radius: r, reach} = read;
 
