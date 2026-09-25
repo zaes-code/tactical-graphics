@@ -14,8 +14,8 @@ import ViewControls from './ViewControls';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
-// Empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
-import {demoAddons} from '@demo/addons';
+// Both empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
+import {demoAddons, demoTools} from '@demo/addons';
 import {
     DEFAULT_PALETTE,
     TacticalGraphicHostility,
@@ -414,6 +414,18 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
 
                 {/* Tilt and turn from clicks, for anyone without a right mouse button. */}
                 {engineHandle?.camera && (addonEngine || (engine === 'maplibre' && tilted)) && <ViewControls camera={engineHandle.camera}/>}
+
+                {/* Add-on tools, on a developer's machine only; the public sample has none. @see demoAddons.ts */}
+                {demoTools.length > 0 && (
+                    <Box sx={{position: 'absolute', right: 12, bottom: 32, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380}}>
+                        {/* An add-on may load its panel lazily, as the engines do. */}
+                        <React.Suspense fallback={null}>
+                            {demoTools.map(tool => (
+                                <tool.Panel key={tool.id} engine={engineHandle} darkMode={darkMode}/>
+                            ))}
+                        </React.Suspense>
+                    </Box>
+                )}
 
                 {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
