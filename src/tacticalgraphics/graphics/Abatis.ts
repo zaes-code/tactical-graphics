@@ -44,11 +44,12 @@ export const ABATIS_HEIGHT_RATIO = 0.588;
  * than a reach — the renderer derives it from the zoom through `decorationMeters`, so
  * the tooth holds its size on screen.
  *
- * **The tooth points north, whichever way the route was drawn.** It stands on the side
- * of the line that faces north (the left of a line drawn eastward, the right of one drawn
- * westward), so a route drawn right to left no longer puts it underneath. That replaced
- * the `mirrored` flag and the drag that set it (user's call, 2026-09-25): the side is
- * the line's, not a setting, and a file's `mirrored` is ignored. @see northSide
+ * **The tooth is drawn pointing north, and then belongs to the line.** Which side it stands
+ * on is decided once, when the line is drawn: the side facing north, so a route drawn right
+ * to left no longer puts it underneath (`drawnSide`, which both engines apply). It is stored
+ * as `mirrored`, the other side from the default left of the line, and from then on it turns
+ * with the line: rotated half a turn, the tooth points south, as the user asked (2026-09-25).
+ * Nothing but the draw sets it; there is no grip to flip it. @see drawnSide, northSide
  */
 /**
  * Which way to turn off a line drawn on `heading` (degrees clockwise from north) to face
@@ -59,6 +60,21 @@ export function northSide(heading: number): -90 | 90 {
     const east = Math.sin((heading * Math.PI) / 180);
     if (Math.abs(east) > 1e-9) return east > 0 ? -90 : 90;
     return Math.cos((heading * Math.PI) / 180) > 0 ? -90 : 90;
+}
+
+/**
+ * The side a newly drawn graphic's decoration takes, decided from the direction it was drawn.
+ *
+ * Only abatis has one: its tooth goes on the side of the first segment that faces north, which
+ * is `mirrored` when the line runs westward. Both engines apply this when a draw finishes, and
+ * nothing applies it again, so a later rotation turns the tooth with the line. `{}` for every
+ * other graphic and for a line too short to have a direction.
+ */
+export function drawnSide(name: string, coords: Position[]): {mirrored?: true} {
+    if (name !== TacticalGraphicName.Abatis || coords.length < 2) return {};
+    const [a, b] = coords;
+    if (a[0] === b[0] && a[1] === b[1]) return {};
+    return northSide(turf.bearing(turf.point(a), turf.point(b))) === 90 ? {mirrored: true} : {};
 }
 
 export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
@@ -91,7 +107,7 @@ export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
         const foot = turf.along(line, span, {units: 'meters'}).geometry.coordinates;
 
         const heading = turf.bearing(turf.point(start), turf.point(foot));
-        const apex = turf.destination(turf.point(mid), height, heading + northSide(heading), {
+        const apex = turf.destination(turf.point(mid), height, heading + (opts?.mirrored ? 90 : -90), {
             units: 'meters',
         }).geometry.coordinates as Position;
 
@@ -113,8 +129,7 @@ export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
      * `[start, end]`, the two ends of the drawn line.
      *
      * There was a third, on the chevron's apex, whose only job was to be dragged across the
-     * route to flip it. The side follows the line now, so nothing is left to grab there.
-     * @see northSide
+     * route to flip it. The side is set when the line is drawn now. @see drawnSide
      */
     generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
         const coords = base.geometry.coordinates;
