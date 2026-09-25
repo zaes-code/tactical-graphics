@@ -75,6 +75,8 @@ function labelGapDegrees(opts: PointGraphicOptions): number {
 
 export abstract class MissionTask extends TacticalGraphicsBase<PointGraphicOptions> {
     type: string = "Point";
+    /** A dropped point has no size; it comes from `radius`. @see IGraphicGenerator.requiresRadius */
+    readonly requiresRadius = true;
 
     /**
      * The two arcs the arc-and-arrowhead circles are built from: an upper one
