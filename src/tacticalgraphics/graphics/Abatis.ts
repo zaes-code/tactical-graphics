@@ -42,9 +42,25 @@ export const ABATIS_HEIGHT_RATIO = 0.588;
  *
  * `size` is the chevron's base width **in meters**, and is a decoration size rather
  * than a reach — the renderer derives it from the zoom through `decorationMeters`, so
- * the tooth holds its size on screen. `mirrored` puts the chevron on the other side of
- * the route.
+ * the tooth holds its size on screen.
+ *
+ * **The tooth points north, whichever way the route was drawn.** It stands on the side
+ * of the line that faces north (the left of a line drawn eastward, the right of one drawn
+ * westward), so a route drawn right to left no longer puts it underneath. That replaced
+ * the `mirrored` flag and the drag that set it (user's call, 2026-09-25): the side is
+ * the line's, not a setting, and a file's `mirrored` is ignored. @see northSide
  */
+/**
+ * Which way to turn off a line drawn on `heading` (degrees clockwise from north) to face
+ * north: -90, its left, when it runs east of north-south; +90, its right, when it runs west.
+ * A line running due north or south has no north side, and gets its west one.
+ */
+export function northSide(heading: number): -90 | 90 {
+    const east = Math.sin((heading * Math.PI) / 180);
+    if (Math.abs(east) > 1e-9) return east > 0 ? -90 : 90;
+    return Math.cos((heading * Math.PI) / 180) > 0 ? -90 : 90;
+}
+
 export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
     name: string = TacticalGraphicName.Abatis;
     type: string = 'LineString';
@@ -75,7 +91,7 @@ export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
         const foot = turf.along(line, span, {units: 'meters'}).geometry.coordinates;
 
         const heading = turf.bearing(turf.point(start), turf.point(foot));
-        const apex = turf.destination(turf.point(mid), height, heading + (opts?.mirrored ? 90 : -90), {
+        const apex = turf.destination(turf.point(mid), height, heading + northSide(heading), {
             units: 'meters',
         }).geometry.coordinates as Position;
 
@@ -94,22 +110,16 @@ export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
     }
 
     /**
-     * `[start, end, apex]` — the two ends of the drawn line, then the chevron's apex.
+     * `[start, end]`, the two ends of the drawn line.
      *
-     * The apex is third and exists to be *seen*: flipping the chevron means dragging a
-     * handle across the route, and without a dot on the tip nothing tells a user the
-     * chevron is the thing that moves. `handleContract` names index 2 the mirror handle
-     * for exactly this. When the line is too short to carry a tooth the apex is simply
-     * absent, and the contract's trailing role goes unfilled rather than pointing at a
-     * place the symbol does not occupy.
+     * There was a third, on the chevron's apex, whose only job was to be dragged across the
+     * route to flip it. The side follows the line now, so nothing is left to grab there.
+     * @see northSide
      */
-    generateHandles(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiPoint> {
+    generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
         const coords = base.geometry.coordinates;
         if (coords.length < 2) return this.asMultiPointFeature(coords);
-
-        const ends = [coords[0], coords[coords.length - 1]];
-        const path = this.path(base, opts);
-        return this.asMultiPointFeature(path ? [...ends, path[1]] : ends);
+        return this.asMultiPointFeature([coords[0], coords[coords.length - 1]]);
     }
 
     /** No amplifiers: affiliation and nothing else. */
