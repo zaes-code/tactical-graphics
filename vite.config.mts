@@ -32,26 +32,47 @@ const LIBRARY_ALIASES = [
 ];
 
 /**
- * **Engines from outside this repo, on a developer's machine only.** @see src/components/demoAddons.ts
+ * **Engines and tools from outside this repo, on a developer's machine only.** @see src/components/demoAddons.ts
  *
  * `npm run start:addons` runs Vite in `addons` mode, which loads the Vite plugins named in
- * `demo-addons.local.json` (untracked, so each developer lists their own) and leaves
- * `@demo/addons` for one of them to answer. In every other mode `@demo/addons` is the empty
- * list. Nothing here names an add-on: this repo is MIT and an add-on's code stays in the add-on.
+ * `demo-addons.local.json` (untracked, so each developer lists their own). Each plugin names its
+ * entry module as `demoAddonEntry`, and `@demo/addons` becomes those entries' lists joined, so
+ * several add-ons can be loaded at once. In every other mode `@demo/addons` is the empty list.
+ * Nothing here names an add-on: this repo is MIT and an add-on's code stays in the add-on.
  */
 const ADDONS_MODE = 'addons';
 const ADDONS_FILE = fileURLToPath(new URL('./demo-addons.local.json', import.meta.url));
 const NO_ADDONS = {find: /^@demo\/addons$/, replacement: fileURLToPath(new URL('./src/components/demoAddonsNone.ts', import.meta.url))};
+
+type AddonPlugin = PluginOption & {demoAddonEntry?: string};
+
+/** `@demo/addons` as one module re-exporting every add-on entry's engines and tools. */
+function addonSlot(entries: string[]): PluginOption {
+    const id = '\0demo-addons';
+    return {
+        name: 'demo-addon-slot',
+        enforce: 'pre',
+        resolveId: source => (source === '@demo/addons' ? id : undefined),
+        load(loaded) {
+            if (loaded !== id) return undefined;
+            const imports = entries.map((entry, i) => `import * as addon${i} from ${JSON.stringify(entry.replaceAll('\\', '/'))};`);
+            const join = (list: string) => `[${entries.map((_, i) => `...(addon${i}.${list} ?? [])`).join(', ')}]`;
+            return [...imports, `export const demoAddons = ${join('demoAddons')};`, `export const demoTools = ${join('demoTools')};`].join('\n');
+        },
+    };
+}
 
 async function addonPlugins(): Promise<PluginOption[]> {
     if (!existsSync(ADDONS_FILE)) {
         throw new Error(`addons mode needs demo-addons.local.json: {"plugins": ["<path to an add-on's Vite plugin>"]}`);
     }
     const {plugins = []} = JSON.parse(readFileSync(ADDONS_FILE, 'utf8')) as {plugins?: string[]};
-    return Promise.all(plugins.map(async path => {
+    const loaded = await Promise.all(plugins.map(async path => {
         const module = await import(pathToFileURL(resolve(fileURLToPath(new URL('.', import.meta.url)), path)).href);
-        return (module.default ?? module.plugin)() as PluginOption;
+        return (module.default ?? module.plugin)() as AddonPlugin;
     }));
+    const entries = loaded.flatMap(plugin => (plugin && typeof plugin === 'object' && 'demoAddonEntry' in plugin && plugin.demoAddonEntry ? [plugin.demoAddonEntry] : []));
+    return [addonSlot(entries), ...loaded];
 }
 
 export default defineConfig(async ({command, mode}) => {
