@@ -74,3 +74,9 @@ tmp/plates/
 # What `tmp/verify-artifact.mjs` writes beside the page it is checking: the same file
 # wrapped in the skeleton the artifact host adds at publish time. Build output.
 *.wrapped.html
+
+# The docs site: the API reference is generated, and so is the build.
+/site/api/
+/site/.vitepress/cache/
+/site/.vitepress/dist/
+/site/.vitepress/preview/

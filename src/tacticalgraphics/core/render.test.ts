@@ -789,8 +789,9 @@ describe('decorated graphics emit the drawn shape', () => {
  * The tracker-derived tables have `gen-readme-graphics-table.py --check`. This is the
  * one number that comes from the registry instead, so it needs its own guard.
  */
-describe('README stays honest about the registry', () => {
-    const readme = readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf8');
+describe('the docs stay honest about the registry', () => {
+    // The guides that quote the registry, since the README became a summary.
+    const readme = ['errors.md', 'tactical-graphic-object.md'].map(f => readFileSync(join(__dirname, '..', '..', '..', 'site', 'guide', f), 'utf8')).join('\n');
 
     it('quotes the real number of registered graphics in its error example', () => {
         const quoted = readme.match(/see\s+the\s+(\d+)\s+supported names/s);

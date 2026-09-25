@@ -1,5 +1,5 @@
 /**
- * The three sizing examples in README.md, run. A snippet that does not compile or that
+ * The three sizing examples in the docs (site/guide/tactical-graphic-object.md), run. A snippet that does not compile or that
  * quietly means something else is worse than no snippet — this file has already had to be
  * fixed once for naming a constructor arity and a method that did not exist.
  */
