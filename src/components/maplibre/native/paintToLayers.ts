@@ -102,6 +102,18 @@ function textAnchor(align: string | undefined, baseline: string | undefined): st
     return `${vertical}-${horizontal}`;
 }
 
+/** Left for right: the alignment of a block turned a half turn about its anchor. */
+function mirrorAlign(align: string | undefined): string | undefined {
+    return align === 'left' ? 'right' : align === 'right' ? 'left' : align;
+}
+
+/** Top for bottom, likewise. */
+function mirrorBaseline(baseline: string | undefined): string | undefined {
+    if (baseline === 'top' || baseline === 'hanging') return 'bottom';
+    if (baseline === 'bottom' || baseline === 'alphabetic') return 'top';
+    return baseline;
+}
+
 /** The rendered px size of a font shorthand, times the mark's scale. */
 function renderedFontPx(font: string, scale: number): number {
     const match = font.match(/(\d*\.?\d+)px/);
@@ -241,6 +253,10 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // `text-rotate` turns the glyph about its anchor, which is what the
                     // paint list means, so only the units and sign differ.
                     rotate: ((text.rotation ?? 0) * 180) / Math.PI,
+                    // A paint that states a rotation lays its text along something on the
+                    // map, a line or a symbol's axis, so it turns with the map. Zero is a
+                    // horizontal line, not an upright label. @see turnedSymbolLayout
+                    turned: text.rotation !== undefined,
                     color: text.fill,
                     haloColor: text.halo?.color ?? 'transparent',
                     haloWidth: outwardHalo(text.halo?.widthPx),
@@ -251,6 +267,11 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // the header note. It is a single property because `text-offset`
                     // wants one expression yielding a pair, not a pair of expressions.
                     offset: [(text.offsetXPx ?? 0) / size, (text.offsetYPx ?? 0) / size],
+                    // The same block turned a half turn about its anchor, for when the map
+                    // is turned far enough that the text would read upside down.
+                    flippedAnchor: textAnchor(mirrorAlign(text.align), mirrorBaseline(text.baseline)),
+                    flippedJustify: mirrorAlign(text.justify ?? text.align) ?? 'center',
+                    flippedOffset: [-(text.offsetXPx ?? 0) / size, -(text.offsetYPx ?? 0) / size],
                 },
             });
         }
@@ -401,11 +422,16 @@ export function circleLayer(id: string, source: string): LayerSpecification {
     } as LayerSpecification;
 }
 
+/**
+ * The upright labels: text a paint did not turn, which stays level on screen however the map
+ * is turned or tilted. Turned text is in {@link turnedSymbolLayer}, from the same source.
+ */
 export function symbolLayer(id: string, source: string, fontStack: string): LayerSpecification {
     return {
         id,
         type: 'symbol',
         source,
+        filter: ['!', ['get', 'turned']],
         layout: {
             'text-field': ['get', 'label'],
             'text-font': [fontStack],
@@ -440,6 +466,60 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
             'text-halo-width': ['get', 'haloWidth'],
         },
     } as LayerSpecification;
+}
+
+/**
+ * Whether a label turned to `rotate` degrees reads upside down on a map at `bearing`. Its
+ * angle on screen is `rotate - bearing`: the paint's angle is for a north-up map, and
+ * turning the map turns the text with it.
+ */
+export function turnedLabelFlips(rotate: number, bearing: number): boolean {
+    const onScreen = ((((rotate - bearing + 180) % 360) + 360) % 360) - 180;
+    return Math.abs(onScreen) > 90;
+}
+
+/**
+ * The layout that keeps turned text along its line and the right way up on a map at
+ * `bearing`. Past a quarter turn from level, a label is turned the other half turn and
+ * anchored at the opposite corner, with its offset reversed, so the block stays exactly
+ * where it was and only reads the other way: what the paint layer's upright rule does on a
+ * north-up map. MapLibre's own `text-keep-upright` is for line placement only.
+ *
+ * The bearing is a literal: layout cannot read the camera. The renderer sets these again
+ * when a turn changes which labels flip. @see turnedLabelFlips
+ */
+export function turnedSymbolLayout(bearing: number): Record<string, unknown> {
+    // The expression form of turnedLabelFlips.
+    const flips = [
+        '>',
+        ['abs', ['-', ['%', ['+', ['%', ['+', ['-', ['get', 'rotate'], bearing], 180], 360], 360], 360], 180]],
+        90,
+    ];
+    return {
+        'text-rotate': ['case', flips, ['+', ['get', 'rotate'], 180], ['get', 'rotate']],
+        'text-anchor': ['case', flips, ['get', 'flippedAnchor'], ['get', 'anchor']],
+        'text-justify': ['case', flips, ['get', 'flippedJustify'], ['get', 'justify']],
+        'text-offset': ['case', flips, ['array', 'number', 2, ['get', 'flippedOffset']], ['array', 'number', 2, ['get', 'offset']]],
+    };
+}
+
+/**
+ * The turned labels: text a paint laid along a line or a symbol's axis. They turn with the
+ * map, so a line's label stays on the line when the map is turned, and face the camera
+ * when it is tilted, so they stay legible. @see turnedSymbolLayout
+ */
+export function turnedSymbolLayer(id: string, source: string, fontStack: string, bearing: number): LayerSpecification {
+    const upright = symbolLayer(id, source, fontStack) as LayerSpecification & {layout: Record<string, unknown>};
+    return {
+        ...upright,
+        filter: ['get', 'turned'],
+        layout: {
+            ...upright.layout,
+            ...turnedSymbolLayout(bearing),
+            'text-rotation-alignment': 'map',
+            'text-pitch-alignment': 'viewport',
+        },
+    } as unknown as LayerSpecification;
 }
 
 /**
