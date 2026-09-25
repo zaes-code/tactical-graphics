@@ -53,7 +53,7 @@ import {
     dashZoomStep,
     lineLayer,
     renderHatchImage,
-    symbolLayer, MEASURE_LABEL_PX} from './paintToLayers';
+    symbolLayer, turnedLabelFlips, turnedSymbolLayer, turnedSymbolLayout, MEASURE_LABEL_PX} from './paintToLayers';
 
 /**
  * # Path B — realize the geometry, then let MapLibre draw it
@@ -93,6 +93,8 @@ export const HANDLE_LAYER_ID = 'tg-handle';
 export const SKETCH_LAYER_ID = 'tg-sketch';
 /** The security operations' host-provided center symbol. @see core/securitySymbol.ts */
 export const SYMBOL_ICON_LAYER_ID = 'tg-icon';
+/** Text laid along a line or an axis, which turns with the map. @see turnedSymbolLayer */
+export const TURNED_SYMBOL_LAYER_ID = 'tg-symbol-turned';
 
 /**
  * The glyph stack MapLibre renders labels with.
@@ -317,6 +319,12 @@ export class NativeLayerRenderer {
      */
     private readonly onMoveEnd = () => this.scheduleRealize();
 
+    /** The turned labels' rotations, as last uploaded. @see applyTurnedLayout */
+    private turnedRotations: number[] = [];
+    /** Which of them flip at the bearing their layout was last set for. */
+    private flipSignature = '';
+    private readonly onRotate = () => this.applyTurnedLayout(false);
+
     private measureCanvas: CanvasRenderingContext2D | null = null;
 
     constructor(private readonly map: MapLibreMap) {
@@ -324,6 +332,7 @@ export class NativeLayerRenderer {
         map.on('zoom', this.onZoom);
         map.on('zoomend', this.onZoomEnd);
         map.on('moveend', this.onMoveEnd);
+        map.on('rotate', this.onRotate);
         // Sources are realized on zoom, so without this a provider registered after
         // the map settled would not appear until something unrelated moved it. The
         // revision check inside `realizeCenterSymbols` then throws the stale rasters
@@ -380,8 +389,9 @@ export class NativeLayerRenderer {
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
         this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
+        this.map.addLayer(turnedSymbolLayer(TURNED_SYMBOL_LAYER_ID, SOURCE_PREFIX + 'symbols', FONT_STACK, this.map.getBearing()));
         this.map.addLayer(iconLayer(SYMBOL_ICON_LAYER_ID, SOURCE_PREFIX + 'icons'));
-        this.layerIds.push('tg-fill-pattern', 'tg-fill', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
+        this.layerIds.push('tg-fill-pattern', 'tg-fill', 'tg-circle', 'tg-symbol', TURNED_SYMBOL_LAYER_ID, SYMBOL_ICON_LAYER_ID);
 
         // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
         // that list is what a click hit-tests against to find a *graphic*, and a
@@ -514,6 +524,8 @@ export class NativeLayerRenderer {
         this.setData('fills', buckets.fills);
         this.setData('circles', buckets.circles);
         this.setData('symbols', buckets.symbols);
+        this.turnedRotations = buckets.symbols.filter(f => f.properties?.turned).map(f => f.properties!.rotate as number);
+        this.applyTurnedLayout(true);
 
         // A dash pattern cannot be data-driven, so each distinct one needs its own
         // layer. Created lazily and never removed: they are few, and dropping a layer
@@ -1093,6 +1105,23 @@ export class NativeLayerRenderer {
         return best;
     }
 
+    /**
+     * Sets the turned labels' layout for the current bearing: which of them are turned the
+     * other half turn to stay readable. A turn fires this every frame, and the layout is only
+     * set when the answer changes for at least one label, since setting it lays the text out
+     * again. After an upload it is always set, because the new labels were never asked.
+     * @see turnedSymbolLayout
+     */
+    private applyTurnedLayout(always: boolean): void {
+        const bearing = this.map.getBearing();
+        const signature = this.turnedRotations.map(r => (turnedLabelFlips(r, bearing) ? '1' : '0')).join('');
+        if (!always && signature === this.flipSignature) return;
+        this.flipSignature = signature;
+        for (const [name, value] of Object.entries(turnedSymbolLayout(bearing))) {
+            this.map.setLayoutProperty(TURNED_SYMBOL_LAYER_ID, name as Parameters<MapLibreMap['setLayoutProperty']>[1], value as Parameters<MapLibreMap['setLayoutProperty']>[2]);
+        }
+    }
+
     /** The selected graphic as a one-or-zero list, for the no-handle-mode case. */
     private selectedHandleBearer(): MapLibreTacticalGraphic[] {
         const selected = this.selectedId ? this.find(this.selectedId) : undefined;
@@ -1103,6 +1132,7 @@ export class NativeLayerRenderer {
         this.map.off('zoom', this.onZoom);
         this.map.off('zoomend', this.onZoomEnd);
         this.map.off('moveend', this.onMoveEnd);
+        this.map.off('rotate', this.onRotate);
         this.unsubscribeSymbols();
     }
 }
