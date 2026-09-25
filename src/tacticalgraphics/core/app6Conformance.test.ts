@@ -70,18 +70,44 @@ describe('APP-06 280100 — abatis', () => {
         expect(meters(path[0], path[2])).toBeLessThanOrEqual(total / 2 + 1);
     });
 
-    it('puts the apex on the other side when mirrored', () => {
-        const plain = drawn(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH}));
-        const flipped = drawn(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH, mirrored: true}));
-        // Same feet, apex reflected across the route.
-        expect(meters(plain[0], flipped[0])).toBeCloseTo(0, 1);
-        expect(meters(plain[1], flipped[1])).toBeGreaterThan(TOOTH);
+    /*
+     * The tooth stands on the line's north side whichever way it was drawn (user's call,
+     * 2026-09-25). Drawn right to left it used to hang underneath, and a `mirrored` flag
+     * with a drag to set it was the only way back up. @see northSide
+     */
+    const apexNorthOfFeet = (route: Position[], props: Record<string, unknown> = {}) => {
+        const [foot, apex, far] = drawn(lineBase(TacticalGraphicName.Abatis, route, {radius: TOOTH, ...props}));
+        return apex[1] - (foot[1] + far[1]) / 2;
+    };
+
+    it.each([
+        ['west to east', [[-77.0, 38.9], [-76.9, 38.9]]],
+        ['east to west', [[-76.9, 38.9], [-77.0, 38.9]]],
+        ['southwest to northeast', [[-77.0, 38.9], [-76.9, 38.95]]],
+        ['northeast to southwest', [[-76.9, 38.95], [-77.0, 38.9]]],
+        ['northwest to southeast', [[-77.0, 38.95], [-76.9, 38.9]]],
+        ['southeast to northwest', [[-76.9, 38.9], [-77.0, 38.95]]],
+    ] as [string, Position[]][])('points the tooth north on a route drawn %s', (_, route) => {
+        expect(apexNorthOfFeet(route)).toBeGreaterThan(0);
     });
 
-    it('offers the two ends and the apex as handles', () => {
+    it('puts it on the west side of a route running due north or south', () => {
+        for (const route of [[[-77.0, 38.9], [-77.0, 39.0]], [[-77.0, 39.0], [-77.0, 38.9]]] as Position[][]) {
+            const [foot, apex] = drawn(lineBase(TacticalGraphicName.Abatis, route, {radius: TOOTH}));
+            expect(apex[0]).toBeLessThan(foot[0]);
+        }
+    });
+
+    it('ignores a mirrored flag an older file carries', () => {
+        const east: Position[] = [[-76.9, 38.9], [-77.0, 38.9]];
+        expect(apexNorthOfFeet(east, {mirrored: true})).toBeGreaterThan(0);
+        expect(drawn(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH, mirrored: true}))).toEqual(drawn(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH})));
+    });
+
+    it('offers the two ends as handles', () => {
         const handles = renderTacticalGraphic(lineBase(TacticalGraphicName.Abatis, SHORT, {radius: TOOTH})).handles;
         expect(handles.geometry.type).toBe('MultiPoint');
-        expect((handles.geometry as {coordinates: Position[]}).coordinates).toHaveLength(3);
+        expect((handles.geometry as {coordinates: Position[]}).coordinates).toHaveLength(2);
     });
 });
 

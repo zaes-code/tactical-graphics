@@ -349,9 +349,9 @@ describe('APP-06 constructions through the MapLibre adapter', () => {
         expect(abatisPath(ABATIS_ROUTE).length).toBeGreaterThan(3);
     });
 
-    it('offers a handle per end plus the chevron apex', () => {
+    it('offers a handle per end, and none on the tooth, whose side follows the line', () => {
         const built = buildTacticalGraphic(TacticalGraphicName.Abatis, ABATIS_ROUTE, {}, RESOLUTION);
-        expect(built!.handles).toHaveLength(3);
+        expect(built!.handles).toHaveLength(2);
     });
     const READINESS = [
         TacticalGraphicName.ExplosivesPlannedStateOfReadiness,

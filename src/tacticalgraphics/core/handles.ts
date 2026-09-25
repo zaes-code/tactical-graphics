@@ -152,9 +152,10 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     // (User's report: "pursuit point 3 drag still doesn't behave like other cane graphics
     // […] I'm trying to have consistency across similar graphics".)
     //
-    // This one carries the handle elsewhere in its own contract below, but it mirrors just
-    // the same, and `supportsMirror` is the question a panel or a test asks.
-    TacticalGraphicName.Abatis,
+    // 280100 abatis left on 2026-09-25, the last one. Its tooth stands on the north side of
+    // the line whichever way it was drawn, so there is no side left to choose (user's call).
+    // The list is kept, empty, because the gesture is real and `supportsMirror` is still
+    // the question a panel or a test asks. @see Abatis.northSide
     // 152800 left this list on 2026-09-06: its point 3 states which side the arc falls on,
     // so the flip is a placed point rather than an amplifier and there is no mirror gesture
     // left to advertise. @see MobileDefense.frame
@@ -624,15 +625,6 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     }
     if (BLOCK_GRAPHICS.includes(name)) {
         return {roles: ['offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
-    }
-    // **These three first.** They mirror, so they are in `MIRROR_HANDLE_GRAPHICS` — but
-    // each puts the handle at its own index, and the generic branch below would
-    // otherwise claim them and put it at 0.
-    //
-    // The chevron's apex, which the generator emits third precisely so the flip has
-    // something to grab. @see Abatis.generateHandles
-    if (name === TacticalGraphicName.Abatis) {
-        return {roles: ['shape', 'shape', 'mirror'], repeating: 'shape'};
     }
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
         return MIRROR_HANDLE_AT_0;

@@ -474,34 +474,12 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
-     * Which side the graphic's decoration hangs on. Abatis's chevron is the one in this
-     * family that flips; a symmetric graphic ignores it. @see setMirrored
-     */
-    mirrored: boolean = false;
-
-    /**
-     * @see TacticalGraphicHandler.setMirrored
-     *
-     * **This family had no mirror at all.** `LineGraphicController.setMirrored` forwarded
-     * to `graphic.setMirrored?.()` and every holder here was missing it, so the call
-     * landed on `undefined` and did nothing — silently, because the optional call is
-     * exactly the shape a symmetric graphic legitimately has. Abatis's apex handle is
-     * declared a `mirror` in the contract precisely so the flip has something to grab,
-     * and grabbing it flipped nothing.
-     */
-    setMirrored(mirrored: boolean): void {
-        if (mirrored === this.mirrored) return;
-        this.mirrored = mirrored;
-        this.updateGraphic();
-    }
-
-    /**
      * How many handles `visiblePathHandles` dropped off the front.
      *
      * `handleRole` is indexed against the *generator's* list, and this holder renders a
      * filtered one — a two-point graphic hides the handle sitting on its own start. So
-     * the apex the contract calls index 2 arrives as index 1, is answered `shape`, and
-     * the mirror never fires. Recomputed on every publish rather than assumed, because
+     * the handle the contract calls index 2 arrives as index 1 and is answered with the
+     * wrong role. Recomputed on every publish rather than assumed, because
      * whether the start handle is dropped depends on where it landed.
      * @see TacticalGraphicHandler.handleIndexOffset
      */
@@ -523,7 +501,6 @@ export class LineGraphicBase implements LineGraphic {
             this.base,
             {
                 size: this.graphicSize(),
-                mirrored: this.mirrored,
                 // Halved, because that is what `toGraphicOptions` hands a generator for a
                 // public `width` and the generator doubles it straight back. Passing the
                 // whole distance here would have made a graphic drawn in the app twice the
@@ -545,7 +522,6 @@ export class LineGraphicBase implements LineGraphic {
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, bag, {
             decorationSize: this.graphicSize(),
-            mirrored: this.mirrored,
             // The same number the shape was just built from, filed so a restore replays a
             // distance instead of re-deriving one from whatever zoom the file is opened at.
             ...(standoff !== undefined ? {width: standoff} : {}),
