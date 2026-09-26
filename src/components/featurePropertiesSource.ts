@@ -68,8 +68,9 @@ export interface FeaturePropertiesSource {
      * Draw this graphic name-only, or stop.
      *
      * Separate from `apply` because it is not an amplifier: the library keeps it off the
-     * portable description entirely, so a host holds the choice itself and stamps it as a
-     * renderer input. @see amplifierVisibility, `PaintFeature.hideAmplifiers`
+     * portable description entirely. This only draws the choice; it remembers nothing, so
+     * the caller records it if it should outlive a restore. @see amplifierVisibility,
+     * `TacticalGraphicsEngine.setAmplifiersHidden`, `PaintFeature.hideAmplifiers`
      */
     setAmplifiersHidden(selection: SelectedGraphic, hidden: boolean): void;
 

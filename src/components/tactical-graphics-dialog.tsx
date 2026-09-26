@@ -23,7 +23,7 @@ import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactic
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
-import {amplifiersHidden} from './amplifierVisibility';
+import {rememberAmplifiersHidden, rememberedAmplifiersHidden} from './amplifierVisibility';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
 import {
     getDisplayName,
@@ -245,6 +245,17 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
      * looks like it should undo the very thing that had already happened.
      */
     const [openedNameOnly, setOpenedNameOnly] = useState(false);
+    /**
+     * Draws the graphic name-only, or stops, and remembers it.
+     *
+     * Two halves because the library holds the choice only while the graphic is drawn: the
+     * source puts it on the map, and this app's own store is what re-applies it after a
+     * restore or an engine switch. @see amplifierVisibility
+     */
+    const applyNameOnly = (target: SelectedGraphic, hidden: boolean) => {
+        rememberAmplifiersHidden(target.id, hidden);
+        source.setAmplifiersHidden(target, hidden);
+    };
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
     const paperRef = useRef<HTMLDivElement | null>(null);
     const lineRef = useRef<SVGLineElement | null>(null);
@@ -271,8 +282,8 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             setPendingChanges(curr);
             // View state, not an amplifier: it comes from this app's store rather than
             // from the graphic. @see amplifierVisibility
-            setNameOnly(amplifiersHidden(next.id));
-            setOpenedNameOnly(amplifiersHidden(next.id));
+            setNameOnly(rememberedAmplifiersHidden(next.id));
+            setOpenedNameOnly(rememberedAmplifiersHidden(next.id));
             setDialogPosition({x: 0, y: 0});
         });
     }, [source]);
@@ -351,7 +362,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
         // The toggle took effect immediately, so cancelling has to undo it — otherwise the
         // one control that applied on the spot is also the one Cancel cannot take back.
         if (selection && nameOnly !== openedNameOnly) {
-            source.setAmplifiersHidden(selection, openedNameOnly);
+            applyNameOnly(selection, openedNameOnly);
             setNameOnly(openedNameOnly);
         }
         setSelection(null);
@@ -620,7 +631,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                     // own store — it is not one of the
                                                     // amplifiers `OK` writes back.
                                                     setNameOnly(checked);
-                                                    if (selection) source.setAmplifiersHidden(selection, checked);
+                                                    if (selection) applyNameOnly(selection, checked);
                                                 }}
                                             />
                                         }

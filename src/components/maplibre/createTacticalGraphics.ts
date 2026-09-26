@@ -27,7 +27,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {NativeLayerRenderer, type NativeLayerRendererOptions} from './native/NativeLayerRenderer';
 import {MapLibreInteractions, type EditMode as InteractionMode} from './interaction/MapLibreInteractions';
-import {amplifiersHidden} from '../amplifierVisibility';
+import {amplifiersHiddenOn, stampAmplifierVisibility} from './amplifierVisibility';
 import {restoreSnapshotGraphics} from './restoreGraphic';
 import {resolutionOf} from './projection';
 
@@ -154,15 +154,23 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
                  * disagreed, and anything the host keys by id lost track of the graphic on
                  * one leg of the round trip.
                  *
-                 * Which is exactly what happened to the "name only" choice: it is remembered
-                 * per graphic id, so it survived OpenLayers → MapLibre and not the way back.
+                 * A host that keeps its own state per graphic, such as the "name only"
+                 * choice, finds the graphic again by that id. Every graphic comes back drawn
+                 * in full: the snapshot carries no such choice, so re-applying it is the
+                 * host's call. @see TacticalGraphicsEngine.setAmplifiersHidden
                  */
-                const id = symbolId ?? graphic.id;
-                renderer.add({...graphic, id, graphic: {...graphic.graphic, hideAmplifiers: amplifiersHidden(id) || undefined},
-                    labels: graphic.labels ? {...graphic.labels, hideAmplifiers: amplifiersHidden(id) || undefined} : undefined});
+                renderer.add({...graphic, id: symbolId ?? graphic.id});
             }
             options.onChange?.();
         },
+
+        setAmplifiersHidden(id: string, hidden: boolean) {
+            // Onto the held graphic's paint features, and nowhere else: the flag there is
+            // the whole of the state. @see amplifierVisibility
+            stampAmplifierVisibility(renderer, id, hidden);
+        },
+
+        amplifiersHidden: (id: string) => amplifiersHiddenOn(renderer, id),
 
         refreshStyles: () => renderer.realize(),
 

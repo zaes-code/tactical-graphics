@@ -6,25 +6,26 @@
  * in a file another operator opens. So it is not in the snapshot, and a restore rebuilds
  * every feature without it. Something has to put it back.
  *
- * Two things were missing, and together they made the toggle survive a page reload — it is in
- * local storage — but not an engine switch, which is the one place a user watches it happen:
+ * That something is the host. The engines hold the choice in memory only and draw a
+ * restored graphic in full; this demo keeps its own record in local storage and re-applies
+ * it after every restore through `rememberAmplifierVisibility`. Until 2026-09-25 the
+ * published renderers read that record themselves, which put the demo's storage key inside
+ * the library.
  *
- * - **`restampAmplifierVisibility` was never called.** It was written for this, sat in
- *   `featurePropertiesSource.ts`, and nothing referenced it.
- * - **MapLibre's restore threw away the incoming `symbolId`**, minting a fresh `mlb-N`
- *   instead — while OpenLayers' restore has always adopted the id it was given. The choice is
- *   remembered *per graphic id*, so it survived OpenLayers → MapLibre and not the way back.
- *
- * The second is the more general defect: a host keying anything by graphic id lost track of
- * the graphic on one leg of the round trip.
+ * It depends on one thing the engines do guarantee: **a restore keeps the incoming
+ * `symbolId`**. MapLibre's once minted a fresh `mlb-N` instead, while OpenLayers' adopted
+ * the id it was given, so a choice remembered per graphic id survived OpenLayers → MapLibre
+ * and not the way back.
  */
-import {TacticalGraphicName, toSnapshot} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, toSnapshot, type TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 import type {Feature as GeoFeature, Geometry} from 'geojson';
 import {
-    amplifiersHidden,
     forgetAmplifierVisibility,
-    hiddenAmplifierIds,
-    setAmplifiersHidden,
+    reapplyAmplifierVisibility,
+    rememberAmplifierVisibility,
+    rememberAmplifiersHidden,
+    rememberedAmplifierIds,
+    rememberedAmplifiersHidden,
 } from './amplifierVisibility';
 
 /** A saved base feature, as either engine writes one. */
@@ -44,9 +45,9 @@ describe('the remembered "name only" choice', () => {
     afterEach(() => forgetAmplifierVisibility());
 
     it('is kept in local storage, so it survives a reload', () => {
-        setAmplifiersHidden('mlb-253', true);
+        rememberAmplifiersHidden('mlb-253', true);
         expect(window.localStorage.getItem('tacticalGraphics.hiddenAmplifiers')).toContain('mlb-253');
-        expect(amplifiersHidden('mlb-253')).toBe(true);
+        expect(rememberedAmplifiersHidden('mlb-253')).toBe(true);
     });
 
     it('is keyed by the graphic id the snapshot carries', () => {
@@ -59,17 +60,17 @@ describe('the remembered "name only" choice', () => {
         const carried = snapshot.features[0].properties?.symbolId;
         expect(carried).toBe('mlb-253');
 
-        setAmplifiersHidden(carried as string, true);
-        expect(hiddenAmplifierIds().has('mlb-253')).toBe(true);
+        rememberAmplifiersHidden(carried as string, true);
+        expect(rememberedAmplifierIds().has('mlb-253')).toBe(true);
     });
 
     it('forgets a choice when it is switched off, rather than accumulating ids', () => {
         // The store is consulted on every restore, so a stale id would re-hide a graphic
         // that happens to be given that id later.
-        setAmplifiersHidden('a', true);
-        setAmplifiersHidden('a', false);
-        expect(hiddenAmplifierIds().has('a')).toBe(false);
-        expect(amplifiersHidden('a')).toBe(false);
+        rememberAmplifiersHidden('a', true);
+        rememberAmplifiersHidden('a', false);
+        expect(rememberedAmplifierIds().has('a')).toBe(false);
+        expect(rememberedAmplifiersHidden('a')).toBe(false);
     });
 
     it('survives storage being unavailable, because losing the memory beats losing the toggle', () => {
@@ -79,10 +80,68 @@ describe('the remembered "name only" choice', () => {
             (window.localStorage as unknown as {getItem: () => never}).getItem = () => {
                 throw new Error('blocked');
             };
-            expect(() => amplifiersHidden('a')).not.toThrow();
-            expect(amplifiersHidden('a')).toBe(false);
+            expect(() => rememberedAmplifiersHidden('a')).not.toThrow();
+            expect(rememberedAmplifiersHidden('a')).toBe(false);
         } finally {
             (window.localStorage as unknown as {getItem: typeof real}).getItem = real;
         }
+    });
+});
+
+describe('the demo re-applies what it remembers', () => {
+    beforeEach(() => forgetAmplifierVisibility());
+    afterEach(() => forgetAmplifierVisibility());
+
+    /** Just enough engine to watch the two verbs the wrapper touches. */
+    const fakeEngine = () => {
+        const hidden = new Set<string>();
+        const calls: string[] = [];
+        const engine = {
+            restore: () => {
+                // What both real engines do: every restored graphic comes back in full.
+                hidden.clear();
+                calls.push('restore');
+            },
+            setAmplifiersHidden: (id: string, value: boolean) => {
+                calls.push(`set ${id} ${value}`);
+                if (value) hidden.add(id);
+                else hidden.delete(id);
+            },
+            amplifiersHidden: (id: string) => hidden.has(id),
+        } as unknown as TacticalGraphicsEngine;
+        return {engine, calls};
+    };
+
+    it('puts every remembered choice back after a restore', () => {
+        rememberAmplifiersHidden('mlb-253', true);
+        const {engine, calls} = fakeEngine();
+        const wrapped = rememberAmplifierVisibility(engine);
+
+        wrapped.restore(toSnapshot([base('mlb-253')]));
+        expect(calls).toEqual(['restore', 'set mlb-253 true']);
+        expect(wrapped.amplifiersHidden?.('mlb-253')).toBe(true);
+    });
+
+    it('records a choice made through the engine, so the next restore finds it', () => {
+        const {engine} = fakeEngine();
+        const wrapped = rememberAmplifierVisibility(engine);
+
+        wrapped.setAmplifiersHidden?.('ol-7', true);
+        expect(rememberedAmplifiersHidden('ol-7')).toBe(true);
+        wrapped.restore(toSnapshot([base('ol-7')]));
+        expect(wrapped.amplifiersHidden?.('ol-7')).toBe(true);
+
+        wrapped.setAmplifiersHidden?.('ol-7', false);
+        expect(rememberedAmplifiersHidden('ol-7')).toBe(false);
+        wrapped.restore(toSnapshot([base('ol-7')]));
+        expect(wrapped.amplifiersHidden?.('ol-7')).toBe(false);
+    });
+
+    it('asks nothing of an engine that cannot hide amplifiers', () => {
+        // The method is optional on the interface; an add-on engine may not have it.
+        rememberAmplifiersHidden('a', true);
+        const bare = {restore: () => {}} as unknown as TacticalGraphicsEngine;
+        expect(() => reapplyAmplifierVisibility(bare)).not.toThrow();
+        expect(() => rememberAmplifierVisibility(bare).restore({type: 'FeatureCollection', features: []})).not.toThrow();
     });
 });

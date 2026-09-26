@@ -1639,7 +1639,19 @@ export class MapLibreInteractions {
         // mid-drag would delete what the user is holding.
         if (!rebuilt) return;
 
-        const next = {...rebuilt, id: drag.graphic.id};
+        // **The "name only" choice rides along.** The rebuild reads the portable bag, which
+        // deliberately does not carry it, so a drag used to put every amplifier back. Only
+        // that flag is carried; what a drag does to the label anchor is left as it was.
+        // @see carryPaintFlags, TacticalGraphicsEngine.setAmplifiersHidden
+        const hidden = drag.graphic.graphic.hideAmplifiers;
+        const next = hidden
+            ? {
+                ...rebuilt,
+                id: drag.graphic.id,
+                graphic: {...rebuilt.graphic, hideAmplifiers: hidden},
+                labels: rebuilt.labels ? {...rebuilt.labels, hideAmplifiers: drag.graphic.labels?.hideAmplifiers} : rebuilt.labels,
+            }
+            : {...rebuilt, id: drag.graphic.id};
         this.renderer.replace(drag.graphic.id, next);
         drag.graphic = next;
         // **Only once the gesture has actually changed the size**, which is the rule
