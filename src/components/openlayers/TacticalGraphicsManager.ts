@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, acceptsInsertedVertex, drawnSide, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -1801,12 +1801,6 @@ export class TacticalGraphicsManager {
             this.lastDrawEndedAt = Date.now() + 1000;
             this.normalizeDrawnGeometry(name, e);
             tacticalGraphicHandler.onDrawEndFunc(e);
-            // Which side a decoration takes, decided once from the way it was drawn: an abatis
-            // tooth faces north. Only a draw sets it, so rotation keeps it. @see drawnSide
-            const drawnLine = e.feature?.getGeometry();
-            if (drawnLine instanceof LineString && drawnSide(name, drawnLine.getCoordinates().map(c => toLonLat(c))).mirrored) {
-                tacticalGraphicHandler.setMirrored?.(true);
-            }
             drawingVectorSource.clear();
             this.graphicControllers.push(tacticalGraphicHandler);
             this.stopDrawing(tacticalGraphicHandler, false);
