@@ -10,8 +10,12 @@ const snapshot = graphics.snapshot();          // one feature per graphic
 await db.save(JSON.stringify(snapshot));
 
 // later, in a fresh session — or in the other engine
-graphics.restore(await db.load());
+graphics.restore(JSON.parse(await db.load()));
 ```
+
+The snapshot is a `FeatureCollection` stamped with `tacticalGraphicsVersion`
+(`SNAPSHOT_VERSION`, currently 2). A file that declares no version is read as
+version 1 and migrated on the way in.
 
 **A snapshot taken in one engine restores in the other.** Nothing renderer-specific
 travels with it, which is what makes that true rather than merely likely; the demo's
@@ -19,8 +23,8 @@ engine picker hands the map across on every switch.
 
 A snapshot holds **one feature per graphic** — the base geometry the user drew.
 Everything else is derived and regenerates on load. A record is the same
-`tacticalGraphic` object described [above](/guide/tactical-graphic-object), and nothing
-else:
+`tacticalGraphic` object described in [The `tacticalGraphic` object](/guide/tactical-graphic-object),
+plus three bookkeeping fields (`role`, `symbolId`, `graphicName`):
 
 ```jsonc
 "properties": {

@@ -121,9 +121,9 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
 
 /**
  * One band of a multi-band weapon/sensor range fan. `range` is the outer
- * radius in **kilometers** (the inner radius is whatever the previous
- * band's range was, or 0 for the innermost band). FM 1-02.2 Table 5-26
- * templates.
+ * radius in **meters** since 3.2.0 (kilometers before; see `range` below). The inner
+ * radius is whatever the previous band's range was, or 0 for the innermost band.
+ * FM 1-02.2 Table 5-26 templates.
  *
  * The sector variant (WeaponSensorRangeFanSector) lets each band carry
  * its own `leftAzimuthDeg` / `rightAzimuthDeg` — absolute compass

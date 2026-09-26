@@ -14,21 +14,20 @@ you only have to care when you want to. `createTacticalGraphics(map, {manager})`
 `TacticalGraphicsManager`, `getController`, the feature holders and the controllers. One
 thing here has no MapLibre counterpart:
 
-**A provider for one graphic, handed straight to the holder.** `handler.setSymbolProvider`
-is the same idea as `setGraphicSecuritySymbolProvider` above without needing an id, and it
-accepts this subpath's wider return — an `ol` `Style` included. It takes precedence over
-the shared per-graphic registry, which works on both engines and is what to reach for
-first.
-
 **A provider that returns an `ol` `Style`.** Used verbatim — no image is built, so sizing
 and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayers subpath
 accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
+`useMilsymbolSecurityOperationSymbols(ms)` registers milsymbol as both this provider and
+the shared one. Register a shared provider too when you use it: on Cover, Guard, Screen and
+the two follow tasks the shared paint places the symbol only when a shared provider (global
+or per-graphic) answers, so the OpenLayers global on its own draws a center symbol on the
+escort alone.
 
 Everything *else* about the provider is shared, and a provider is resolved most-specific
-first: `handler.setSymbolProvider`, then `setGraphicSecuritySymbolProvider(id, …)`, then
-the OpenLayers global, then the shared global. `labels`, a per-graphic `sizePx` and a
-per-graphic provider all reach both engines. What stays OpenLayers-only is the `ol`
-`Style` return, which cannot cross engines at all.
+first: `setGraphicSecuritySymbolProvider(id, …)`, then the OpenLayers global, then the
+shared global. `labels`, a per-graphic `sizePx` and a per-graphic provider all reach both
+engines. What stays OpenLayers-only is the `ol` `Style` return, which cannot cross engines
+at all.
 
 ### Placing graphics from data
 
@@ -60,12 +59,19 @@ keep drawing the old label.
 It subscribes a handler to `change:resolution` so a graphic whose geometry is a
 screen-pixel constant times the resolution can re-derive itself. **No graphic in the
 library is built that way any more** — the security operations were the last, and
-they are drawn from two points as of 2.0.0 — so every live controller's
+they are drawn from two points as of 3.0.0 — so every live controller's
 `onResolutionChangeFunc` is empty and the subscription drives nothing. The manager
 still does it when the user draws and `restore` still does it on load; a graphic you
 build yourself should too, because the hook is what a screen-sized graphic would need
 and the alternative is finding out later. Pair it with `unwatchResolution` when you
 remove the graphic, or the listener outlives its features.
+
+**The manager does not know about a graphic built this way.** `serializeTacticalGraphics`
+and selection walk `manager.graphicControllers`, not the vector source, so the sample above
+draws a graphic that is left out of a save. `restoreTacticalGraphics` is the path that does
+all of it for you — it builds each base through `getController`, stamps `graphicName` and
+`symbolId`, applies the amplifiers, registers the handler with the manager and watches its
+resolution — so placing graphics from GeoJSON through it is usually the shorter route.
 
 ### When you need the restore report
 
@@ -79,11 +85,16 @@ const {restored, failed} = restoreTacticalGraphics(manager, await db.load());
 ```
 
 A graphic that fails to restore is reported in `failed` and rolled back on its own, so
-one bad record cannot cost you the rest of the map.
+one bad record cannot cost you the rest of the map. The report also carries `version`, the
+snapshot version the file declared (or the current one where it declared none).
+
+Unlike the façade's `restore()`, `restoreTacticalGraphics` **adds** to what the manager
+already holds; it does not clear the map first.
 
 ## Advanced: MapLibre
 
-`NativeLayerRenderer` and `MapLibreInteractions`. `buildTacticalGraphic` is the
+`NativeLayerRenderer` (the renderer the façade builds and the one `{renderer}` adopts),
+`CanvasOverlayRenderer` and `MapLibreInteractions`. `buildTacticalGraphic` is the
 counterpart to `getController` for placing graphics from data, and hands back a ready
 graphic rather than mutating a holder:
 
@@ -98,7 +109,9 @@ const graphic = buildTacticalGraphic(TacticalGraphicName.FieldsOfFire, geometry,
 if (graphic) renderer.add(graphic);
 ```
 
-**Text needs a glyph server.** MapLibre draws labels from pre-generated SDF glyphs served
-over HTTP; there is no path to a system font. A deployment either self-hosts a glyph set
-or points at someone else's. OpenLayers has no equivalent requirement — it is the
-sharpest practical difference between the two.
+**Text on the native renderer needs a glyph server.** `NativeLayerRenderer` draws labels
+with MapLibre symbol layers, which read pre-generated SDF glyphs served over HTTP; there is
+no path to a system font, and a style with no `glyphs` URL renders its labels silently
+empty. A deployment either self-hosts a glyph set or points at someone else's.
+`CanvasOverlayRenderer` paints its text itself with a real font and needs none, and neither
+does OpenLayers — it is the sharpest practical difference between the two engines.
