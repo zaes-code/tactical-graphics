@@ -51,6 +51,7 @@
 
 import {TacticalGraphicProperties} from './render';
 import {TacticalGraphicEchelon} from './type';
+import type {SecuritySymbolProvider} from './securitySymbol';
 
 /** A single `[x, y]` in projected meters (EPSG:3857). */
 export type ProjectedPosition = [number, number];
@@ -293,6 +294,23 @@ export interface PaintContext {
      * small, which is a bug this repo has shipped twice.
      */
     measureText(text: string, font: string): number;
+
+    /**
+     * The renderer's own center-symbol provider, when it has one.
+     *
+     * A host-supplied unit symbol is found in a fixed order, most specific first: a
+     * provider bound to this graphic, then this one, then the shared one. The
+     * OpenLayers entry point has a provider of its own (it may answer with an `ol`
+     * `Style`) and hands it over here in image form, so the paints that leave room
+     * for the symbol ask the same chain the renderer draws from. Without it they
+     * asked only the shared pair, found nothing and left no room, so a host that
+     * registered only the OpenLayers provider got an empty center on five of the six
+     * graphics.
+     *
+     * Optional: a renderer with no provider of its own leaves it out.
+     * @see resolveSecuritySymbol, CENTER_SYMBOL_GRAPHICS
+     */
+    centerSymbolProvider?: SecuritySymbolProvider;
 }
 
 /**
@@ -313,6 +331,16 @@ export interface PaintFeature {
      * same object `renderTacticalGraphic` consumes and persistence saves.
      */
     properties: TacticalGraphicProperties;
+
+    /**
+     * The graphic's own id, when the renderer knows one: `symbolId` on an OpenLayers
+     * feature. Used only to find a center-symbol provider registered for this graphic
+     * alone. @see setGraphicSecuritySymbolProvider
+     *
+     * A renderer input rather than a field on the bag, because the id is not part of
+     * what the symbol is and does not belong in a saved file.
+     */
+    graphicId?: string;
 
     /**
      * Draw the symbol and its designation only — no dates, altitudes, widths, field H or
