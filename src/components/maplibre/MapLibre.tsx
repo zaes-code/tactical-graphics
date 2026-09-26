@@ -26,6 +26,7 @@ import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {createMapLibrePropertiesSource} from './featurePropertiesSource';
 import {createTacticalGraphics} from './createTacticalGraphics';
+import {rememberAmplifierVisibility} from '../amplifierVisibility';
 import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 
 /**
@@ -281,12 +282,15 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
                 // **Through the library's façade**, adopting the renderer rather than
                 // replacing it: the demo still reaches past it for the sample sweep and
                 // the file IO, which are the app's own concerns.
-                engine = createTacticalGraphics(map, {
+                // Wrapped so every restore re-applies the "name only" choices this app
+                // remembers: the engine keeps them in memory only, and a restore draws
+                // every graphic in full. @see rememberAmplifierVisibility
+                engine = rememberAmplifierVisibility(createTacticalGraphics(map, {
                     renderer: native,
                     // A finished or abandoned draw puts the panel back into view, which
                     // is what the OpenLayers engine does through the same channel.
                     onModeChange: mode => onInteractionModeChange(mode),
-                });
+                }));
             }
 
             // **After `engine` exists, not before.** Every verb on the handle delegates
@@ -377,6 +381,8 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
             refreshStyles: () => engine?.refreshStyles(),
             snapshot: () => engine?.snapshot() ?? {type: 'FeatureCollection', features: []},
             restore: snapshot => engine?.restore(snapshot),
+            setAmplifiersHidden: (id, hidden) => engine?.setAmplifiersHidden?.(id, hidden),
+            amplifiersHidden: id => engine?.amplifiersHidden?.(id) ?? false,
             exportGeoJson: () => exportGraphics(renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []}),
             importGeoJson: async file => engine?.restore(JSON.parse(await file.text())),
         };

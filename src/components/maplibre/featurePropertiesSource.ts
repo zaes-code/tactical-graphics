@@ -21,7 +21,7 @@
 import type {Position} from 'geojson';
 import type {Map as MapLibreMap} from 'maplibre-gl';
 import {TacticalGraphicName, widthFromBase, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
-import {setAmplifiersHidden} from '../amplifierVisibility';
+import {stampAmplifierVisibility} from './amplifierVisibility';
 import type {GraphicLabels} from '../graphicAmplifiers';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {buildTacticalGraphic, carryPaintFlags, descriptionOf} from './maplibreAdapter';
@@ -149,20 +149,12 @@ export function createMapLibrePropertiesSource(
         },
 
         setAmplifiersHidden(selection, hidden) {
+            // Drawn here, remembered nowhere: the choice is view state the host keeps, so
+            // the demo records it itself. The OpenLayers half stamps the OL features
+            // instead; both end up handing the same `PaintFeature.hideAmplifiers` to the
+            // same paint function. @see TacticalGraphicsEngine.setAmplifiersHidden
             if (!selection.id) return;
-            setAmplifiersHidden(selection.id, hidden);
-
-            // MapLibre bakes each paint result into a GeoJSON source, so a flag that only
-            // the paints read has to be put on the paint features and the graphic
-            // re-realized. The OpenLayers half stamps the OL feature instead; both end up
-            // handing the same `PaintFeature.hideAmplifiers` to the same paint function.
-            const current = renderer.find(selection.id);
-            if (!current) return;
-            renderer.replace(selection.id, {
-                ...current,
-                graphic: {...current.graphic, hideAmplifiers: hidden || undefined},
-                labels: current.labels ? {...current.labels, hideAmplifiers: hidden || undefined} : current.labels,
-            });
+            stampAmplifierVisibility(renderer, selection.id, hidden);
         },
     };
 }

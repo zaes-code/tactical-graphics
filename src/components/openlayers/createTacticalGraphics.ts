@@ -27,7 +27,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {clearAllGraphics, restoreTacticalGraphics, serializeOneGraphic, serializeTacticalGraphics} from './persistence';
-import {restampAmplifierVisibility} from './featurePropertiesSource';
+import {amplifiersHiddenOn, stampAmplifierVisibility} from './amplifierVisibility';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
 
 /** Options for {@link createTacticalGraphics}. */
@@ -150,19 +150,19 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
         restore(snapshot: FeatureCollection) {
             clearAllGraphics(manager);
             restoreTacticalGraphics(manager, snapshot);
-            /*
-             * **The remembered "name only" choices, re-applied.**
-             *
-             * `hideAmplifiers` is a renderer input the host supplies, not a field on the
-             * portable description — so it is deliberately not in the snapshot, and a
-             * restore rebuilds every feature without it. `restampAmplifierVisibility` was
-             * written for exactly this and **nothing called it**, so the choice survived
-             * a reload (it is in local storage) and not an engine switch, which is the
-             * one place a user watches it happen. (User's report, 2026-09-04.)
-             */
-            restampAmplifierVisibility(manager.map);
+            // Every graphic comes back drawn in full. The snapshot carries no "name only"
+            // choice, because it is view state the host holds, so re-applying it is the
+            // host's call. @see TacticalGraphicsEngine.setAmplifiersHidden
             options.onChange?.();
         },
+
+        setAmplifiersHidden(id: string, hidden: boolean) {
+            // Onto the features the style functions read, and nowhere else: the flag on
+            // the features is the whole of the state. @see amplifierVisibility
+            stampAmplifierVisibility(manager.map, id, hidden);
+        },
+
+        amplifiersHidden: (id: string) => amplifiersHiddenOn(manager.map, id),
 
         refreshStyles() {
             // Explicit rather than waiting for the next frame: `ol/Object.set` and a
