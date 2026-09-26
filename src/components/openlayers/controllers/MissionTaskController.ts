@@ -240,7 +240,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
      * What the drag describes, which is not always a centre and a radius.
      *
      * Nearly every graphic on this controller is drawn centre-to-edge, and for those this
-     * is the identity. Contain is not: its plate marks the two clicks as the ends of the
+     * is the identity, apart from the rotation of the arc mission tasks: their second click
+     * is APP-06's start point, so the library turns the rotation to put that point under
+     * the cursor. @see rotationFromDrawnPoint. Contain is not centre-to-edge: its plate marks the two clicks as the ends of the
      * semicircle's opening, so the frame's centre is half way along the drag and its size
      * is half the reach. **The rule is the library's**, so MapLibre draws the same symbol
      * from the same two clicks. @see frameFromDrag
