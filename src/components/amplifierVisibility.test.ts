@@ -11,7 +11,7 @@
  * `amplifierVisibility` is.
  */
 
-import {amplifiersHidden, forgetAmplifierVisibility, hiddenAmplifierIds, setAmplifiersHidden} from './amplifierVisibility';
+import {rememberedAmplifiersHidden, forgetAmplifierVisibility, rememberedAmplifierIds, rememberAmplifiersHidden} from './amplifierVisibility';
 import {renderTacticalGraphic} from '@zaes/tactical-graphics';
 import {TacticalGraphicName} from '@zaes/tactical-graphics';
 
@@ -19,26 +19,26 @@ beforeEach(() => forgetAmplifierVisibility());
 
 describe('the app remembers which graphics are name-only', () => {
     it('starts remembering nothing', () => {
-        expect(amplifiersHidden('a')).toBe(false);
-        expect(hiddenAmplifierIds().size).toBe(0);
+        expect(rememberedAmplifiersHidden('a')).toBe(false);
+        expect(rememberedAmplifierIds().size).toBe(0);
     });
 
     it('remembers a choice, per graphic', () => {
-        setAmplifiersHidden('a', true);
-        expect(amplifiersHidden('a')).toBe(true);
-        expect(amplifiersHidden('b')).toBe(false);
+        rememberAmplifiersHidden('a', true);
+        expect(rememberedAmplifiersHidden('a')).toBe(true);
+        expect(rememberedAmplifiersHidden('b')).toBe(false);
     });
 
     it('forgets one without forgetting the rest', () => {
-        setAmplifiersHidden('a', true);
-        setAmplifiersHidden('b', true);
-        setAmplifiersHidden('a', false);
-        expect(amplifiersHidden('a')).toBe(false);
-        expect(amplifiersHidden('b')).toBe(true);
+        rememberAmplifiersHidden('a', true);
+        rememberAmplifiersHidden('b', true);
+        rememberAmplifiersHidden('a', false);
+        expect(rememberedAmplifiersHidden('a')).toBe(false);
+        expect(rememberedAmplifiersHidden('b')).toBe(true);
     });
 
     it('survives a reload — it is in storage, not in memory', () => {
-        setAmplifiersHidden('a', true);
+        rememberAmplifiersHidden('a', true);
         // What a fresh page would read.
         expect(JSON.parse(window.localStorage.getItem('tacticalGraphics.hiddenAmplifiers') ?? '[]')).toEqual(['a']);
     });
@@ -50,7 +50,7 @@ describe('the app remembers which graphics are name-only', () => {
         window.localStorage.setItem = () => {
             throw new Error('blocked');
         };
-        expect(() => setAmplifiersHidden('a', true)).not.toThrow();
+        expect(() => rememberAmplifiersHidden('a', true)).not.toThrow();
         window.localStorage.setItem = setItem;
     });
 });

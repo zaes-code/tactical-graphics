@@ -230,8 +230,50 @@ export interface TacticalGraphicsEngine {
      */
     snapshot(): FeatureCollection;
 
-    /** Replaces everything on the map with `snapshot`, rebuilt through the generators. */
+    /**
+     * Replaces everything on the map with `snapshot`, rebuilt through the generators.
+     *
+     * Every restored graphic is drawn in full, whatever it showed before: the snapshot
+     * carries no "name only" choice, so a host that keeps one re-applies it afterward
+     * with {@link setAmplifiersHidden}. @see amplifiersHidden
+     */
     restore(snapshot: FeatureCollection): void;
+
+    /**
+     * Draws one graphic with its name only, hiding its other amplifiers, or stops.
+     *
+     * ## View state, held by the host
+     *
+     * Which graphics show their name only says nothing about what a symbol *is*, so it is
+     * not part of the portable description and never appears in {@link snapshot}. The
+     * engine keeps the choice in memory, on the graphic as drawn, for as long as that
+     * graphic is on the map. It does not persist it anywhere: nothing here reads or writes
+     * browser storage, so where the choice outlives a page is the host's decision.
+     *
+     * The choice survives edits to the graphic. It does **not** survive {@link restore}
+     * or {@link clearAll}: a restore replaces every graphic with one rebuilt from the
+     * snapshot, drawn in full. A host that remembers the choice keeps its own set of ids
+     * and re-applies it after each restore:
+     *
+     * ```ts
+     * graphics.restore(saved);
+     * for (const id of myHiddenIds) graphics.setAmplifiersHidden?.(id, true);
+     * ```
+     *
+     * Restores in both renderers keep the `symbolId` each graphic was saved with, so an
+     * id recorded before a snapshot finds the same graphic after it.
+     *
+     * An id with no graphic on the map is ignored. Optional so an engine that has no
+     * amplifiers to hide still satisfies this interface; both published renderers
+     * implement it.
+     */
+    setAmplifiersHidden?(id: string, hidden: boolean): void;
+
+    /**
+     * Whether a graphic is currently drawn with its name only. `false` for an id with no
+     * graphic on the map. @see setAmplifiersHidden
+     */
+    amplifiersHidden?(id: string): boolean;
 
     /**
      * Redraws everything against the **current** library config.
