@@ -178,8 +178,8 @@ tacticalGraphic: {
                               // target carries both; every other rectangle takes its
                               // length from the anchor points instead
     rotation: 45,             // degrees, counter-clockwise from east (point graphics)
-    mirrored: false,          // which side an asymmetric symbol hangs on — the cane on a
-                              // withdrawal, the chevron on an abatis
+    mirrored: false,          // an abatis tooth on the right of its line; set when the
+                              // line is drawn, so the tooth starts out pointing north
     bend: 0.8,                // Turn and Envelopment — how sharply the curve bows
     labelGapDegrees: 15,      // arc mission tasks — angular hole left for the letter
     labelGap: 0,              // the same hole in meters, for the graphics that cut it

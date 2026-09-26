@@ -42,9 +42,46 @@ export const ABATIS_HEIGHT_RATIO = 0.588;
  *
  * `size` is the chevron's base width **in meters**, and is a decoration size rather
  * than a reach — the renderer derives it from the zoom through `decorationMeters`, so
- * the tooth holds its size on screen. `mirrored` puts the chevron on the other side of
- * the route.
+ * the tooth holds its size on screen.
+ *
+ * **The tooth is drawn pointing north, and then belongs to the line.** Which side it stands
+ * on is decided once, when the line is drawn: the side facing north, so a route drawn right
+ * to left no longer puts it underneath (`drawnSide`, which both engines apply). It is stored
+ * as `mirrored`, the other side from the default left of the line, and from then on it turns
+ * with the line: rotated half a turn, the tooth points south, as the user asked (2026-09-25).
+ * Nothing but the draw sets it; there is no grip to flip it. @see drawnSide, northSide
  */
+/**
+ * Which way to turn off a line drawn on `heading` (degrees clockwise from north) to face
+ * north: -90, its left, when it runs east of north-south; +90, its right, when it runs west.
+ * A line running due north or south has no north side, and gets its west one.
+ */
+export function northSide(heading: number): -90 | 90 {
+    const east = Math.sin((heading * Math.PI) / 180);
+    if (Math.abs(east) > 1e-9) return east > 0 ? -90 : 90;
+    return Math.cos((heading * Math.PI) / 180) > 0 ? -90 : 90;
+}
+
+/** Whether a draw decides which side of its line this graphic's decoration takes. @see drawnSide */
+export function hasDrawnSide(name: string): boolean {
+    return name === TacticalGraphicName.Abatis;
+}
+
+/**
+ * The side a newly drawn graphic's decoration takes, decided from the direction it was drawn.
+ *
+ * Only abatis has one: its tooth goes on the side of the first segment that faces north, which
+ * is `mirrored` when the line runs westward. Both engines apply this when a draw finishes, and
+ * nothing applies it again, so a later rotation turns the tooth with the line. `{}` for every
+ * other graphic and for a line too short to have a direction.
+ */
+export function drawnSide(name: string, coords: Position[]): {mirrored?: true} {
+    if (!hasDrawnSide(name) || coords.length < 2) return {};
+    const [a, b] = coords;
+    if (a[0] === b[0] && a[1] === b[1]) return {};
+    return northSide(turf.bearing(turf.point(a), turf.point(b))) === 90 ? {mirrored: true} : {};
+}
+
 export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
     name: string = TacticalGraphicName.Abatis;
     type: string = 'LineString';
@@ -94,22 +131,15 @@ export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
     }
 
     /**
-     * `[start, end, apex]` — the two ends of the drawn line, then the chevron's apex.
+     * `[start, end]`, the two ends of the drawn line.
      *
-     * The apex is third and exists to be *seen*: flipping the chevron means dragging a
-     * handle across the route, and without a dot on the tip nothing tells a user the
-     * chevron is the thing that moves. `handleContract` names index 2 the mirror handle
-     * for exactly this. When the line is too short to carry a tooth the apex is simply
-     * absent, and the contract's trailing role goes unfilled rather than pointing at a
-     * place the symbol does not occupy.
+     * There was a third, on the chevron's apex, whose only job was to be dragged across the
+     * route to flip it. The side is set when the line is drawn now. @see drawnSide
      */
-    generateHandles(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiPoint> {
+    generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
         const coords = base.geometry.coordinates;
         if (coords.length < 2) return this.asMultiPointFeature(coords);
-
-        const ends = [coords[0], coords[coords.length - 1]];
-        const path = this.path(base, opts);
-        return this.asMultiPointFeature(path ? [...ends, path[1]] : ends);
+        return this.asMultiPointFeature([coords[0], coords[coords.length - 1]]);
     }
 
     /** No amplifiers: affiliation and nothing else. */
