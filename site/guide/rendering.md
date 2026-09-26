@@ -15,7 +15,7 @@ const graphics = createTacticalGraphics(map);
 
 graphics.startDrawing(TacticalGraphicName.MainAxisOfAdvance);  // then the user clicks
 graphics.setInteractionMode('edit');                           // edit | view — or a single gesture:
-                                                               // translate | rotate | resize | modify | drawing
+                                                               // translate | rotate | resize | modify
 
 const saved = graphics.snapshot();     // portable GeoJSON, one feature per graphic
 graphics.restore(saved);               // rebuilt editable — in either engine
@@ -29,14 +29,21 @@ and leaves your map alone.
 |---|---|
 | `capabilities` | what this engine supports, so a host can disable a control **with a reason** rather than offer one that does nothing |
 | `startDrawing(name)` / `cancelDrawing()` | arm the draw tool; the next clicks place the base |
-| `setInteractionMode(mode)` / `getInteractionMode()` | what a drag means: `view`, `translate`, `rotate`, `resize`, `modify` |
+| `setInteractionMode(mode)` / `getInteractionMode()` | what a drag means: `view`, `edit`, `translate`, `rotate`, `resize`, `modify`. `getInteractionMode()` also reports `drawing`, which `startDrawing` sets |
+| `getSelection()` / `select(id)` | the selected graphic as `{id, name, base}`, or `null`; `select(null)` clears |
+| `selectionGestures()` | which of translate, rotate and resize the selected graphic accepts, or `null` with nothing selected |
+| `selectionBox()` | the selection's bounding box in map-container pixels, for drawing your own edit chrome |
+| `beginGesture(kind, event)` | start a `translate`, `rotate` or `resize` on the selection from your own control; returns `false` if refused |
 | `clearAll()` | remove every graphic and return to `view` |
 | `snapshot()` / `restore(fc)` | the whole map as GeoJSON, and back — see [Saving and restoring](/guide/saving-and-restoring) |
 | `refreshStyles()` | redraw against the current config, after `configureTacticalGraphics` |
 | `destroy()` | detach every listener and interaction |
 
 Pass callbacks as the second argument — `onChange`, `onSelect`, `onDrawEnd`,
-`onModeChange` — and they mean the same thing in both engines.
+`onModeChange` — and they mean the same thing in both engines. The same options object
+also takes one engine-specific field: an existing `manager` (a `TacticalGraphicsManager`)
+on OpenLayers, or an existing `renderer` (a `NativeLayerRenderer`) on MapLibre, to wrap
+instead of constructing a new one.
 
 ## A complete example, per engine
 
@@ -99,7 +106,7 @@ import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
 
 const map = new MapLibreMap({
     container: 'map',
-    style: 'https://your-style-server/style.json',   // must serve glyphs — see below
+    style: 'https://your-style-server/style.json',   // glyphs are replaced — see below
     center: [-77.04, 38.89],
     zoom: 10,
 });
@@ -133,11 +140,15 @@ map.on('load', () => {
 });
 ```
 
-**Three lines differ**, and each for a reason that is MapLibre's rather than this
-library's: the map is constructed differently, the work waits for `load`, and the style
-must serve glyphs because MapLibre draws text from SDF glyph PBFs rather than a system
-font. Everything from `createTacticalGraphics` onward is character-for-character the
-same.
+**Besides the imports, three things differ**, and each for a reason that is MapLibre's
+rather than this library's: the map is constructed differently, the work waits for
+`load`, and text needs a glyph server because MapLibre draws text from SDF glyph PBFs
+rather than a system font. The renderer sets that server itself: on construction it
+calls `map.setGlyphs()` with MapLibre's demo server
+(`https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf`) and draws every label in
+the `Noto Sans Bold` stack, replacing any `glyphs` URL your style carried. Neither is an
+option in this release. Everything from `createTacticalGraphics` onward is
+character-for-character the same.
 
 ## What the two engines share
 
@@ -156,8 +167,8 @@ showing where a new vertex would land are all present in both.
 | | |
 |---|---|
 | **Label rasterization** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
-| **Glyph hosting** | MapLibre needs a glyph server for any text at all, so a deployment self-hosts a glyph set or points at someone else's. OpenLayers uses the system font and needs nothing. |
-| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realize geometry into GeoJSON, which is far too costly per frame, so screen-sized decorations hold a stale size mid-gesture and settle when it ends. |
+| **Glyph hosting** | MapLibre needs a glyph server for any text at all. The renderer points the map at MapLibre's public demo glyph server and the `Noto Sans Bold` stack, and neither is configurable yet, so labels depend on that server being reachable. OpenLayers uses the system font and needs nothing. |
+| **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realize geometry into GeoJSON, which is far too costly per frame, so mid-gesture it rebuilds only at coarse zoom steps (and no more often than a minimum interval); screen-sized decorations are briefly the wrong size between rebuilds and settle when the zoom ends. |
 
 ## The radius read-out
 
@@ -176,9 +187,10 @@ so a graphic can never report a radius in one place and not the other. Both are 
 not inputs — a graphic is sized by dragging it.
 
 The read-out is a *measurement*, so it reads in whichever unit suits the number — `400 m`,
-`78 km`. That is deliberately not how the `WIDTH` amplifier or a range band is written:
-those are part of the symbol and follow doctrine's own conventions. A read-out that
-changes units is easier to read; an amplifier that does is a symbol that changes meaning.
+`78 km`. The `WIDTH` (AM) amplifier uses the same formatter (`formatDistance`, exported
+from the root), a deliberate departure from FM 1-02.2, which admits only meters or feet
+for that field. A range fan's band labels do not: they follow the plate and print whole
+meters with thousands separators, such as `MAX RG(1) 28,500`.
 
 ## Geometry only, no styling
 
@@ -240,13 +252,14 @@ Object.values(TacticalGraphicName).map(name => (
 latter [returns plain strings](/guide/tactical-graphic-object) and `getDisplayName` wants the
 enum. Either works for the thumbnail itself — both accessors take a `string` too.
 
-Three exports, and one of them is usually all you need:
+Four exports, and one of them is usually all you need:
 
 | Export | Gives you |
 |---|---|
 | `getGraphicThumbnailUrl(name)` | A `data:` URI ready for `<img src>`. Percent-encoded, built on first ask and cached, so re-rendering the same option costs nothing |
 | `getGraphicThumbnailSvg(name)` | The raw `<svg>` markup, for inlining into the DOM — the one to use if you want to restyle it with CSS |
 | `GRAPHIC_THUMBNAIL_SVGS` | The whole `Partial<Record<TacticalGraphicName, string>>`, if you would rather hold the map yourself |
+| `GRAPHIC_THUMBNAIL_ASPECT` | `1.53`, the width-to-height ratio of the viewBox every thumbnail is composed against, for sizing the `<img>` |
 
 Both accessors return `undefined` for a name that has no thumbnail, so a picker can render
 a spacer and keep its rows aligned.
@@ -342,7 +355,8 @@ renderer that reads GeoJSON can consume it — filter on `properties.role`
 task's letter, a screen-sized arrowhead and the rest are synthesized at paint time,
 so a raw `renderTacticalGraphic` consumer gets the skeleton. The paint functions are
 exported from the root entry point for exactly this — `getPaintFunction(name)`
-returns the marks to draw, in projected meters, with no renderer in them. That is
+returns the graphic's paint functions, which return the marks to draw, in projected
+meters, with no renderer in them. That is
 how both of the renderers above are built, and it is the supported way to build a
 third.
 
@@ -383,15 +397,15 @@ getLabel(TacticalGraphicName.FinalProtectiveFire); // → 'FPF'
 ```
 
 **Making room for the letter on the arc mission tasks.** Secure, Isolate, Retain,
-Occupy, Control, Contain, Cordon and Search and Area Defense are two arcs of one
-circle with a one- or two-character label in the hole between them — `AD`, `C/S` and `S`
-all occur. The generator leaves 15° of
+Occupy, Control, Contain, Deny, Locate, Cordon and Search, Cordon and Knock and Area
+Defense are two arcs of one circle with a short label in the hole between them — `S`,
+`AD`, `C/S` and `LOC` all occur. The generator leaves 15° of
 arc either side of the label, which is the best it can do with no glyph to measure —
 so on a large circle the hole is bigger than the letter needs.
 
 If you measure your own text, set `labelGapDegrees: 0` and the arcs run right up to
-the label axis; cut the gap yourself from the rendered glyph. That is what this
-package's OpenLayers layer does, and why its circles hug their letters at every size:
+the label axis; cut the gap yourself from the rendered glyph. That is what both of this
+package's renderers do, and why their circles hug their letters at every size:
 
 ```ts
 tacticalGraphic: {name: 'Secure', radius: 1000, rotation: 0, labelGapDegrees: 0}

@@ -13,8 +13,9 @@ Everything the library needs lives in one object on the feature's `properties`:
 ```
 
 `name` is always required, and **38 of the 318 graphics need a geometry input as well**:
-the one-point mission tasks and circular areas take their size from `radius`, since a
-single point has none. Without it you get a `TacticalGraphicError` naming the field rather
+the one-point mission tasks, the circular areas and the other symbols sized from a center
+(movement to contact, the airfield) take their size from `radius`, since a single point
+has none. Without it you get a `TacticalGraphicError` naming the field rather
 than an invented size — see [Errors](/guide/errors). Every other field is optional, and each graphic ignores the ones that
 do not apply to it, so there is no per-graphic options type to look up:
 
@@ -34,26 +35,30 @@ tacticalGraphic: {
     secondCountryCode: 'CAN', // country beside the secondary designation
     startDate: '021200ZJUN26',
     endDate: '021800ZJUN26',
-    eff: '021200Z-021800Z',   // effective time, where a graphic shows one line for both
+    eff: '021200Z-021800Z',   // accepted and saved, but no graphic draws it: the
+                              // airspace coordination areas' EFF line is built from
+                              // startDate and endDate
     minAltitude: 500,         // a NUMBER, in the configured altitude unit — see below
     maxAltitude: 2000,
     altitudeDatum: 'AGL',     // AltitudeDatum — what those numbers are measured from
-    weapon: 'M252 81mm',      // FinalProtectiveFire only
-    grid: '18SUJ2345',
+    weapon: 'M252 81mm',      // FinalProtectiveFire's weapon, and the two convoys'
+                              // equipment type (field V)
+    grid: '18SUJ2345',        // the airspace coordination areas
 
     // Symbology — affects color and dash pattern. Every field below is backed by an
     // exported enum; the table after this block lists each one's complete set of values.
     hostility: 'Friend',      // TacticalGraphicHostility
     status: 'Present',        // TacticalGraphicStatus — Planned ⇒ dashed
-    confidence: 'Known',      // TacticalGraphicConfidence — rendered where doctrine
-                              // shows a reliability rating
+    confidence: 'Known',      // TacticalGraphicConfidence — Suspected on a hostile
+                              // graphic dashes its line work, as Planned does
     echelon: 'Battalion/Squadron', // TacticalGraphicEchelon
     direction: 'One Way',     // RouteDirection — route graphics
-    mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the two mine
-                              // areas draw inside themselves
+    mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the three mine
+                              // areas draw inside themselves, and a mineline along itself
     mobility: 'Tracked',      // TacticalGraphicMobility — APP-06 Table 8-24 sector 1,
-                              // the icon a limited access area or restricted terrain
-                              // carries to say what kind of movement the ground admits
+                              // the icon a limited access area, restricted terrain or
+                              // severely restricted terrain carries to say what kind of
+                              // movement the ground admits
     terrain: 'Ground',        // TacticalGraphicTerrain — APP-06 Table 8-25 sector 2,
                               // the word under that icon, and the color the area is
                               // hatched in
@@ -61,31 +66,36 @@ tacticalGraphic: {
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
                               // circle radius, or a point-anchored arrow's half-length.
-                              // Only for graphics that HAVE a center. METERS — note that
-                              // a range fan's bands are kilometers, see below.
+                              // Only for graphics that HAVE a center. METERS, like a
+                              // range fan's bands, see below.
     decorationSize: 300,      // how big to draw a line graphic's decorations — an
                               // arrowhead's barb length, a passage lane's teeth. Not a
                               // reach from anywhere, which is why it isn't `radius`.
     width: 600,               // FULL width across a drawn line — rail to rail on an axis
                               // of advance, edge to edge on a corridor, and the across
                               // dimension of a rectangular zone
-    length: 1120,             // FULL length ALONG the graphic. Only the rectangular
-                              // target carries both; every other rectangle takes its
-                              // length from the anchor points instead
+    length: 1120,             // FULL length ALONG the graphic. Only the one-point boxes
+                              // and ellipses carry both (the rectangular target, cued
+                              // acquisition doctrine and the three maritime ellipses);
+                              // every other rectangle takes its length from its anchor
+                              // points instead
     rotation: 45,             // degrees, counter-clockwise from east (point graphics)
-    mirrored: false,          // which side an asymmetric symbol hangs on — the cane on a
-                              // withdrawal, the chevron on an abatis
-    bend: 0.8,                // Turn and Envelopment — how sharply the curve bows
-    labelGapDegrees: 15,      // arc mission tasks — angular hole left for the letter
-    labelGap: 0,              // the same hole in meters, for the graphics that cut it
-                              // from the rendered glyph instead
+    mirrored: false,          // Abatis only: which side of the line its tooth is on.
+                              // Set when the line is drawn, so the tooth starts out
+                              // pointing north; see below
+    bend: 0.8,                // Turn, the tactical turn and Envelopment — how sharply
+                              // the curve bows, where the drawn points do not say
+    labelGapDegrees: 15,      // arc mission tasks — HALF the angular hole left for the
+                              // letter
+    labelGap: 0,              // the same half-gap in meters, on Turn and the tactical
+                              // turn
     rangeFan: {bands: [...]}, // weapon/sensor range fans — see below
 
     // APP-06 200700 radar search doctrine, which states its whole shape as values:
     // "a search axis azimuth, a start range, a stop range, and a stop relative bearing"
-    searchAxisAzimuthDeg: 53,  // degrees clockwise from north — the axis the sector centres on
-    startRange: 20000,         // metres from the radar to the near arc
-    stopRange: 60000,          // metres from the radar to the far arc
+    searchAxisAzimuthDeg: 53,  // degrees clockwise from north — the axis the sector centers on
+    startRange: 20000,         // meters from the radar to the near arc
+    stopRange: 60000,          // meters from the radar to the far arc
     stopRelativeBearingDeg: 45,// degrees either side of the axis, so half the opening
 }
 ```
@@ -152,17 +162,27 @@ FM 1-02.2 makes these fields free text, so a string still renders untouched — 
 A number plus a datum is what the types invite, because that is what a program can sort
 and compare. See [Configuring colors and sizes](/guide/colors-and-sizes).
 
+**`mirrored` belongs to the abatis alone.** When an abatis line is drawn, `drawnSide(name,
+coords)` picks the side from the drawing direction so the tooth starts out pointing north
+(west on a line drawn due north or south), and that choice is stored as `mirrored`. After
+that it turns with the line when the graphic is rotated, and no grip flips it. Files saved
+before 2026-09-06 may also carry `mirrored` on the seven cane arrows (delay, withdraw,
+withdraw under pressure, disengage, retirement, forward and rearward passage of lines) and
+mobile defense. Those graphics now state their side with a third anchor point, and the old
+files still draw as they were saved.
+
 ## Range fans
 
-The two weapon/sensor range fans read one extra object. Every other graphic ignores it:
+The two weapon/sensor range fans read one extra object. Every other graphic ignores it,
+except radar search doctrine, which reads it only from files saved in its old shape:
 
 ```ts
 rangeFan: {
     // One entry per ring, innermost first — they are sorted, so the order you write
     // them in does not matter.
     bands: [
-        {range: 5,  label: 'MG',   altitude: 300},
-        {range: 12, label: 'ATGM', altitude: 1500, leftAzimuthDeg: 340, rightAzimuthDeg: 40},
+        {range: 5000,  label: 'MG',   altitude: 300},
+        {range: 12000, label: 'ATGM', altitude: 1500, leftAzimuthDeg: 340, rightAzimuthDeg: 40},
     ],
     // Sector fan only: where the sector points, degrees clockwise from north.
     // Omit it and the fan uses the bearing the graphic was drawn at.
@@ -172,25 +192,23 @@ rangeFan: {
 
 | Field | Meaning |
 |---|---|
-| `range` | how far the ring reaches, **in kilometers** — see the warning below |
+| `range` | how far the ring reaches, **in meters** — see the note below |
 | `label` | optional name, drawn above the range line (`MG`, `ATGM`) |
 | `altitude` | optional, a number in the configured unit — drawn as `ALT 300FT AGL`, measured from the graphic's own `altitudeDatum` |
 | `leftAzimuthDeg` / `rightAzimuthDeg` | sector fan only: this band's own edges, degrees clockwise from north. Omit them and the band spans the sector |
 
-**`range` is in kilometers, and it is the only distance here that is not meters.**
-`radius`, `width`, `length` and `decorationSize` are all meters. A range fan is quoted in
-kilometers because that is how an envelope is written and the label prints the number
-bare — meters would put three zeroes on every ring. It is a wart, and it stays one: the
-alternative silently rescales every range fan already saved by a factor of a thousand.
+**`range` is in meters**, like `radius`, `width`, `length` and `decorationSize`. Both
+APP-06 range fan plates (242100 and 242200) give their ranges in meters. **It was
+kilometers before 3.2.0, and there is no migration:** a fan saved before 3.2.0 carries a
+kilometer number and renders a thousand times too small.
 
-Bands render as `MIN RG 5` on a circular fan and `RG 5` on a sector, matching FM 1-02.2
-table 5-276.
+On a circular fan the innermost band renders as `MIN RG 5,000` and each band outside it
+as `MAX RG(1) 12,000`, `MAX RG(2) …`; on a sector every band renders as `RG 5,000`. The
+label groups thousands rather than changing the unit.
 
 **A fan with no `bands` still draws.** It falls back to a single ring taken from the
 graphic's own `radius` — so a `radius` of 180000 meters draws one ring labeled
-`MIN RG 180`. That is the shape you get from the draw tool before any band is entered,
-and it is why the two units sit next to each other on one graphic: `radius` is the
-meters a user dragged, `range` is the kilometers they typed.
+`MIN RG 180,000`. That is the shape you get from the draw tool before any band is entered.
 
 Because the description rides on the feature, a tactical graphic is **just GeoJSON**.
 Save it, `POST` it, put it in PostGIS, diff it in git — then render it back with
@@ -208,14 +226,15 @@ dash to the graphic on screen, from 12/8 px down to 3/2 px (`withFittedDashes`).
 
 ## Sizing a graphic
 
-Three fields size a graphic, and which one applies depends on what the symbol *is*. They
-are all in meters and none of them overlap — a graphic reads one.
+Four fields size a graphic, and which one applies depends on what the symbol *is*. They
+are all in meters and each means one thing. Most graphics read one of them; the one-point
+boxes and ellipses read `width` and `length` together.
 
 | Field | Means | Graphics |
 |---|---|---|
 | `radius` | reach from the symbol's own center | circles and point-anchored symbols |
-| `width` | **full** width across a drawn line | axes of advance, corridors, rectangular zones |
-| `length` | **full** length along the graphic | the rectangular target, which is the only one that carries both |
+| `width` | **full** width across a drawn line | axes of advance, corridors, rectangular zones, and the across dimension of the one-point boxes and ellipses |
+| `length` | **full** length along the graphic | the one-point boxes and ellipses: the rectangular target, cued acquisition doctrine and the three maritime ellipses |
 | `decorationSize` | how large the decorations on a line are drawn | arrowheads, teeth, label offsets |
 
 **`radius` — a circle, sized from its center:**
@@ -251,7 +270,9 @@ renderTacticalGraphic({
 });
 ```
 
-Omit any of them and the graphic falls back to its own default.
+Omit `width`, `length` or `decorationSize` and the graphic falls back to its own default.
+`radius` has no default on the 38 graphics that need it: omit it there and you get the
+error described at the top of this page.
 
 ## Which base geometry does a graphic need?
 
@@ -261,9 +282,11 @@ rather than a broken shape.
 | Base geometry | Graphics | Example |
 |---|---|---|
 | `LineString` | arrows, phase lines, boundaries, corridors | `MainAxisOfAdvance`, `PhaseLine` |
-| `LineString` **+ `width`** | the twenty rectangular zones | `FreeFireAreaRectangular`, `TargetAreaRectangular` |
-| `Point` | mission tasks, range fans, fighting positions | `Secure`, `Occupy`, `BaseDefenseZone` |
+| `LineString` **+ `width`** | the twenty rectangular zones | `FreeFireAreaRectangular`, `NoFireAreaRectangular` |
+| `Point` | one-point mission tasks, circular areas, the one-point boxes and ellipses, range fans | `Secure`, `Occupy`, `BaseDefenseZone`, `TargetAreaRectangular` |
 | `Polygon` | areas | `ObjectiveArea`, `NamedAreaOfInterest` |
+
+`baseGeometryFor(name)` answers this at run time.
 
 ```ts
 renderTacticalGraphic({
@@ -272,6 +295,15 @@ renderTacticalGraphic({
     properties: {tacticalGraphic: {name: 'Secure', radius: 1000, rotation: 0}},
 });
 ```
+
+**The arc mission tasks are drawn from two points and stored as one.** APP-06 describes
+secure, isolate, retain, occupy, control, area defense, locate and the two cordons with two
+anchor points: point 1 is the center, and point 2 is the arc's start point and sets the
+radius. Both bundled renderers draw them with two clicks: the center, then a second point
+whose distance sets `radius` and whose direction sets `rotation` (the axis the letter sits
+on). What is stored is a `Point` base at the center plus `radius` and `rotation`, not a
+two-point line. The edit handle sits on APP-06's point 2, the blunt end of the upper arc,
+175° counter-clockwise from that axis.
 
 **The rectangular zones are the exception worth knowing about.** APP-06 defines them
 from two anchor points and a width rather than from a drawn box — points 1 and 2 sit at
@@ -326,19 +358,29 @@ rather than the literal, so pass the enum.
 
 ## Which end is the arrowhead?
 
-**Thirty-four graphics number their points from the tip**, because APP-06 does: *"Point 1
+**Arrow graphics number their points from the tip**, because APP-06 does: *"Point 1
 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol."* So on an
-axis of advance the **first** coordinate is the head and the last is the tail. The list is
-the axis-of-advance family, avenue of approach, both follow tasks, both counterattacks,
-advance to contact, frontal attack, turning movement, mobile defense, the seven retrograde
-canes, exploit, both fixes, breach, bypass, canalize, clear, both blocks, penetrate,
-relief in place, and fields of fire.
+axis of advance the **first** coordinate is the head and the last is the tail.
+
+**Twenty-seven graphics are listed in `TIP_FIRST_GRAPHICS`**: the ones whose stored order
+the library turns around before its generator reads it. The list is the axis-of-advance
+family, avenue of approach, both follow tasks, both counterattacks, advance to contact,
+frontal attack, turning movement, mobile defense, the seven retrograde canes, both fixes,
+fields of fire, search area and the two convoys. Fields of fire and search area are the
+odd ones: APP-06 numbers their **vertex** first, so their first two points swap rather than
+the whole line reversing. `generatorOrder(name, coords)` and `storedOrder(name, coords)`
+apply the right one.
+
+Exploit, breach, bypass, canalize, clear, both blocks, penetrate and relief in place also
+number from the arrowhead, but they are not on the list: their bases store every anchor
+point their plates name, in the plates' own order, and their generators read them as
+stored.
 
 ```ts
 import {TIP_FIRST_GRAPHICS, drawsTipFirst} from '@zaes/tactical-graphics';
 
 drawsTipFirst(TacticalGraphicName.MainAxisOfAdvance);   // → true
-TIP_FIRST_GRAPHICS.length;                              // → 34 — the whole list, if you need to migrate
+TIP_FIRST_GRAPHICS.length;                              // → 27
 ```
 
 Nothing about the rendered symbol changes — the shape, its decorations, its handles and
@@ -347,7 +389,10 @@ arrow points at.
 
 **3.0.0 changed this and saved data is not migrated.** There is no version marker in
 `properties.tacticalGraphic` to detect an older graphic by, so if you hold data written by
-1.x or 2.x, reverse the coordinate array of any graphic `drawsTipFirst` returns true for.
-The other 22 multipoint graphics — the ones drawn from anchor points, demonstration, the
-obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate, the ferry and raft site,
-and the four direction-of-attack graphics — are untouched.
+1.x or 2.x, apply 3.0.0's list to it: reverse the coordinate array of every graphic
+`drawsTipFirst` returns true for today (search area and the two convoys did not exist
+then), and of the eight named above that have left the list since. The one exception is
+fields of fire, whose first two points swap instead; `storedOrder` does that for you. The
+multipoint graphics that were never on the list — the ones drawn from anchor points,
+demonstration, the obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate, the
+ferry and raft site, and the four direction-of-attack graphics — are untouched.

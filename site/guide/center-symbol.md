@@ -25,8 +25,10 @@ All of them stop at 96 px however far the map zooms in. A framed 2525E symbol
 carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
 the screen would be a badge the size of a hand. It is the ceiling
 `setSecuritySymbolSize` is clamped to, so every center symbol agrees on how large it ever
-draws. Zoomed *out* they keep shrinking with the graphic — a floor would leave the symbol
-bigger than the shape it sits in.
+draws. Zoomed *out*, Cover, Guard, Screen and the two follow tasks keep shrinking with the
+graphic — a floor would leave the symbol bigger than the shape it sits in. The escort is
+the exception: it holds an 8 px floor, because its size comes from the span of its bar,
+which can be short while the graphic is still plainly visible.
 
 On the two follow tasks the symbol **replaces** the designation: a picture of the unit
 says more than its name. Type a designation and register no provider, and the text draws
@@ -42,8 +44,8 @@ The SIDC handed to the provider is derived from the graphic's own `hostility`, s
 hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
 `securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
 it. All six offer the affiliation for that reason — the escort and the two follow tasks
-are tactical mission tasks, which otherwise carry no amplifiers at all, and an entity
-symbol's frame *is* its standard identity.
+are tactical mission tasks, which otherwise carry little (the escort nothing, the follow
+tasks only a designation), and an entity symbol's frame *is* its standard identity.
 
 **Size the symbol by its width.** Both renderers draw the image at the width they are
 given and let its height follow the image's own aspect, because neither knows how tall
@@ -55,7 +57,9 @@ so a much taller image would overflow the body it sits in.
 
 **Every one of the six sizes itself from the graphic it sits in**, and stops at 96 px so
 zooming in cannot inflate it. `setSecuritySymbolSize` no longer governs any of them — it
-is the size for a symbol a host places itself, and the ceiling the six share:
+is the size for a symbol a host places itself, and it is clamped to the same 96 px ceiling
+the six share (`MAX_SYMBOL_SIZE_PX`, a constant). On MapLibre it is also the fallback width
+for an image that could not be rasterized:
 
 ```ts
 import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
@@ -71,7 +75,9 @@ belongs to the library because the library is what places the image around a pro
 that returns a `src` string.
 
 To size **one** symbol rather than all of them, return `{src, sizePx}` from its
-provider. That wins over the global size and leaves it untouched.
+provider. That wins over the size the library derived from the graphic and leaves the
+global size untouched. It is used as given: the 96 px ceiling applies to the size the
+library derives, not to one a provider returns.
 
 ## Choosing the symbol
 
@@ -95,7 +101,7 @@ graphic's `name`, so it can give Cover, Guard and Screen three different symbols
 
 It also receives `labels`, the graphic's amplifiers, and may return a per-graphic
 `sizePx`. In practice these three graphics carry only `hostility`
-(`getGraphicFields('Screen')` offers nothing else), so two Screens look identical to a
+(`getGraphicFields('Screen')`, from `/openlayers`, offers nothing else), so two Screens look identical to a
 provider keyed on the bag alone.
 
 **To tell two of a kind apart, bind a provider to one graphic by id:**
@@ -108,16 +114,19 @@ setGraphicSecuritySymbolProvider(graphicId, undefined);   // back to the global 
 ```
 
 It wins over the global provider for that graphic and returns `undefined` to draw no
-center symbol at all. The id is the graphic's own — `symbolId` on an OpenLayers holder,
-`id` on a `MapLibreTacticalGraphic`. Both engines honor it, and both repaint straight
-away. `clearGraphicSecuritySymbolProviders()` forgets the lot when a map is torn down:
+center symbol at all. The id is the graphic's own — `getSymbolId()` on an OpenLayers
+handler (its features carry it as `symbolId`), `id` on a `MapLibreTacticalGraphic`, and
+`id` on the façade's selection either way. Both engines honor it. MapLibre repaints
+straight away; OpenLayers picks it up on its next render, so call
+`graphics.refreshStyles()` to see it at once. `clearGraphicSecuritySymbolProviders()`
+forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
 
 ### Worked example: three security operations, three units
 
 Each with its own unit symbol, on **either engine** — every call below is from the façade
 or the root package, so the only thing that differs between OpenLayers and MapLibre is
-the import path in the setup above.
+the subpath `createTacticalGraphics` is imported from.
 
 The provider is the global one, keyed on `request.name`. That is enough here because the
 three graphics are three *kinds*; reach for `setGraphicSecuritySymbolProvider` only when
@@ -175,7 +184,7 @@ The entity codes are illustrative — FM 1-02.2 does not prescribe which unit pe
 which security task, so substitute your own.
 
 Note that these three are **drawn from two points in meters**, like every other graphic
-in the library — they were the last screen-sized symbols and stopped being so in 2.0.0.
-Nothing here has to be re-derived when the map zooms. The façade still subscribes a
-resolution handler for you, because that hook is what a screen-sized graphic *would* need;
+in the library — they were the last screen-sized symbols and stopped being so in 3.0.0.
+Nothing here has to be re-derived when the map zooms. On OpenLayers the façade still
+subscribes a resolution handler for you, because that hook is what a screen-sized graphic *would* need;
 see [Placing graphics from data](/guide/advanced#placing-graphics-from-data) for why the hook is kept.

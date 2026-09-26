@@ -18,7 +18,7 @@
 
 ## References
 
-- [FM 1-02.2, Military Symbols](https://www.battleorder.org/post/symbolsfm) — US Army
+- [FM 1-02.2, Military Symbols](https://armypubs.army.mil) — US Army, from the Army Publishing Directorate
 - [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
 - [APP-06, NATO Joint Military Symbology](https://nso.nato.int/nso/nsdd/main/standards), Edition E — retrieved from the
   NATO Standardization Document Database. NATO is acknowledged as its publisher; NATO

@@ -42,15 +42,15 @@ once. So the rule is that a symbology fact never lives in a renderer.
 ```bash
 npm start                  # run the demo app
 npm test                   # run the test suite
-npx tsc --noEmit           # typecheck (the main correctness gate)
+npm run typecheck          # tsc --noEmit (the main correctness gate)
 npm run lint               # eslint --fix
 npm run gen:thumbnails     # redraw the picker thumbnails, then rebuild
 npm run check:thumbnails   # report whether the committed thumbnails are stale
 ```
 
 The generators in `src/tacticalgraphics/graphics/` are the reference for new
-shapes, and the OpenLayers demo under `src/components/openlayers/` shows how a
-renderer consumes them. See **Adding a graphic** below for the steps.
+shapes, and the two renderers under `src/components/openlayers/` and
+`src/components/maplibre/` show how a renderer consumes them. See **Adding a graphic** below for the steps.
 
 ---
 
@@ -61,10 +61,15 @@ renderer consumes them. See **Adding a graphic** below for the steps.
 3. Register it in `core/TacticalGraphicsRegistry.ts`.
 4. Add it to `GRAPHIC_CATEGORIES` in `core/categories.ts`.
 
-Steps 1 and 4 are enforced by the compiler — `GRAPHIC_CATEGORIES` is an exhaustive
-`Record<TacticalGraphicName, …>`, so TypeScript tells you what's missing. To wire
-the graphic into the demo app you also need entries in
-`controllerRegistry.ts` and `graphicFieldRegistry.ts`.
+Once step 1 is done, the compiler walks you through most of the rest. Five tables are
+exhaustive `Record<TacticalGraphicName, …>`s, and `npm run typecheck` fails until each has an entry:
+`GRAPHIC_CATEGORIES` (step 4), `GRAPHIC_SPECIFICATIONS` in `core/specifications.ts` and
+`GRAPHIC_ENTITY_CODES` in `core/entityCodes.ts` (which standard defines the graphic, and
+its APP-06 code or `null`), and, in the OpenLayers renderer, `CONTROLLER_REGISTRY` in
+`controllerRegistry.ts` and `GRAPHIC_FIELDS` in `graphicFieldRegistry.ts`. Step 3 is not
+checked: a graphic left out of the registry compiles, and `renderTacticalGraphic` then
+rejects it as unknown. Nor is its paint in `symbology/registry.ts`, and without one MapLibre
+cannot draw it; `isPaintable(name)` tells you.
 
 5. `npm run build && npm run gen:thumbnails` — the [picker thumbnail](/guide/rendering#a-picture-for-a-menu).
    Nothing fails to compile without it; the graphic simply has no picture, and the

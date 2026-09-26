@@ -1,7 +1,7 @@
 # Configuring colors and sizes
 
 Everything re-styleable lives on one all-optional config. Omit a field and you get
-the doctrinal FM 1-02.2 value, so an unconfigured consumer needs none of this.
+the default, which is the doctrinal value wherever doctrine sets one, so an unconfigured consumer needs none of this.
 
 It lives in the **root** entry point, not the OpenLayers one: none of it is specific
 to a renderer, so a second view inherits it rather than reinventing it, and you
@@ -21,12 +21,15 @@ configureTacticalGraphics({
     obstacleColor: '#00AC00',      // the green itself
 });
 
-source.forEachFeature(f => f.changed());   // repaint what is already drawn
+graphics.refreshStyles();   // repaint what is already drawn
 ```
 
-That last line matters: OpenLayers caches its render per feature revision, so a
-config change does not reach features already on the map until something bumps their
-revision.
+That last line matters: neither engine repaints what it has already drawn when the
+config changes. OpenLayers keeps each feature's cached render until the feature's
+revision is bumped, and MapLibre keeps drawing the paint results it baked into its
+GeoJSON source. `refreshStyles()` on the [`createTacticalGraphics`](/guide/rendering)
+handle does the right thing for either engine; on OpenLayers without the façade,
+`source.forEachFeature(f => f.changed())` does the same.
 
 ## Obstacles are green, and that beats affiliation
 
@@ -74,7 +77,7 @@ are unmoved by either setting.
 Which graphics does it govern? Ask, rather than keeping a list:
 
 ```ts
-import {OBSTACLE_GRAPHICS, drawsAsObstacle} from '@zaes/tactical-graphics';
+import {OBSTACLE_GRAPHICS, TacticalGraphicName, drawsAsObstacle} from '@zaes/tactical-graphics';
 
 drawsAsObstacle(TacticalGraphicName.ObstacleZone);   // true
 drawsAsObstacle(TacticalGraphicName.Route);          // false — a route is not an obstacle
@@ -105,7 +108,7 @@ const MY_DARK_PALETTE = {
 };
 
 configureTacticalGraphics(dark ? MY_DARK_PALETTE : DEFAULT_PALETTE);
-source.forEachFeature(f => f.changed());
+graphics.refreshStyles();
 ```
 
 Spread `DEFAULT_PALETTE` into your set as above. `configureTacticalGraphics` merges,
@@ -114,8 +117,8 @@ going back to light has to actively re-send the light values, not merely stop se
 the dark ones.
 
 `DEFAULT_PALETTE` covers the *unaffiliated* neutrals — the default line color, the
-label text that follows it, the halo behind that text — and the editor chrome (handle
-dots, the inert center, the draw marker). It deliberately carries no
+label text that follows it, the halo behind that text — the obstacle green, and the
+editor chrome (handle dots, the inert center, the draw marker and its outline). It deliberately carries no
 `hostilityColors`: the four affiliation colors are doctrine, and shifting them for a
 display setting makes a symbol read differently depending on how the app is
 configured. Pass `hostilityColors` yourself if you disagree.

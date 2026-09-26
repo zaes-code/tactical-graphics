@@ -6,7 +6,7 @@
 npm install @zaes/tactical-graphics
 ```
 
-The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package. That keeps the production tree at 34 packages — 32 MIT, one Unlicense, one 0BSD. No copyleft, and every one of them declares a license.
+The only runtime dependency is [TurfJS](https://turfjs.org/) — and only the individual modules this library actually calls, not the `@turf/turf` meta-package — plus `@types/geojson`, which is type declarations only. That keeps the production tree at 34 packages — 32 MIT, one Unlicense, one 0BSD. No copyleft, and every one of them declares a license.
 
 Four entry points ship, and you can use any of them on its own:
 
@@ -76,7 +76,7 @@ You get three pieces back:
 | | What it is |
 |---|---|
 | `graphic` | the drawn symbol — a `MultiLineString` here |
-| `labels` | a `MultiPoint` of anchor points for text. Anchors only; you own the typography |
+| `labels` | a `Point` or `MultiPoint` of anchor points for text. Anchors only; you own the typography |
 | `handles` | a `MultiPoint` of grab points an editor can expose as drag handles — usually the drawn vertices, plus shape or width points for the graphics that have them. A generator may leave a vertex out when a handle there would be redundant or would sit under the symbol's own label |
 
 Everything is GeoJSON, in **EPSG:4326** (`[longitude, latitude]`), in and out.
