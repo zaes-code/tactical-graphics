@@ -8,7 +8,7 @@
  * | family | APP-06 Anchor Points | handle |
  * |---|---|---|
  * | 18 circular areas | *"one (1) anchor point and a radius"* — no point 2 | the rim at the angle both standards draw the radius arrow |
- * | 9 arc mission tasks | *"point 2 defines the graphic's start point and radius"* | that start point |
+ * | 10 arc mission tasks | *"point 2 defines the graphic's start point and radius"* | that start point |
  * | contain (151204) | points 1 and 2 are the **opening's** two ends | both of them, and no centre dot |
  *
  * The handle used to sit at 205 degrees on all of them — the arrowhead end of the lower
@@ -24,7 +24,7 @@ import {Contain, RADIUS_ARROW_DEGREES, START_POINT_DEGREES} from './graphics/Mis
 /** Metres. Near the equator this is a bit under two degrees of longitude. */
 const RADIUS = 200_000;
 
-/** The nine whose Template annotates `PT. 2 (START POINT)` against the upper arc's end. */
+/** The ten whose Template annotates `PT. 2 (START POINT)` against the upper arc's end. */
 const START_POINT_TASKS = [
     TacticalGraphicName.Secure,
     TacticalGraphicName.Locate,
@@ -95,7 +95,7 @@ function edgeHandle(name: TacticalGraphicName, geometry?: {type: string; coordin
     return positions(render(name, geometry).handles.geometry)[0];
 }
 
-describe('point 2, on the nine arc mission tasks', () => {
+describe('point 2, on the ten arc mission tasks', () => {
     it.each(START_POINT_TASKS.map(n => [String(n), n] as const))(
         '%s puts its handle on the start point, not on the arrowhead',
         (_label, name) => {
