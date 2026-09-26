@@ -38,9 +38,12 @@ function schemaFields(): Set<string> {
     return new Set(Array.from(body.matchAll(/^\s{4}(\w+)\??:/gm), m => m[1]));
 }
 
-/** Field names in the README's `tacticalGraphic: { ... }` catalog block. */
+/** Where the field catalog lives, since the README became a summary. */
+const OBJECT_PAGE = 'site/guide/tactical-graphic-object.md';
+
+/** Field names in the docs' `tacticalGraphic: { ... }` catalog block. */
 function readmeFields(): Set<string> {
-    const md = read('README.md');
+    const md = read(OBJECT_PAGE);
     const start = md.indexOf('tacticalGraphic: {\n    // Required');
     const block = md.slice(start, md.indexOf('\n}\n```', start));
     return new Set(Array.from(block.matchAll(/^\s{4}(\w+):/gm), m => m[1]));
@@ -105,7 +108,7 @@ describe('the README documents the enums that exist', () => {
 
     /** The `Every accepted value` cell of the row naming this enum. */
     function documentedValues(enumName: string): string[] {
-        const md = read('README.md');
+        const md = read(OBJECT_PAGE);
         const row = md.split('\n').find(line => line.includes(`\`${enumName}\``) && line.startsWith('|'));
         if (!row) return [];
         const cells = row.split('|').map(c => c.trim());

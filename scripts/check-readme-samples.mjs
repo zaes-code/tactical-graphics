@@ -1,7 +1,8 @@
 /**
- * # Do the README's code samples still compile?
+ * # Do the documentation's code samples still compile?
  *
- * Every ```ts / ```tsx fence in `README.md`, checked against the **built** `dist/` types —
+ * Every ```ts / ```tsx fence in `README.md` and in the docs site's hand-written pages
+ * (`site/`, not the generated `site/api/`), checked against the **built** `dist/` types —
  * not against `src/`. What a reader copies is compiled against the published package, and
  * an export that vanished from a barrel passes a source typecheck *and* a grep: the only
  * thing that catches it is asking the built types.
@@ -28,9 +29,9 @@
  *
  *     npm run build && npm run check:readme-samples
  */
-import {mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync} from 'fs';
+import {mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, readdirSync, statSync} from 'fs';
 import {tmpdir} from 'os';
-import {join, resolve} from 'path';
+import {join, relative, resolve} from 'path';
 import {execFileSync} from 'child_process';
 
 const ROOT = resolve(process.argv[2] ?? '.');
@@ -57,7 +58,7 @@ const EXCERPT_NOISE = new Set([
 const DOM_GLOBAL_SHADOW = /does not exist on type '(BarProp|Window|Location|History|Navigator|Screen)'/;
 
 /** Every fenced block, with its language and the line the fence opened on. */
-function fences(markdown) {
+function fences(markdown, source) {
     const out = [];
     const lines = markdown.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -66,7 +67,7 @@ function fences(markdown) {
         const body = [];
         let j = i + 1;
         for (; j < lines.length && !/^```\s*$/.test(lines[j]); j++) body.push(lines[j]);
-        out.push({lang: open[1] ?? '', line: i + 1, code: body.join('\n')});
+        out.push({lang: open[1] ?? '', line: i + 1, code: body.join('\n'), file: source});
         i = j;
     }
     return out;
@@ -118,7 +119,17 @@ function diagnose(dir) {
     }
 }
 
-const typed = fences(readFileSync(join(ROOT, 'README.md'), 'utf8')).filter(b => b.lang === 'ts' || b.lang === 'tsx');
+/** The README, and the site's pages: everything under `site/` but the generated API and the builds. */
+const SKIP = new Set(['api', 'node_modules', 'cache', 'dist', 'preview']);
+const pages = dir =>
+    readdirSync(dir).flatMap(f => {
+        const full = join(dir, f);
+        if (statSync(full).isDirectory()) return SKIP.has(f) ? [] : pages(full);
+        return f.endsWith('.md') ? [full] : [];
+    });
+const sources = [join(ROOT, 'README.md'), ...pages(join(ROOT, 'site'))];
+const rel = f => relative(ROOT, f).split(String.fromCharCode(92)).join('/');
+const typed = sources.flatMap(f => fences(readFileSync(f, 'utf8'), rel(f))).filter(b => b.lang === 'ts' || b.lang === 'tsx');
 const blocks = typed.filter(b => /^\s*import\s/m.test(b.code));
 
 const dir = mkdtempSync(join(tmpdir(), 'readme-samples-'));
@@ -151,7 +162,7 @@ blocks.forEach((b, i) => {
 const where = d => {
     const stem = /(sample\d+)/.exec(d.file)?.[1];
     const b = stem && named.get(stem);
-    return b ? `README.md:${b.line + d.line}` : d.file;
+    return b ? `${b.file}:${b.line + d.line}` : d.file;
 };
 
 let failures = 0;
@@ -202,7 +213,9 @@ const ENUM_OF = {
     altitudeDatum: 'AltitudeDatum',
 };
 
-const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+/** Where the annotated object lives, now that the README is a summary. */
+const OBJECT_PAGE = 'site/guide/tactical-graphic-object.md';
+const readme = readFileSync(join(ROOT, OBJECT_PAGE), 'utf8');
 // **The block that lists the fields, not the first `tacticalGraphic: {` in the file.**
 // An earlier snippet shows the object as `tacticalGraphic: {/* every field below */}` on
 // one line; anchoring on that gave a body of forty characters, a body that matched nothing,
@@ -210,7 +223,7 @@ const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
 const objectStart = readme.indexOf('tacticalGraphic: {\n    // Required');
 const enumErrors = [];
 if (objectStart === -1) {
-    enumErrors.push('README.md  the annotated `tacticalGraphic` object is gone — this pass checks nothing');
+    enumErrors.push(OBJECT_PAGE + '  the annotated `tacticalGraphic` object is gone — this pass checks nothing');
 } else {
     const lib = await import(`file://${p('dist/cjs/index.js')}`);
     const body = readme.slice(objectStart, readme.indexOf('\n```', objectStart));
@@ -219,11 +232,11 @@ if (objectStart === -1) {
         const enumName = ENUM_OF[m[1]];
         if (!enumName) continue;
         const members = lib[enumName] ?? lib.default?.[enumName];
-        if (!members) { enumErrors.push(`README.md  \`${enumName}\` is not exported from dist/`); continue; }
+        if (!members) { enumErrors.push(`${OBJECT_PAGE}  \`${enumName}\` is not exported from dist/`); continue; }
         const values = Object.values(members);
         if (values.includes(m[2])) continue;
         const line = before + body.slice(0, m.index).split('\n').length - 1;
-        enumErrors.push(`README.md:${line}  ${m[1]}: '${m[2]}' is not a ${enumName} — ${values.join(' | ')}`);
+        enumErrors.push(`${OBJECT_PAGE}:${line}  ${m[1]}: '${m[2]}' is not a ${enumName} — ${values.join(' | ')}`);
     }
 }
 if (enumErrors.length) {

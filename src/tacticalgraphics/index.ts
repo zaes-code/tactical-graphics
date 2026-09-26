@@ -16,6 +16,8 @@
  *
  * The output is GeoJSON in EPSG:4326 — render it with OpenLayers or anything
  * else that reads GeoJSON.
+ *
+ * @module @zaes/tactical-graphics
  */
 
 // ── The entry point ─────────────────────────────────────────────────────────
