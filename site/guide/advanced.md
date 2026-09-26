@@ -18,10 +18,9 @@ thing here has no MapLibre counterpart:
 and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayers subpath
 accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
 `useMilsymbolSecurityOperationSymbols(ms)` registers milsymbol as both this provider and
-the shared one. Register a shared provider too when you use it: on Cover, Guard, Screen and
-the two follow tasks the shared paint places the symbol only when a shared provider (global
-or per-graphic) answers, so the OpenLayers global on its own draws a center symbol on the
-escort alone.
+the shared one. On its own it is enough on OpenLayers: all six center-symbol graphics draw
+from it. Changing any provider or the size repaints on its own;
+`subscribeSecurityOperationSymbolChange(listener)` tells a host when that happens.
 
 Everything *else* about the provider is shared, and a provider is resolved most-specific
 first: `setGraphicSecuritySymbolProvider(id, …)`, then the OpenLayers global, then the
@@ -112,6 +111,8 @@ if (graphic) renderer.add(graphic);
 **Text on the native renderer needs a glyph server.** `NativeLayerRenderer` draws labels
 with MapLibre symbol layers, which read pre-generated SDF glyphs served over HTTP; there is
 no path to a system font, and a style with no `glyphs` URL renders its labels silently
-empty. A deployment either self-hosts a glyph set or points at someone else's.
+empty. The renderer's `glyphs` and `fontStack` options choose the server and font, and by
+default it uses MapLibre's public demo server, which a production deployment should
+replace.
 `CanvasOverlayRenderer` paints its text itself with a real font and needs none, and neither
 does OpenLayers — it is the sharpest practical difference between the two engines.

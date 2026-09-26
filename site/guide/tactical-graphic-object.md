@@ -299,11 +299,13 @@ renderTacticalGraphic({
 **The arc mission tasks are drawn from two points and stored as one.** APP-06 describes
 secure, isolate, retain, occupy, control, area defense, locate and the two cordons with two
 anchor points: point 1 is the center, and point 2 is the arc's start point and sets the
-radius. Both bundled renderers draw them with two clicks: the center, then a second point
-whose distance sets `radius` and whose direction sets `rotation` (the axis the letter sits
-on). What is stored is a `Point` base at the center plus `radius` and `rotation`, not a
-two-point line. The edit handle sits on APP-06's point 2, the blunt end of the upper arc,
-175° counter-clockwise from that axis.
+radius. Deny follows the same rule, so there are ten. Both bundled renderers draw them
+with two clicks the way APP-06 numbers them: the center, then point 2, the start point,
+whose distance sets `radius`. What is stored is a `Point` base at the center plus `radius`
+and `rotation`, not a two-point line; `rotation` is the axis the letter sits on, and the
+start point is 175° counter-clockwise from it, so `rotationFromDrawnPoint(name, angle)`
+turns the second click's direction into the stored `rotation`. The edit handle sits on
+point 2, so it is where the second click was.
 
 **The rectangular zones are the exception worth knowing about.** APP-06 defines them
 from two anchor points and a width rather than from a drawn box — points 1 and 2 sit at
