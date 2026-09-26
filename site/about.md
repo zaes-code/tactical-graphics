@@ -2,17 +2,9 @@
 
 ## Roadmap
 
-- Keep pace with FM 1-02.2 and APP-06 as they are revised. Every graphic this library tracks is
-  complete today, so a new edition's additions are what [Upcoming graphics](/guide/graphics#upcoming-graphics)
-  will list next.
-- **Leaflet is scoped as a third rendering engine.** The groundwork is done: symbology
-  now lives in the map-agnostic half as paint functions — geometry, colors, and text
-  described in projected meters — and both shipping engines are consumers of it rather
-  than owners. A third engine implements one bridge from those paint descriptions to
-  its own primitives, and inherits every graphic. Leaflet's canvas renderer is the
-  natural fit; the open questions are its lack of a built-in editing interaction and
-  how far its layer model stretches to the screen-space decorations, and both are being
-  assessed before any commitment to a date.
+Keep pace with FM 1-02.2 and APP-06 as they are revised. Every graphic this library tracks is
+complete today, so a new edition's additions are what [Upcoming graphics](/guide/graphics#upcoming-graphics)
+will list next.
 
 ---
 
