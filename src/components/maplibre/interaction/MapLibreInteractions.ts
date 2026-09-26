@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, descriptionOf, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, axisBaseFromDraw, drawnSide, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, axisBaseFromDraw, drawnSide, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, rotationFromDrawnPoint, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -910,10 +910,11 @@ export class MapLibreInteractions {
      * The size and bearing a point-anchored draw supplies, from its two clicks.
      *
      * The second click is a point on the rim: how far it is from the anchor is the
-     * radius, and the direction it lies in is the graphic's bearing — both read exactly
+     * radius, and the direction it lies in gives the graphic's bearing — both read exactly
      * as OpenLayers reads them off a Circle sketch. Planar, in projected meters, which is
      * also the frame `rotation` is expressed in: degrees counter-clockwise from east, not
-     * a compass bearing.
+     * a compass bearing. For an arc mission task that click is APP-06's start point, so
+     * the bearing is turned to put the start point there. @see rotationFromDrawnPoint
      *
      * Falls back to the default for a one-click draw, so a fixed-size symbol is
      * unaffected and a canceled sizing click cannot leave a graphic with no size at all.
@@ -975,7 +976,9 @@ export class MapLibreInteractions {
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
         const drawn = groundLength(radius, vertices[0][1]);
-        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+        // The angle to the second click, turned by the library's rule: an arc mission task's
+        // second click is its start point, not its axis. @see rotationFromDrawnPoint
+        const rotation = rotationFromDrawnPoint(name, (Math.atan2(dy, dx) * 180) / Math.PI);
         /*
          * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
          *
