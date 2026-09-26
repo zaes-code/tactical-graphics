@@ -14,7 +14,7 @@
  * wrong is silent and looks plausible — it sat on the arrowhead of the retrograde tasks for
  * a while, which flips the graphic from the one part of it that does not move.
  *
- * **Two graphics are left.** Mobile defence and the seven cane arrows gave the job to an
+ * **None is left.** Abatis went last (2026-09-25): its side is set when it is drawn. Mobile defence and the seven cane arrows gave the job to an
  * anchor point instead: their plates all read *"Point 3 defines which side of the line the
  * arc is on"*, so the flip is a place rather than a flag. @see RetrogradeTask
  */
@@ -46,7 +46,7 @@ const geometryOf = (name: TacticalGraphicName, mirrored: boolean) =>
 const mirrorable = () => listTacticalGraphicNames().filter(n => supportsMirror(n as TacticalGraphicName));
 
 describe('mirroring', () => {
-    it('names the two graphics that still flip', () => {
+    it('names no graphic that still flips', () => {
         /*
          * **152800 left this list on 2026-09-06, then the seven cane arrows, then 344000.**
          *
@@ -64,11 +64,11 @@ describe('mirroring', () => {
          * did something different on this one symbol. (User's report, 2026-09-06: "I'm trying
          * to have consistency across similar graphics".)
          *
-         * What is left is the one graphic whose side genuinely is not in its points: an
-         * abatis chevron, whose base is a free-form route and whose tooth hangs off it.
-         * @see MobileDefense.frame, RetrogradeTask, Pursuit.generateHandles
+         * Abatis was the last, on 2026-09-25: its side is set once, when the line is drawn,
+         * and then turns with the line, with no grip to flip it (user's call).
+         * @see MobileDefense.frame, RetrogradeTask, Pursuit.generateHandles, drawnSide
          */
-        expect(mirrorable().sort()).toEqual(['Abatis']);
+        expect(mirrorable()).toEqual([]);
     });
 
     it('gives each of them exactly one mirror handle', () => {
@@ -107,9 +107,10 @@ describe('mirroring', () => {
         expect(handleRole(TacticalGraphicName.Pursuit, 0)).toBe('shape');
     });
 
-    it('puts the abatis mirror where its own generator emits one', () => {
-        // Mobile defence used to be the other half of this pair. @see the list above
-        expect(handleRole(TacticalGraphicName.Abatis, 2)).toBe('mirror');
+    it('leaves abatis two shape grips and no mirror', () => {
+        // Its apex grip existed only to be dragged across the line. @see northSide
+        expect(handleContract(TacticalGraphicName.Abatis).roles).not.toContain('mirror');
+        expect(handleRole(TacticalGraphicName.Abatis, 1)).toBe('shape');
     });
 
     it('leaves mobile defence three shape grips and no mirror', () => {

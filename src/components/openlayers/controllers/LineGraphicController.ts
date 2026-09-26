@@ -7,7 +7,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {Geometry} from 'ol/geom';
 import {ObjectEvent} from 'ol/Object';
 import {StyleFunction} from 'ol/style/Style';
-import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, editStretches, normalizeDrawnBase, pivotVertexIndex, reshapesByVertex, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, drawnSide, hasDrawnSide, editStretches, normalizeDrawnBase, pivotVertexIndex, reshapesByVertex, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 import type {Position} from 'geojson';
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
@@ -538,6 +538,17 @@ export class LineGraphicController implements TacticalGraphicHandler {
             if (this.areCoordsEqual(coords[coords.length - 1], coords[coords.length - 2])) {
                 coords.pop();
                 (geometry as LineString).setCoordinates(coords);
+            }
+            // Which side a decoration takes, from the way the line is being drawn, applied to
+            // the preview on every move so what the user sees while drawing is what they get:
+            // an abatis tooth faces north. Only a draw sets it, so rotation keeps it.
+            // @see drawnSide
+            // The field, not `setMirrored`: that redraws at once, and the first move has no base
+            // yet to draw. The sketch update below draws with the side already in place.
+            const name = this.resolvedName();
+            const holder = this.graphic as {mirrored?: boolean};
+            if (name && hasDrawnSide(name) && 'mirrored' in holder) {
+                holder.mirrored = drawnSide(name, coords.map(c => toLonLat(c))).mirrored === true;
             }
             // **Through the sketch door where the holder has one**, because these coordinates
             // are clicks and not a base. @see LineGraphic.setSketchBase

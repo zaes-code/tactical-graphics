@@ -474,21 +474,13 @@ export class LineGraphicBase implements LineGraphic {
     }
 
     /**
-     * Which side the graphic's decoration hangs on. Abatis's chevron is the one in this
-     * family that flips; a symmetric graphic ignores it. @see setMirrored
+     * Which side of its line the graphic's decoration stands on: the abatis tooth, the only
+     * one in this family with a side. Set once, when the line is drawn (`drawnSide`), or from
+     * a file, and never by a gesture, so rotating the graphic turns the tooth with it.
      */
-    mirrored: boolean = false;
+    mirrored = false;
 
-    /**
-     * @see TacticalGraphicHandler.setMirrored
-     *
-     * **This family had no mirror at all.** `LineGraphicController.setMirrored` forwarded
-     * to `graphic.setMirrored?.()` and every holder here was missing it, so the call
-     * landed on `undefined` and did nothing — silently, because the optional call is
-     * exactly the shape a symmetric graphic legitimately has. Abatis's apex handle is
-     * declared a `mirror` in the contract precisely so the flip has something to grab,
-     * and grabbing it flipped nothing.
-     */
+    /** @see mirrored, TacticalGraphicHandler.setMirrored */
     setMirrored(mirrored: boolean): void {
         if (mirrored === this.mirrored) return;
         this.mirrored = mirrored;
@@ -500,8 +492,8 @@ export class LineGraphicBase implements LineGraphic {
      *
      * `handleRole` is indexed against the *generator's* list, and this holder renders a
      * filtered one — a two-point graphic hides the handle sitting on its own start. So
-     * the apex the contract calls index 2 arrives as index 1, is answered `shape`, and
-     * the mirror never fires. Recomputed on every publish rather than assumed, because
+     * the handle the contract calls index 2 arrives as index 1 and is answered with the
+     * wrong role. Recomputed on every publish rather than assumed, because
      * whether the start handle is dropped depends on where it landed.
      * @see TacticalGraphicHandler.handleIndexOffset
      */
@@ -545,7 +537,8 @@ export class LineGraphicBase implements LineGraphic {
         // zoom it happens to be at. `decorationSize` is the schema's name for this scalar.
         writeGraphicProperties(this.getFeatures(), this.graphicName, bag, {
             decorationSize: this.graphicSize(),
-            mirrored: this.mirrored,
+            // Filed only when set, so the lines with no side do not all carry a `false`.
+            ...(this.mirrored ? {mirrored: true} : {}),
             // The same number the shape was just built from, filed so a restore replays a
             // distance instead of re-deriving one from whatever zoom the file is opened at.
             ...(standoff !== undefined ? {width: standoff} : {}),
