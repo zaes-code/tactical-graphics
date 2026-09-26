@@ -48,6 +48,8 @@
  *
  * `maplibre-gl` is an **optional peer** dependency, like `ol`: installing this
  * package for its geometry alone pulls in neither.
+ *
+ * @module @zaes/tactical-graphics/maplibre
  */
 
 // The two renderers.

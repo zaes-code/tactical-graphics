@@ -42,7 +42,8 @@ function along(from: Position, metres: number, bearingDeg: number): Position {
  *
  * ## Attitude
  *
- * `rotation` is the attitude, in degrees clockwise from north like every other angle here.
+ * `rotation` is the attitude, in degrees counter-clockwise from east, as the point-anchored
+ * graphics measure it; `generateGraphics` converts it to a bearing.
  * The plate quotes AN in mils; converting for display is a host's business, and carrying a
  * second field for the same physical quantity would be the parallel-flag mistake.
  */

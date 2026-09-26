@@ -7,6 +7,8 @@
  * these carry so much less text than the catalog tiles on zaes.com.
  *
  * Reachable as `@zaes/tactical-graphics/thumbnails`; not part of the root barrel.
+ *
+ * @module @zaes/tactical-graphics/thumbnails
  */
 import type {TacticalGraphicName} from '../core/type';
 

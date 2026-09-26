@@ -1407,6 +1407,8 @@ function thumbnailModule() {
         ` * these carry so much less text than the catalog tiles on zaes.com.\n` +
         ` *\n` +
         ` * Reachable as \`@zaes/tactical-graphics/thumbnails\`; not part of the root barrel.\n` +
+        ` *\n` +
+        ` * @module @zaes/tactical-graphics/thumbnails\n` +
         ` */\n` +
         `import type {TacticalGraphicName} from '../core/type';\n\n` +
         `/** The viewBox every thumbnail is composed against, before its own zoom multiple. */\n` +
