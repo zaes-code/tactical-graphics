@@ -25,15 +25,28 @@ import {
     type EngineCapabilities,
     type TacticalGraphicsEngine,
 } from '@zaes/tactical-graphics';
-import {NativeLayerRenderer} from './native/NativeLayerRenderer';
+import {NativeLayerRenderer, type NativeLayerRendererOptions} from './native/NativeLayerRenderer';
 import {MapLibreInteractions, type EditMode as InteractionMode} from './interaction/MapLibreInteractions';
 import {amplifiersHidden} from '../amplifierVisibility';
 import {restoreSnapshotGraphics} from './restoreGraphic';
 import {resolutionOf} from './projection';
 
-/** Options for {@link createTacticalGraphics}. */
-export interface MapLibreEngineOptions extends EngineCallbacks {
-    /** An existing renderer to wrap, instead of constructing one. */
+/**
+ * Options for {@link createTacticalGraphics}.
+ *
+ * `glyphs` and `fontStack` go to the {@link NativeLayerRenderer} this constructs. Their
+ * defaults point at MapLibre's **public demo glyph server**, which is fine for a sample
+ * and not for production: set your own glyphs URL (or `glyphs: false` when your style
+ * already has one) and a stack it serves. @see NativeLayerRendererOptions
+ */
+export interface MapLibreEngineOptions extends EngineCallbacks, NativeLayerRendererOptions {
+    /**
+     * An existing renderer to wrap, instead of constructing one.
+     *
+     * That renderer already owns its glyphs and font stack, set when it was constructed
+     * (`new NativeLayerRenderer(map, {glyphs, fontStack})`). Passing `glyphs` or
+     * `fontStack` here as well throws rather than being ignored.
+     */
     renderer?: NativeLayerRenderer;
 }
 
@@ -54,7 +67,15 @@ const toInteractionMode = (mode: EditMode): InteractionMode => (mode === 'drawin
  * to take them off again.
  */
 export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngineOptions = {}): TacticalGraphicsEngine {
-    const renderer = options.renderer ?? new NativeLayerRenderer(map);
+    if (options.renderer && (options.glyphs !== undefined || options.fontStack !== undefined)) {
+        // The renderer set its glyphs and built its symbol layers when it was constructed;
+        // there is nothing here that could honor these now.
+        throw new Error(
+            'createTacticalGraphics: `glyphs` and `fontStack` configure the renderer it constructs. ' +
+                'With `renderer`, pass them to `new NativeLayerRenderer(map, {glyphs, fontStack})` instead.',
+        );
+    }
+    const renderer = options.renderer ?? new NativeLayerRenderer(map, {glyphs: options.glyphs, fontStack: options.fontStack});
     let mode: EditMode = 'view';
 
     const interactions = new MapLibreInteractions(map, renderer, {
