@@ -53,7 +53,7 @@ import {
     dashZoomStep,
     lineLayer,
     renderHatchImage,
-    symbolLayer, turnedLabelFlips, turnedSymbolLayer, turnedSymbolLayout, MEASURE_LABEL_PX} from './paintToLayers';
+    symbolLayer, turnedLabelFlips, turnedSymbolLayer, turnedSymbolLayout, MEASURE_LABEL_PX, type FontStack} from './paintToLayers';
 
 /**
  * # Path B — realize the geometry, then let MapLibre draw it
@@ -105,12 +105,13 @@ export const TURNED_SYMBOL_LAYER_ID = 'tg-symbol-turned';
  * practical difference between the two paths: a deployment either self-hosts a
  * glyph set or points at someone else's server.
  *
- * MapLibre's own demo server is used here because the spike is keyless by
- * decision. A real deployment must self-host — an external font server is a
- * runtime dependency, breaks offline and under a strict CSP, and is not something
- * to build a product on.
+ * MapLibre's own demo server is the **default** because the demo is keyless by
+ * decision. A real deployment should self-host and say so through
+ * {@link NativeLayerRendererOptions.glyphs}: an external font server is a runtime
+ * dependency, breaks offline and under a strict CSP, and is not something to build
+ * a product on.
  */
-const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
+export const DEFAULT_GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
 /**
  * **The stack name has to exist on the glyph server, and a wrong one fails almost
  * silently.** `Open Sans Bold` — the obvious transliteration of this library's
@@ -126,7 +127,39 @@ const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
  * library uses has to be *mapped* to a stack that has been pre-generated. The
  * canvas overlay has neither problem.
  */
-const FONT_STACK = 'Noto Sans Bold';
+export const DEFAULT_FONT_STACK = 'Noto Sans Bold';
+
+/**
+ * Where the native renderer gets its text from. Both options are read once, when the
+ * renderer is constructed.
+ *
+ * The defaults are MapLibre's **public demo glyph server** and a stack it serves. They
+ * are fine for a sample and wrong for production: the labels then depend on a server
+ * nobody has promised to keep up, fail offline and under a strict CSP, and cannot be
+ * self-hosted. A production deployment should set both, or set `glyphs: false` and let
+ * its own style carry them.
+ */
+export interface NativeLayerRendererOptions {
+    /**
+     * The glyphs URL template to put on the map's style, with MapLibre's `{fontstack}`
+     * and `{range}` placeholders, for example `'https://example.com/fonts/{fontstack}/{range}.pbf'`.
+     *
+     * `false` leaves the style's own `glyphs` alone, for a host whose style already
+     * names a glyph server. That style must then serve {@link NativeLayerRendererOptions.fontStack}, and must have a
+     * `glyphs` URL at all: a symbol layer against a style with none renders nothing.
+     *
+     * Defaults to {@link DEFAULT_GLYPHS_URL}, MapLibre's public demo server. Set your own.
+     */
+    glyphs?: string | false;
+    /**
+     * The font stack every label is drawn in: one font name, or names tried in order.
+     * Each must exist on the glyph server, and a wrong name fails almost silently (the
+     * labels render as specks, with nothing but a 404 in the network log).
+     *
+     * Defaults to {@link DEFAULT_FONT_STACK}, `'Noto Sans Bold'`, which the demo server serves.
+     */
+    fontStack?: FontStack;
+}
 
 /** How much the zoom must move mid-gesture before the geometry is rebuilt. */
 const ZOOM_REALIZE_THRESHOLD = 0.34;
@@ -327,7 +360,17 @@ export class NativeLayerRenderer {
 
     private measureCanvas: CanvasRenderingContext2D | null = null;
 
-    constructor(private readonly map: MapLibreMap) {
+    /** The glyphs URL `install` sets, or false to leave the style's own. @see NativeLayerRendererOptions */
+    private readonly glyphs: string | false;
+    /** The stack every symbol layer names. @see NativeLayerRendererOptions */
+    private readonly fontStack: FontStack;
+
+    constructor(
+        private readonly map: MapLibreMap,
+        options: NativeLayerRendererOptions = {},
+    ) {
+        this.glyphs = options.glyphs ?? DEFAULT_GLYPHS_URL;
+        this.fontStack = options.fontStack ?? DEFAULT_FONT_STACK;
         this.install();
         map.on('zoom', this.onZoom);
         map.on('zoomend', this.onZoomEnd);
@@ -365,11 +408,12 @@ export class NativeLayerRenderer {
      * The style must already carry a `glyphs` URL for the symbol layer to render
      * anything, so it is set here rather than being left to the basemap style —
      * a symbol layer against a style with no glyphs renders silently empty, which
-     * is a bad failure mode to leave for later.
+     * is a bad failure mode to leave for later. A host that passed `glyphs: false`
+     * has taken that on itself.
      */
     private install(): void {
         if (this.installed) return;
-        this.map.setGlyphs(GLYPHS_URL);
+        if (this.glyphs !== false) this.map.setGlyphs(this.glyphs);
 
         for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure', 'vertexHint', 'connector']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
@@ -388,8 +432,8 @@ export class NativeLayerRenderer {
         this.map.addLayer(patternFillLayer('tg-fill-pattern', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
-        this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
-        this.map.addLayer(turnedSymbolLayer(TURNED_SYMBOL_LAYER_ID, SOURCE_PREFIX + 'symbols', FONT_STACK, this.map.getBearing()));
+        this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', this.fontStack));
+        this.map.addLayer(turnedSymbolLayer(TURNED_SYMBOL_LAYER_ID, SOURCE_PREFIX + 'symbols', this.fontStack, this.map.getBearing()));
         this.map.addLayer(iconLayer(SYMBOL_ICON_LAYER_ID, SOURCE_PREFIX + 'icons'));
         this.layerIds.push('tg-fill-pattern', 'tg-fill', 'tg-circle', 'tg-symbol', TURNED_SYMBOL_LAYER_ID, SYMBOL_ICON_LAYER_ID);
 
@@ -405,7 +449,7 @@ export class NativeLayerRenderer {
         // distance laid **along** it so it picks up the line's own angle. Same shape as
         // OpenLayers' `createMeasureFeature`. @see setMeasure
         this.map.addLayer(sketchLayer(MEASURE_LAYER_ID, SOURCE_PREFIX + 'measure', MEASURE_DASH, LINE_WIDTH()));
-        this.map.addLayer(measureLabelLayer(MEASURE_LABEL_LAYER_ID, SOURCE_PREFIX + 'measure', FONT_STACK));
+        this.map.addLayer(measureLabelLayer(MEASURE_LABEL_LAYER_ID, SOURCE_PREFIX + 'measure', this.fontStack));
         this.map.addLayer(handleLayer(HANDLE_LAYER_ID, SOURCE_PREFIX + 'handles'));
         // Above the handles: it marks the vertex a drag would create, and a real handle
         // sitting on top of that offer would hide it. @see setVertexHint

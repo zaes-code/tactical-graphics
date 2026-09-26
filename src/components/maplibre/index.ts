@@ -37,7 +37,10 @@
  *    you serve. Getting this wrong is silent — every GeoJSON source simply never
  *    loads. Only the native renderer needs it. @see scripts/copy-maplibre-worker.js
  * 2. **Serve glyphs, for the native renderer.** MapLibre draws text from SDF PBFs;
- *    there is no system-font path.
+ *    there is no system-font path. By default the renderer points the style at
+ *    MapLibre's public demo glyph server and draws in `Noto Sans Bold`; production
+ *    should pass its own `glyphs` URL and `fontStack` (or `glyphs: false` to keep
+ *    the style's own). @see NativeLayerRendererOptions
  * 3. **Not put a CSS filter on the map canvas.** MapLibre composites every layer
  *    into one canvas, so a filter meant for the basemap repaints the graphics too.
  *    The canvas overlay is immune; the native renderer has no escape, which is why
@@ -51,7 +54,8 @@
 export {createTacticalGraphics} from './createTacticalGraphics';
 export type {MapLibreEngineOptions} from './createTacticalGraphics';
 export {CanvasOverlayRenderer} from './canvas/CanvasOverlayRenderer';
-export {NativeLayerRenderer} from './native/NativeLayerRenderer';
+export {NativeLayerRenderer, DEFAULT_GLYPHS_URL, DEFAULT_FONT_STACK} from './native/NativeLayerRenderer';
+export type {NativeLayerRendererOptions} from './native/NativeLayerRenderer';
 
 // Generator output → paint-ready graphics, including the 4326 → 3857 projection.
 /**
@@ -107,7 +111,7 @@ export type {ViewTransform} from './projection';
 // The paint-list consumers, for a host driving its own rendering.
 export {paintToCanvas} from './canvas/paintToCanvas';
 export {bucketPaints, circleLayer, featureCollection, fillLayer, lineLayer, symbolLayer} from './native/paintToLayers';
-export type {LayerBuckets} from './native/paintToLayers';
+export type {FontStack, LayerBuckets} from './native/paintToLayers';
 
 // A keyless OSM raster basemap, the same tiles the OpenLayers demo uses.
 export {createBasemapStyle} from './basemapStyle';
