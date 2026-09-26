@@ -62,6 +62,11 @@ export function northSide(heading: number): -90 | 90 {
     return Math.cos((heading * Math.PI) / 180) > 0 ? -90 : 90;
 }
 
+/** Whether a draw decides which side of its line this graphic's decoration takes. @see drawnSide */
+export function hasDrawnSide(name: string): boolean {
+    return name === TacticalGraphicName.Abatis;
+}
+
 /**
  * The side a newly drawn graphic's decoration takes, decided from the direction it was drawn.
  *
@@ -71,7 +76,7 @@ export function northSide(heading: number): -90 | 90 {
  * other graphic and for a line too short to have a direction.
  */
 export function drawnSide(name: string, coords: Position[]): {mirrored?: true} {
-    if (name !== TacticalGraphicName.Abatis || coords.length < 2) return {};
+    if (!hasDrawnSide(name) || coords.length < 2) return {};
     const [a, b] = coords;
     if (a[0] === b[0] && a[1] === b[1]) return {};
     return northSide(turf.bearing(turf.point(a), turf.point(b))) === 90 ? {mirrored: true} : {};
