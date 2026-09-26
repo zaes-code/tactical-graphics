@@ -62,7 +62,7 @@ function addonSlot(entries: string[]): PluginOption {
     };
 }
 
-async function addonPlugins(): Promise<PluginOption[]> {
+async function addonPlugins(): Promise<{plugins: PluginOption[]; entries: string[]}> {
     if (!existsSync(ADDONS_FILE)) {
         throw new Error(`addons mode needs demo-addons.local.json: {"plugins": ["<path to an add-on's Vite plugin>"]}`);
     }
@@ -72,15 +72,25 @@ async function addonPlugins(): Promise<PluginOption[]> {
         return (module.default ?? module.plugin)() as AddonPlugin;
     }));
     const entries = loaded.flatMap(plugin => (plugin && typeof plugin === 'object' && 'demoAddonEntry' in plugin && plugin.demoAddonEntry ? [plugin.demoAddonEntry] : []));
-    return [addonSlot(entries), ...loaded];
+    return {plugins: [addonSlot(entries), ...loaded], entries};
 }
 
 export default defineConfig(async ({command, mode}) => {
     const addons = mode === ADDONS_MODE;
     // A build is what gets deployed, and the public sample must never carry an add-on.
     if (addons && command === 'build') throw new Error('addons mode is for the dev server only; it never builds');
+    const slot = addons ? await addonPlugins() : undefined;
     return {
-        plugins: [react(), ...(addons ? await addonPlugins() : [])],
+        plugins: [react(), ...(slot?.plugins ?? [])],
+
+        /**
+         * **The dependency scan has to be told where the add-ons are.** It crawls from
+         * `index.html` and cannot see through the virtual `@demo/addons` module, so an add-on's
+         * own dependencies (Cesium's 12 MB, for one) were found only when the add-on loaded.
+         * Vite then bundled a second time and forced a full reload, and a lazy import still in
+         * flight failed with a 504. Listing each entry beside `index.html` finds them at startup.
+         */
+        optimizeDeps: slot ? {entries: ['index.html', ...slot.entries.map(entry => entry.replaceAll('\\', '/'))]} : undefined,
 
         resolve: {
             alias: addons ? LIBRARY_ALIASES : [NO_ADDONS, ...LIBRARY_ALIASES],
