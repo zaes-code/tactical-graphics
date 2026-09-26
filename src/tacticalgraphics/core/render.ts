@@ -197,11 +197,12 @@ export interface TacticalGraphicProperties {
      */
     length?: number;
     /**
-     * Hangs an asymmetric graphic's hook on the other side of its drawn line.
+     * Puts an abatis tooth on the right of its line instead of the left.
      *
-     * Portable user intent, not renderer state: a Cesium view needs it to draw the same
-     * symbol. Expressed relative to the line's own bearing, so it survives rotation —
-     * see `GeometryService.getCaneArrow` for the compass-pinned version this replaced.
+     * Set once, when the line is drawn, so the tooth starts out pointing north whichever way
+     * the line ran (`drawnSide`); after that it turns with the line, and no gesture flips it.
+     * Files saved before 2026-09-06 also carry it for the cane arrows, Pursuit and Mobile
+     * Defense, which state their side with a third point now; those still draw as saved.
      */
     mirrored?: boolean;
     /** Rotation in degrees, for point-based graphics. */
