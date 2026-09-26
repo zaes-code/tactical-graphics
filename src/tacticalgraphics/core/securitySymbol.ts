@@ -27,6 +27,7 @@
 
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 import type {GraphicLabels} from './render';
+import type {PaintFeature} from './paint';
 
 /** What the provider is told about the symbol it is being asked for. */
 export interface SecuritySymbolRequest {
@@ -104,10 +105,12 @@ const listeners = new Set<() => void>();
  * Records a change and tells every renderer about it.
  *
  * The revision alone is a *pull*: a renderer notices it is stale the next time it
- * happens to look. That is enough for OpenLayers, whose style functions re-run on
- * the next draw, and not for MapLibre, which realizes its sources on zoom and would
- * otherwise show the old symbol until something unrelated moved the map. A provider
- * set and nothing visibly happening is not an API worth shipping.
+ * happens to look, and neither renderer looks on its own. MapLibre realizes its
+ * sources on zoom, and OpenLayers re-runs a style function only when the map
+ * redraws, so both would show the old symbol until something unrelated moved the
+ * map. Both subscribe: MapLibre's native renderer, and OpenLayers'
+ * `TacticalGraphicsManager` through `subscribeSecurityOperationSymbolChange`. A
+ * provider set and nothing visibly happening is not an API worth shipping.
  */
 function bump(): void {
     revision++;
@@ -350,16 +353,40 @@ export function useMilsymbolSecuritySymbols(ms: MilsymbolModule, options: Record
 }
 
 /**
+ * The id a paint looks a per-graphic provider up by.
+ *
+ * `graphicId` is what a renderer sets on the paint feature (OpenLayers, from the
+ * feature's `symbolId`); a `symbolId` in the bag is how the MapLibre placement hands it
+ * over. OpenLayers used to set neither, so a provider bound to one graphic never reached
+ * the paint there and the five paint-placed graphics drew nothing for it.
+ */
+export function symbolGraphicId(feature: PaintFeature): string | undefined {
+    return feature.graphicId || ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined;
+}
+
+/**
  * The provider's answer as an image, whichever shape it returned.
  *
- * A provider bound to this graphic wins over the global one; a provider that throws
- * costs the center symbol and nothing else. The arms, the letter and every
- * interaction are already in place, and losing a whole graphic over its decoration
- * is not a trade worth making — a host's provider is a host's code, and a bad SIDC
- * or a missing DOM is the ordinary way it fails.
+ * **Three providers, most specific first:** one bound to this graphic, then
+ * `rendererProvider` (a renderer's own, which the paints receive as
+ * `PaintContext.centerSymbolProvider`), then the shared global one. The first that is
+ * registered answers, and an answer of nothing is final: a per-graphic provider that
+ * returns `undefined` means "no symbol on this one", not "ask the next".
+ *
+ * The middle slot is how the OpenLayers provider reaches the paints that leave room for
+ * the symbol. Without it they skipped straight to the shared provider, and a host that
+ * registered only the OpenLayers one got no room cut and no symbol drawn.
+ *
+ * A provider that throws costs the center symbol and nothing else. The arms, the letter
+ * and every interaction are already in place, and losing a whole graphic over its
+ * decoration is not a trade worth making — a host's provider is a host's code, and a
+ * bad SIDC or a missing DOM is the ordinary way it fails.
  */
-export function resolveSecuritySymbol(request: SecuritySymbolRequest): SecuritySymbolImage | undefined {
-    const active = (request.graphicId ? graphicProviders.get(request.graphicId) : undefined) ?? provider;
+export function resolveSecuritySymbol(
+    request: SecuritySymbolRequest,
+    rendererProvider?: SecuritySymbolProvider,
+): SecuritySymbolImage | undefined {
+    const active = (request.graphicId ? graphicProviders.get(request.graphicId) : undefined) ?? rendererProvider ?? provider;
     if (!active) return undefined;
 
     let answer: ReturnType<SecuritySymbolProvider>;

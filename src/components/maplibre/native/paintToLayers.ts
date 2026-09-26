@@ -423,10 +423,21 @@ export function circleLayer(id: string, source: string): LayerSpecification {
 }
 
 /**
+ * A font stack as MapLibre's `text-font` wants it: font names tried in order against the
+ * style's `glyphs` server. A single name is a one-entry stack.
+ */
+export type FontStack = string | readonly string[];
+
+/** `text-font`'s value for a {@link FontStack}. A fresh array, so no layer shares one with the caller. */
+export function textFont(fontStack: FontStack): string[] {
+    return typeof fontStack === 'string' ? [fontStack] : [...fontStack];
+}
+
+/**
  * The upright labels: text a paint did not turn, which stays level on screen however the map
  * is turned or tilted. Turned text is in {@link turnedSymbolLayer}, from the same source.
  */
-export function symbolLayer(id: string, source: string, fontStack: string): LayerSpecification {
+export function symbolLayer(id: string, source: string, fontStack: FontStack): LayerSpecification {
     return {
         id,
         type: 'symbol',
@@ -434,7 +445,7 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
         filter: ['!', ['get', 'turned']],
         layout: {
             'text-field': ['get', 'label'],
-            'text-font': [fontStack],
+            'text-font': textFont(fontStack),
             'text-size': ['get', 'size'],
             'text-rotate': ['get', 'rotate'],
             'text-anchor': ['get', 'anchor'],
@@ -508,7 +519,7 @@ export function turnedSymbolLayout(bearing: number): Record<string, unknown> {
  * map, so a line's label stays on the line when the map is turned, and face the camera
  * when it is tilted, so they stay legible. @see turnedSymbolLayout
  */
-export function turnedSymbolLayer(id: string, source: string, fontStack: string, bearing: number): LayerSpecification {
+export function turnedSymbolLayer(id: string, source: string, fontStack: FontStack, bearing: number): LayerSpecification {
     const upright = symbolLayer(id, source, fontStack) as LayerSpecification & {layout: Record<string, unknown>};
     return {
         ...upright,
@@ -563,14 +574,14 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
  * takes the line's own angle and stays upright relative to it as the user swings the
  * handle round, with no rotation to compute and none to keep in step.
  */
-export function measureLabelLayer(id: string, source: string, fontStack: string): LayerSpecification {
+export function measureLabelLayer(id: string, source: string, fontStack: FontStack): LayerSpecification {
     return {
         id,
         type: 'symbol',
         source,
         layout: {
             'text-field': ['get', 'label'],
-            'text-font': [fontStack],
+            'text-font': textFont(fontStack),
             // One line, like the other engine's. A read-out naming two numbers carries a
             // separator MapLibre will happily break at, and the two engines then say the
             // same thing in a different shape. @see NO_WRAP_EMS
