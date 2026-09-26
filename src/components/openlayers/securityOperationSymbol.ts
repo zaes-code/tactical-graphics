@@ -32,6 +32,24 @@
  *
  * Registering nothing is a supported state: the arms and labels draw, the center
  * is simply empty.
+ *
+ * ## Which provider answers
+ *
+ * Three can be registered, and the most specific one registered wins: a provider bound
+ * to one graphic (`setGraphicSecuritySymbolProvider`, root entry), then this module's
+ * OpenLayers provider (`setSecurityOperationSymbolProvider`), then the shared one
+ * (`setSecuritySymbolProvider`, root entry). It holds for all six graphics in
+ * `CENTER_SYMBOL_GRAPHICS`. The shared paints place five of them and leave room for the
+ * symbol, so the OpenLayers provider is handed to them through the paint context; before
+ * that they never saw it, and a host that registered only this provider got a symbol on
+ * the escort and an empty center on the other five.
+ *
+ * ## Repainting on a change
+ *
+ * A StyleFunction re-runs only when OpenLayers redraws, and nothing about registering a
+ * provider or changing a size makes it redraw. `subscribeSecurityOperationSymbolChange`
+ * reports every such change on either registry, and `TacticalGraphicsManager` uses it to
+ * mark its center-symbol features changed.
  */
 import {Feature} from 'ol';
 import type {FeatureLike} from 'ol/Feature';
@@ -45,11 +63,13 @@ import {
     getGraphicSecuritySymbolProvider,
     getSecuritySymbolProvider,
     securitySymbolSidc,
+    subscribeSecuritySymbolChange,
     useMilsymbolSecuritySymbols,
     followTaskSymbol,
     securityOperationSymbol,
 } from '@zaes/tactical-graphics';
-import {paintContext, toPaintFeature} from './paintToOpenLayers';
+import type {SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from '@zaes/tactical-graphics';
+import {paintContext, setPaintCenterSymbolProvider, toPaintFeature} from './paintToOpenLayers';
 import {readGraphicLabels} from './graphicProperties';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
@@ -144,6 +164,7 @@ export function setSecurityOperationSymbolSize(px: number): void {
     // The cache is keyed on the request, size included, so stale entries could
     // never be *returned* — but nothing would ever evict them either.
     styleCache.clear();
+    notifyChange();
 }
 
 /** The current center-symbol size in CSS pixels. */
@@ -170,16 +191,51 @@ export const securityOperationSidc = securitySymbolSidc;
 
 let provider: SecurityOperationSymbolProvider | undefined;
 
+/** Told of every change to this module's provider or size. @see subscribeSecurityOperationSymbolChange */
+const listeners = new Set<() => void>();
+
+function notifyChange(): void {
+    listeners.forEach(listener => listener());
+}
+
+/**
+ * Subscribes to every change that alters what a center symbol draws on OpenLayers: this
+ * module's provider and size, and the root entry's providers and size
+ * (`setSecuritySymbolProvider`, `setGraphicSecuritySymbolProvider`,
+ * `setSecuritySymbolSize`). Returns the unsubscribe.
+ *
+ * A StyleFunction re-runs only when the map redraws, so a provider registered after the
+ * graphics were drawn changed nothing on screen until something unrelated moved the map.
+ * `TacticalGraphicsManager` subscribes for its own features; a host drawing center-symbol
+ * graphics on a layer of its own subscribes here and calls `changed()` on them.
+ */
+export function subscribeSecurityOperationSymbolChange(listener: () => void): () => void {
+    listeners.add(listener);
+    const unsubscribeShared = subscribeSecuritySymbolChange(listener);
+    return () => {
+        listeners.delete(listener);
+        unsubscribeShared();
+    };
+}
+
 /**
  * Registers the provider for every security operation on every map.
  *
  * Global, like `configureTacticalGraphics`, and for the same reason: the center
  * symbol describes the symbology rather than one view, so a host should not have
- * to say it once per map. Pass `undefined` to go back to drawing no symbol.
+ * to say it once per map. Pass `undefined` to remove it; the shared provider from the
+ * root entry, if one is registered, then answers in its place.
+ *
+ * Covers all six graphics that carry a center symbol, and a provider bound to one
+ * graphic with `setGraphicSecuritySymbolProvider` still wins over it.
  */
 export function setSecurityOperationSymbolProvider(next: SecurityOperationSymbolProvider | undefined): void {
     provider = next;
     styleCache.clear();
+    // The paints that place the symbol and leave room for it read the provider through
+    // the paint context, in image form. @see paintContext
+    setPaintCenterSymbolProvider(next ? asPaintProvider(next) : undefined);
+    notifyChange();
 }
 
 /** The registered provider, or `undefined` if a host has registered none. */
@@ -242,15 +298,22 @@ export function useMilsymbolSecurityOperationSymbols(ms: MilsymbolModule, option
 }
 
 /**
- * One resolved Style per distinct request. Rebuilding an Icon — and rasterising a
+ * One resolved answer per distinct request. Rebuilding an Icon — and rasterising a
  * symbol behind it — on every render frame is wasteful.
  *
  * Keyed on the whole request and not just the SIDC, because a provider may key on
  * any of it. A cache keyed on the SIDC alone would hand two graphics with the same
  * affiliation and different labels the same glyph, which is precisely the case
  * `labels` exists to support.
+ *
+ * Each entry keeps the answer twice: as the `Style` this renderer draws, and as the
+ * image the shared paints lay the graphic out for. @see asPaintProvider
  */
-const styleCache = new globalThis.Map<SecurityOperationSymbolProvider, globalThis.Map<string, Style | undefined>>();
+interface Resolved {
+    style: Style;
+    image: SecuritySymbolImage;
+}
+const styleCache = new globalThis.Map<SecurityOperationSymbolProvider, globalThis.Map<string, Resolved | undefined>>();
 
 /**
  * Includes `name` so one provider can hand Cover, Guard and Screen different
@@ -289,32 +352,72 @@ function iconStyle(image: string | SecurityOperationSymbolImage, defaultSizePx: 
  * with identical amplifiers and *different* providers are a normal case now, and a
  * shared key space would give the second one the first one's symbol.
  */
-function resolve(request: SecurityOperationSymbolRequest, active: SecurityOperationSymbolProvider | undefined): Style | undefined {
+function resolveEntry(request: SecurityOperationSymbolRequest, active: SecurityOperationSymbolProvider | undefined): Resolved | undefined {
     if (!active) return undefined;
 
     let perProvider = styleCache.get(active);
     if (!perProvider) {
-        perProvider = new globalThis.Map<string, Style | undefined>();
+        perProvider = new globalThis.Map<string, Resolved | undefined>();
         styleCache.set(active, perProvider);
     }
 
     const key = cacheKey(request);
     if (perProvider.has(key)) return perProvider.get(key);
 
-    let style: Style | undefined;
+    let entry: Resolved | undefined;
     try {
         const produced = active(request);
-        style = produced instanceof Style || produced === undefined ? produced : iconStyle(produced, request.sizePx);
+        entry =
+            produced === undefined
+                ? undefined
+                : {
+                      style: produced instanceof Style ? produced : iconStyle(produced, request.sizePx),
+                      image: imageOf(produced, request.sizePx),
+                  };
     } catch {
         // A provider that throws — a missing DOM, a SIDC milsymbol rejects — costs
         // the center glyph and nothing else. The arms, the labels and every
         // interaction are already in place, and losing the whole graphic over its
         // decoration is not an acceptable trade.
-        style = undefined;
+        entry = undefined;
     }
 
-    perProvider.set(key, style);
-    return style;
+    perProvider.set(key, entry);
+    return entry;
+}
+
+function resolve(request: SecurityOperationSymbolRequest, active: SecurityOperationSymbolProvider | undefined): Style | undefined {
+    return resolveEntry(request, active)?.style;
+}
+
+/**
+ * A provider's answer in the image form the shared paints read.
+ *
+ * A string or `{src, sizePx}` maps across directly. A `Style` has no image the paint
+ * could use, and needs none: the paint only decides *that* there is a symbol and how
+ * much room it takes, and this renderer draws the `Style` itself. So a `Style` reports
+ * the requested size, and its `Icon`'s `src` when it has one (an empty string when it
+ * does not). The requested size is the only honest answer: `Icon.getWidth()` is
+ * undefined until the image has loaded.
+ */
+function imageOf(produced: Style | string | SecurityOperationSymbolImage, requestedPx: number): SecuritySymbolImage {
+    if (typeof produced === 'string') return {src: produced, sizePx: requestedPx};
+    if (produced instanceof Style) {
+        const icon = produced.getImage();
+        return {src: icon instanceof Icon ? (icon.getSrc() ?? '') : '', sizePx: requestedPx};
+    }
+    return {src: produced.src, sizePx: produced.sizePx ?? requestedPx};
+}
+
+/**
+ * The OpenLayers provider as the shared paints ask for it, through the paint context.
+ *
+ * Goes through the same cache as the style functions, so a provider is still asked once
+ * per distinct request however many paints consult it. The two request types differ only
+ * in where `labels` is typed from; the bag the paint reads is the same shape.
+ */
+function asPaintProvider(ol: SecurityOperationSymbolProvider): SecuritySymbolProvider {
+    return (request: SecuritySymbolRequest) => resolveEntry(request as unknown as SecurityOperationSymbolRequest, ol)?.image;
 }
 
 /**

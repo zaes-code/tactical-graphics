@@ -20,6 +20,7 @@ import type {
     ProjectedGeometry,
     ProjectedInputGeometry,
     ProjectedPosition,
+    SecuritySymbolProvider,
     StrokeSpec,
     TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
@@ -318,10 +319,14 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
 
     const bag = readGraphicLabels(feature) as Partial<TacticalGraphicProperties>;
     const resolvedName = (bag.name ?? name ?? feature.get('graphicName')) as TacticalGraphicName;
+    const graphicId = feature.get('symbolId') as string | undefined;
 
     return {
         geometry,
         properties: {...bag, name: resolvedName},
+        // The holder's id, so a center-symbol provider bound to this graphic reaches the
+        // paint that places the symbol. @see PaintFeature.graphicId
+        ...(graphicId ? {graphicId} : {}),
         // A host's view state, stamped on the feature rather than stored in the bag —
         // saving a graphic must not save someone's display preference with it.
         // @see PaintFeature.hideAmplifiers
@@ -352,9 +357,30 @@ export function toPaintFeature(feature: FeatureLike, name?: TacticalGraphicName)
  * `measureText` is the module's existing canvas measurer, so a ported function
  * measures with exactly the ruler it did before the port — which is what makes a
  * before/after screenshot comparison meaningful.
+ *
+ * `centerSymbolProvider` is the OpenLayers center-symbol provider in image form, when a
+ * host has registered one, so the paints that place the symbol and leave room for it
+ * consult the same providers the style functions draw from. @see PaintContext.centerSymbolProvider
  */
 export function paintContext(resolution: number): PaintContext {
-    return {resolution, measureText: (text, font) => getTextWidth(text, font, 1)};
+    return {
+        resolution,
+        measureText: (text, font) => getTextWidth(text, font, 1),
+        ...(centerSymbolProvider ? {centerSymbolProvider} : {}),
+    };
+}
+
+let centerSymbolProvider: SecuritySymbolProvider | undefined;
+
+/**
+ * Hands the paint context this engine's own center-symbol provider.
+ *
+ * A slot filled from `securityOperationSymbol.ts` whenever the OpenLayers provider is set,
+ * rather than an import of it: that module already imports this one, and the provider is
+ * only ever set through it. Internal; not on the barrel.
+ */
+export function setPaintCenterSymbolProvider(next: SecuritySymbolProvider | undefined): void {
+    centerSymbolProvider = next;
 }
 
 /**

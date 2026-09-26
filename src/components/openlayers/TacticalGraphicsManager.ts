@@ -12,11 +12,12 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
+import {subscribeSecurityOperationSymbolChange} from "./securityOperationSymbol";
 import {Coordinate} from "ol/coordinate";
 import {EventsKey} from "ol/events";
 import {Extent, extend as extendExtent} from "ol/extent";
@@ -584,6 +585,7 @@ export class TacticalGraphicsManager {
         if (this.resolutionKeys.some(entry => entry.handler === handler)) return;
         const key = this.map.getView().on('change:resolution', handler.onResolutionChangeFunc) as EventsKey;
         this.resolutionKeys.push({handler, key});
+        this.watchCenterSymbols();
     };
 
     /** Drops one handler's zoom subscription. Safe on a handler that has none. */
@@ -592,6 +594,7 @@ export class TacticalGraphicsManager {
         if (index < 0) return;
         unByKey(this.resolutionKeys[index].key);
         this.resolutionKeys.splice(index, 1);
+        if (!this.resolutionKeys.length) this.unwatchCenterSymbols();
     };
 
     /**
@@ -604,6 +607,46 @@ export class TacticalGraphicsManager {
     releaseAllGraphics = (): void => {
         this.resolutionKeys.forEach(entry => unByKey(entry.key));
         this.resolutionKeys.length = 0;
+        this.unwatchCenterSymbols();
+    };
+
+    /**
+     * The unsubscribe for center-symbol changes, while this manager has graphics to repaint.
+     *
+     * **Registering a provider, or changing a size, did nothing on screen.** A StyleFunction
+     * re-runs only when OpenLayers redraws, so a symbol provider registered after the
+     * graphics were drawn stayed invisible until something unrelated moved the map. MapLibre
+     * was told (its renderer subscribes) and this engine was not.
+     *
+     * The subscription rides the zoom list's lifetime rather than the manager's, because the
+     * manager has no teardown of its own and the listener registry is module-global: held
+     * from construction, it would keep every manager — and its map — alive for the life of
+     * the page. The zoom list is already the manager's record of which graphics are on the
+     * map, every path that adds one registers it there, and `releaseAllGraphics` (which
+     * `clearAllGraphics` and the façade's `destroy` both call) already empties it.
+     */
+    private unsubscribeCenterSymbols: (() => void) | undefined;
+
+    private watchCenterSymbols = (): void => {
+        if (this.unsubscribeCenterSymbols) return;
+        this.unsubscribeCenterSymbols = subscribeSecurityOperationSymbolChange(this.repaintCenterSymbols);
+    };
+
+    private unwatchCenterSymbols = (): void => {
+        this.unsubscribeCenterSymbols?.();
+        this.unsubscribeCenterSymbols = undefined;
+    };
+
+    /**
+     * Marks every feature of every center-symbol graphic changed, so its style functions
+     * re-run. Every feature and not only the one that draws the symbol: a follow task lays
+     * its body out around the symbol, and drops its designation for it.
+     */
+    private repaintCenterSymbols = (): void => {
+        for (const {handler} of this.resolutionKeys) {
+            const name = this.graphicNameOf(handler);
+            if (name && CENTER_SYMBOL_GRAPHICS.has(name)) handler.getFeatures().forEach(feature => feature.changed());
+        }
     };
 
     // define what happens on mouse down, drag and mouse up events.
