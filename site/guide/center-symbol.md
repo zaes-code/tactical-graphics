@@ -64,8 +64,7 @@ for an image that could not be rasterized:
 ```ts
 import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
 
-setSecuritySymbolSize(40);   // CSS px, default 25, clamped to [8, 96]
-graphics.refreshStyles();    // takes effect on the next render
+setSecuritySymbolSize(40);   // CSS px, default 25, clamped to [8, 96]; both engines repaint
 ```
 
 **Not** milsymbol's own `size` option. That sets the SVG's internal resolution; the
@@ -116,9 +115,8 @@ setGraphicSecuritySymbolProvider(graphicId, undefined);   // back to the global 
 It wins over the global provider for that graphic and returns `undefined` to draw no
 center symbol at all. The id is the graphic's own — `getSymbolId()` on an OpenLayers
 handler (its features carry it as `symbolId`), `id` on a `MapLibreTacticalGraphic`, and
-`id` on the façade's selection either way. Both engines honor it. MapLibre repaints
-straight away; OpenLayers picks it up on its next render, so call
-`graphics.refreshStyles()` to see it at once. `clearGraphicSecuritySymbolProviders()`
+`id` on the façade's selection either way. Both engines honor it and repaint straight
+away. `clearGraphicSecuritySymbolProviders()`
 forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
 

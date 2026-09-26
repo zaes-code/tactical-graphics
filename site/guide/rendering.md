@@ -36,14 +36,16 @@ and leaves your map alone.
 | `beginGesture(kind, event)` | start a `translate`, `rotate` or `resize` on the selection from your own control; returns `false` if refused |
 | `clearAll()` | remove every graphic and return to `view` |
 | `snapshot()` / `restore(fc)` | the whole map as GeoJSON, and back — see [Saving and restoring](/guide/saving-and-restoring) |
+| `setAmplifiersHidden(id, hidden)` / `amplifiersHidden(id)` | draw a graphic name-only, and read it back — see [Showing a graphic's name only](#showing-a-graphic-s-name-only). Not saved in a snapshot |
 | `refreshStyles()` | redraw against the current config, after `configureTacticalGraphics` |
 | `destroy()` | detach every listener and interaction |
 
 Pass callbacks as the second argument — `onChange`, `onSelect`, `onDrawEnd`,
 `onModeChange` — and they mean the same thing in both engines. The same options object
-also takes one engine-specific field: an existing `manager` (a `TacticalGraphicsManager`)
+also takes engine-specific fields: an existing `manager` (a `TacticalGraphicsManager`)
 on OpenLayers, or an existing `renderer` (a `NativeLayerRenderer`) on MapLibre, to wrap
-instead of constructing a new one.
+instead of constructing a new one. On MapLibre it also takes `glyphs` and `fontStack`
+(see below); a `renderer` you pass in keeps its own, so give those to its constructor.
 
 ## A complete example, per engine
 
@@ -106,7 +108,7 @@ import {createTacticalGraphics} from '@zaes/tactical-graphics/maplibre';
 
 const map = new MapLibreMap({
     container: 'map',
-    style: 'https://your-style-server/style.json',   // glyphs are replaced — see below
+    style: 'https://your-style-server/style.json',   // see below for glyphs
     center: [-77.04, 38.89],
     zoom: 10,
 });
@@ -143,12 +145,14 @@ map.on('load', () => {
 **Besides the imports, three things differ**, and each for a reason that is MapLibre's
 rather than this library's: the map is constructed differently, the work waits for
 `load`, and text needs a glyph server because MapLibre draws text from SDF glyph PBFs
-rather than a system font. The renderer sets that server itself: on construction it
-calls `map.setGlyphs()` with MapLibre's demo server
-(`https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf`) and draws every label in
-the `Noto Sans Bold` stack, replacing any `glyphs` URL your style carried. Neither is an
-option in this release. Everything from `createTacticalGraphics` onward is
-character-for-character the same.
+rather than a system font. By default the renderer sets that server itself: on
+construction it calls `map.setGlyphs()` with MapLibre's public demo server
+(`DEFAULT_GLYPHS_URL`) and draws every label in the `Noto Sans Bold` stack
+(`DEFAULT_FONT_STACK`), replacing any `glyphs` URL your style carried. **Set your own for
+production**, since the demo server is not a service anyone promises to keep up:
+`createTacticalGraphics(map, {glyphs: 'https://your-host/fonts/{fontstack}/{range}.pbf',
+fontStack: 'Open Sans Bold'})`, or `glyphs: false` to keep the one your style already
+names. Everything from `createTacticalGraphics` onward is character-for-character the same.
 
 ## What the two engines share
 
@@ -167,7 +171,7 @@ showing where a new vertex would land are all present in both.
 | | |
 |---|---|
 | **Label rasterization** | MapLibre places text from an SDF glyph set, OpenLayers from a browser font. Text lands a pixel or so apart, and a label anchored off-screen is clipped by one and not placed at all by the other. Not something you can configure away. |
-| **Glyph hosting** | MapLibre needs a glyph server for any text at all. The renderer points the map at MapLibre's public demo glyph server and the `Noto Sans Bold` stack, and neither is configurable yet, so labels depend on that server being reachable. OpenLayers uses the system font and needs nothing. |
+| **Glyph hosting** | MapLibre needs a glyph server for any text at all. By default the renderer points the map at MapLibre's public demo glyph server and the `Noto Sans Bold` stack; the `glyphs` and `fontStack` options set your own. OpenLayers uses the system font and needs nothing. |
 | **Redraw during a zoom** | OpenLayers re-runs its style functions every frame. MapLibre has to re-realize geometry into GeoJSON, which is far too costly per frame, so mid-gesture it rebuilds only at coarse zoom steps (and no more often than a minimum interval); screen-sized decorations are briefly the wrong size between rebuilds and settle when the zoom ends. |
 
 ## The radius read-out
@@ -210,14 +214,17 @@ source.addFeatures(features);
 
 ## Showing a graphic's name only
 
-Set `hideAmplifiers` on the **feature**, not in the `tacticalGraphic` bag, and the graphic
-draws its symbol and designation while every annotation — dates, altitudes, widths, field
-H, a corridor's information block — goes:
+Through the engine, `graphics.setAmplifiersHidden(id, true)`, and the graphic draws its
+symbol and designation while every annotation — dates, altitudes, widths, field H, a
+corridor's information block — goes. `graphics.amplifiersHidden(id)` reads it back:
 
 ```ts
-graphicFeature.set('hideAmplifiers', true);
-labelFeature.set('hideAmplifiers', true);
+graphics.setAmplifiersHidden(id, true);   // id from getSelection(), or a snapshot's symbolId
+graphics.amplifiersHidden(id);            // true
 ```
+
+Below the engine, the same flag is `hideAmplifiers` on the OpenLayers **feature** (not in
+the `tacticalGraphic` bag), or on the `PaintFeature` on MapLibre.
 
 **The symbol's own text is never hidden.** A cover's `C`, a mission task's letter, a `PL`
 prefix, an `ACP` number: hide those and the reader is looking at a different graphic.
@@ -226,9 +233,10 @@ of the symbol — a stray date is noise, a missing letter is wrong.
 
 It is deliberately **not** part of the portable description. It says nothing about what the
 symbol is: two identical corridors side by side may reasonably differ, and none of it
-should travel in a file another operator opens. So the host keeps the choice wherever its
-other view state lives — a store, a URL, local storage — and supplies it at render time,
-the way it supplies `graphicSize`. On MapLibre the same flag goes on the `PaintFeature`.
+should travel in a file another operator opens. So it is never in a snapshot, the library
+stores it nowhere, and `restore()` draws every graphic in full. The host keeps the choice
+wherever its other view state lives (a store, a URL, local storage) and applies it again
+after a restore: a restore keeps each graphic's saved `symbolId`, so the same ids work.
 
 ## A picture for a menu
 
