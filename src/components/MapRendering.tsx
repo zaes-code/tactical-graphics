@@ -11,6 +11,7 @@ import SettingsModal from './SettingsModal';
 import MapControls, {thumbnailInkFor} from './MapControls';
 import EditAffordances from './EditAffordances';
 import ViewControls from './ViewControls';
+import AddonErrorBoundary from './AddonErrorBoundary';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
@@ -377,15 +378,16 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
               */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
                 {addonEngine
-                    ? <React.Suspense fallback={null}>
-                        <addonEngine.View
-                            key={addonEngine.id}
-                            darkMode={darkMode}
-                            graphicsSettings={settings}
-                            onReady={handleEngineReady}
-                            onInteractionModeChange={setInteractionMode}
-                        />
-                    </React.Suspense>
+                    ? <AddonErrorBoundary key={addonEngine.id} label={addonEngine.label}>
+                        <React.Suspense fallback={null}>
+                            <addonEngine.View
+                                darkMode={darkMode}
+                                graphicsSettings={settings}
+                                onReady={handleEngineReady}
+                                onInteractionModeChange={setInteractionMode}
+                            />
+                        </React.Suspense>
+                    </AddonErrorBoundary>
                     : engine === 'openlayers'
                     ? <OpenLayersMap
                         key="openlayers"
@@ -419,11 +421,13 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 {demoTools.length > 0 && (
                     <Box sx={{position: 'absolute', right: 12, bottom: 32, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380}}>
                         {/* An add-on may load its panel lazily, as the engines do. */}
-                        <React.Suspense fallback={null}>
-                            {demoTools.map(tool => (
-                                <tool.Panel key={tool.id} engine={engineHandle} darkMode={darkMode}/>
-                            ))}
-                        </React.Suspense>
+                        {demoTools.map(tool => (
+                            <AddonErrorBoundary key={tool.id} label={tool.label}>
+                                <React.Suspense fallback={null}>
+                                    <tool.Panel engine={engineHandle} darkMode={darkMode}/>
+                                </React.Suspense>
+                            </AddonErrorBoundary>
+                        ))}
                     </Box>
                 )}
 
