@@ -70,7 +70,15 @@ export interface LayerBuckets {
     circles: Feature[];
     symbols: Feature[];
     /** Hatch images this list needs registered, by id. @see renderHatchImage */
-    hatches: Map<string, HatchSpec>;
+    hatches: Map<string, HatchImage>;
+    /** How much MapLibre will grow a pattern at the zoom these fills are for. @see hatchGrowth */
+    hatchGrowth: number;
+}
+
+/** A hatch as `map.addImage` wants it: the spec, and the raster width to draw it at. */
+export interface HatchImage {
+    spec: HatchSpec;
+    rasterPx: number;
 }
 
 /** EPSG:3857 → lon/lat, for a geometry on its way into a MapLibre source. */
@@ -127,8 +135,36 @@ function renderedFontPx(font: string, scale: number): number {
  * Derived from the spec's own values so two areas asking for the same hatch share
  * one registered image, and two asking for different ones do not collide.
  */
-export function hatchImageId(spec: HatchSpec): string {
-    return `tg-hatch-${spec.kind}-${spec.color}-${spec.sizePx}-${spec.lineWidthPx}`.replace(/[^a-z0-9-]/gi, '_');
+export function hatchImageId(spec: HatchSpec, rasterPx = spec.sizePx): string {
+    return `tg-hatch-${spec.kind}-${spec.color}-${spec.sizePx}-${spec.lineWidthPx}-${rasterPx}`.replace(/[^a-z0-9-]/gi, '_');
+}
+
+/**
+ * The `pixelRatio` every hatch is registered at. Whole, because MapLibre stores a
+ * pattern's ratio in a Uint16 vertex attribute and a fractional one truncates.
+ */
+export const HATCH_PIXEL_RATIO = 4;
+
+/**
+ * How much MapLibre grows a `fill-pattern` at `zoom`.
+ *
+ * It lays the pattern out in the pixels of the tile zoom, `floor(zoom)`, so between integer
+ * zooms the pattern grows with the map: at 5.6 a 10 px tile repeats every 15 px, then snaps
+ * back to 10 at 6. OpenLayers draws it at 10 at every zoom, and there is no paint property to
+ * turn this off, so the raster is drawn that much smaller instead. @see hatchRasterPx
+ */
+export function hatchGrowth(zoom: number): number {
+    return 2 ** (zoom - Math.max(0, Math.floor(zoom)));
+}
+
+/**
+ * The raster width that shows a hatch at its own `sizePx` once MapLibre has grown it.
+ *
+ * Rounded to whole pixels at `HATCH_PIXEL_RATIO`, so it is off by at most 2.5% and a
+ * 10 px hatch needs at most 21 images across a zoom level.
+ */
+export function hatchRasterPx(spec: HatchSpec, growth: number): number {
+    return Math.round(spec.sizePx * HATCH_PIXEL_RATIO / growth);
 }
 
 /**
@@ -140,13 +176,15 @@ export function hatchImageId(spec: HatchSpec): string {
  * between the two renderers on this feature: a canvas takes a `CanvasPattern`
  * directly, MapLibre needs the tile drawn and uploaded first.
  */
-export function renderHatchImage(spec: HatchSpec): ImageData | null {
+export function renderHatchImage(spec: HatchSpec, rasterPx = spec.sizePx): ImageData | null {
     const canvas = document.createElement('canvas');
-    canvas.width = spec.sizePx;
-    canvas.height = spec.sizePx;
+    canvas.width = rasterPx;
+    canvas.height = rasterPx;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
+    // Drawn in the spec's own pixels and scaled to fit, so the stroke keeps its proportion.
+    ctx.scale(rasterPx / spec.sizePx, rasterPx / spec.sizePx);
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
@@ -156,7 +194,7 @@ export function renderHatchImage(spec: HatchSpec): ImageData | null {
     }
     ctx.stroke();
 
-    return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
+    return ctx.getImageData(0, 0, rasterPx, rasterPx);
 }
 
 /**
@@ -176,8 +214,8 @@ export const GRAPHIC_ID_PROPERTY = 'tgId';
  * `graphicId`, when given, is stamped on every feature so a rendered mark can be
  * traced back to its graphic. @see GRAPHIC_ID_PROPERTY
  */
-export function emptyBuckets(): LayerBuckets {
-    return {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+export function emptyBuckets(hatchGrowth = 1): LayerBuckets {
+    return {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map(), hatchGrowth};
 }
 
 export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets {
@@ -210,6 +248,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
         }
 
         if (fill) {
+            const hatch = fill.pattern && {spec: fill.pattern, rasterPx: hatchRasterPx(fill.pattern, buckets.hatchGrowth)};
             buckets.fills.push({
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
@@ -220,10 +259,10 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // feature in the layer, and MapLibre treats an unknown image name
                     // as "no pattern" — which is exactly the flat-color fallback
                     // `FillSpec` documents.
-                    pattern: fill.pattern ? hatchImageId(fill.pattern) : '',
+                    pattern: hatch ? hatchImageId(hatch.spec, hatch.rasterPx) : '',
                 },
             });
-            if (fill.pattern) buckets.hatches.set(hatchImageId(fill.pattern), fill.pattern);
+            if (hatch) buckets.hatches.set(hatchImageId(hatch.spec, hatch.rasterPx), hatch);
         }
 
         if (circle) {
@@ -542,7 +581,7 @@ export function turnedSymbolLayer(id: string, source: string, fontStack: FontSta
  * pays per layer on every frame.
  */
 export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
-    const merged: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+    const merged = emptyBuckets(all[0]?.hatchGrowth);
 
     for (const bucket of all) {
         for (const [key, list] of Array.from(bucket.lines)) {
@@ -553,7 +592,7 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
         merged.fills.push(...bucket.fills);
         merged.circles.push(...bucket.circles);
         merged.symbols.push(...bucket.symbols);
-        for (const [id, spec] of Array.from(bucket.hatches)) merged.hatches.set(id, spec);
+        for (const [id, image] of Array.from(bucket.hatches)) merged.hatches.set(id, image);
     }
 
     return merged;
