@@ -51,6 +51,7 @@ import {
     featureCollection,
     fillLayer,
     dashZoomStep,
+    capOfKey,
     lineLayer,
     renderHatchImage,
     symbolLayer, turnedLabelFlips, turnedSymbolLayer, turnedSymbolLayout, MEASURE_LABEL_PX, type FontStack} from './paintToLayers';
@@ -593,7 +594,7 @@ export class NativeLayerRenderer {
             if (!this.lineLayerKeys.has(layerKey)) {
                 const dash = key === 'solid' ? undefined : key.split('@')[0].split(',').map(n => Number(n) / Math.pow(2, step));
                 this.map.addSource(id, {type: 'geojson', data: featureCollection(list)});
-                this.map.addLayer(lineLayer(id, id, dash), 'tg-symbol');
+                this.map.addLayer(lineLayer(id, id, dash, capOfKey(key)), 'tg-symbol');
                 this.lineLayerKeys.add(layerKey);
                 this.layerIds.push(id);
             } else {
