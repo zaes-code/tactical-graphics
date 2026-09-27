@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {CENTER_SYMBOL_GRAPHICS, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -68,7 +68,7 @@ const MODIFY_PIXEL_TOLERANCE = 10;
  * side. Below this the graphic keeps the side it had, so jitter across the axis cannot
  * flip it back and forth. @see TacticalGraphicHandler.setMirrored
  */
-const MIRROR_FLIP_MIN_PX = 6;
+// Shared with MapLibre. @see MIRROR_FLIP_MIN_PX in the library
 
 /**
  * The smallest width a drag may leave a graphic with, in meters.
@@ -76,7 +76,7 @@ const MIRROR_FLIP_MIN_PX = 6;
  * A width is a magnitude, so a drag past zero has to stop somewhere; at exactly zero the
  * rails collapse onto the centre line and several generators divide by it.
  */
-const MIN_OFFSET_METERS = 1;
+// Shared with MapLibre. @see MIN_OFFSET_METERS in the library
 
 /**
  * The smallest a resize may leave a graphic, in meters.
@@ -244,6 +244,13 @@ export class TacticalGraphicsManager {
      */
     private offsetGrabPerpendicular: number | undefined;
     private offsetGrabWidth: number | undefined;
+    /**
+     * Where the width grip was pressed. The starting perpendicular is measured from here, not
+     * from the first move: latching at the first move lost whatever that move covered, so a
+     * width drag lagged the cursor by it (a quarter of a drag made in four steps), and MapLibre,
+     * which measures from the press, came out 4/3 as wide. @see handleOffset
+     */
+    private offsetGrabCoordinate: number[] | undefined;
     /**
      * How far the cursor was from the resize origin when the drag began, and what size
      * the graphic had then. Latched on the first move and cleared on release, so the
@@ -659,6 +666,7 @@ export class TacticalGraphicsManager {
                 // The width latch belongs to one gesture. @see handleOffset
                 this.offsetGrabPerpendicular = undefined;
                 this.offsetGrabWidth = undefined;
+                this.offsetGrabCoordinate = undefined;
                 this.resizeStartDistance = undefined;
                 this.resizeStartSize = undefined;
                 this.handleGrabOffset = undefined;
@@ -740,6 +748,7 @@ export class TacticalGraphicsManager {
         this.lastPointerPosition = null;
         this.offsetGrabPerpendicular = undefined;
         this.offsetGrabWidth = undefined;
+        this.offsetGrabCoordinate = undefined;
         this.resizeStartDistance = undefined;
         this.resizeStartSize = undefined;
         this.handleGrabOffset = undefined;
@@ -923,7 +932,10 @@ export class TacticalGraphicsManager {
         // through to the map, and the only mode that could widen it was `resize` — which
         // the panel no longer offers.
         const offsetGrab = !!this.activeController.setOffset && !!feature.get('offsetHandler');
-        if (offsetGrab) return true;
+        if (offsetGrab) {
+            this.offsetGrabCoordinate = evt.coordinate;
+            return true;
+        }
 
         /*
          * **A handle that has a job is claimed, whatever the mode says about the body.**
@@ -1548,7 +1560,10 @@ export class TacticalGraphicsManager {
          * now only sets sensitivity, which is all it ever claimed to be.
          */
         if (this.offsetGrabPerpendicular === undefined) {
-            this.offsetGrabPerpendicular = perpendicularDistance;
+            const pressed = this.offsetGrabCoordinate;
+            this.offsetGrabPerpendicular = pressed
+                ? (pressed[0] - segment[0][0]) * widthAxis[0] + (pressed[1] - segment[0][1]) * widthAxis[1]
+                : perpendicularDistance;
             this.offsetGrabWidth = this.activeController.currentOffset?.() ?? Math.abs(perpendicularDistance) * scaleFactor;
         }
         // **Converted to a real distance before it is added to one.** The measurement above
@@ -1966,17 +1981,23 @@ export class TacticalGraphicsManager {
                      * MapLibre and on nothing here. @see LineGraphicBase.shapingFromGesture
                      */
                     const authoring = graphicController as unknown as {
-                        graphic?: {shapingFromGesture?: boolean};
+                        graphic?: {shapingFromGesture?: boolean; reshapingExisting?: boolean};
                         setGestureResolution?: (resolution: number | undefined) => void;
                     };
                     const wasShaping = authoring.graphic?.shapingFromGesture;
-                    if (authoring.graphic) authoring.graphic.shapingFromGesture = true;
+                    if (authoring.graphic) {
+                        authoring.graphic.shapingFromGesture = true;
+                        authoring.graphic.reshapingExisting = true;
+                    }
                     authoring.setGestureResolution?.(this.map.getView().getResolution() ?? undefined);
                     try {
                         // re-renders the tactical graphic based on the new geometry.
                         graphicController.setBaseFeature(feature);
                     } finally {
-                        if (authoring.graphic) authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                        if (authoring.graphic) {
+                            authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                            authoring.graphic.reshapingExisting = false;
+                        }
                         authoring.setGestureResolution?.(undefined);
                     }
                     return;

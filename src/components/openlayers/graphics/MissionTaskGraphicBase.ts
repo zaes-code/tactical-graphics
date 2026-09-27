@@ -730,7 +730,23 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         // A converted graphic's base carries APP-06's anchor points, so the frame is
         // read back out of them rather than taken as a bare center. @see writeBase
         if (geometry instanceof LineString) {
-            this.adoptAnchors(geometry.getCoordinates().map(c => toLonLat(c)) as Position[]);
+            const dragged = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
+            if (!this.adoptAnchors(dragged)) return;
+            /*
+             * **The points the symbol is drawn from go back into the base.** Adopting reads a
+             * frame out of the dragged points and clamps it (a turn bows no further than its
+             * limit), and the base kept the raw points: the file saved an apex the symbol never
+             * reached, and the grip, which is that stored point, came away from the curve under
+             * the cursor. MapLibre writes the frame back into the points (`withAnchorGeometry`),
+             * so the two engines stored different apexes for the same drag (all-engine grip
+             * sweep, 2026-09-26). Written in place with `setCoordinates`, so a Modify drag still
+             * holds the same geometry, and only when the frame moved a point by more than a
+             * meter, so an unclamped drag leaves the operator's own points alone.
+             */
+            const adopted = this.anchorPoints();
+            const moved = adopted.length === dragged.length
+                && adopted.some((p, i) => Math.hypot(p[0] - dragged[i][0], p[1] - dragged[i][1]) * 111_320 > 1);
+            if (moved) geometry.setCoordinates(adopted.map(c => fromLonLat(c as Coordinate)));
             return;
         }
 
@@ -1312,8 +1328,15 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
         // distance *along* the axis past the line's end is the circle's
         // diameter, and the side the cursor strays to picks the flank.
         const theta = (this.rotation * Math.PI) / 180;
-        const along = dx * Math.cos(theta) + dy * Math.sin(theta);
-        const perp = dx * -Math.sin(theta) + dy * Math.cos(theta);
+        /*
+         * **On the ground, because `size` is**, as Turn's bend branch above already does: the
+         * cursor is measured on the screen, and `along / size` mixed projected meters with
+         * ground ones. At 16 degrees south that put the tip 17.7 km from where MapLibre, whose
+         * `setBend` converts, put it for the same drag (all-engine grip sweep, 2026-09-26).
+         */
+        const latitude = latitudeFromMercatorY(center[1]);
+        const along = groundLength(dx * Math.cos(theta) + dy * Math.sin(theta), latitude);
+        const perp = groundLength(dx * -Math.sin(theta) + dy * Math.cos(theta), latitude);
 
         // The rule itself is the library's, so both renderers bend this graphic by the
         // same arithmetic rather than by two copies of it. @see envelopmentBendFrom
