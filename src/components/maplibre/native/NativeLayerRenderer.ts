@@ -52,6 +52,8 @@ import {
     fillLayer,
     dashZoomStep,
     lineLayer,
+    HATCH_PIXEL_RATIO,
+    hatchGrowth,
     renderHatchImage,
     symbolLayer, turnedLabelFlips, turnedSymbolLayer, turnedSymbolLayout, MEASURE_LABEL_PX, type FontStack} from './paintToLayers';
 
@@ -548,7 +550,7 @@ export class NativeLayerRenderer {
         const paintedAt = performance.now();
         const perGraphic = visible.map(graphic => paintTacticalGraphic(graphic, context));
         const bucketedAt = performance.now();
-        const buckets = emptyBuckets();
+        const buckets = emptyBuckets(hatchGrowth(this.map.getZoom()));
         for (let i = 0; i < perGraphic.length; i++) {
             bucketPaintsInto(buckets, perGraphic[i], visible[i].id);
         }
@@ -558,11 +560,11 @@ export class NativeLayerRenderer {
         // Register any hatch this frame needs. MapLibre has no pattern primitive —
         // `fill-pattern` names an image — so the hatch the paint layer describes as
         // parameters has to be rasterised and uploaded before a fill can use it.
-        // Idempotent: `hasImage` keeps this to once per distinct hatch per map.
-        for (const [id, spec] of Array.from(buckets.hatches)) {
+        // Idempotent: `hasImage` keeps this to once per distinct hatch and raster size per map.
+        for (const [id, {spec, rasterPx}] of Array.from(buckets.hatches)) {
             if (this.map.hasImage(id)) continue;
-            const image = renderHatchImage(spec);
-            if (image) this.map.addImage(id, image, {pixelRatio: 1});
+            const image = renderHatchImage(spec, rasterPx);
+            if (image) this.map.addImage(id, image, {pixelRatio: HATCH_PIXEL_RATIO});
         }
 
         this.setData('fills', buckets.fills);
