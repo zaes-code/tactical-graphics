@@ -275,6 +275,16 @@ export class LineGraphicBase implements LineGraphic {
     shapingFromGesture = false;
 
     /**
+     * Set while a `Modify` drag reshapes a graphic that already exists. It authors geometry, so
+     * `shapingFromGesture` is set too and the size floors apply, but it is **not** a new graphic,
+     * so the standoff seed must not fire: on a legacy two-ring multiple-strike zone a seeded
+     * standoff turns the drawing into a self-crossing star. A vertex drag did exactly that on
+     * this engine and not on MapLibre, whose seed runs on a draw alone (all-engine grip sweep,
+     * 2026-09-26). @see standoff
+     */
+    reshapingExisting = false;
+
+    /**
      * The map's resolution **now**, for the length of one gesture.
      *
      * `this.resolution` is the draw-time one, which is what every derived decoration size
@@ -446,7 +456,7 @@ export class LineGraphicBase implements LineGraphic {
     private standoff(filed: number | undefined): number | undefined {
         if (this.standoffOverride !== undefined) return this.standoffOverride;
         if (filed !== undefined) return filed;
-        if (!this.shapingFromGesture) return undefined;
+        if (!this.shapingFromGesture || this.reshapingExisting) return undefined;
         return defaultStandoffMetres(this.graphicName, groundLength(this.resolution ?? 0, this.latitude()));
     }
 

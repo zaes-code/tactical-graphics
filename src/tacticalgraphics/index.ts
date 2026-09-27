@@ -73,7 +73,17 @@ export type {
  * the arcs. Exported for exactly that reason; the OpenLayers sample app uses
  * them in `RangeFanGraphicBase`.
  */
-export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands, rotationToAzimuth} from './graphics/RangeFan';
+export {
+    BAND_SEPARATION_FRACTION,
+    geodesicBearingDeg,
+    geodesicDistanceM,
+    MIN_SECTOR_ARC_DEG,
+    resolveBands,
+    resolveBandAzimuths,
+    resolveCenterAzimuth,
+    resolveRangeFanBands,
+    rotationToAzimuth,
+} from './graphics/RangeFan';
 
 /**
  * Turn's bend limits and the clamp that enforces them. A renderer that lets the
@@ -471,7 +481,7 @@ export {baseGeometryFor} from './core/render';
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
-export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
+export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
 export {
