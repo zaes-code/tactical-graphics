@@ -433,7 +433,7 @@ export class MapLibreInteractions {
         vertex: number;
         /** Where to add a vertex when this drag starts, or -1. @see grabSegment */
         insertAt: number;
-        /** Whether the drag began on the inert center dot. */
+        /** Whether the drag began on the center dot, which is only ever claimed in translate. */
         onCenter: boolean;
         /** Whether the drag began on the rotate/resize pivot. @see startedOnPivot */
         onPivot: boolean;
@@ -1368,6 +1368,15 @@ export class MapLibreInteractions {
         // comes from the handle, not from a mode button, so requiring the user to pick
         // one first would be asking them to answer a question the handle has already
         // answered.
+        // **The gray center dot is a grip in translate only.** Under any other mode it is
+        // not claimed at all, so the press goes to the map and pans it, which is what
+        // OpenLayers does: its `handleDownEvent` returns false on an `inert` handle unless
+        // it is translating. Claiming it in `edit` resized about the center with the
+        // press's distance from it as the lever, measured on Isolate as 180 km to 4,399 km
+        // from a 2 px miss. @see applyGesture
+        const onCenter = grabbed !== undefined && grabbed.index === this.renderer.centerHandleOf(graphic);
+        if (onCenter && this.mode !== 'translate') return;
+
         const roleDrag = grabbed !== undefined && roleOfHandle(graphic, grabbed.index) !== 'shape';
         if (this.mode === 'view' && !roleDrag) return;
 
@@ -1394,12 +1403,11 @@ export class MapLibreInteractions {
 
         this.dragging = {
             graphic,
-            // Grabbing the center dot always means "move this", whatever mode is
-            // selected. Rotate and resize are both degenerate there — the scale ratio
-            // divides by distance-to-center and a point on the axis has no angle — and
-            // the center is the one place a user naturally reaches to drag a symbol
-            // bodily. The dot is drawn gray to say so.
-            onCenter: onHandle && handle === this.renderer.centerHandleOf(graphic),
+            // Only ever true in translate, where the center dot means "move this". Every
+            // other mode refused the press above: rotate and resize are both degenerate
+            // there, since the scale ratio divides by distance-to-center and a point on
+            // the axis has no angle. The dot is drawn gray to say so.
+            onCenter,
             onPivot: this.startedOnPivot(graphic, event.point),
             handle,
             vertex,
@@ -1712,13 +1720,12 @@ export class MapLibreInteractions {
         // of this drag. @see effectiveMode
         const mode = this.effectiveMode();
 
-        // The center dot is a **shortcut to move**, and only in translate mode. Under
-        // any other mode the drag falls through to what that mode means, which is what
-        // OpenLayers does: grabbing a security operation's center rotates it, and a
-        // gesture the graphic refuses is refused below rather than quietly becoming a
-        // move. Treating the center as "move" in every mode made a security operation —
-        // which refuses resize — move when the user asked it to resize.
-        if (drag.onCenter && mode === 'translate') return translate(before, drag.origin, to);
+        // The center dot is a **shortcut to move**, and only in translate mode. Under any
+        // other mode it does nothing: `onPointerDown` does not claim it, and this guards
+        // the same rule for a drag that got here anyway. Falling through let an `edit`
+        // drag resize from the center, and treating it as "move" in every mode made a
+        // graphic that refuses resize move instead. OpenLayers leaves it alone in both.
+        if (drag.onCenter) return mode === 'translate' ? translate(before, drag.origin, to) : before;
 
         // A handle with a *role* means that role, whatever mode is selected — an
         // offset handle sets a width and nothing else, and a band handle sets its own
