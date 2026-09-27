@@ -116,6 +116,13 @@ export function strokedExtentPx(paints: readonly Paint[], resolution: number): n
  * Applied by each renderer at the one place its paints pass through, beside
  * `withHiddenAmplifiers`. Idempotent only in the sense that it is meant to run once; a
  * second pass would shrink the dashes again.
+ *
+ * **A dash has square ends unless its paint says otherwise** (`cap: 'butt'`). OpenLayers and
+ * MapLibre both default to round caps, which add half the line width to each end of every
+ * dash: a 6/4 pattern at 2 px drew as 8/2, and once the fit shrank it to 3/2 the caps closed
+ * the gaps and a dashed line read as solid, just where a small graphic most needs to be told
+ * apart. Stated here rather than in either renderer, so both engines draw the same dash.
+ * (User's call, 2026-09-26, after the ArcGIS engine drew them square and they stayed legible.)
  */
 export function withFittedDashes(paints: Paint[], context: PaintContext): Paint[] {
     if (!paints.some(paint => paint.stroke?.dashPx?.length)) return paints;
@@ -124,7 +131,8 @@ export function withFittedDashes(paints: Paint[], context: PaintContext): Paint[
         const dashPx = paint.stroke?.dashPx;
         if (!dashPx?.length) return paint;
         // A mark that sized its own dash keeps it, capped. @see StrokeSpec.dashSized
-        return {...paint, stroke: {...paint.stroke!, dashPx: fitDash(dashPx, paint.stroke!.dashSized ? 1 : scale)}};
+        const stroke = paint.stroke!;
+        return {...paint, stroke: {...stroke, dashPx: fitDash(dashPx, stroke.dashSized ? 1 : scale), cap: stroke.cap ?? 'butt'}};
     });
 }
 
