@@ -216,7 +216,8 @@ function bandRangeOf(graphic: MapLibreTacticalGraphic, index: number): number | 
  * symbol have", so the two cannot disagree about whether a drag moved one.
  */
 function radarRanges(props: TacticalGraphicProperties): (number | undefined)[] | undefined {
-    if (props.stopRange === undefined && props.searchAxisAzimuthDeg === undefined) return undefined;
+    // By name, as `setBandRange` decides it: a weapon fan can hold these fields too.
+    if (props.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
     return [props.startRange, props.stopRange];
 }
 
@@ -380,6 +381,18 @@ function withAnchorFrame(name: TacticalGraphicName, description: GraphicDescript
         ...(frame.mirrored === undefined ? {} : {mirrored: frame.mirrored}),
     };
     return {...description, properties};
+}
+
+/**
+ * What a drag starts from. **On the six anchor graphics the frame is read from the points first**,
+ * as OpenLayers' holders adopt it: their `radius` and `rotation` describe the points, and a bag
+ * can lack them or hold stale ones (a file, a sample). The bend grip then had no size to divide
+ * by and returned the graphic unchanged, so Turn's apex grip did nothing on MapLibre and ArcGIS
+ * while it bowed the turn on OpenLayers (all-engine grip sweep, 2026-09-26). @see withAnchorFrame
+ */
+function dragStartOf(graphic: MapLibreTacticalGraphic): GraphicDescription {
+    const start = {geometry: graphic.base.geometry, properties: descriptionOf(graphic)};
+    return usesDrawnAnchors(graphic.name) ? withAnchorFrame(graphic.name, start) : start;
 }
 
 /**
@@ -593,7 +606,7 @@ export class MapLibreInteractions {
             onPivot: false,
             handle: -1,
             origin,
-            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
+            start: dragStartOf(graphic),
             // Already past the threshold: the host decided a drag began by pressing the
             // affordance, and re-measuring it against a pixel distance would swallow the
             // first few degrees of every rotate.
@@ -1413,7 +1426,7 @@ export class MapLibreInteractions {
             vertex,
             insertAt,
             origin: [event.lngLat.lng, event.lngLat.lat],
-            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
+            start: dragStartOf(graphic),
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
@@ -1630,7 +1643,7 @@ export class MapLibreInteractions {
 
         const after = withDerivedAmplifiers(
             drag.graphic.name,
-            this.applyGesture(before, drag, to),
+            this.withPastAxisMirror(this.applyGesture(before, drag, to), drag, to),
             before,
             this.effectiveMode(),
         );
@@ -1688,6 +1701,26 @@ export class MapLibreInteractions {
                 this.showAngleMeasure(next, RADAR_READOUT_CAPTIONS.azimuth, after.properties.searchAxisAzimuthDeg);
             }
         }
+    }
+
+    /**
+     * **A grip dragged well past a point-anchored graphic's own axis flips it**, as OpenLayers'
+     * `mirrorIfDraggedPastAxis` does on every shape-grip drag in edit and resize: that is how a
+     * hook or an envelopment changes flanks. MapLibre applied the rule only to the dedicated
+     * mirror grip, so the same drag flipped a graphic on one engine and not the other (found
+     * by the all-engine grip sweep on the circular areas, 2026-09-26).
+     *
+     * Not for a drag started from the selection box, which says only "bigger" or "turn", and
+     * not for a grip with a role of its own (width, band, mirror), which OpenLayers routes
+     * elsewhere before it gets here. @see setMirror, isAffordanceGesture on the other engine
+     */
+    private withPastAxisMirror(after: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
+        const mode = this.effectiveMode();
+        if (this.activeGesture || drag.handle < 0 || drag.onCenter) return after;
+        if (mode !== 'edit' && mode !== 'resize' && mode !== 'modify') return after;
+        if (after.geometry.type !== 'Point') return after;
+        if (roleOfHandle(drag.graphic, drag.handle) !== 'shape') return after;
+        return setMirror(after, to, resolutionOf(this.map), 'across');
     }
 
     /**
@@ -1838,6 +1871,8 @@ export class MapLibreInteractions {
                 return setOffset(before, to, {
                     offsetScale: handleContract(name).offsetScale,
                     resolution: resolutionOf(this.map),
+                    // Where the press was, so the width moves by the drag, not to the cursor.
+                    grab: drag.origin,
                 });
             case 'bend':
                 // Each curve family clamps its own bend, and the two ranges differ —

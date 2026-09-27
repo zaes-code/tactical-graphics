@@ -13,7 +13,7 @@ import {groundLength} from './mercator';
 import {boundsOf, outerRingOf, type Paint, type PaintContext, type PaintFeature, paintGeometryMembers, paintGeometryPositions, type ProjectedGeometry, type ProjectedInputGeometry, type ProjectedPosition} from './paint';
 import {renderTacticalGraphic, TACTICAL_GRAPHIC_KEY, type TacticalGraphicProperties, toGraphicOptions} from './render';
 import {describedProperties} from './snapshot';
-import {GLYPH_CUT_GAP_GRAPHICS, statesShapeAsRangeBands, usesStandoffWidth} from './symbology';
+import {GLYPH_CUT_GAP_GRAPHICS, usesStandoffWidth} from './symbology';
 import {TacticalGraphicName} from './type';
 import {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from './mercator';
 
@@ -301,7 +301,13 @@ function sizeDefaults(
      * a two-arc sector there and as nothing at all here. Measured: 16,000 and 40,000 against
      * neither. @see statesShapeAsRangeBands, RSD_DEFAULT_START_SHARE
      */
-    if (statesShapeAsRangeBands(name) && supplied.startRange === undefined && supplied.stopRange === undefined) {
+    /*
+     * **200700 only.** The two weapon fans are range-band graphics too, but they are drawn
+     * from `rangeFan.bands`, and OpenLayers never gives them a start or stop range. Filling
+     * them in here put 200700's fields on every weapon fan this builder touched, and the
+     * shared editor then took those fans for a radar search.
+     */
+    if (name === TacticalGraphicName.RadarSearchDoctrine && supplied.startRange === undefined && supplied.stopRange === undefined) {
         const outer = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : undefined;
         if (outer !== undefined) return {startRange: outer * RSD_DEFAULT_START_SHARE, stopRange: outer};
     }

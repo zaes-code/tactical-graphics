@@ -690,7 +690,7 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
      * exactly one half-width off the axis, so it has to track the cursor 1:1 or it runs
      * away from it. @see RectangularTarget.generateHandles
      */
-    if (name === TacticalGraphicName.TargetAreaRectangular) {
+    if (RECTANGULAR_TARGET_HOLDER.includes(name)) {
         return {roles: ['shape', 'offset'], offsetScale: 1};
     }
     if (RANGE_FANS.includes(name)) {
@@ -714,6 +714,46 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
         return {roles: ['band', 'band', 'band', 'opening']};
     }
     return SHAPE_ONLY;
+}
+
+/**
+ * How far off the line, in screen pixels, a width or mirror drag has to go before it counts as
+ * choosing a side; below it the graphic keeps the side it had. **One number for every engine**:
+ * OpenLayers held 6 and MapLibre 12, so the same drag flipped a graphic on one and not the other.
+ */
+export const MIRROR_FLIP_MIN_PX = 6;
+
+/** The smallest width a width drag may leave, in meters: at zero the rails collapse. */
+export const MIN_OFFSET_METERS = 1;
+
+/**
+ * The default width-grip sensitivity: the width changes by twice this share of how far the
+ * cursor moved across the line, so a grip drawn two half-widths out tracks it. @see HandleContract
+ */
+export const DEFAULT_OFFSET_SCALE = 0.5;
+
+/**
+ * **Every graphic OpenLayers edits with its rectangular-target holder**: a length grip, then a
+ * width grip. The three maritime ellipses and the cued acquisition doctrine share that holder
+ * (`controllerRegistry`'s `rectangularTarget`), and only 200101 had the contract here, so on
+ * MapLibre and ArcGIS their width grip resized the whole symbol while on OpenLayers it set the
+ * width alone. Found by the all-engine grip sweep, 2026-09-26.
+ */
+const RECTANGULAR_TARGET_HOLDER: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.TargetAreaRectangular,
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+];
+
+/**
+ * Whether a width drag on this graphic reads the cursor against its own anchor point and
+ * attitude rather than against a line in its base: the rectangular-target family, which is
+ * anchored at one point. @see RECTANGULAR_TARGET_HOLDER
+ */
+export function setsWidthFromAnchor(name: TacticalGraphicName): boolean {
+    return RECTANGULAR_TARGET_HOLDER.includes(name);
 }
 
 /**

@@ -9,7 +9,7 @@ import {MissionTaskGraphicBase} from "./MissionTaskGraphicBase";
 import {latitudeFromMercatorY, projectedLength} from '@zaes/tactical-graphics';
 import openlayersAdapter from "../openlayersAdapter";
 import {getRangeFanLabelStyleFn, LINE_WIDTH, radarSearchDoctrineStyleFunc, readHostilityColor} from "../openlayerStyles";
-import {type MeasurePart, RADAR_READOUT_CAPTIONS, RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, radarSectorOpening, resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
+import {BAND_SEPARATION_FRACTION, MIN_SECTOR_ARC_DEG, type MeasurePart, RADAR_READOUT_CAPTIONS, RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, radarSectorOpening, resolveBandAzimuths, resolveBands, resolveRangeFanBands, rotationToAzimuth} from '@zaes/tactical-graphics';
 import {writeGraphicProperties} from "../graphicProperties";
 
 /**
@@ -28,22 +28,8 @@ import {writeGraphicProperties} from "../graphicProperties";
  * Wired through MissionTaskController via the `rangeFan` factory in
  * controllerRegistry.
  */
-/**
- * Minimum gap between two rings when one is dragged towards the other, as a
- * fraction of the outermost band's range — proportional so the rings stay
- * visibly apart whatever size the fan is.
- */
-const BAND_SEPARATION_FRACTION = 0.02;
-
-/**
- * The narrowest a sector band's wedge may be dragged, in degrees.
- *
- * A wedge dragged to zero width is a line, and dragged through zero it turns inside out —
- * the left edge ends up right of the right edge and the arc takes the long way round the
- * circle. Neither is recoverable by dragging back, because there is no longer an arc under
- * the cursor to grab.
- */
-const MIN_SECTOR_ARC_DEG = 5;
+// The ring gap and the narrowest wedge are the library's, shared with MapLibre.
+// @see BAND_SEPARATION_FRACTION, MIN_SECTOR_ARC_DEG
 
 /** Wraps any angle into [0, 360). */
 const normAz = (deg: number): number => ((deg % 360) + 360) % 360;
