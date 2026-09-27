@@ -1,7 +1,7 @@
 import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
+import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition, type StrokeSpec} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -93,9 +93,19 @@ function toGeoJson(geometry: ProjectedGeometry): Geometry {
  * same pixel dash at two stroke widths needs two different arrays, so it needs
  * two layers.
  */
-function dashKey(dashPx: number[] | undefined, widthPx: number): string {
+function dashKey(dashPx: number[] | undefined, widthPx: number, cap: StrokeSpec['cap']): string {
     if (!dashPx || !dashPx.length) return 'solid';
-    return `${dashPx.map(d => (d / widthPx).toFixed(3)).join(',')}@${widthPx}`;
+    return `${dashPx.map(d => (d / widthPx).toFixed(3)).join(',')}@${widthPx}@${cap ?? 'round'}`;
+}
+
+/**
+ * The line cap a line layer's key names. A dash's cap is part of its key because a MapLibre
+ * layer has one `line-cap` for everything in it, and a dash drawn with the wrong cap is a
+ * different dash. @see withFittedDashes, which gives a dash square ends
+ */
+export function capOfKey(key: string): 'butt' | 'round' | 'square' {
+    const cap = key.split('@')[2];
+    return cap === 'butt' || cap === 'square' ? cap : 'round';
 }
 
 /** Anchor names MapLibre uses, from the paint list's align/baseline pair. */
@@ -237,7 +247,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
         const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
 
         if (stroke) {
-            const key = dashKey(stroke.dashPx, stroke.widthPx);
+            const key = dashKey(stroke.dashPx, stroke.widthPx, stroke.cap);
             const list = buckets.lines.get(key) ?? [];
             list.push({
                 type: 'Feature',
@@ -380,12 +390,12 @@ export function dashZoomStep(zoom: number): number {
     return Math.ceil(fraction * DASH_ZOOM_STEPS) / DASH_ZOOM_STEPS;
 }
 
-export function lineLayer(id: string, source: string, dashPx: number[] | undefined): LayerSpecification {
+export function lineLayer(id: string, source: string, dashPx: number[] | undefined, cap: 'butt' | 'round' | 'square' = 'round'): LayerSpecification {
     return {
         id,
         type: 'line',
         source,
-        layout: {'line-cap': 'round', 'line-join': 'round'},
+        layout: {'line-cap': cap, 'line-join': 'round'},
         paint: {
             'line-color': ['get', 'color'],
             'line-width': ['get', 'width'],
