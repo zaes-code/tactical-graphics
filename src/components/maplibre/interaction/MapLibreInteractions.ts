@@ -1121,7 +1121,7 @@ export class MapLibreInteractions {
         if (ranged) return buildTacticalGraphic(name, ranged.geometry, ranged.properties, resolutionOf(this.map));
 
         const drawn = this.anchorDraw(name, vertices);
-        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties), resolutionOf(this.map));
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties, drawn.geometry), resolutionOf(this.map));
 
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
@@ -1161,7 +1161,7 @@ export class MapLibreInteractions {
             ...drawnSide(name, tidied),
         };
 
-        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties), resolutionOf(this.map));
+        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties, geometry), resolutionOf(this.map));
     }
 
     /**
@@ -1176,9 +1176,18 @@ export class MapLibreInteractions {
      * OpenLayers gates the same seed on `shapingFromGesture`; this is that gate here.
      * @see usesStandoffWidth, LineGraphicBase.standoff
      */
-    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties): TacticalGraphicProperties {
+    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties, geometry: Geometry): TacticalGraphicProperties {
         if (!usesStandoffWidth(name) || properties.width !== undefined) return properties;
-        const standoff = defaultStandoffMetres(name, resolutionOf(this.map));
+        /*
+         * **A ground length, at the graphic's first point**, as OpenLayers seeds it: a pixel size
+         * times the bare resolution is a projected length and comes out 1/cos(latitude) too
+         * large. The same draw at 40 degrees north seeded 57.6 km here and 44.4 km there
+         * (all-engine draw sweep, 2026-09-27). @see LineGraphicBase.standoff
+         */
+        const first = (geometry as {coordinates?: unknown}).coordinates;
+        const firstPoint = Array.isArray(first) && Array.isArray(first[0]) ? (first[0] as number[]) : undefined;
+        const latitude = firstPoint ? firstPoint[1] : 0;
+        const standoff = defaultStandoffMetres(name, groundLength(resolutionOf(this.map), latitude));
         return standoff === undefined ? properties : {...properties, width: standoff};
     }
 
