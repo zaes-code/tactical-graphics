@@ -1559,7 +1559,8 @@ export function drawsInTwoClicks(name: TacticalGraphicName): boolean {
  * Both engines measure the same three numbers off the drag — where the first click landed,
  * how far the second reached, and the planar bearing between them — and then hand them to
  * `drawnAnchors` as a centre, a size and a rotation. For a centre-to-edge graphic those are
- * the same numbers, and this returns them untouched.
+ * the same numbers, and this returns them untouched, except that an arc mission task's
+ * rotation is turned so its start point lands on the second click. @see rotationFromDrawnPoint
  *
  * For an end-to-end graphic they are not: the frame's centre is **half way along the drag**,
  * its size is **half the reach**, and its rotation is a quarter turn off the drag, because
@@ -1584,8 +1585,70 @@ export interface DragFrame {
     rotation: number;
 }
 
+/**
+ * Where **point 2** sits on an arc mission task, in degrees counter-clockwise from the
+ * rotation axis (the axis the letter sits on).
+ *
+ * APP-06 words it the same way for all ten: *"Point 1 defines the centre point of the
+ * graphic and point 2 defines the graphic's start point and radius."* The Template draws
+ * `PT. 2 (START POINT)` against the **blunt end of the upper arc**, which
+ * `MissionTask.labelGapArcs` runs round to 175 degrees. @see START_POINT_GRAPHICS
+ */
+export const START_POINT_DEGREES = 175;
+
+/**
+ * The graphics whose second drawn point **is** APP-06's start point, not the direction of
+ * their rotation axis.
+ *
+ * Read off each plate's Anchor Points text, by code: area defence 152600, retain 151205,
+ * isolate 341500, occupy 341700, secure 342100, cordon and knock 342600, cordon and search
+ * 342700, control 343200, deny 343400 and locate 343900. Every one says *"point 2 defines
+ * the graphic's start point and radius"*, and no other plate in APP-06 does. Contain
+ * (151204) is not here: its two points are the ends of the opening. @see frameFromDrag
+ *
+ * The generators put the start-point handle at `rotation + START_POINT_DEGREES`, so a draw
+ * that filed the angle to the second click as `rotation` put that handle almost opposite
+ * the click. `rotationFromDrawnPoint` takes the offset back off.
+ */
+const START_POINT_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Secure,
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
+]);
+
+/** Whether a graphic's second drawn point is its start point. @see START_POINT_GRAPHICS */
+export function drawsFromStartPoint(name: TacticalGraphicName): boolean {
+    return START_POINT_GRAPHICS.has(name);
+}
+
+/**
+ * The `rotation` to file for a point-anchored graphic whose second click lies at
+ * `angleDeg` from its centre.
+ *
+ * Both are planar degrees counter-clockwise from east. For the arc mission tasks the click
+ * is point 2, the start point, so the rotation is the angle less `START_POINT_DEGREES` and
+ * the start point lands under the cursor. Every other graphic takes the angle as its
+ * rotation, unchanged. The result is normalised to (-180, 180].
+ *
+ * **Both engines call this**, OpenLayers through `frameFromDrag` and MapLibre from its
+ * own point draw, so the rule is stated once. Only the draw changes: a stored graphic
+ * keeps its `rotation`, and a later rotate or resize is a delta that needs no offset.
+ */
+export function rotationFromDrawnPoint(name: TacticalGraphicName, angleDeg: number): number {
+    if (!START_POINT_GRAPHICS.has(name)) return angleDeg;
+    const turned = (((angleDeg - START_POINT_DEGREES) % 360) + 360) % 360;
+    return turned > 180 ? turned - 360 : turned;
+}
+
 export function frameFromDrag(name: TacticalGraphicName, radius: number, rotationDeg: number): DragFrame {
-    if (!drawsEndToEnd(name)) return {reach: 0, bearingDeg: rotationDeg, size: radius, rotation: rotationDeg};
+    if (!drawsEndToEnd(name)) return {reach: 0, bearingDeg: rotationDeg, size: radius, rotation: rotationFromDrawnPoint(name, rotationDeg)};
     /*
      * The quarter turn's sign is fixed by `drawnAnchors`, which lays contain's anchors at
      * `rotation - 90` and `rotation + 90`: for the drag to land on those two, the rotation

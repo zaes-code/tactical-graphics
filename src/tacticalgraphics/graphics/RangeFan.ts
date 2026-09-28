@@ -28,6 +28,45 @@ export function rotationToAzimuth(rotationDeg: number): number {
     return az;
 }
 
+/**
+ * How far apart two range-fan rings are kept when one is dragged toward the other, as a share
+ * of the outermost band's range: proportional, so the gap holds up at any size.
+ *
+ * **One number for every engine.** OpenLayers held 0.02 and MapLibre 0.05, so the same drag
+ * clamped a ring at different places on the two (measured: 104.7 km against 111 km).
+ */
+export const BAND_SEPARATION_FRACTION = 0.02;
+
+/**
+ * The narrowest a sector band's wedge may be dragged, in degrees. A wedge dragged to zero is a
+ * line, and through zero it turns inside out with no arc left under the cursor to drag back.
+ */
+export const MIN_SECTOR_ARC_DEG = 5;
+
+/** Earth's mean radius in meters, the figure turf's `distance` uses. */
+const EARTH_RADIUS_M = 6371008.8;
+
+/**
+ * The great-circle distance in meters between two lon/lat points: what a range is, and what
+ * OpenLayers' range fan measures a grip drag with (turf's `distance`, the same haversine).
+ */
+export function geodesicDistanceM(from: [number, number], to: [number, number]): number {
+    const rad = Math.PI / 180;
+    const dLat = (to[1] - from[1]) * rad;
+    const dLon = (to[0] - from[0]) * rad;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(from[1] * rad) * Math.cos(to[1] * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** The initial compass bearing from one lon/lat point to another, in [0, 360): turf's `bearing`. */
+export function geodesicBearingDeg(from: [number, number], to: [number, number]): number {
+    const rad = Math.PI / 180;
+    const [l1, p1, l2, p2] = [from[0] * rad, from[1] * rad, to[0] * rad, to[1] * rad];
+    const y = Math.sin(l2 - l1) * Math.cos(p2);
+    const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(l2 - l1);
+    return ((Math.atan2(y, x) / rad) % 360 + 360) % 360;
+}
+
 export function resolveBands(opts: RangeFanOptions | undefined): RangeFanBand[] {
     const bands = opts?.bands?.filter(b => Number.isFinite(b.range) && b.range > 0) ?? [];
     if (bands.length === 0) {

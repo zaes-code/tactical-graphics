@@ -370,6 +370,8 @@ console.log('\nSmoke-loading both entry points');
 for (const [label, spec, esm] of [
     ['root  cjs', './dist/cjs/index.js', false],
     ['root  esm', './dist/esm/index.js', true],
+    ['edit  cjs', './dist/cjs/ui/editControls.js', false],
+    ['edit  esm', './dist/esm/ui/editControls.js', true],
     ['ol    cjs', './dist/ol/cjs/components/openlayers/index.js', false],
     ['ol    esm', './dist/ol/esm/components/openlayers/index.js', true],
     ['mlb   cjs', './dist/mlb/cjs/components/maplibre/index.js', false],

@@ -10,6 +10,7 @@ import TacticalGraphicsDialog from '../tactical-graphics-dialog';
 import {createOpenLayersPropertiesSource} from './featurePropertiesSource';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {createTacticalGraphics} from './createTacticalGraphics';
+import {rememberAmplifierVisibility} from '../amplifierVisibility';
 import type {EditMode, TacticalGraphicsEngine} from '@zaes/tactical-graphics';
 import {clearAllGraphics} from './sampleGallery';
 // The sweep's grid, shared with the MapLibre view so both engines draw the same one.
@@ -24,6 +25,7 @@ import type {FeatureCollection} from 'geojson';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import type {MapEngineHandle} from '../mapEngine';
 import {FULL_CAPABILITIES} from '../mapEngine';
+import {createOpenLayersOverlay} from '../overlay/openLayersOverlay';
 
 interface Props {
     darkMode: boolean;
@@ -65,6 +67,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         const olMap = createMap(mapRef.current);
         setMap(olMap);
         tacticalGraphicManager.current = new TacticalGraphicsManager(olMap);
+        const overlay = createOpenLayersOverlay(olMap, () => tacticalGraphicManager.current?.renderingVectorLayer);
 
         // Open where the other engine — or the last visit — left off. Applied before
         // the first frame, so there is no visible jump from the default view.
@@ -113,10 +116,13 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         // are the app's own concerns. `onModeChange` is how the engine reports a mode it
         // chose itself — a draw finishing returns to view — without which the draw button
         // keeps reading "Drawing…" long after the draw is over.
-        engine.current = createTacticalGraphics(olMap, {
+        // Wrapped so every restore re-applies the "name only" choices this app remembers:
+        // the engine keeps them in memory only, and a restore draws every graphic in full.
+        // @see rememberAmplifierVisibility
+        engine.current = rememberAmplifierVisibility(createTacticalGraphics(olMap, {
             manager: tacticalGraphicManager.current,
             onModeChange: setInteractionMode,
-        });
+        }));
 
         // Test hook for scripts/drive-app.mjs, which drives the draw/edit flow in a
         // real browser and asserts on feature properties. Stripped from production
@@ -167,6 +173,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 engine.current?.restore(sampleFeatureCollection(hostility, names));
                 fitToGraphics();
             },
+            showOverlay: collection => overlay.show(collection),
             exportGeoJson: () => {
                 const snapshot = engine.current?.snapshot();
                 if (!snapshot) return;

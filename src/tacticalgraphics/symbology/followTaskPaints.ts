@@ -31,7 +31,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
-import {MAX_SYMBOL_SIZE_PX, resolveSecuritySymbol, securitySymbolSidc} from '../core/securitySymbol';
+import {MAX_SYMBOL_SIZE_PX, resolveSecuritySymbol, securitySymbolSidc, symbolGraphicId} from '../core/securitySymbol';
 import type {GraphicLabels} from '../core/render';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 
@@ -187,20 +187,27 @@ function layout(feature: PaintFeature, context: PaintContext) {
      * use; nothing here imports milsymbol, and a host that registers nothing gets the
      * designation the user typed. The symbol wins when both are available — a picture of the
      * unit says more than its name, which is the user's rule for this pair.
+     *
+     * Asked in the renderer's order, the renderer's own provider included
+     * (`context.centerSymbolProvider`): the body is laid out for whatever the renderer
+     * will draw, so the two must consult the same chain. @see resolveSecuritySymbol
      */
     const name = feature.properties.name as TacticalGraphicName;
     const hostility = (feature.properties.hostility as TacticalGraphicHostility) ?? TacticalGraphicHostility.pending;
     // The width that keeps the tallest frame inside the body, capped once it is large
     // enough to read. @see SYMBOL_MAX_ASPECT, capSymbolPx
     const symbolBoxPx = capSymbolPx(px(SYMBOL_BOX_HEIGHT_PX / SYMBOL_MAX_ASPECT) / context.resolution);
-    const image = resolveSecuritySymbol({
-        name,
-        graphicId: ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined,
-        hostility,
-        sidc: securitySymbolSidc(hostility),
-        sizePx: symbolBoxPx,
-        labels: feature.properties as unknown as GraphicLabels,
-    });
+    const image = resolveSecuritySymbol(
+        {
+            name,
+            graphicId: symbolGraphicId(feature),
+            hostility,
+            sidc: securitySymbolSidc(hostility),
+            sizePx: symbolBoxPx,
+            labels: feature.properties as unknown as GraphicLabels,
+        },
+        context.centerSymbolProvider,
+    );
 
     const designation = image ? undefined : feature.properties.designation?.trim();
     const textScale = scaleOf(feature, context);

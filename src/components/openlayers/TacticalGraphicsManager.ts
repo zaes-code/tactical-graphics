@@ -12,11 +12,12 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
 import {defaultDrawStyleFunc} from "./openlayerStyles";
+import {subscribeSecurityOperationSymbolChange} from "./securityOperationSymbol";
 import {Coordinate} from "ol/coordinate";
 import {EventsKey} from "ol/events";
 import {Extent, extend as extendExtent} from "ol/extent";
@@ -67,7 +68,7 @@ const MODIFY_PIXEL_TOLERANCE = 10;
  * side. Below this the graphic keeps the side it had, so jitter across the axis cannot
  * flip it back and forth. @see TacticalGraphicHandler.setMirrored
  */
-const MIRROR_FLIP_MIN_PX = 6;
+// Shared with MapLibre. @see MIRROR_FLIP_MIN_PX in the library
 
 /**
  * The smallest width a drag may leave a graphic with, in meters.
@@ -75,7 +76,7 @@ const MIRROR_FLIP_MIN_PX = 6;
  * A width is a magnitude, so a drag past zero has to stop somewhere; at exactly zero the
  * rails collapse onto the centre line and several generators divide by it.
  */
-const MIN_OFFSET_METERS = 1;
+// Shared with MapLibre. @see MIN_OFFSET_METERS in the library
 
 /**
  * The smallest a resize may leave a graphic, in meters.
@@ -243,6 +244,13 @@ export class TacticalGraphicsManager {
      */
     private offsetGrabPerpendicular: number | undefined;
     private offsetGrabWidth: number | undefined;
+    /**
+     * Where the width grip was pressed. The starting perpendicular is measured from here, not
+     * from the first move: latching at the first move lost whatever that move covered, so a
+     * width drag lagged the cursor by it (a quarter of a drag made in four steps), and MapLibre,
+     * which measures from the press, came out 4/3 as wide. @see handleOffset
+     */
+    private offsetGrabCoordinate: number[] | undefined;
     /**
      * How far the cursor was from the resize origin when the drag began, and what size
      * the graphic had then. Latched on the first move and cleared on release, so the
@@ -584,6 +592,7 @@ export class TacticalGraphicsManager {
         if (this.resolutionKeys.some(entry => entry.handler === handler)) return;
         const key = this.map.getView().on('change:resolution', handler.onResolutionChangeFunc) as EventsKey;
         this.resolutionKeys.push({handler, key});
+        this.watchCenterSymbols();
     };
 
     /** Drops one handler's zoom subscription. Safe on a handler that has none. */
@@ -592,6 +601,7 @@ export class TacticalGraphicsManager {
         if (index < 0) return;
         unByKey(this.resolutionKeys[index].key);
         this.resolutionKeys.splice(index, 1);
+        if (!this.resolutionKeys.length) this.unwatchCenterSymbols();
     };
 
     /**
@@ -604,6 +614,46 @@ export class TacticalGraphicsManager {
     releaseAllGraphics = (): void => {
         this.resolutionKeys.forEach(entry => unByKey(entry.key));
         this.resolutionKeys.length = 0;
+        this.unwatchCenterSymbols();
+    };
+
+    /**
+     * The unsubscribe for center-symbol changes, while this manager has graphics to repaint.
+     *
+     * **Registering a provider, or changing a size, did nothing on screen.** A StyleFunction
+     * re-runs only when OpenLayers redraws, so a symbol provider registered after the
+     * graphics were drawn stayed invisible until something unrelated moved the map. MapLibre
+     * was told (its renderer subscribes) and this engine was not.
+     *
+     * The subscription rides the zoom list's lifetime rather than the manager's, because the
+     * manager has no teardown of its own and the listener registry is module-global: held
+     * from construction, it would keep every manager — and its map — alive for the life of
+     * the page. The zoom list is already the manager's record of which graphics are on the
+     * map, every path that adds one registers it there, and `releaseAllGraphics` (which
+     * `clearAllGraphics` and the façade's `destroy` both call) already empties it.
+     */
+    private unsubscribeCenterSymbols: (() => void) | undefined;
+
+    private watchCenterSymbols = (): void => {
+        if (this.unsubscribeCenterSymbols) return;
+        this.unsubscribeCenterSymbols = subscribeSecurityOperationSymbolChange(this.repaintCenterSymbols);
+    };
+
+    private unwatchCenterSymbols = (): void => {
+        this.unsubscribeCenterSymbols?.();
+        this.unsubscribeCenterSymbols = undefined;
+    };
+
+    /**
+     * Marks every feature of every center-symbol graphic changed, so its style functions
+     * re-run. Every feature and not only the one that draws the symbol: a follow task lays
+     * its body out around the symbol, and drops its designation for it.
+     */
+    private repaintCenterSymbols = (): void => {
+        for (const {handler} of this.resolutionKeys) {
+            const name = this.graphicNameOf(handler);
+            if (name && CENTER_SYMBOL_GRAPHICS.has(name)) handler.getFeatures().forEach(feature => feature.changed());
+        }
     };
 
     // define what happens on mouse down, drag and mouse up events.
@@ -616,6 +666,7 @@ export class TacticalGraphicsManager {
                 // The width latch belongs to one gesture. @see handleOffset
                 this.offsetGrabPerpendicular = undefined;
                 this.offsetGrabWidth = undefined;
+                this.offsetGrabCoordinate = undefined;
                 this.resizeStartDistance = undefined;
                 this.resizeStartSize = undefined;
                 this.handleGrabOffset = undefined;
@@ -697,6 +748,7 @@ export class TacticalGraphicsManager {
         this.lastPointerPosition = null;
         this.offsetGrabPerpendicular = undefined;
         this.offsetGrabWidth = undefined;
+        this.offsetGrabCoordinate = undefined;
         this.resizeStartDistance = undefined;
         this.resizeStartSize = undefined;
         this.handleGrabOffset = undefined;
@@ -880,7 +932,10 @@ export class TacticalGraphicsManager {
         // through to the map, and the only mode that could widen it was `resize` — which
         // the panel no longer offers.
         const offsetGrab = !!this.activeController.setOffset && !!feature.get('offsetHandler');
-        if (offsetGrab) return true;
+        if (offsetGrab) {
+            this.offsetGrabCoordinate = evt.coordinate;
+            return true;
+        }
 
         /*
          * **A handle that has a job is claimed, whatever the mode says about the body.**
@@ -1505,7 +1560,10 @@ export class TacticalGraphicsManager {
          * now only sets sensitivity, which is all it ever claimed to be.
          */
         if (this.offsetGrabPerpendicular === undefined) {
-            this.offsetGrabPerpendicular = perpendicularDistance;
+            const pressed = this.offsetGrabCoordinate;
+            this.offsetGrabPerpendicular = pressed
+                ? (pressed[0] - segment[0][0]) * widthAxis[0] + (pressed[1] - segment[0][1]) * widthAxis[1]
+                : perpendicularDistance;
             this.offsetGrabWidth = this.activeController.currentOffset?.() ?? Math.abs(perpendicularDistance) * scaleFactor;
         }
         // **Converted to a real distance before it is added to one.** The measurement above
@@ -1923,17 +1981,23 @@ export class TacticalGraphicsManager {
                      * MapLibre and on nothing here. @see LineGraphicBase.shapingFromGesture
                      */
                     const authoring = graphicController as unknown as {
-                        graphic?: {shapingFromGesture?: boolean};
+                        graphic?: {shapingFromGesture?: boolean; reshapingExisting?: boolean};
                         setGestureResolution?: (resolution: number | undefined) => void;
                     };
                     const wasShaping = authoring.graphic?.shapingFromGesture;
-                    if (authoring.graphic) authoring.graphic.shapingFromGesture = true;
+                    if (authoring.graphic) {
+                        authoring.graphic.shapingFromGesture = true;
+                        authoring.graphic.reshapingExisting = true;
+                    }
                     authoring.setGestureResolution?.(this.map.getView().getResolution() ?? undefined);
                     try {
                         // re-renders the tactical graphic based on the new geometry.
                         graphicController.setBaseFeature(feature);
                     } finally {
-                        if (authoring.graphic) authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                        if (authoring.graphic) {
+                            authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                            authoring.graphic.reshapingExisting = false;
+                        }
                         authoring.setGestureResolution?.(undefined);
                     }
                     return;

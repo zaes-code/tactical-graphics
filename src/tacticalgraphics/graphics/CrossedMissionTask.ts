@@ -70,6 +70,8 @@ const CROSS_ARMS: Partial<Record<TacticalGraphicName, CrossArm[]>> = {
 export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string;
     type: string = 'Point';
+    /** A dropped point has no size; it comes from `radius`. @see IGraphicGenerator.requiresRadius */
+    readonly requiresRadius = true;
 
     constructor(name: TacticalGraphicName) {
         super();

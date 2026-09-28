@@ -13,7 +13,7 @@
  * spelling in our own words around it — this makes the gate able to say that, which it
  * could not before and which is why quoting 8.1.4.3 in the config section failed here.
  */
-import {readFileSync} from 'fs';
+import {readdirSync, readFileSync} from 'fs';
 import {join} from 'path';
 
 /**
@@ -27,9 +27,17 @@ const BRITISH =
 
 describe('README spelling', () => {
     it('uses US English throughout the prose', () => {
-        const md = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
+        // The README and every hand-written page of the docs site. The Graphics page is
+        // left out: its tables are generated from the tracker.
+        const pages = [
+            'README.md',
+            'site/index.md',
+            'site/contributing.md',
+            'site/about.md',
+            ...readdirSync(join(process.cwd(), 'site', 'guide')).map(f => `site/guide/${f}`),
+        ].filter(f => f.endsWith('.md') && f !== 'site/guide/graphics.md');
+        const md = pages.map(f => readFileSync(join(process.cwd(), f), 'utf8')).join('\n');
         const prose = md
-            .slice(0, md.indexOf('## Supported graphics'))
             // Code is not prose. A fenced block is someone's program and an inline span
             // is usually an identifier — `AltitudeUnit.meters` is the name of a thing, and
             // respelling it would make the documentation wrong rather than American.

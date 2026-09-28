@@ -57,7 +57,17 @@ export interface DrawnFrame {
     side: number;
 }
 
-/** The smallest run a frame can describe, in meters. Below this a drag is a click. */
+/**
+ * The smallest run a frame can describe, in meters. Below this a drag is a click.
+ *
+ * **So a symbol under a meter across draws nothing, on purpose, where its generator reads
+ * only a frame.** Ambush (chord of points 2 and 3) and Pursuit (diameter of points 2 and 3)
+ * are the two: neither has a dropped fallback for a drawn base, because a click must not
+ * park a default-sized symbol (2026-09-06), so an unreadable frame is an empty
+ * MultiLineString, which is still valid GeoJSON. No operator draws either at that size; the
+ * case exists only in a synthetic sweep or a file from elsewhere. Found by the NVG add-on's
+ * round-trip fixtures, 2026-09-24. @see subMeterFrames.test.ts
+ */
 const MIN_SIZE_M = 1;
 
 /**

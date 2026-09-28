@@ -25,6 +25,8 @@
  * Not exported here: the React demo (`MapControls`, `OpenLayers.tsx`) and the
  * sample gallery, which exist to exercise the library rather than to be
  * consumed.
+ *
+ * @module @zaes/tactical-graphics/openlayers
  */
 
 // The entry point: wires draw / modify / pointer interactions onto a map.
@@ -174,6 +176,10 @@ export {PolygonGraphicController, RectangularAreaGraphicController} from './cont
 // Its on-screen size is the library's rather than the provider's, because the
 // library is what builds the Icon around a provider that returns a `src` string:
 // `setSecurityOperationSymbolSize`, not milsymbol's own `size` option.
+// A provider bound to one graphic wins over this one, and this one over the shared
+// provider on the root entry. The manager repaints its graphics when any of them
+// changes; `subscribeSecurityOperationSymbolChange` is for a host drawing on a layer
+// of its own.
 export {
     DEFAULT_SYMBOL_SIZE_PX,
     MAX_SYMBOL_SIZE_PX,
@@ -183,6 +189,7 @@ export {
     securityOperationSidc,
     setSecurityOperationSymbolProvider,
     setSecurityOperationSymbolSize,
+    subscribeSecurityOperationSymbolChange,
     useMilsymbolSecurityOperationSymbols,
 } from './securityOperationSymbol';
 export type {

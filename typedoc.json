@@ -1,0 +1,41 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/tacticalgraphics/index.ts",
+    "src/components/openlayers/index.ts",
+    "src/components/maplibre/index.ts",
+    "src/tacticalgraphics/assets/graphicThumbnails.ts",
+    "src/tacticalgraphics/ui/editControls.ts"
+  ],
+  "tsconfig": "tsconfig.json",
+  "out": "site/api",
+  "plugin": [
+    "typedoc-plugin-markdown",
+    "typedoc-vitepress-theme"
+  ],
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeExternals": true,
+  "readme": "none",
+  "entryFileName": "index",
+  "outputFileStrategy": "members",
+  "hidePageHeader": true,
+  "useCodeBlocks": true,
+  "skipErrorChecking": true,
+  "docsRoot": "./site",
+  "membersWithOwnFile": [
+    "Class",
+    "Interface",
+    "Enum"
+  ],
+  "sidebar": {
+    "autoConfiguration": true,
+    "format": "vitepress",
+    "pretty": false,
+    "collapsed": true
+  },
+  "name": "API reference",
+  "enumMembersFormat": "table",
+  "sourceLinkTemplate": "https://github.com/zaes-code/tactical-graphics/blob/develop/{path}#L{line}"
+}

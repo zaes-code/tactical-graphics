@@ -11,11 +11,12 @@ import SettingsModal from './SettingsModal';
 import MapControls, {thumbnailInkFor} from './MapControls';
 import EditAffordances from './EditAffordances';
 import ViewControls from './ViewControls';
+import AddonErrorBoundary from './AddonErrorBoundary';
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
-// Empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
-import {demoAddons} from '@demo/addons';
+// Both empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
+import {demoAddons, demoTools} from '@demo/addons';
 import {
     DEFAULT_PALETTE,
     TacticalGraphicHostility,
@@ -146,6 +147,8 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    // The add-on tool panel that is expanded: one at a time, all collapsed to start. @see DemoToolProps
+    const [openTool, setOpenTool] = useState<string | null>(null);
     const [engine, setEngine] = useState<MapEngine>(loadEngine);
     const addonEngine = demoAddons.find(addon => addon.id === engine);
     /** MapLibre's 3D view. OpenLayers has no tilted mode, so the toggle shows on MapLibre only. */
@@ -319,7 +322,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                                 textTransform: 'none',
                             }}
                         >
-                            MIL-STD-2525E &middot; FM 1-02.2 &middot; NATO APP-06
+                            FM 1-02.2 &middot; NATO APP-06
                         </Typography>
                     </Typography>
 
@@ -377,15 +380,24 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
               */}
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
                 {addonEngine
-                    ? <React.Suspense fallback={null}>
-                        <addonEngine.View
-                            key={addonEngine.id}
-                            darkMode={darkMode}
-                            graphicsSettings={settings}
-                            onReady={handleEngineReady}
-                            onInteractionModeChange={setInteractionMode}
-                        />
-                    </React.Suspense>
+                    ? <AddonErrorBoundary key={addonEngine.id} label={addonEngine.label}>
+                        {/* An add-on engine loads lazily, and the page had nothing to show meanwhile: the
+                          * panel waits for the engine's capabilities, so the whole view went blank. */}
+                        <React.Suspense
+                            fallback={
+                                <Box sx={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary'}}>
+                                    Loading {addonEngine.label}…
+                                </Box>
+                            }
+                        >
+                            <addonEngine.View
+                                darkMode={darkMode}
+                                graphicsSettings={settings}
+                                onReady={handleEngineReady}
+                                onInteractionModeChange={setInteractionMode}
+                            />
+                        </React.Suspense>
+                    </AddonErrorBoundary>
                     : engine === 'openlayers'
                     ? <OpenLayersMap
                         key="openlayers"
@@ -414,6 +426,27 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
 
                 {/* Tilt and turn from clicks, for anyone without a right mouse button. */}
                 {engineHandle?.camera && (addonEngine || (engine === 'maplibre' && tilted)) && <ViewControls camera={engineHandle.camera}/>}
+
+                {/* Add-on tools, on a developer's machine only; the public sample has none. @see demoAddons.ts
+                  * Kept left of the camera buttons (`ViewControls`, top right), and scrolled rather than
+                  * grown past the top of the map: three tool panels stacked over them and covered them. */}
+                {demoTools.length > 0 && (
+                    <Box sx={{position: 'absolute', right: 64, bottom: 32, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380, maxHeight: 'calc(100% - 48px)', overflowY: 'auto'}}>
+                        {/* An add-on may load its panel lazily, as the engines do. */}
+                        {demoTools.map(tool => (
+                            <AddonErrorBoundary key={tool.id} label={tool.label}>
+                                <React.Suspense fallback={null}>
+                                    <tool.Panel
+                                        engine={engineHandle}
+                                        darkMode={darkMode}
+                                        expanded={openTool === tool.id}
+                                        onExpandedChange={expanded => setOpenTool(expanded ? tool.id : current => (current === tool.id ? null : current))}
+                                    />
+                                </React.Suspense>
+                            </AddonErrorBoundary>
+                        ))}
+                    </Box>
+                )}
 
                 {/*
                   * One panel, either engine. It used to live inside `OpenLayers.tsx`,
