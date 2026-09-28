@@ -29,7 +29,7 @@ CI/CD automation, and program management — with domain consulting in DoD and C
 and cleared personnel where a program requires it.
 
 This library comes out of that geospatial and C2 work. It is open-sourced because an
-accurate MIL-STD-2525E symbol set is infrastructure rather than an advantage worth
+accurate set of tactical graphics is infrastructure rather than an advantage worth
 keeping: every team building a common operational picture rebuilds the same arrows and
 the same amplifier rules, and doing it once, in the open, against the plates is better
 for everyone drawing them.
