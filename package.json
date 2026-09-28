@@ -66,6 +66,11 @@
       "import": "./dist/mlb/esm/components/maplibre/index.js",
       "require": "./dist/mlb/cjs/components/maplibre/index.js"
     },
+    "./edit-controls": {
+      "types": "./dist/types/ui/editControls.d.ts",
+      "import": "./dist/esm/ui/editControls.js",
+      "require": "./dist/cjs/ui/editControls.js"
+    },
     "./thumbnails": {
       "types": "./dist/types/assets/graphicThumbnails.d.ts",
       "import": "./dist/esm/assets/graphicThumbnails.js",

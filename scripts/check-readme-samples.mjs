@@ -96,6 +96,7 @@ function tsconfig(dir) {
                 '@zaes/tactical-graphics/openlayers': [p('dist/ol/types/components/openlayers/index.d.ts')],
                 '@zaes/tactical-graphics/maplibre': [p('dist/mlb/types/components/maplibre/index.d.ts')],
                 '@zaes/tactical-graphics/thumbnails': [p('dist/types/assets/graphicThumbnails.d.ts')],
+                '@zaes/tactical-graphics/edit-controls': [p('dist/types/ui/editControls.d.ts')],
                 '*': [p('node_modules/*')],
             },
         },
