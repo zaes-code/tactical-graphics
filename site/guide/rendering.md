@@ -47,6 +47,47 @@ on OpenLayers, or an existing `renderer` (a `NativeLayerRenderer`) on MapLibre, 
 instead of constructing a new one. On MapLibre it also takes `glyphs` and `fontStack`
 (see below); a `renderer` you pass in keeps its own, so give those to its constructor.
 
+## Edit controls
+
+In `edit` mode a click selects a graphic and its grips drag. Moving, rotating and resizing
+the whole graphic need something to grab that is not a grip, and
+`@zaes/tactical-graphics/edit-controls` provides it: a dashed box around the selection with a
+move, rotate and resize button on its corners. It is plain DOM with no framework, and it works
+with every engine, because it asks only `selectionBox()`, `selectionGestures()` and
+`beginGesture()`. A symbol that refuses a gesture gets no button for it.
+
+```ts
+import {attachEditControls} from '@zaes/tactical-graphics/edit-controls';
+
+const controls = attachEditControls(mapContainer, graphics);
+// ...
+controls.destroy();
+```
+
+Give it the element the map fills. The buttons follow the selection on every animation frame
+while the engine is in `edit` mode; pass `isActive` to decide that yourself.
+
+Every button can be swapped:
+
+```ts
+import {attachEditControls} from '@zaes/tactical-graphics/edit-controls';
+
+attachEditControls(mapContainer, graphics, {
+    icons: {translate: '<svg>...</svg>', rotate: document.createElement('i')},  // markup or an element
+    labels: {rotate: 'Turn'},                                                  // tooltip and screen reader
+    corners: {rotate: 'bottom-left'},                                          // where it hangs
+    gestures: ['translate', 'rotate'],                                         // which to offer at all
+});
+```
+
+The colors are CSS custom properties, set on the container or any ancestor:
+`--tg-edit-button-background`, `--tg-edit-button-color`, `--tg-edit-button-border`,
+`--tg-edit-button-hover`, `--tg-edit-box-color` and `--tg-edit-z-index`. For more, style the
+classes `tg-edit-controls`, `tg-edit-box`, `tg-edit-button` and `tg-edit-button--translate`
+(`--rotate`, `--resize`), and pass `injectStyles: false` to replace the built-in stylesheet
+altogether. For a design of your own from scratch, skip this and build on the three engine
+methods in the table above.
+
 ## A complete example, per engine
 
 The same program twice. Read either one on its own — that is the point of printing both

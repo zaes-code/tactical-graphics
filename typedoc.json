@@ -4,7 +4,8 @@
     "src/tacticalgraphics/index.ts",
     "src/components/openlayers/index.ts",
     "src/components/maplibre/index.ts",
-    "src/tacticalgraphics/assets/graphicThumbnails.ts"
+    "src/tacticalgraphics/assets/graphicThumbnails.ts",
+    "src/tacticalgraphics/ui/editControls.ts"
   ],
   "tsconfig": "tsconfig.json",
   "out": "site/api",
