@@ -379,7 +379,15 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
                 {addonEngine
                     ? <AddonErrorBoundary key={addonEngine.id} label={addonEngine.label}>
-                        <React.Suspense fallback={null}>
+                        {/* An add-on engine loads lazily, and the page had nothing to show meanwhile: the
+                          * panel waits for the engine's capabilities, so the whole view went blank. */}
+                        <React.Suspense
+                            fallback={
+                                <Box sx={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary'}}>
+                                    Loading {addonEngine.label}…
+                                </Box>
+                            }
+                        >
                             <addonEngine.View
                                 darkMode={darkMode}
                                 graphicsSettings={settings}
@@ -417,9 +425,11 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 {/* Tilt and turn from clicks, for anyone without a right mouse button. */}
                 {engineHandle?.camera && (addonEngine || (engine === 'maplibre' && tilted)) && <ViewControls camera={engineHandle.camera}/>}
 
-                {/* Add-on tools, on a developer's machine only; the public sample has none. @see demoAddons.ts */}
+                {/* Add-on tools, on a developer's machine only; the public sample has none. @see demoAddons.ts
+                  * Kept left of the camera buttons (`ViewControls`, top right), and scrolled rather than
+                  * grown past the top of the map: three tool panels stacked over them and covered them. */}
                 {demoTools.length > 0 && (
-                    <Box sx={{position: 'absolute', right: 12, bottom: 32, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380}}>
+                    <Box sx={{position: 'absolute', right: 64, bottom: 32, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380, maxHeight: 'calc(100% - 48px)', overflowY: 'auto'}}>
                         {/* An add-on may load its panel lazily, as the engines do. */}
                         {demoTools.map(tool => (
                             <AddonErrorBoundary key={tool.id} label={tool.label}>
