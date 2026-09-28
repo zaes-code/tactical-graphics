@@ -51,9 +51,12 @@ import {
     featureCollection,
     fillLayer,
     dashZoomStep,
+    capOfKey,
     lineLayer,
+    HATCH_PIXEL_RATIO,
+    hatchGrowth,
     renderHatchImage,
-    symbolLayer, MEASURE_LABEL_PX} from './paintToLayers';
+    symbolLayer, turnedLabelFlips, turnedSymbolLayer, turnedSymbolLayout, MEASURE_LABEL_PX, type FontStack} from './paintToLayers';
 
 /**
  * # Path B — realize the geometry, then let MapLibre draw it
@@ -93,6 +96,8 @@ export const HANDLE_LAYER_ID = 'tg-handle';
 export const SKETCH_LAYER_ID = 'tg-sketch';
 /** The security operations' host-provided center symbol. @see core/securitySymbol.ts */
 export const SYMBOL_ICON_LAYER_ID = 'tg-icon';
+/** Text laid along a line or an axis, which turns with the map. @see turnedSymbolLayer */
+export const TURNED_SYMBOL_LAYER_ID = 'tg-symbol-turned';
 
 /**
  * The glyph stack MapLibre renders labels with.
@@ -103,12 +108,13 @@ export const SYMBOL_ICON_LAYER_ID = 'tg-icon';
  * practical difference between the two paths: a deployment either self-hosts a
  * glyph set or points at someone else's server.
  *
- * MapLibre's own demo server is used here because the spike is keyless by
- * decision. A real deployment must self-host — an external font server is a
- * runtime dependency, breaks offline and under a strict CSP, and is not something
- * to build a product on.
+ * MapLibre's own demo server is the **default** because the demo is keyless by
+ * decision. A real deployment should self-host and say so through
+ * {@link NativeLayerRendererOptions.glyphs}: an external font server is a runtime
+ * dependency, breaks offline and under a strict CSP, and is not something to build
+ * a product on.
  */
-const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
+export const DEFAULT_GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
 /**
  * **The stack name has to exist on the glyph server, and a wrong one fails almost
  * silently.** `Open Sans Bold` — the obvious transliteration of this library's
@@ -124,7 +130,39 @@ const GLYPHS_URL = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
  * library uses has to be *mapped* to a stack that has been pre-generated. The
  * canvas overlay has neither problem.
  */
-const FONT_STACK = 'Noto Sans Bold';
+export const DEFAULT_FONT_STACK = 'Noto Sans Bold';
+
+/**
+ * Where the native renderer gets its text from. Both options are read once, when the
+ * renderer is constructed.
+ *
+ * The defaults are MapLibre's **public demo glyph server** and a stack it serves. They
+ * are fine for a sample and wrong for production: the labels then depend on a server
+ * nobody has promised to keep up, fail offline and under a strict CSP, and cannot be
+ * self-hosted. A production deployment should set both, or set `glyphs: false` and let
+ * its own style carry them.
+ */
+export interface NativeLayerRendererOptions {
+    /**
+     * The glyphs URL template to put on the map's style, with MapLibre's `{fontstack}`
+     * and `{range}` placeholders, for example `'https://example.com/fonts/{fontstack}/{range}.pbf'`.
+     *
+     * `false` leaves the style's own `glyphs` alone, for a host whose style already
+     * names a glyph server. That style must then serve {@link NativeLayerRendererOptions.fontStack}, and must have a
+     * `glyphs` URL at all: a symbol layer against a style with none renders nothing.
+     *
+     * Defaults to {@link DEFAULT_GLYPHS_URL}, MapLibre's public demo server. Set your own.
+     */
+    glyphs?: string | false;
+    /**
+     * The font stack every label is drawn in: one font name, or names tried in order.
+     * Each must exist on the glyph server, and a wrong name fails almost silently (the
+     * labels render as specks, with nothing but a 404 in the network log).
+     *
+     * Defaults to {@link DEFAULT_FONT_STACK}, `'Noto Sans Bold'`, which the demo server serves.
+     */
+    fontStack?: FontStack;
+}
 
 /** How much the zoom must move mid-gesture before the geometry is rebuilt. */
 const ZOOM_REALIZE_THRESHOLD = 0.34;
@@ -317,13 +355,30 @@ export class NativeLayerRenderer {
      */
     private readonly onMoveEnd = () => this.scheduleRealize();
 
+    /** The turned labels' rotations, as last uploaded. @see applyTurnedLayout */
+    private turnedRotations: number[] = [];
+    /** Which of them flip at the bearing their layout was last set for. */
+    private flipSignature = '';
+    private readonly onRotate = () => this.applyTurnedLayout(false);
+
     private measureCanvas: CanvasRenderingContext2D | null = null;
 
-    constructor(private readonly map: MapLibreMap) {
+    /** The glyphs URL `install` sets, or false to leave the style's own. @see NativeLayerRendererOptions */
+    private readonly glyphs: string | false;
+    /** The stack every symbol layer names. @see NativeLayerRendererOptions */
+    private readonly fontStack: FontStack;
+
+    constructor(
+        private readonly map: MapLibreMap,
+        options: NativeLayerRendererOptions = {},
+    ) {
+        this.glyphs = options.glyphs ?? DEFAULT_GLYPHS_URL;
+        this.fontStack = options.fontStack ?? DEFAULT_FONT_STACK;
         this.install();
         map.on('zoom', this.onZoom);
         map.on('zoomend', this.onZoomEnd);
         map.on('moveend', this.onMoveEnd);
+        map.on('rotate', this.onRotate);
         // Sources are realized on zoom, so without this a provider registered after
         // the map settled would not appear until something unrelated moved it. The
         // revision check inside `realizeCenterSymbols` then throws the stale rasters
@@ -356,11 +411,12 @@ export class NativeLayerRenderer {
      * The style must already carry a `glyphs` URL for the symbol layer to render
      * anything, so it is set here rather than being left to the basemap style —
      * a symbol layer against a style with no glyphs renders silently empty, which
-     * is a bad failure mode to leave for later.
+     * is a bad failure mode to leave for later. A host that passed `glyphs: false`
+     * has taken that on itself.
      */
     private install(): void {
         if (this.installed) return;
-        this.map.setGlyphs(GLYPHS_URL);
+        if (this.glyphs !== false) this.map.setGlyphs(this.glyphs);
 
         for (const kind of ['fills', 'circles', 'symbols', 'icons', 'handles', 'sketch', 'measure', 'vertexHint', 'connector']) {
             this.map.addSource(SOURCE_PREFIX + kind, {type: 'geojson', data: featureCollection([])});
@@ -379,9 +435,10 @@ export class NativeLayerRenderer {
         this.map.addLayer(patternFillLayer('tg-fill-pattern', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(fillLayer('tg-fill', SOURCE_PREFIX + 'fills'));
         this.map.addLayer(circleLayer('tg-circle', SOURCE_PREFIX + 'circles'));
-        this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', FONT_STACK));
+        this.map.addLayer(symbolLayer('tg-symbol', SOURCE_PREFIX + 'symbols', this.fontStack));
+        this.map.addLayer(turnedSymbolLayer(TURNED_SYMBOL_LAYER_ID, SOURCE_PREFIX + 'symbols', this.fontStack, this.map.getBearing()));
         this.map.addLayer(iconLayer(SYMBOL_ICON_LAYER_ID, SOURCE_PREFIX + 'icons'));
-        this.layerIds.push('tg-fill-pattern', 'tg-fill', 'tg-circle', 'tg-symbol', SYMBOL_ICON_LAYER_ID);
+        this.layerIds.push('tg-fill-pattern', 'tg-fill', 'tg-circle', 'tg-symbol', TURNED_SYMBOL_LAYER_ID, SYMBOL_ICON_LAYER_ID);
 
         // Editor chrome, added last so it sits above every graphic. Not in `layerIds`:
         // that list is what a click hit-tests against to find a *graphic*, and a
@@ -395,7 +452,7 @@ export class NativeLayerRenderer {
         // distance laid **along** it so it picks up the line's own angle. Same shape as
         // OpenLayers' `createMeasureFeature`. @see setMeasure
         this.map.addLayer(sketchLayer(MEASURE_LAYER_ID, SOURCE_PREFIX + 'measure', MEASURE_DASH, LINE_WIDTH()));
-        this.map.addLayer(measureLabelLayer(MEASURE_LABEL_LAYER_ID, SOURCE_PREFIX + 'measure', FONT_STACK));
+        this.map.addLayer(measureLabelLayer(MEASURE_LABEL_LAYER_ID, SOURCE_PREFIX + 'measure', this.fontStack));
         this.map.addLayer(handleLayer(HANDLE_LAYER_ID, SOURCE_PREFIX + 'handles'));
         // Above the handles: it marks the vertex a drag would create, and a real handle
         // sitting on top of that offer would hide it. @see setVertexHint
@@ -494,7 +551,7 @@ export class NativeLayerRenderer {
         const paintedAt = performance.now();
         const perGraphic = visible.map(graphic => paintTacticalGraphic(graphic, context));
         const bucketedAt = performance.now();
-        const buckets = emptyBuckets();
+        const buckets = emptyBuckets(hatchGrowth(this.map.getZoom()));
         for (let i = 0; i < perGraphic.length; i++) {
             bucketPaintsInto(buckets, perGraphic[i], visible[i].id);
         }
@@ -504,16 +561,18 @@ export class NativeLayerRenderer {
         // Register any hatch this frame needs. MapLibre has no pattern primitive —
         // `fill-pattern` names an image — so the hatch the paint layer describes as
         // parameters has to be rasterised and uploaded before a fill can use it.
-        // Idempotent: `hasImage` keeps this to once per distinct hatch per map.
-        for (const [id, spec] of Array.from(buckets.hatches)) {
+        // Idempotent: `hasImage` keeps this to once per distinct hatch and raster size per map.
+        for (const [id, {spec, rasterPx}] of Array.from(buckets.hatches)) {
             if (this.map.hasImage(id)) continue;
-            const image = renderHatchImage(spec);
-            if (image) this.map.addImage(id, image, {pixelRatio: 1});
+            const image = renderHatchImage(spec, rasterPx);
+            if (image) this.map.addImage(id, image, {pixelRatio: HATCH_PIXEL_RATIO});
         }
 
         this.setData('fills', buckets.fills);
         this.setData('circles', buckets.circles);
         this.setData('symbols', buckets.symbols);
+        this.turnedRotations = buckets.symbols.filter(f => f.properties?.turned).map(f => f.properties!.rotate as number);
+        this.applyTurnedLayout(true);
 
         // A dash pattern cannot be data-driven, so each distinct one needs its own
         // layer. Created lazily and never removed: they are few, and dropping a layer
@@ -537,7 +596,7 @@ export class NativeLayerRenderer {
             if (!this.lineLayerKeys.has(layerKey)) {
                 const dash = key === 'solid' ? undefined : key.split('@')[0].split(',').map(n => Number(n) / Math.pow(2, step));
                 this.map.addSource(id, {type: 'geojson', data: featureCollection(list)});
-                this.map.addLayer(lineLayer(id, id, dash), 'tg-symbol');
+                this.map.addLayer(lineLayer(id, id, dash, capOfKey(key)), 'tg-symbol');
                 this.lineLayerKeys.add(layerKey);
                 this.layerIds.push(id);
             } else {
@@ -1093,6 +1152,23 @@ export class NativeLayerRenderer {
         return best;
     }
 
+    /**
+     * Sets the turned labels' layout for the current bearing: which of them are turned the
+     * other half turn to stay readable. A turn fires this every frame, and the layout is only
+     * set when the answer changes for at least one label, since setting it lays the text out
+     * again. After an upload it is always set, because the new labels were never asked.
+     * @see turnedSymbolLayout
+     */
+    private applyTurnedLayout(always: boolean): void {
+        const bearing = this.map.getBearing();
+        const signature = this.turnedRotations.map(r => (turnedLabelFlips(r, bearing) ? '1' : '0')).join('');
+        if (!always && signature === this.flipSignature) return;
+        this.flipSignature = signature;
+        for (const [name, value] of Object.entries(turnedSymbolLayout(bearing))) {
+            this.map.setLayoutProperty(TURNED_SYMBOL_LAYER_ID, name as Parameters<MapLibreMap['setLayoutProperty']>[1], value as Parameters<MapLibreMap['setLayoutProperty']>[2]);
+        }
+    }
+
     /** The selected graphic as a one-or-zero list, for the no-handle-mode case. */
     private selectedHandleBearer(): MapLibreTacticalGraphic[] {
         const selected = this.selectedId ? this.find(this.selectedId) : undefined;
@@ -1103,6 +1179,7 @@ export class NativeLayerRenderer {
         this.map.off('zoom', this.onZoom);
         this.map.off('zoomend', this.onZoomEnd);
         this.map.off('moveend', this.onMoveEnd);
+        this.map.off('rotate', this.onRotate);
         this.unsubscribeSymbols();
     }
 }

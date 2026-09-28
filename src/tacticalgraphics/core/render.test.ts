@@ -15,6 +15,7 @@ import {
     toFeatureCollection,
 } from './render';
 import {allowedGestures, publishesAnchorHandleOnly} from './symbology';
+import {baseVertexCount} from './handles';
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
 
 const axisFeature = (): Feature => ({
@@ -148,6 +149,95 @@ describe('renderTacticalGraphic', () => {
         renderTacticalGraphic(input);
         expect(JSON.stringify(input.geometry)).toBe(before);
     });
+
+    /**
+     * **Nor its properties.** A simple line's generator hands the base back as its graphic,
+     * and stamping `role: 'graphic'` on that wrote into the caller's feature, which `base` is
+     * documented to return unchanged. The geometry-only test above could not see it. Found by
+     * the NVG add-on's round trip, 2026-09-24.
+     */
+    it('does not mutate the input feature at all', () => {
+        const input: Feature = {
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [[15.98, 59.992], [16.02, 59.992]]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.PhaseLine}},
+        };
+        const before = JSON.stringify(input);
+        const rendered = renderTacticalGraphic(input);
+        expect(JSON.stringify(input)).toBe(before);
+        expect(rendered.base).toBe(input);
+        expect((rendered.graphic.properties as any).role).toBe('graphic');
+    });
+});
+
+/** Every position in a geometry, flattened. */
+function positionsIn(geometry: Feature['geometry']): unknown[] {
+    if (!geometry) return [];
+    if (geometry.type === 'GeometryCollection') return geometry.geometries.flatMap(g => positionsIn(g));
+    const out: unknown[] = [];
+    const walk = (c: unknown) => {
+        if (Array.isArray(c) && c.some(Array.isArray)) c.forEach(walk);
+        else out.push(c);
+    };
+    (geometry.coordinates as unknown[]).forEach(walk);
+    return geometry.type === 'Point' ? [geometry.coordinates] : out;
+}
+const isCoordinate = (p: unknown) => Array.isArray(p) && p.length >= 2 && p.every(Number.isFinite);
+
+describe('invalid GeoJSON never leaves renderTacticalGraphic', () => {
+    /**
+     * Every control point on one spot, for every graphic: either a `TacticalGraphicError` or
+     * geometry whose every position is a coordinate. The eight air corridors returned `null`
+     * rails here and ferry crossing `NaN` arrowheads.
+     */
+    it('throws a TacticalGraphicError or draws real coordinates for a collapsed base', () => {
+        const at: Position = [16, 60];
+        const failures: string[] = [];
+        for (const name of listTacticalGraphicNames() as TacticalGraphicName[]) {
+            const kind = baseGeometryFor(name) ?? 'LineString';
+            if (kind === 'Point') continue;
+            const n = Math.max(2, baseVertexCount(name) || 2);
+            const geometry: Feature['geometry'] = kind === 'Polygon'
+                ? {type: 'Polygon', coordinates: [[at, at, at, at]]}
+                : {type: 'LineString', coordinates: Array.from({length: n}, () => at)};
+            try {
+                const {graphic, labels, handles} = renderTacticalGraphic({
+                    type: 'Feature', geometry, properties: {tacticalGraphic: {name, radius: 500, width: 500}},
+                });
+                for (const part of [graphic, labels, handles]) {
+                    if (!positionsIn(part.geometry).every(isCoordinate)) failures.push(`${name}: ${part.properties?.role}`);
+                }
+            } catch (e) {
+                if (!(e instanceof TacticalGraphicError)) failures.push(`${name}: ${(e as Error).message}`);
+            }
+        }
+        expect(failures).toEqual([]);
+    });
+
+    it('names ferry crossing when its two ends coincide', () => {
+        const feature: Feature = {
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [[16, 60], [16, 60]]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.FerryCrossing}},
+        };
+        expect(() => renderTacticalGraphic(feature)).toThrow(TacticalGraphicError);
+        expect(() => renderTacticalGraphic(feature)).toThrow(/"FerryCrossing" cannot be drawn/);
+    });
+
+    /**
+     * A vertex placed twice is a zero-length leg, which has no direction for its rails.
+     * The corridor still draws, with the rails at that vertex square to the next leg.
+     */
+    it('draws an air corridor through a repeated vertex', () => {
+        const {graphic, handles} = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'LineString', coordinates: [[16, 60], [16.01, 60], [16.01, 60], [16.02, 60]]},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.AirCorridor, width: 400}},
+        });
+        expect(positionsIn(graphic.geometry).every(isCoordinate)).toBe(true);
+        // Four vertices, then two tangent points on each of two rails per leg.
+        expect((handles.geometry as MultiPoint).coordinates).toHaveLength(4 + 3 * 4);
+    });
 });
 
 describe('renderTacticalGraphic errors', () => {
@@ -194,6 +284,39 @@ describe('renderTacticalGraphic errors', () => {
             }
         }
         expect(failures).toEqual([]);
+    });
+
+    /**
+     * **A one-point graphic with no `radius` has no size**, and was handed to turf as
+     * `undefined`, which threw "coordinates must contain numbers" naming neither the field
+     * nor the graphic. Every point-based name either draws real coordinates from `{name}`
+     * alone or says what it needs. The editors always stamp a radius, so this is what a
+     * hand-built feature or an imported file meets.
+     */
+    it('names the missing radius on a one-point graphic, and throws nothing else', () => {
+        const pointBased = (listTacticalGraphicNames() as TacticalGraphicName[])
+            .filter(name => baseGeometryFor(name) === 'Point');
+        const needRadius: string[] = [];
+        const failures: string[] = [];
+        for (const name of pointBased) {
+            try {
+                const {graphic} = renderTacticalGraphic({
+                    type: 'Feature', geometry: {type: 'Point', coordinates: [16, 60]}, properties: {tacticalGraphic: {name}},
+                });
+                if (!positionsIn(graphic.geometry).every(isCoordinate)) failures.push(`${name}: invalid positions`);
+            } catch (e) {
+                const named = e instanceof TacticalGraphicError && e.graphicName === name && /tacticalGraphic\.radius/.test(e.message);
+                if (named) needRadius.push(name);
+                else failures.push(`${name}: ${(e as Error).message}`);
+            }
+        }
+        expect(failures).toEqual([]);
+        // The fifteen the NVG harness met, among the rest of their families.
+        expect(needRadius).toEqual(expect.arrayContaining([
+            'CordonAndKnock', 'Locate', 'Deny', 'TargetBuildUpAreaCircular', 'TargetValueAreaCircular',
+            'ZoneOfResponsibilityCircular', 'PsyOpsZoneCircular', 'ActiveManeuverArea', 'Airfield',
+            'MovementToContact', 'Destroy', 'Interdict', 'Neutralize', 'Suppress', 'Defeat',
+        ]));
     });
 
     /**
@@ -666,8 +789,9 @@ describe('decorated graphics emit the drawn shape', () => {
  * The tracker-derived tables have `gen-readme-graphics-table.py --check`. This is the
  * one number that comes from the registry instead, so it needs its own guard.
  */
-describe('README stays honest about the registry', () => {
-    const readme = readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf8');
+describe('the docs stay honest about the registry', () => {
+    // The guides that quote the registry, since the README became a summary.
+    const readme = ['errors.md', 'tactical-graphic-object.md'].map(f => readFileSync(join(__dirname, '..', '..', '..', 'site', 'guide', f), 'utf8')).join('\n');
 
     it('quotes the real number of registered graphics in its error example', () => {
         const quoted = readme.match(/see\s+the\s+(\d+)\s+supported names/s);

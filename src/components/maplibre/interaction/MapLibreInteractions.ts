@@ -41,7 +41,7 @@ import {
 import {buildTacticalGraphic, descriptionOf, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, axisBaseFromDraw, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, axisBaseFromDraw, drawnSide, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, rotationFromDrawnPoint, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -216,7 +216,8 @@ function bandRangeOf(graphic: MapLibreTacticalGraphic, index: number): number | 
  * symbol have", so the two cannot disagree about whether a drag moved one.
  */
 function radarRanges(props: TacticalGraphicProperties): (number | undefined)[] | undefined {
-    if (props.stopRange === undefined && props.searchAxisAzimuthDeg === undefined) return undefined;
+    // By name, as `setBandRange` decides it: a weapon fan can hold these fields too.
+    if (props.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
     return [props.startRange, props.stopRange];
 }
 
@@ -383,6 +384,18 @@ function withAnchorFrame(name: TacticalGraphicName, description: GraphicDescript
 }
 
 /**
+ * What a drag starts from. **On the six anchor graphics the frame is read from the points first**,
+ * as OpenLayers' holders adopt it: their `radius` and `rotation` describe the points, and a bag
+ * can lack them or hold stale ones (a file, a sample). The bend grip then had no size to divide
+ * by and returned the graphic unchanged, so Turn's apex grip did nothing on MapLibre and ArcGIS
+ * while it bowed the turn on OpenLayers (all-engine grip sweep, 2026-09-26). @see withAnchorFrame
+ */
+function dragStartOf(graphic: MapLibreTacticalGraphic): GraphicDescription {
+    const start = {geometry: graphic.base.geometry, properties: descriptionOf(graphic)};
+    return usesDrawnAnchors(graphic.name) ? withAnchorFrame(graphic.name, start) : start;
+}
+
+/**
  * The other direction: a gesture that set a **number** rewrites the points from it.
  *
  * `setBend`, `setReach` and `setMirror` change a property, and for these six the picture
@@ -433,7 +446,7 @@ export class MapLibreInteractions {
         vertex: number;
         /** Where to add a vertex when this drag starts, or -1. @see grabSegment */
         insertAt: number;
-        /** Whether the drag began on the inert center dot. */
+        /** Whether the drag began on the center dot, which is only ever claimed in translate. */
         onCenter: boolean;
         /** Whether the drag began on the rotate/resize pivot. @see startedOnPivot */
         onPivot: boolean;
@@ -593,7 +606,7 @@ export class MapLibreInteractions {
             onPivot: false,
             handle: -1,
             origin,
-            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
+            start: dragStartOf(graphic),
             // Already past the threshold: the host decided a drag began by pressing the
             // affordance, and re-measuring it against a pixel distance would swallow the
             // first few degrees of every rotate.
@@ -910,10 +923,11 @@ export class MapLibreInteractions {
      * The size and bearing a point-anchored draw supplies, from its two clicks.
      *
      * The second click is a point on the rim: how far it is from the anchor is the
-     * radius, and the direction it lies in is the graphic's bearing — both read exactly
+     * radius, and the direction it lies in gives the graphic's bearing — both read exactly
      * as OpenLayers reads them off a Circle sketch. Planar, in projected meters, which is
      * also the frame `rotation` is expressed in: degrees counter-clockwise from east, not
-     * a compass bearing.
+     * a compass bearing. For an arc mission task that click is APP-06's start point, so
+     * the bearing is turned to put the start point there. @see rotationFromDrawnPoint
      *
      * Falls back to the default for a one-click draw, so a fixed-size symbol is
      * unaffected and a canceled sizing click cannot leave a graphic with no size at all.
@@ -975,7 +989,9 @@ export class MapLibreInteractions {
         // degrees north. Stamping them made the rim outrun the cursor that sized it — the
         // same defect OpenLayers had, from the same measurement. @see mercator.ts
         const drawn = groundLength(radius, vertices[0][1]);
-        const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+        // The angle to the second click, turned by the library's rule: an arc mission task's
+        // second click is its start point, not its axis. @see rotationFromDrawnPoint
+        const rotation = rotationFromDrawnPoint(name, (Math.atan2(dy, dx) * 180) / Math.PI);
         /*
          * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
          *
@@ -1105,7 +1121,7 @@ export class MapLibreInteractions {
         if (ranged) return buildTacticalGraphic(name, ranged.geometry, ranged.properties, resolutionOf(this.map));
 
         const drawn = this.anchorDraw(name, vertices);
-        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties), resolutionOf(this.map));
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties, drawn.geometry), resolutionOf(this.map));
 
         const wants = baseGeometryFor(name);
         // What the user clicked becomes what is stored — repeated clicks dropped, and an
@@ -1140,9 +1156,12 @@ export class MapLibreInteractions {
             // reaches `Math.cos` and comes back NaN, and a point-anchored graphic with
             // no radius has no size at all. @see maplibreAdapter
             ...this.sizeFromDraw(name, wants, vertices),
+            // Which side a decoration takes, decided once from the way it was drawn: an
+            // abatis tooth faces north. Only a draw sets it, so rotation keeps it. @see drawnSide
+            ...drawnSide(name, tidied),
         };
 
-        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties), resolutionOf(this.map));
+        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties, geometry), resolutionOf(this.map));
     }
 
     /**
@@ -1157,9 +1176,18 @@ export class MapLibreInteractions {
      * OpenLayers gates the same seed on `shapingFromGesture`; this is that gate here.
      * @see usesStandoffWidth, LineGraphicBase.standoff
      */
-    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties): TacticalGraphicProperties {
+    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties, geometry: Geometry): TacticalGraphicProperties {
         if (!usesStandoffWidth(name) || properties.width !== undefined) return properties;
-        const standoff = defaultStandoffMetres(name, resolutionOf(this.map));
+        /*
+         * **A ground length, at the graphic's first point**, as OpenLayers seeds it: a pixel size
+         * times the bare resolution is a projected length and comes out 1/cos(latitude) too
+         * large. The same draw at 40 degrees north seeded 57.6 km here and 44.4 km there
+         * (all-engine draw sweep, 2026-09-27). @see LineGraphicBase.standoff
+         */
+        const first = (geometry as {coordinates?: unknown}).coordinates;
+        const firstPoint = Array.isArray(first) && Array.isArray(first[0]) ? (first[0] as number[]) : undefined;
+        const latitude = firstPoint ? firstPoint[1] : 0;
+        const standoff = defaultStandoffMetres(name, groundLength(resolutionOf(this.map), latitude));
         return standoff === undefined ? properties : {...properties, width: standoff};
     }
 
@@ -1362,6 +1390,15 @@ export class MapLibreInteractions {
         // comes from the handle, not from a mode button, so requiring the user to pick
         // one first would be asking them to answer a question the handle has already
         // answered.
+        // **The gray center dot is a grip in translate only.** Under any other mode it is
+        // not claimed at all, so the press goes to the map and pans it, which is what
+        // OpenLayers does: its `handleDownEvent` returns false on an `inert` handle unless
+        // it is translating. Claiming it in `edit` resized about the center with the
+        // press's distance from it as the lever, measured on Isolate as 180 km to 4,399 km
+        // from a 2 px miss. @see applyGesture
+        const onCenter = grabbed !== undefined && grabbed.index === this.renderer.centerHandleOf(graphic);
+        if (onCenter && this.mode !== 'translate') return;
+
         const roleDrag = grabbed !== undefined && roleOfHandle(graphic, grabbed.index) !== 'shape';
         if (this.mode === 'view' && !roleDrag) return;
 
@@ -1388,18 +1425,17 @@ export class MapLibreInteractions {
 
         this.dragging = {
             graphic,
-            // Grabbing the center dot always means "move this", whatever mode is
-            // selected. Rotate and resize are both degenerate there — the scale ratio
-            // divides by distance-to-center and a point on the axis has no angle — and
-            // the center is the one place a user naturally reaches to drag a symbol
-            // bodily. The dot is drawn gray to say so.
-            onCenter: onHandle && handle === this.renderer.centerHandleOf(graphic),
+            // Only ever true in translate, where the center dot means "move this". Every
+            // other mode refused the press above: rotate and resize are both degenerate
+            // there, since the scale ratio divides by distance-to-center and a point on
+            // the axis has no angle. The dot is drawn gray to say so.
+            onCenter,
             onPivot: this.startedOnPivot(graphic, event.point),
             handle,
             vertex,
             insertAt,
             origin: [event.lngLat.lng, event.lngLat.lat],
-            start: {geometry: graphic.base.geometry, properties: descriptionOf(graphic)},
+            start: dragStartOf(graphic),
             started: false,
             startPixel: {x: event.point.x, y: event.point.y},
         };
@@ -1616,7 +1652,7 @@ export class MapLibreInteractions {
 
         const after = withDerivedAmplifiers(
             drag.graphic.name,
-            this.applyGesture(before, drag, to),
+            this.withPastAxisMirror(this.applyGesture(before, drag, to), drag, to),
             before,
             this.effectiveMode(),
         );
@@ -1633,7 +1669,19 @@ export class MapLibreInteractions {
         // mid-drag would delete what the user is holding.
         if (!rebuilt) return;
 
-        const next = {...rebuilt, id: drag.graphic.id};
+        // **The "name only" choice rides along.** The rebuild reads the portable bag, which
+        // deliberately does not carry it, so a drag used to put every amplifier back. Only
+        // that flag is carried; what a drag does to the label anchor is left as it was.
+        // @see carryPaintFlags, TacticalGraphicsEngine.setAmplifiersHidden
+        const hidden = drag.graphic.graphic.hideAmplifiers;
+        const next = hidden
+            ? {
+                ...rebuilt,
+                id: drag.graphic.id,
+                graphic: {...rebuilt.graphic, hideAmplifiers: hidden},
+                labels: rebuilt.labels ? {...rebuilt.labels, hideAmplifiers: drag.graphic.labels?.hideAmplifiers} : rebuilt.labels,
+            }
+            : {...rebuilt, id: drag.graphic.id};
         this.renderer.replace(drag.graphic.id, next);
         drag.graphic = next;
         // **Only once the gesture has actually changed the size**, which is the rule
@@ -1662,6 +1710,26 @@ export class MapLibreInteractions {
                 this.showAngleMeasure(next, RADAR_READOUT_CAPTIONS.azimuth, after.properties.searchAxisAzimuthDeg);
             }
         }
+    }
+
+    /**
+     * **A grip dragged well past a point-anchored graphic's own axis flips it**, as OpenLayers'
+     * `mirrorIfDraggedPastAxis` does on every shape-grip drag in edit and resize: that is how a
+     * hook or an envelopment changes flanks. MapLibre applied the rule only to the dedicated
+     * mirror grip, so the same drag flipped a graphic on one engine and not the other (found
+     * by the all-engine grip sweep on the circular areas, 2026-09-26).
+     *
+     * Not for a drag started from the selection box, which says only "bigger" or "turn", and
+     * not for a grip with a role of its own (width, band, mirror), which OpenLayers routes
+     * elsewhere before it gets here. @see setMirror, isAffordanceGesture on the other engine
+     */
+    private withPastAxisMirror(after: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
+        const mode = this.effectiveMode();
+        if (this.activeGesture || drag.handle < 0 || drag.onCenter) return after;
+        if (mode !== 'edit' && mode !== 'resize' && mode !== 'modify') return after;
+        if (after.geometry.type !== 'Point') return after;
+        if (roleOfHandle(drag.graphic, drag.handle) !== 'shape') return after;
+        return setMirror(after, to, resolutionOf(this.map), 'across');
     }
 
     /**
@@ -1694,13 +1762,12 @@ export class MapLibreInteractions {
         // of this drag. @see effectiveMode
         const mode = this.effectiveMode();
 
-        // The center dot is a **shortcut to move**, and only in translate mode. Under
-        // any other mode the drag falls through to what that mode means, which is what
-        // OpenLayers does: grabbing a security operation's center rotates it, and a
-        // gesture the graphic refuses is refused below rather than quietly becoming a
-        // move. Treating the center as "move" in every mode made a security operation —
-        // which refuses resize — move when the user asked it to resize.
-        if (drag.onCenter && mode === 'translate') return translate(before, drag.origin, to);
+        // The center dot is a **shortcut to move**, and only in translate mode. Under any
+        // other mode it does nothing: `onPointerDown` does not claim it, and this guards
+        // the same rule for a drag that got here anyway. Falling through let an `edit`
+        // drag resize from the center, and treating it as "move" in every mode made a
+        // graphic that refuses resize move instead. OpenLayers leaves it alone in both.
+        if (drag.onCenter) return mode === 'translate' ? translate(before, drag.origin, to) : before;
 
         // A handle with a *role* means that role, whatever mode is selected — an
         // offset handle sets a width and nothing else, and a band handle sets its own
@@ -1813,6 +1880,8 @@ export class MapLibreInteractions {
                 return setOffset(before, to, {
                     offsetScale: handleContract(name).offsetScale,
                     resolution: resolutionOf(this.map),
+                    // Where the press was, so the width moves by the drag, not to the cursor.
+                    grab: drag.origin,
                 });
             case 'bend':
                 // Each curve family clamps its own bend, and the two ranges differ —

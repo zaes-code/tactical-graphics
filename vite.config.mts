@@ -20,6 +20,7 @@ import {resolve} from 'node:path';
 const LIBRARY_NAME = '@zaes/tactical-graphics';
 const LIBRARY_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/index.ts', import.meta.url));
 const THUMBNAILS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/assets/graphicThumbnails.ts', import.meta.url));
+const EDIT_CONTROLS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/ui/editControls.ts', import.meta.url));
 
 /**
  * Anchored, because a plain `{name: path}` alias is a prefix match: the root's entry would
@@ -28,38 +29,70 @@ const THUMBNAILS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/assets/gr
  */
 const LIBRARY_ALIASES = [
     {find: new RegExp(`^${LIBRARY_NAME}/thumbnails$`), replacement: THUMBNAILS_ENTRY},
+    {find: new RegExp(`^${LIBRARY_NAME}/edit-controls$`), replacement: EDIT_CONTROLS_ENTRY},
     {find: new RegExp(`^${LIBRARY_NAME}$`), replacement: LIBRARY_ENTRY},
 ];
 
 /**
- * **Engines from outside this repo, on a developer's machine only.** @see src/components/demoAddons.ts
+ * **Engines and tools from outside this repo, on a developer's machine only.** @see src/components/demoAddons.ts
  *
  * `npm run start:addons` runs Vite in `addons` mode, which loads the Vite plugins named in
- * `demo-addons.local.json` (untracked, so each developer lists their own) and leaves
- * `@demo/addons` for one of them to answer. In every other mode `@demo/addons` is the empty
- * list. Nothing here names an add-on: this repo is MIT and an add-on's code stays in the add-on.
+ * `demo-addons.local.json` (untracked, so each developer lists their own). Each plugin names its
+ * entry module as `demoAddonEntry`, and `@demo/addons` becomes those entries' lists joined, so
+ * several add-ons can be loaded at once. In every other mode `@demo/addons` is the empty list.
+ * Nothing here names an add-on: this repo is MIT and an add-on's code stays in the add-on.
  */
 const ADDONS_MODE = 'addons';
 const ADDONS_FILE = fileURLToPath(new URL('./demo-addons.local.json', import.meta.url));
 const NO_ADDONS = {find: /^@demo\/addons$/, replacement: fileURLToPath(new URL('./src/components/demoAddonsNone.ts', import.meta.url))};
 
-async function addonPlugins(): Promise<PluginOption[]> {
+type AddonPlugin = PluginOption & {demoAddonEntry?: string};
+
+/** `@demo/addons` as one module re-exporting every add-on entry's engines and tools. */
+function addonSlot(entries: string[]): PluginOption {
+    const id = '\0demo-addons';
+    return {
+        name: 'demo-addon-slot',
+        enforce: 'pre',
+        resolveId: source => (source === '@demo/addons' ? id : undefined),
+        load(loaded) {
+            if (loaded !== id) return undefined;
+            const imports = entries.map((entry, i) => `import * as addon${i} from ${JSON.stringify(entry.replaceAll('\\', '/'))};`);
+            const join = (list: string) => `[${entries.map((_, i) => `...(addon${i}.${list} ?? [])`).join(', ')}]`;
+            return [...imports, `export const demoAddons = ${join('demoAddons')};`, `export const demoTools = ${join('demoTools')};`].join('\n');
+        },
+    };
+}
+
+async function addonPlugins(): Promise<{plugins: PluginOption[]; entries: string[]}> {
     if (!existsSync(ADDONS_FILE)) {
         throw new Error(`addons mode needs demo-addons.local.json: {"plugins": ["<path to an add-on's Vite plugin>"]}`);
     }
     const {plugins = []} = JSON.parse(readFileSync(ADDONS_FILE, 'utf8')) as {plugins?: string[]};
-    return Promise.all(plugins.map(async path => {
+    const loaded = await Promise.all(plugins.map(async path => {
         const module = await import(pathToFileURL(resolve(fileURLToPath(new URL('.', import.meta.url)), path)).href);
-        return (module.default ?? module.plugin)() as PluginOption;
+        return (module.default ?? module.plugin)() as AddonPlugin;
     }));
+    const entries = loaded.flatMap(plugin => (plugin && typeof plugin === 'object' && 'demoAddonEntry' in plugin && plugin.demoAddonEntry ? [plugin.demoAddonEntry] : []));
+    return {plugins: [addonSlot(entries), ...loaded], entries};
 }
 
 export default defineConfig(async ({command, mode}) => {
     const addons = mode === ADDONS_MODE;
     // A build is what gets deployed, and the public sample must never carry an add-on.
     if (addons && command === 'build') throw new Error('addons mode is for the dev server only; it never builds');
+    const slot = addons ? await addonPlugins() : undefined;
     return {
-        plugins: [react(), ...(addons ? await addonPlugins() : [])],
+        plugins: [react(), ...(slot?.plugins ?? [])],
+
+        /**
+         * **The dependency scan has to be told where the add-ons are.** It crawls from
+         * `index.html` and cannot see through the virtual `@demo/addons` module, so an add-on's
+         * own dependencies (Cesium's 12 MB, for one) were found only when the add-on loaded.
+         * Vite then bundled a second time and forced a full reload, and a lazy import still in
+         * flight failed with a 504. Listing each entry beside `index.html` finds them at startup.
+         */
+        optimizeDeps: slot ? {entries: ['index.html', ...slot.entries.map(entry => entry.replaceAll('\\', '/'))]} : undefined,
 
         resolve: {
             alias: addons ? LIBRARY_ALIASES : [NO_ADDONS, ...LIBRARY_ALIASES],

@@ -14,7 +14,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {capLabelToGraphic} from './labelFit';
-import {MAX_SYMBOL_SIZE_PX, resolveSecuritySymbol, securitySymbolSidc} from '../core/securitySymbol';
+import {MAX_SYMBOL_SIZE_PX, resolveSecuritySymbol, securitySymbolSidc, symbolGraphicId} from '../core/securitySymbol';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import type {GraphicLabels} from '../core/render';
 
@@ -101,7 +101,10 @@ const SYMBOL_GAP_SHARE = 0.46;
  * The host-supplied unit symbol at the centre, placed and sized — or nothing.
  *
  * The same seam as the escort and the follow tasks: nothing here imports milsymbol, a host
- * registers a provider, and registering nothing draws an empty centre.
+ * registers a provider, and registering nothing draws an empty centre. The provider is
+ * looked up in the renderer's order — this graphic's own, then the renderer's
+ * (`context.centerSymbolProvider`), then the shared one — so the placement exists exactly
+ * when the renderer has something to draw in it. @see resolveSecuritySymbol
  *
  * **Sized from the graphic, capped like the others.** These are drawn in metres now, so the
  * gap grows as the map is zoomed into and a symbol that kept pace with it would be a badge
@@ -120,14 +123,17 @@ export function securityOperationSymbol(
     const wantedPx = Math.min((centre.gapMetres * SYMBOL_GAP_SHARE) / context.resolution, MAX_SYMBOL_SIZE_PX);
     if (!(wantedPx > 0)) return undefined;
 
-    const image = resolveSecuritySymbol({
-        name: feature.properties.name as TacticalGraphicName,
-        graphicId: ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined,
-        hostility,
-        sidc: securitySymbolSidc(hostility),
-        sizePx: wantedPx,
-        labels: feature.properties as unknown as GraphicLabels,
-    });
+    const image = resolveSecuritySymbol(
+        {
+            name: feature.properties.name as TacticalGraphicName,
+            graphicId: symbolGraphicId(feature),
+            hostility,
+            sidc: securitySymbolSidc(hostility),
+            sizePx: wantedPx,
+            labels: feature.properties as unknown as GraphicLabels,
+        },
+        context.centerSymbolProvider,
+    );
     if (!image) return undefined;
     return {at: centre.at, sizePx: image.sizePx ?? wantedPx, src: image.src};
 }

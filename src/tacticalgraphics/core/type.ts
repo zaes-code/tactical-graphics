@@ -121,9 +121,9 @@ export interface SecurityOperationOptions extends BaseGraphicOptions {
 
 /**
  * One band of a multi-band weapon/sensor range fan. `range` is the outer
- * radius in **kilometers** (the inner radius is whatever the previous
- * band's range was, or 0 for the innermost band). FM 1-02.2 Table 5-26
- * templates.
+ * radius in **meters** since 3.2.0 (kilometers before; see `range` below). The inner
+ * radius is whatever the previous band's range was, or 0 for the innermost band.
+ * FM 1-02.2 Table 5-26 templates.
  *
  * The sector variant (WeaponSensorRangeFanSector) lets each band carry
  * its own `leftAzimuthDeg` / `rightAzimuthDeg` — absolute compass
@@ -281,6 +281,11 @@ export type EncirclementAreaOptions = EncirclementOptions;
 export interface IGraphicGenerator<T extends GraphicOptions = GraphicOptions> {
     readonly name: string;
     readonly type: string;
+    /**
+     * True when a Point base gives this graphic no size of its own, so `radius` must say it.
+     * `renderTacticalGraphic` refuses such a feature by name rather than let turf fail on it.
+     */
+    readonly requiresRadius?: boolean;
 
     generate(baseCoords: Feature, opts?: T): ITacticalGraphic;
 }

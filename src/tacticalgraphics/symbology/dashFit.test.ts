@@ -115,6 +115,22 @@ describe('withFittedDashes', () => {
     });
 });
 
+describe('dash caps', () => {
+    const context = {resolution: 1, measureText} as PaintContext;
+    const line = (stroke: Paint['stroke']): Paint => ({geometry: {type: 'LineString', coordinates: [[0, 0], [400, 0]]}, stroke});
+
+    it('gives a dash square ends, so round caps cannot close its gaps', () => {
+        const [out] = withFittedDashes([line({color: '#000', widthPx: 2, dashPx: [12, 8]})], context);
+        expect(out.stroke!.cap).toBe('butt');
+    });
+
+    it('keeps a cap the paint states, and leaves a solid line as it was', () => {
+        const [dashed, solid] = withFittedDashes([line({color: '#000', widthPx: 2, dashPx: [12, 8], cap: 'round'}), line({color: '#000', widthPx: 2})], context);
+        expect(dashed.stroke!.cap).toBe('round');
+        expect(solid.stroke!.cap).toBeUndefined();
+    });
+});
+
 describe('strokeParts', () => {
     const parts: [number, number][][] = [[[0, 0], [1, 0]], [[0, 1], [1, 1]], [[0, 2], [1, 2]], [[0, 3], [1, 3]]];
     const stroke = {color: '#000', widthPx: 2};

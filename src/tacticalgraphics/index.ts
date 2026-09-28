@@ -1,5 +1,5 @@
 /**
- * @zaes/tactical-graphics — MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJSON.
+ * @zaes/tactical-graphics — FM 1-02.2 / APP-06 tactical graphics as plain GeoJSON.
  *
  * Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON
  * feature's properties, then render it:
@@ -16,6 +16,8 @@
  *
  * The output is GeoJSON in EPSG:4326 — render it with OpenLayers or anything
  * else that reads GeoJSON.
+ *
+ * @module @zaes/tactical-graphics
  */
 
 // ── The entry point ─────────────────────────────────────────────────────────
@@ -71,7 +73,17 @@ export type {
  * the arcs. Exported for exactly that reason; the OpenLayers sample app uses
  * them in `RangeFanGraphicBase`.
  */
-export {resolveBands, resolveBandAzimuths, resolveCenterAzimuth, resolveRangeFanBands, rotationToAzimuth} from './graphics/RangeFan';
+export {
+    BAND_SEPARATION_FRACTION,
+    geodesicBearingDeg,
+    geodesicDistanceM,
+    MIN_SECTOR_ARC_DEG,
+    resolveBands,
+    resolveBandAzimuths,
+    resolveCenterAzimuth,
+    resolveRangeFanBands,
+    rotationToAzimuth,
+} from './graphics/RangeFan';
 
 /**
  * Turn's bend limits and the clamp that enforces them. A renderer that lets the
@@ -162,6 +174,7 @@ export type {WireStyle} from './graphics/WireObstacle';
 export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
 export {ROADBLOCK_MAX_HALF_WIDTH_RATIO, ROADBLOCK_MIN_HALF_WIDTH_RATIO, clampRoadblockHalfWidth} from './graphics/RoadblockComplete';
 export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from './graphics/AntiTankDitch';
+export {drawnSide, hasDrawnSide, northSide} from './graphics/Abatis';
 export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
 
 /**
@@ -448,6 +461,9 @@ export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX
 // rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
 export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
 export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag, statesShapeAsRangeBands} from './core/symbology';
+// Where an arc mission task's second click lands: on its start point, so the draw files the
+// rotation that puts it there. @see START_POINT_GRAPHICS
+export {rotationFromDrawnPoint} from './core/symbology';
 export {describedProperties, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';
@@ -465,7 +481,7 @@ export {baseGeometryFor} from './core/render';
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
-export {RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, supportsMirror} from './core/handles';
+export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
 export {

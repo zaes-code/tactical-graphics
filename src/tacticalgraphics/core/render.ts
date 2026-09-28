@@ -21,7 +21,7 @@
  */
 
 import {dashedPartsOf} from './dashedParts';
-import {Feature, FeatureCollection, GeoJsonProperties, Position} from 'geojson';
+import {Feature, FeatureCollection, GeoJsonProperties, Geometry, Position} from 'geojson';
 import * as turf from './turf';
 import {TacticalGraphicsRegistry} from './TacticalGraphicsRegistry';
 import {
@@ -44,8 +44,10 @@ export const TACTICAL_GRAPHIC_KEY = 'tacticalGraphic' as const;
 
 /**
  * Everything the library needs to draw one tactical graphic, stored under
- * `feature.properties.tacticalGraphic`. Only `name` is required; every graphic
- * ignores the fields that don't apply to it.
+ * `feature.properties.tacticalGraphic`. Only `name` is required by the type; the 38
+ * graphics drawn from a single `Point` with no other size also need `radius`, and
+ * {@link renderTacticalGraphic} throws without it. Every graphic ignores the fields that
+ * don't apply to it.
  */
 export interface TacticalGraphicProperties {
     /** Which graphic to draw. The single required field. */
@@ -117,20 +119,32 @@ export interface TacticalGraphicProperties {
      */
     altitudeDatum?: AltitudeDatum;
 
+    /**
+     * Effective time. Accepted and saved, but no graphic draws it: the airspace
+     * coordination areas build their `EFF` line from `startDate` and `endDate`.
+     */
     eff?: string;
+    /** Grid reference. The airspace coordination areas render it. */
     grid?: string;
-    /** Weapon designation. Today only FinalProtectiveFire renders this. */
+    /**
+     * Weapon designation on FinalProtectiveFire. The two convoys render it too, as field V,
+     * the equipment type.
+     */
     weapon?: string;
 
     // ── Symbology (affects color and dash pattern) ─────────────────────────
     hostility?: TacticalGraphicHostility;
+    /** `Planned` dashes the line work on most graphics. */
     status?: TacticalGraphicStatus;
+    /** `Suspected` on a hostile graphic dashes its line work, as `Planned` does. */
     confidence?: TacticalGraphicConfidence;
     echelon?: TacticalGraphicEchelon;
+    /** The route graphics: route, main supply route and alternate supply route. */
     direction?: RouteDirection;
     /**
-     * Which mine the two mine areas draw inside themselves — APP-06 Table 8-24's
-     * Sector 1 Modifier, restricted to its seven primitive types.
+     * Which mine the three mine areas draw inside themselves, and the mineline along
+     * itself — APP-06 Table 8-24's Sector 1 Modifier, restricted to its seven primitive
+     * types.
      * @see TacticalGraphicMineType
      */
     mineType?: TacticalGraphicMineType;
@@ -152,11 +166,18 @@ export interface TacticalGraphicProperties {
     /**
      * Radius in **meters**: how far the symbol reaches from its own center. The circle
      * radius for the arc mission tasks and circular areas, and the half-length of a
-     * point-anchored arrow. Defaults are applied per graphic when omitted.
+     * point-anchored arrow.
+     *
+     * **Required** on the 38 graphics drawn from a single `Point` with no other size:
+     * {@link renderTacticalGraphic} throws a {@link TacticalGraphicError} naming this field
+     * rather than inventing one. The other point graphics (range fans, the one-point boxes
+     * and ellipses, radar search doctrine) are sized by their own fields.
      *
      * Only for graphics that *have* a center. A line graphic's arrowhead or teeth are
      * sized by `decorationSize`, which is a different quantity that was briefly and
-     * wrongly folded in here.
+     * wrongly folded in here. Both reach the generators through one slot (`size`), so a
+     * line graphic handed a `radius` reads it as its `decorationSize`, and `radius` wins
+     * if both are set. @see toGraphicOptions
      */
     radius?: number;
     /**
@@ -168,16 +189,15 @@ export interface TacticalGraphicProperties {
      * arrowhead, and there is no center to take a radius of. The two were briefly one
      * field, which made `radius` mean two unrelated things depending on the graphic.
      *
-     * **Caveat, see `ai/decisions.md`:** the generators that read this still consume it as
-     * meters per *screen pixel* and multiply by a pixel count of their own, so a value in
-     * meters comes out ~20x too large. That is the open item this field's existence makes
-     * findable rather than hidden inside `radius`.
+     * In **meters**: `DirectionOfSupportingAttack` with `decorationSize: 400` draws barbs
+     * 400 m long.
      */
     decorationSize?: number;
     /**
      * **Full** width in meters, measured across a drawn line: rail to rail on an
-     * axis of advance, edge to edge on a corridor. What a width-drag handle writes,
-     * and what a properties dialog shows.
+     * axis of advance, edge to edge on a corridor, across a rectangular zone. On the
+     * one-point boxes and ellipses it is the dimension across the attitude. What a
+     * width-drag handle writes, and what a properties dialog shows.
      *
      * Full, not half — the generators work in half-widths (the perpendicular offset
      * from the centerline), so `toGraphicOptions` halves it on the way in and the
@@ -189,35 +209,48 @@ export interface TacticalGraphicProperties {
     /**
      * Full length in meters, the dimension **along** the graphic rather than across it.
      *
-     * Only the rectangular target carries both. FM 1-02.2 table 5-25 draws it with
-     * `AM1` across the top and `AM` down the side; APP-06 240802 names them
-     * outright — "the target length (AM1) in metres and target width (AM) in metres".
-     * Every other rectangle takes its length from the anchor points instead, which is
-     * why this is not beside `width` on all of them.
+     * Only the one-point boxes and ellipses carry both: the rectangular target, cued
+     * acquisition doctrine (APP-06 200600, built by the same generator) and the three
+     * maritime ellipses (200101, 200201, 200401), where it is the full major axis.
+     * FM 1-02.2 table 5-25 draws the rectangular target with `AM1` across the top and
+     * `AM` down the side; APP-06 240802 names them outright — "the target length (AM1)
+     * in metres and target width (AM) in metres". Every other rectangle takes its length
+     * from the anchor points instead, which is why this is not beside `width` on all of
+     * them.
      */
     length?: number;
     /**
-     * Hangs an asymmetric graphic's hook on the other side of its drawn line.
+     * Puts an abatis tooth on the right of its line instead of the left.
      *
-     * Portable user intent, not renderer state: a Cesium view needs it to draw the same
-     * symbol. Expressed relative to the line's own bearing, so it survives rotation —
-     * see `GeometryService.getCaneArrow` for the compass-pinned version this replaced.
+     * Set once, when the line is drawn, so the tooth starts out pointing north whichever way
+     * the line ran (`drawnSide`); after that it turns with the line, and no gesture flips it.
+     * Files saved before 2026-09-06 also carry it for the cane arrows and Mobile
+     * Defense, which state their side with a third point now; those still draw as saved.
      */
     mirrored?: boolean;
-    /** Rotation in degrees, for point-based graphics. */
+    /**
+     * Rotation in degrees, counter-clockwise from east, for point-based graphics.
+     *
+     * On the arc mission tasks it is the axis the letter sits on; APP-06's point 2, where
+     * the edit handle is, lies 175° counter-clockwise from it.
+     */
     rotation?: number;
     /**
-     * Depth of a bowed graphic's curve, as a signed multiple of `size`. Only
-     * Turn reads it: larger bends the turn more sharply, negative bends it the
-     * other way. Unitless on purpose — it survives a resize.
+     * Depth of a bowed graphic's curve, as a signed multiple of `size`. Turn, the
+     * tactical turn and Envelopment read it: larger bends the curve more sharply,
+     * negative bends it the other way. Unitless on purpose — it survives a resize.
+     *
+     * A fallback: once the base carries the anchor point that places the curve, that
+     * point decides and this is ignored.
      */
     bend?: number;
     /**
      * Half the gap left in the circle for the label, in **degrees of arc**. Only
      * the arc-and-arrowhead mission tasks read it — Secure, Isolate, Retain,
-     * Occupy, Control, Contain, Cordon and Search, Area Defense. Omit it for the
-     * doctrinal 15°; pass 0 if you intend to cut the gap yourself from the label
-     * as you render it, which is what this library's OpenLayers layer does.
+     * Occupy, Control, Contain, Deny, Locate, Cordon and Knock, Cordon and Search,
+     * Area Defense. Omit it for the default 15°; pass 0 if you intend to cut the gap
+     * yourself from the label as you render it, which is what both of this library's
+     * renderers do.
      */
     labelGapDegrees?: number;
     /**
@@ -234,7 +267,10 @@ export interface TacticalGraphicProperties {
      * wide around the same "T".
      */
     labelGap?: number;
-    /** Multi-band range fan config. Only the two range fan graphics read this. */
+    /**
+     * Multi-band range fan config. The two range fan graphics read this; radar search
+     * doctrine reads it only from a file saved in its old shape.
+     */
     rangeFan?: RangeFanConfig;
 
     /*
@@ -256,11 +292,11 @@ export interface TacticalGraphicProperties {
      * A graphic saved in the old shape still reads: `RadarSearchDoctrine.frame` falls back to
      * the bands, the rotation and the drawn size when these are absent.
      */
-    /** Degrees clockwise from north — the axis the sector is centred on. */
+    /** Degrees clockwise from north — the axis the sector is centered on. */
     searchAxisAzimuthDeg?: number;
-    /** Metres from the radar to the near arc. */
+    /** Meters from the radar to the near arc. */
     startRange?: number;
-    /** Metres from the radar to the far arc. */
+    /** Meters from the radar to the far arc. */
     stopRange?: number;
     /** Degrees, an equal angle **either side** of the search axis — so half the opening. */
     stopRelativeBearingDeg?: number;
@@ -607,14 +643,31 @@ export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: P
     return {...cleaned, ...overrides} as GraphicOptions;
 }
 
-/** Stamps the graphic config and a role onto a generated feature. */
+/**
+ * A copy of a generated feature with the graphic config and a role stamped on it.
+ *
+ * A copy because a generator may hand back the base itself (every simple line does), and
+ * writing into that wrote `role: 'graphic'` into the caller's own feature, which `base` is
+ * documented to leave unchanged. The geometry is shared, not cloned; nothing here writes it.
+ */
 function tag(feature: Feature, props: TacticalGraphicProperties, role: TacticalGraphicRole): Feature {
-    feature.properties = {
-        ...(feature.properties ?? {}),
-        [TACTICAL_GRAPHIC_KEY]: props,
-        role,
+    return {
+        ...feature,
+        properties: {
+            ...(feature.properties ?? {}),
+            [TACTICAL_GRAPHIC_KEY]: props,
+            role,
+        },
     };
-    return feature;
+}
+
+/** True when every position in the geometry is an array of finite numbers. */
+function hasValidPositions(geometry: Geometry | null): boolean {
+    if (!geometry) return true;
+    if (geometry.type === 'GeometryCollection') return geometry.geometries.every(hasValidPositions);
+    const walk = (c: unknown): boolean =>
+        Array.isArray(c) && (typeof c[0] === 'number' ? c.length >= 2 && c.every(Number.isFinite) : c.every(walk));
+    return walk(geometry.coordinates);
 }
 
 /**
@@ -641,7 +694,9 @@ function withDashedParts(feature: Feature, name: TacticalGraphicName | string): 
  * @param feature   A Feature with `properties.tacticalGraphic` set.
  * @param overrides Generator options that win over the feature's properties.
  * @throws {TacticalGraphicError} if the config is missing, names an unknown
- *         graphic, or the geometry type doesn't suit that graphic.
+ *         graphic, the geometry type doesn't suit that graphic, a one-point graphic
+ *         has no `radius`, or the base cannot be drawn (every control point on one
+ *         spot, for instance). Invalid GeoJSON is never returned.
  */
 export function renderTacticalGraphic(feature: Feature, overrides?: Partial<GraphicOptions>): TacticalGraphicRender {
     const props = readTacticalGraphicProperties(feature);
@@ -675,7 +730,30 @@ export function renderTacticalGraphic(feature: Feature, overrides?: Partial<Grap
         );
     }
 
-    const rendered = generator.generate(feature, toGraphicOptions(props, overrides));
+    const options = toGraphicOptions(props, overrides);
+    // The editors always stamp a radius; a hand-built feature or an imported file may not,
+    // and turf's "coordinates must contain numbers" names neither the field nor the graphic.
+    if (generator.requiresRadius && feature.geometry.type === 'Point' && !Number.isFinite(options.size)) {
+        throw new TacticalGraphicError(
+            `Graphic "${props.name}" is drawn from one point and needs "properties.${TACTICAL_GRAPHIC_KEY}.radius" (meters) to size it.`,
+            props.name,
+        );
+    }
+
+    // A base a generator cannot draw from (every control point on one spot, most often) either
+    // throws from deep inside turf or comes back with `NaN` and `null` positions. Both leave as
+    // one error that names the graphic, and invalid GeoJSON never leaves at all.
+    const cannotDraw = (why: string) =>
+        new TacticalGraphicError(`Graphic "${props.name}" cannot be drawn from this base: ${why}. Check that its control points are distinct.`, props.name);
+    let rendered;
+    try {
+        rendered = generator.generate(feature, options);
+    } catch (e) {
+        throw cannotDraw((e as Error)?.message ?? String(e));
+    }
+    for (const part of [rendered.graphic, rendered.labels, rendered.handles]) {
+        if (!hasValidPositions(part.geometry)) throw cannotDraw('it produced positions that are not coordinates');
+    }
 
     return {
         name: props.name,

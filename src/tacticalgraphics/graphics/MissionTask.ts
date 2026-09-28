@@ -1,5 +1,5 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
-import {ARC_TIC_FRACTION, arcTicCount} from '../core/symbology';
+import {ARC_TIC_FRACTION, arcTicCount, START_POINT_DEGREES} from '../core/symbology';
 import {Feature, MultiLineString, MultiPoint, Point, GeometryCollection, Position} from "geojson";
 import {Coordinate, PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import geometryService from "../core/GeometryService";
@@ -36,21 +36,16 @@ export const DEFAULT_LABEL_GAP_DEGREES = 15;
 const MAX_LABEL_GAP_DEGREES = 60;
 
 /**
- * Where **point 2** sits on an arc mission task, in degrees from the rotation axis.
- *
- * APP-06 words it the same way for all nine — secure, isolate, retain, control, occupy,
- * area defence, locate and the two cordons: *"This symbol requires two anchor points.
- * Point 1 defines the centre point of the graphic and point 2 defines the graphic's start
- * point and radius."* The Template draws `PT. 2 (START POINT)` against the **blunt end of
- * the upper arc**, which is the end the arc is drawn from and the one with no arrowhead on
- * it — 175 degrees here, since {@link MissionTask.labelGapArcs} runs the upper arc from the
- * label gap round to there.
+ * Where **point 2** sits on an arc mission task, in degrees from the rotation axis: the
+ * blunt end of the upper arc, which is the end with no arrowhead on it. Stated in
+ * `core/symbology` because the draw needs it too, and re-exported here for the generators
+ * and their tests. @see START_POINT_GRAPHICS, rotationFromDrawnPoint
  *
  * The handle used to sit on `lowerArch[0]` at 205 degrees instead: the *other* free end,
  * the one carrying the arrowhead. Measured on both engines, every circle in the library
  * put its red handle at 206 degrees. @see generateHandles
  */
-export const START_POINT_DEGREES = 175;
+export {START_POINT_DEGREES};
 
 /**
  * Where the radius is drawn on a circular **area**, in degrees from the rotation axis.
@@ -75,6 +70,8 @@ function labelGapDegrees(opts: PointGraphicOptions): number {
 
 export abstract class MissionTask extends TacticalGraphicsBase<PointGraphicOptions> {
     type: string = "Point";
+    /** A dropped point has no size; it comes from `radius`. @see IGraphicGenerator.requiresRadius */
+    readonly requiresRadius = true;
 
     /**
      * The two arcs the arc-and-arrowhead circles are built from: an upper one

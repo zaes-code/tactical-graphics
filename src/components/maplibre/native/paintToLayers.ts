@@ -1,7 +1,7 @@
 import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
 import type {LayerSpecification} from 'maplibre-gl';
-import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition} from '@zaes/tactical-graphics';
+import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition, type StrokeSpec} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
 /**
@@ -70,7 +70,15 @@ export interface LayerBuckets {
     circles: Feature[];
     symbols: Feature[];
     /** Hatch images this list needs registered, by id. @see renderHatchImage */
-    hatches: Map<string, HatchSpec>;
+    hatches: Map<string, HatchImage>;
+    /** How much MapLibre will grow a pattern at the zoom these fills are for. @see hatchGrowth */
+    hatchGrowth: number;
+}
+
+/** A hatch as `map.addImage` wants it: the spec, and the raster width to draw it at. */
+export interface HatchImage {
+    spec: HatchSpec;
+    rasterPx: number;
 }
 
 /** EPSG:3857 → lon/lat, for a geometry on its way into a MapLibre source. */
@@ -85,9 +93,19 @@ function toGeoJson(geometry: ProjectedGeometry): Geometry {
  * same pixel dash at two stroke widths needs two different arrays, so it needs
  * two layers.
  */
-function dashKey(dashPx: number[] | undefined, widthPx: number): string {
+function dashKey(dashPx: number[] | undefined, widthPx: number, cap: StrokeSpec['cap']): string {
     if (!dashPx || !dashPx.length) return 'solid';
-    return `${dashPx.map(d => (d / widthPx).toFixed(3)).join(',')}@${widthPx}`;
+    return `${dashPx.map(d => (d / widthPx).toFixed(3)).join(',')}@${widthPx}@${cap ?? 'round'}`;
+}
+
+/**
+ * The line cap a line layer's key names. A dash's cap is part of its key because a MapLibre
+ * layer has one `line-cap` for everything in it, and a dash drawn with the wrong cap is a
+ * different dash. @see withFittedDashes, which gives a dash square ends
+ */
+export function capOfKey(key: string): 'butt' | 'round' | 'square' {
+    const cap = key.split('@')[2];
+    return cap === 'butt' || cap === 'square' ? cap : 'round';
 }
 
 /** Anchor names MapLibre uses, from the paint list's align/baseline pair. */
@@ -100,6 +118,18 @@ function textAnchor(align: string | undefined, baseline: string | undefined): st
     if (vertical === 'center') return horizontal;
     if (horizontal === 'center') return vertical;
     return `${vertical}-${horizontal}`;
+}
+
+/** Left for right: the alignment of a block turned a half turn about its anchor. */
+function mirrorAlign(align: string | undefined): string | undefined {
+    return align === 'left' ? 'right' : align === 'right' ? 'left' : align;
+}
+
+/** Top for bottom, likewise. */
+function mirrorBaseline(baseline: string | undefined): string | undefined {
+    if (baseline === 'top' || baseline === 'hanging') return 'bottom';
+    if (baseline === 'bottom' || baseline === 'alphabetic') return 'top';
+    return baseline;
 }
 
 /** The rendered px size of a font shorthand, times the mark's scale. */
@@ -115,8 +145,36 @@ function renderedFontPx(font: string, scale: number): number {
  * Derived from the spec's own values so two areas asking for the same hatch share
  * one registered image, and two asking for different ones do not collide.
  */
-export function hatchImageId(spec: HatchSpec): string {
-    return `tg-hatch-${spec.kind}-${spec.color}-${spec.sizePx}-${spec.lineWidthPx}`.replace(/[^a-z0-9-]/gi, '_');
+export function hatchImageId(spec: HatchSpec, rasterPx = spec.sizePx): string {
+    return `tg-hatch-${spec.kind}-${spec.color}-${spec.sizePx}-${spec.lineWidthPx}-${rasterPx}`.replace(/[^a-z0-9-]/gi, '_');
+}
+
+/**
+ * The `pixelRatio` every hatch is registered at. Whole, because MapLibre stores a
+ * pattern's ratio in a Uint16 vertex attribute and a fractional one truncates.
+ */
+export const HATCH_PIXEL_RATIO = 4;
+
+/**
+ * How much MapLibre grows a `fill-pattern` at `zoom`.
+ *
+ * It lays the pattern out in the pixels of the tile zoom, `floor(zoom)`, so between integer
+ * zooms the pattern grows with the map: at 5.6 a 10 px tile repeats every 15 px, then snaps
+ * back to 10 at 6. OpenLayers draws it at 10 at every zoom, and there is no paint property to
+ * turn this off, so the raster is drawn that much smaller instead. @see hatchRasterPx
+ */
+export function hatchGrowth(zoom: number): number {
+    return 2 ** (zoom - Math.max(0, Math.floor(zoom)));
+}
+
+/**
+ * The raster width that shows a hatch at its own `sizePx` once MapLibre has grown it.
+ *
+ * Rounded to whole pixels at `HATCH_PIXEL_RATIO`, so it is off by at most 2.5% and a
+ * 10 px hatch needs at most 21 images across a zoom level.
+ */
+export function hatchRasterPx(spec: HatchSpec, growth: number): number {
+    return Math.round(spec.sizePx * HATCH_PIXEL_RATIO / growth);
 }
 
 /**
@@ -128,13 +186,15 @@ export function hatchImageId(spec: HatchSpec): string {
  * between the two renderers on this feature: a canvas takes a `CanvasPattern`
  * directly, MapLibre needs the tile drawn and uploaded first.
  */
-export function renderHatchImage(spec: HatchSpec): ImageData | null {
+export function renderHatchImage(spec: HatchSpec, rasterPx = spec.sizePx): ImageData | null {
     const canvas = document.createElement('canvas');
-    canvas.width = spec.sizePx;
-    canvas.height = spec.sizePx;
+    canvas.width = rasterPx;
+    canvas.height = rasterPx;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
+    // Drawn in the spec's own pixels and scaled to fit, so the stroke keeps its proportion.
+    ctx.scale(rasterPx / spec.sizePx, rasterPx / spec.sizePx);
     ctx.strokeStyle = spec.color;
     ctx.lineWidth = spec.lineWidthPx;
     ctx.beginPath();
@@ -144,7 +204,7 @@ export function renderHatchImage(spec: HatchSpec): ImageData | null {
     }
     ctx.stroke();
 
-    return ctx.getImageData(0, 0, spec.sizePx, spec.sizePx);
+    return ctx.getImageData(0, 0, rasterPx, rasterPx);
 }
 
 /**
@@ -164,8 +224,8 @@ export const GRAPHIC_ID_PROPERTY = 'tgId';
  * `graphicId`, when given, is stamped on every feature so a rendered mark can be
  * traced back to its graphic. @see GRAPHIC_ID_PROPERTY
  */
-export function emptyBuckets(): LayerBuckets {
-    return {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+export function emptyBuckets(hatchGrowth = 1): LayerBuckets {
+    return {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map(), hatchGrowth};
 }
 
 export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets {
@@ -187,7 +247,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
         const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
 
         if (stroke) {
-            const key = dashKey(stroke.dashPx, stroke.widthPx);
+            const key = dashKey(stroke.dashPx, stroke.widthPx, stroke.cap);
             const list = buckets.lines.get(key) ?? [];
             list.push({
                 type: 'Feature',
@@ -198,6 +258,7 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
         }
 
         if (fill) {
+            const hatch = fill.pattern && {spec: fill.pattern, rasterPx: hatchRasterPx(fill.pattern, buckets.hatchGrowth)};
             buckets.fills.push({
                 type: 'Feature',
                 geometry: toGeoJson(geometry),
@@ -208,10 +269,10 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // feature in the layer, and MapLibre treats an unknown image name
                     // as "no pattern" — which is exactly the flat-color fallback
                     // `FillSpec` documents.
-                    pattern: fill.pattern ? hatchImageId(fill.pattern) : '',
+                    pattern: hatch ? hatchImageId(hatch.spec, hatch.rasterPx) : '',
                 },
             });
-            if (fill.pattern) buckets.hatches.set(hatchImageId(fill.pattern), fill.pattern);
+            if (hatch) buckets.hatches.set(hatchImageId(hatch.spec, hatch.rasterPx), hatch);
         }
 
         if (circle) {
@@ -241,6 +302,10 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // `text-rotate` turns the glyph about its anchor, which is what the
                     // paint list means, so only the units and sign differ.
                     rotate: ((text.rotation ?? 0) * 180) / Math.PI,
+                    // A paint that states a rotation lays its text along something on the
+                    // map, a line or a symbol's axis, so it turns with the map. Zero is a
+                    // horizontal line, not an upright label. @see turnedSymbolLayout
+                    turned: text.rotation !== undefined,
                     color: text.fill,
                     haloColor: text.halo?.color ?? 'transparent',
                     haloWidth: outwardHalo(text.halo?.widthPx),
@@ -251,6 +316,11 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // the header note. It is a single property because `text-offset`
                     // wants one expression yielding a pair, not a pair of expressions.
                     offset: [(text.offsetXPx ?? 0) / size, (text.offsetYPx ?? 0) / size],
+                    // The same block turned a half turn about its anchor, for when the map
+                    // is turned far enough that the text would read upside down.
+                    flippedAnchor: textAnchor(mirrorAlign(text.align), mirrorBaseline(text.baseline)),
+                    flippedJustify: mirrorAlign(text.justify ?? text.align) ?? 'center',
+                    flippedOffset: [-(text.offsetXPx ?? 0) / size, -(text.offsetYPx ?? 0) / size],
                 },
             });
         }
@@ -320,12 +390,12 @@ export function dashZoomStep(zoom: number): number {
     return Math.ceil(fraction * DASH_ZOOM_STEPS) / DASH_ZOOM_STEPS;
 }
 
-export function lineLayer(id: string, source: string, dashPx: number[] | undefined): LayerSpecification {
+export function lineLayer(id: string, source: string, dashPx: number[] | undefined, cap: 'butt' | 'round' | 'square' = 'round'): LayerSpecification {
     return {
         id,
         type: 'line',
         source,
-        layout: {'line-cap': 'round', 'line-join': 'round'},
+        layout: {'line-cap': cap, 'line-join': 'round'},
         paint: {
             'line-color': ['get', 'color'],
             'line-width': ['get', 'width'],
@@ -401,14 +471,30 @@ export function circleLayer(id: string, source: string): LayerSpecification {
     } as LayerSpecification;
 }
 
-export function symbolLayer(id: string, source: string, fontStack: string): LayerSpecification {
+/**
+ * A font stack as MapLibre's `text-font` wants it: font names tried in order against the
+ * style's `glyphs` server. A single name is a one-entry stack.
+ */
+export type FontStack = string | readonly string[];
+
+/** `text-font`'s value for a {@link FontStack}. A fresh array, so no layer shares one with the caller. */
+export function textFont(fontStack: FontStack): string[] {
+    return typeof fontStack === 'string' ? [fontStack] : [...fontStack];
+}
+
+/**
+ * The upright labels: text a paint did not turn, which stays level on screen however the map
+ * is turned or tilted. Turned text is in {@link turnedSymbolLayer}, from the same source.
+ */
+export function symbolLayer(id: string, source: string, fontStack: FontStack): LayerSpecification {
     return {
         id,
         type: 'symbol',
         source,
+        filter: ['!', ['get', 'turned']],
         layout: {
             'text-field': ['get', 'label'],
-            'text-font': [fontStack],
+            'text-font': textFont(fontStack),
             'text-size': ['get', 'size'],
             'text-rotate': ['get', 'rotate'],
             'text-anchor': ['get', 'anchor'],
@@ -443,6 +529,60 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
 }
 
 /**
+ * Whether a label turned to `rotate` degrees reads upside down on a map at `bearing`. Its
+ * angle on screen is `rotate - bearing`: the paint's angle is for a north-up map, and
+ * turning the map turns the text with it.
+ */
+export function turnedLabelFlips(rotate: number, bearing: number): boolean {
+    const onScreen = ((((rotate - bearing + 180) % 360) + 360) % 360) - 180;
+    return Math.abs(onScreen) > 90;
+}
+
+/**
+ * The layout that keeps turned text along its line and the right way up on a map at
+ * `bearing`. Past a quarter turn from level, a label is turned the other half turn and
+ * anchored at the opposite corner, with its offset reversed, so the block stays exactly
+ * where it was and only reads the other way: what the paint layer's upright rule does on a
+ * north-up map. MapLibre's own `text-keep-upright` is for line placement only.
+ *
+ * The bearing is a literal: layout cannot read the camera. The renderer sets these again
+ * when a turn changes which labels flip. @see turnedLabelFlips
+ */
+export function turnedSymbolLayout(bearing: number): Record<string, unknown> {
+    // The expression form of turnedLabelFlips.
+    const flips = [
+        '>',
+        ['abs', ['-', ['%', ['+', ['%', ['+', ['-', ['get', 'rotate'], bearing], 180], 360], 360], 360], 180]],
+        90,
+    ];
+    return {
+        'text-rotate': ['case', flips, ['+', ['get', 'rotate'], 180], ['get', 'rotate']],
+        'text-anchor': ['case', flips, ['get', 'flippedAnchor'], ['get', 'anchor']],
+        'text-justify': ['case', flips, ['get', 'flippedJustify'], ['get', 'justify']],
+        'text-offset': ['case', flips, ['array', 'number', 2, ['get', 'flippedOffset']], ['array', 'number', 2, ['get', 'offset']]],
+    };
+}
+
+/**
+ * The turned labels: text a paint laid along a line or a symbol's axis. They turn with the
+ * map, so a line's label stays on the line when the map is turned, and face the camera
+ * when it is tilted, so they stay legible. @see turnedSymbolLayout
+ */
+export function turnedSymbolLayer(id: string, source: string, fontStack: FontStack, bearing: number): LayerSpecification {
+    const upright = symbolLayer(id, source, fontStack) as LayerSpecification & {layout: Record<string, unknown>};
+    return {
+        ...upright,
+        filter: ['get', 'turned'],
+        layout: {
+            ...upright.layout,
+            ...turnedSymbolLayout(bearing),
+            'text-rotation-alignment': 'map',
+            'text-pitch-alignment': 'viewport',
+        },
+    } as unknown as LayerSpecification;
+}
+
+/**
  * Folds per-graphic buckets into one set, preserving dash-key grouping.
  *
  * Bucketing per graphic is what lets each feature carry its owner's id; merging
@@ -451,7 +591,7 @@ export function symbolLayer(id: string, source: string, fontStack: string): Laye
  * pays per layer on every frame.
  */
 export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
-    const merged: LayerBuckets = {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map()};
+    const merged = emptyBuckets(all[0]?.hatchGrowth);
 
     for (const bucket of all) {
         for (const [key, list] of Array.from(bucket.lines)) {
@@ -462,7 +602,7 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
         merged.fills.push(...bucket.fills);
         merged.circles.push(...bucket.circles);
         merged.symbols.push(...bucket.symbols);
-        for (const [id, spec] of Array.from(bucket.hatches)) merged.hatches.set(id, spec);
+        for (const [id, image] of Array.from(bucket.hatches)) merged.hatches.set(id, image);
     }
 
     return merged;
@@ -483,14 +623,14 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
  * takes the line's own angle and stays upright relative to it as the user swings the
  * handle round, with no rotation to compute and none to keep in step.
  */
-export function measureLabelLayer(id: string, source: string, fontStack: string): LayerSpecification {
+export function measureLabelLayer(id: string, source: string, fontStack: FontStack): LayerSpecification {
     return {
         id,
         type: 'symbol',
         source,
         layout: {
             'text-field': ['get', 'label'],
-            'text-font': [fontStack],
+            'text-font': textFont(fontStack),
             // One line, like the other engine's. A read-out naming two numbers carries a
             // separator MapLibre will happily break at, and the two engines then say the
             // same thing in a different shape. @see NO_WRAP_EMS

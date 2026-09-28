@@ -70,6 +70,14 @@ export interface MapEngineHandle extends TacticalGraphicsEngine {
     camera?: ViewCamera;
 
     /**
+     * Shows GeoJSON that is not tactical graphics under them, painted from each feature's
+     * simplestyle properties, replacing what was shown; `null` clears it. For add-on tools with
+     * something to show beside the graphics. It is not saved with them, and an engine without it
+     * shows nothing. @see OverlayProperties
+     */
+    showOverlay?(collection: FeatureCollection | null): void;
+
+    /**
      * Formats an engine can save to beyond GeoJSON, which every engine writes. The panel
      * turns its Export button into a menu when there are any.
      */

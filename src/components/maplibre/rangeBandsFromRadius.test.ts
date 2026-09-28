@@ -39,6 +39,20 @@ describe('a range-band graphic restored from a radius alone', () => {
         expect(built!.properties.stopRange).toBe(9_000);
     });
 
+    /**
+     * **Nor for the two weapon fans**, which are drawn from their bands. OpenLayers never gives
+     * them a start or stop range, and doing it here made the shared editor take them for a
+     * radar search: their band grips wrote fields the fan never reads. (User's report,
+     * 2026-09-26: range fan grips dead on MapLibre and ArcGIS.)
+     */
+    it('does not give the weapon fans the ranges of a radar search', () => {
+        for (const name of [TacticalGraphicName.WeaponSensorRangeFanCircular, TacticalGraphicName.WeaponSensorRangeFanSector]) {
+            const built = buildTacticalGraphic(name, POINT, {radius: RADIUS, rotation: 0}, RES);
+            expect(built!.properties.startRange).toBeUndefined();
+            expect(built!.properties.stopRange).toBeUndefined();
+        }
+    });
+
     /** And a graphic that is not described by bands is untouched by the rule. */
     it('does not invent ranges for anything else', () => {
         const built = buildTacticalGraphic(TacticalGraphicName.PhaseLine, {type: 'LineString', coordinates: [[-0.7, 40], [0, 40]]}, {radius: RADIUS}, RES);

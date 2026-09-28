@@ -152,9 +152,10 @@ const MIRROR_HANDLE_GRAPHICS: readonly TacticalGraphicName[] = [
     // (User's report: "pursuit point 3 drag still doesn't behave like other cane graphics
     // […] I'm trying to have consistency across similar graphics".)
     //
-    // This one carries the handle elsewhere in its own contract below, but it mirrors just
-    // the same, and `supportsMirror` is the question a panel or a test asks.
-    TacticalGraphicName.Abatis,
+    // 280100 abatis left on 2026-09-25, the last one. Its side is set when the line is drawn,
+    // so the tooth starts out pointing north, and then turns with the line; no grip flips it
+    // (user's call). The list is kept, empty, because `supportsMirror` is still the question a
+    // panel or a test asks. @see drawnSide
     // 152800 left this list on 2026-09-06: its point 3 states which side the arc falls on,
     // so the flip is a placed point rather than an amplifier and there is no mirror gesture
     // left to advertise. @see MobileDefense.frame
@@ -625,15 +626,6 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
     if (BLOCK_GRAPHICS.includes(name)) {
         return {roles: ['offset'], repeating: 'shape', offsetScale: OFFSET_SCALE[name]};
     }
-    // **These three first.** They mirror, so they are in `MIRROR_HANDLE_GRAPHICS` — but
-    // each puts the handle at its own index, and the generic branch below would
-    // otherwise claim them and put it at 0.
-    //
-    // The chevron's apex, which the generator emits third precisely so the flip has
-    // something to grab. @see Abatis.generateHandles
-    if (name === TacticalGraphicName.Abatis) {
-        return {roles: ['shape', 'shape', 'mirror'], repeating: 'shape'};
-    }
     if (MIRROR_HANDLE_GRAPHICS.includes(name)) {
         return MIRROR_HANDLE_AT_0;
     }
@@ -698,7 +690,7 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
      * exactly one half-width off the axis, so it has to track the cursor 1:1 or it runs
      * away from it. @see RectangularTarget.generateHandles
      */
-    if (name === TacticalGraphicName.TargetAreaRectangular) {
+    if (RECTANGULAR_TARGET_HOLDER.includes(name)) {
         return {roles: ['shape', 'offset'], offsetScale: 1};
     }
     if (RANGE_FANS.includes(name)) {
@@ -722,6 +714,46 @@ export function handleContract(name: TacticalGraphicName): HandleContract {
         return {roles: ['band', 'band', 'band', 'opening']};
     }
     return SHAPE_ONLY;
+}
+
+/**
+ * How far off the line, in screen pixels, a width or mirror drag has to go before it counts as
+ * choosing a side; below it the graphic keeps the side it had. **One number for every engine**:
+ * OpenLayers held 6 and MapLibre 12, so the same drag flipped a graphic on one and not the other.
+ */
+export const MIRROR_FLIP_MIN_PX = 6;
+
+/** The smallest width a width drag may leave, in meters: at zero the rails collapse. */
+export const MIN_OFFSET_METERS = 1;
+
+/**
+ * The default width-grip sensitivity: the width changes by twice this share of how far the
+ * cursor moved across the line, so a grip drawn two half-widths out tracks it. @see HandleContract
+ */
+export const DEFAULT_OFFSET_SCALE = 0.5;
+
+/**
+ * **Every graphic OpenLayers edits with its rectangular-target holder**: a length grip, then a
+ * width grip. The three maritime ellipses and the cued acquisition doctrine share that holder
+ * (`controllerRegistry`'s `rectangularTarget`), and only 200101 had the contract here, so on
+ * MapLibre and ArcGIS their width grip resized the whole symbol while on OpenLayers it set the
+ * width alone. Found by the all-engine grip sweep, 2026-09-26.
+ */
+const RECTANGULAR_TARGET_HOLDER: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.TargetAreaRectangular,
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+];
+
+/**
+ * Whether a width drag on this graphic reads the cursor against its own anchor point and
+ * attitude rather than against a line in its base: the rectangular-target family, which is
+ * anchored at one point. @see RECTANGULAR_TARGET_HOLDER
+ */
+export function setsWidthFromAnchor(name: TacticalGraphicName): boolean {
+    return RECTANGULAR_TARGET_HOLDER.includes(name);
 }
 
 /**

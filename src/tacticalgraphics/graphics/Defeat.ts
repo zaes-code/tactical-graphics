@@ -56,6 +56,8 @@ const REACH_TO_SHAFT_HALF_WIDTH = 0.048;
 export class Defeat extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string = TacticalGraphicName.Defeat;
     type: string = 'Point';
+    /** A dropped point has no size; it comes from `radius`. @see IGraphicGenerator.requiresRadius */
+    readonly requiresRadius = true;
 
     /**
      * One filled ring per arrow, tail first, running clockwise in the arrow's own frame.
