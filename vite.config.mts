@@ -20,6 +20,7 @@ import {resolve} from 'node:path';
 const LIBRARY_NAME = '@zaes/tactical-graphics';
 const LIBRARY_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/index.ts', import.meta.url));
 const THUMBNAILS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/assets/graphicThumbnails.ts', import.meta.url));
+const EDIT_CONTROLS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/ui/editControls.ts', import.meta.url));
 
 /**
  * Anchored, because a plain `{name: path}` alias is a prefix match: the root's entry would
@@ -28,6 +29,7 @@ const THUMBNAILS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/assets/gr
  */
 const LIBRARY_ALIASES = [
     {find: new RegExp(`^${LIBRARY_NAME}/thumbnails$`), replacement: THUMBNAILS_ENTRY},
+    {find: new RegExp(`^${LIBRARY_NAME}/edit-controls$`), replacement: EDIT_CONTROLS_ENTRY},
     {find: new RegExp(`^${LIBRARY_NAME}$`), replacement: LIBRARY_ENTRY},
 ];
 

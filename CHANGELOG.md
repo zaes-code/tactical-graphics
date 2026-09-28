@@ -15,6 +15,14 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **Edit controls, as a new entry point: `@zaes/tactical-graphics/edit-controls`.**
+  `attachEditControls(container, engine)` draws the dashed selection box and its move, rotate
+  and resize buttons over any engine's map, in plain DOM with no framework. They were only in
+  the sample app before, so every host had to build its own. Icons, labels, corners, which
+  buttons appear and the colors can all be changed.
+
 ## [4.3.1] — 2026-09-23
 
 Documentation only: the npm page shows the README of the latest version, and 4.3.0 shipped
