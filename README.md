@@ -1,6 +1,6 @@
 # Tactical Graphics
 
-Render **MIL-STD-2525E / FM 1-02.2 / APP-06 tactical graphics** (axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries) as plain **GeoJSON**, and draw and edit them on **OpenLayers** or **MapLibre**.
+Render **FM 1-02.2 / APP-06 tactical graphics** (axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries) as plain **GeoJSON**, and draw and edit them on **OpenLayers** or **MapLibre**.
 
 It complements [milsymbol](https://github.com/spatialillusions/milsymbol), which draws single-point unit symbols: this library draws the multi-point graphics milsymbol does not.
 

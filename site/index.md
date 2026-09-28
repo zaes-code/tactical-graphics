@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: Tactical Graphics
-  text: MIL-STD-2525E, FM 1-02.2 and APP-06 as plain GeoJSON
+  text: FM 1-02.2 and APP-06 as plain GeoJSON
   tagline: Axis-of-advance arrows, phase lines, mission tasks, range fans and boundaries, for OpenLayers, MapLibre or anything that reads GeoJSON.
   actions:
     - theme: brand

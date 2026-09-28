@@ -1,6 +1,6 @@
 # Introduction
 
-Render **MIL-STD-2525E / FM 1-02.2 / APP-06 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
+Render **FM 1-02.2 / APP-06 tactical graphics** — axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries — as plain **GeoJSON**.
 
 Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, or anything else that reads GeoJSON.
 
