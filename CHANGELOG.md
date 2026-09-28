@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.4.0] — 2026-09-28
+
 ### Added
 
 - **Edit controls, as a new entry point: `@zaes/tactical-graphics/edit-controls`.**
@@ -22,6 +24,59 @@ the npm publish dates — when a version actually became installable.
   and resize buttons over any engine's map, in plain DOM with no framework. They were only in
   the sample app before, so every host had to build its own. Icons, labels, corners, which
   buttons appear and the colors can all be changed.
+- **"Name only" belongs to the host.** The engine facade has `setAmplifiersHidden(id, hidden)`
+  and `amplifiersHidden(id)`. Both renderers used to read the choice from the demo's own
+  `localStorage` key, so a host that hid amplifiers any other way lost it on every `restore()`.
+  The choice now lives on the drawn graphic; `restore()` and `clearAll()` draw everything in
+  full, and the host re-applies its own record.
+- **MapLibre hosts choose their own glyphs and fonts.** `NativeLayerRenderer` takes `glyphs` (a
+  URL, or `false` to keep the style's own) and `fontStack`. The defaults are exported as
+  `DEFAULT_GLYPHS_URL` and `DEFAULT_FONT_STACK`, with the `NativeLayerRendererOptions` and
+  `FontStack` types. The default still points at MapLibre's public demo glyph server, which a
+  production app should replace.
+- `subscribeSecurityOperationSymbolChange` on `/openlayers`, for a host drawing center symbols
+  on a layer of its own. The manager repaints its own graphics when a provider changes.
+- On the root entry, for renderers: the range fan's geodesic helpers (`geodesicBearingDeg`,
+  `geodesicDistanceM`, `BAND_SEPARATION_FRACTION`, `MIN_SECTOR_ARC_DEG`), the abatis side
+  helpers (`drawnSide`, `hasDrawnSide`, `northSide`), `rotationFromDrawnPoint` for the arc
+  mission tasks, and the handle constants `DEFAULT_OFFSET_SCALE`, `MIN_OFFSET_METERS`,
+  `MIRROR_FLIP_MIN_PX` and `setsWidthFromAnchor`.
+- **A documentation site.** The guides moved out of the README into `site/`, with an API
+  reference generated from the doc comments of all four entry points.
+
+### Changed
+
+- **Arc mission tasks start under the second click.** For the ten graphics whose APP-06 figures
+  make point 2 the start point and the radius (retain, occupy, secure, isolate, deny, area
+  defense and the rest), the second click now lands on the start point. Contain is not one of
+  them.
+- **The abatis tooth points north**, whichever way the line is drawn. The side is set when the
+  line is drawn, rotation keeps it, and the tooth shows on its final side while drawing.
+- **Dashed lines have square ends**, so a dash stays a dash when zoomed out.
+- **MapLibre line labels turn with the map** and flip to stay readable, keeping their side of
+  the line.
+- **The headline names FM 1-02.2 and APP-06** instead of MIL-STD-2525E, in the README, the npm
+  description, the docs and the demo. By entity code, 282 of the 318 graphics are in 2525E
+  Change 1, so the old wording overstated it. The graphics themselves are unchanged.
+
+### Fixed
+
+- **Every grip does on MapLibre what it does on OpenLayers.** A range fan's band grips were dead
+  on MapLibre; the rectangular-target family gets its width grip there; point-anchored grips
+  flip past the axis as they do on OpenLayers; Turn's apex reads its frame from its points; and
+  a width drag moves by the drag and flips only on a real crossing, on both engines.
+- **The center grip no longer resizes on MapLibre.** Dragging a point-anchored graphic's gray
+  center dot pans the map outside translate mode, as on OpenLayers. A 2 px slip used to take
+  Isolate's radius from 180 km to 4,399 km.
+- **MapLibre hatches keep their spacing between zoom levels** instead of growing with the map
+  and snapping back at each whole level.
+- **OpenLayers draws the center symbol** of cover, guard, screen and the follow tasks from a
+  provider registered with `setSecurityOperationSymbolProvider` alone, and repaints it when a
+  provider or the symbol size changes.
+- **`renderTacticalGraphic` is safer with bases no editor draws.** It no longer writes a `role`
+  into the feature it is given; a one-point graphic with no radius, or any base a generator
+  cannot draw from, throws a `TacticalGraphicError` naming the problem instead of a turf error;
+  and air corridors draw through a repeated vertex.
 
 ## [4.3.1] — 2026-09-23
 
@@ -1627,7 +1682,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...develop
+[4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...v4.3.0
 [4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
