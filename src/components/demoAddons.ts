@@ -41,6 +41,14 @@ export interface DemoToolProps {
     /** `null` while an engine is being swapped. */
     engine: MapEngineHandle | null;
     darkMode: boolean;
+    /**
+     * Whether this panel is expanded. The demo keeps one tool panel open at a time, across every
+     * add-on, since they stack in one column over the map; a panel that is expanded tells the
+     * demo through `onExpandedChange`, and the one that was open closes. A panel run against an
+     * older demo without these keeps its own state.
+     */
+    expanded?: boolean;
+    onExpandedChange?(expanded: boolean): void;
 }
 
 /**
