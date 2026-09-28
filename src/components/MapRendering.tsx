@@ -379,7 +379,15 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             <Box sx={{position: 'relative', flex: 1, overflow: 'hidden'}}>
                 {addonEngine
                     ? <AddonErrorBoundary key={addonEngine.id} label={addonEngine.label}>
-                        <React.Suspense fallback={null}>
+                        {/* An add-on engine loads lazily, and the page had nothing to show meanwhile: the
+                          * panel waits for the engine's capabilities, so the whole view went blank. */}
+                        <React.Suspense
+                            fallback={
+                                <Box sx={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary'}}>
+                                    Loading {addonEngine.label}…
+                                </Box>
+                            }
+                        >
                             <addonEngine.View
                                 darkMode={darkMode}
                                 graphicsSettings={settings}
