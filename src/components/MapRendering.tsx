@@ -147,6 +147,8 @@ function loadGraphicsSettings(): TacticalGraphicsConfigOptions {
 
 const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode}) => {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    // The add-on tool panel that is expanded: one at a time, all collapsed to start. @see DemoToolProps
+    const [openTool, setOpenTool] = useState<string | null>(null);
     const [engine, setEngine] = useState<MapEngine>(loadEngine);
     const addonEngine = demoAddons.find(addon => addon.id === engine);
     /** MapLibre's 3D view. OpenLayers has no tilted mode, so the toggle shows on MapLibre only. */
@@ -434,7 +436,12 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         {demoTools.map(tool => (
                             <AddonErrorBoundary key={tool.id} label={tool.label}>
                                 <React.Suspense fallback={null}>
-                                    <tool.Panel engine={engineHandle} darkMode={darkMode}/>
+                                    <tool.Panel
+                                        engine={engineHandle}
+                                        darkMode={darkMode}
+                                        expanded={openTool === tool.id}
+                                        onExpandedChange={expanded => setOpenTool(expanded ? tool.id : current => (current === tool.id ? null : current))}
+                                    />
                                 </React.Suspense>
                             </AddonErrorBoundary>
                         ))}
