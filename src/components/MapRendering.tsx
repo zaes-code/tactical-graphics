@@ -355,16 +355,19 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         </Tooltip>
                     )}
 
-                    <IconButton
-                        onClick={() => setSettingsOpen(true)}
-                        size="small"
-                        sx={{
-                            color: 'text.secondary',
-                            '&:hover': {color: 'text.primary', backgroundColor: 'action.hover'},
-                        }}
-                    >
-                        <SettingsIcon fontSize="small"/>
-                    </IconButton>
+                    <Tooltip title="Settings">
+                        <IconButton
+                            onClick={() => setSettingsOpen(true)}
+                            size="small"
+                            aria-label="Settings"
+                            sx={{
+                                color: 'text.secondary',
+                                '&:hover': {color: 'text.primary', backgroundColor: 'action.hover'},
+                            }}
+                        >
+                            <SettingsIcon fontSize="small"/>
+                        </IconButton>
+                    </Tooltip>
                 </Toolbar>
             </AppBar>
 
