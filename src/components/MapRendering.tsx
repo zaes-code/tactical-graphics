@@ -233,6 +233,8 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
         return loaded;
     });
 
+    const smoothRef = useRef(settings.smoothLines === true);
+
     useEffect(() => {
         applyGraphicsConfig(darkMode, settings);
         // Configuring changes what the symbology answers; it does not tell the map that
@@ -241,6 +243,14 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
         // drawing the old colors until the paints re-run. Every host needs both halves.
         // @see MapEngineHandle.refreshStyles
         engineRef.current?.refreshStyles();
+        // SPIKE: smoothing is geometry, not style, so a restyle cannot show it. Rebuild every
+        // graphic through its generator, the same round trip the engine switch makes.
+        const smooth = settings.smoothLines === true;
+        if (smooth !== smoothRef.current) {
+            smoothRef.current = smooth;
+            const held = engineRef.current?.snapshot();
+            if (held && held.features.length) engineRef.current?.restore(held);
+        }
         localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
     }, [darkMode, settings]);
 

@@ -9,6 +9,8 @@ import {
 import geometryService from "../core/GeometryService";
 import * as turf from "../core/turf";
 import {rectangleFromAxis} from "../core/anchors";
+import {getSmoothLines} from "../core/config";
+import {chaikinRing} from "../core/smoothing";
 
 export class AreaGraphic extends TacticalGraphicsBase {
 
@@ -21,7 +23,8 @@ export class AreaGraphic extends TacticalGraphicsBase {
     }
 
     generateGraphics(base: Feature<Polygon>, opts: IBaseGraphicOptions | undefined): Feature<Polygon> {
-        return base;
+        if (!getSmoothLines()) return base;
+        return this.asPolygonFeature(base.geometry.coordinates.map(ring => chaikinRing(ring)));
     }
 
     generateHandles(base: Feature<Polygon>, opts: IBaseGraphicOptions | undefined): Feature<MultiPoint> {

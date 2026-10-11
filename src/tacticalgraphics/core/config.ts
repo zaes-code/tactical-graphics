@@ -191,6 +191,16 @@ export interface TacticalGraphicsConfigOptions {
     /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.feet}. @see AltitudeUnit */
     altitudeUnit?: AltitudeUnit;
 
+    /**
+     * Round the corners of plain lines and areas (Chaikin corner cutting). Default `false`.
+     *
+     * SPIKE: applies only to the pass-through generators (`Phaseline`, `AreaGraphic`). The
+     * rendered line no longer passes through the inner drawn vertices; the base, its handles
+     * and its labels are unchanged. Geometry, not style: a renderer has to regenerate its
+     * graphics when this changes, a restyle is not enough.
+     */
+    smoothLines?: boolean;
+
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these color the affordances a renderer draws so a user
     // can edit a graphic. They say "you can drag this", and that meaning must not shift
@@ -229,6 +239,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly labelUsesHostilityColor?: boolean;
     readonly labelHaloColor?: string;
     readonly altitudeUnit?: AltitudeUnit;
+    readonly smoothLines?: boolean;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -247,6 +258,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.labelUsesHostilityColor !== undefined) this.labelUsesHostilityColor = options.labelUsesHostilityColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
         if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
+        if (options.smoothLines !== undefined) this.smoothLines = options.smoothLines;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -277,6 +289,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             obstacleColors: overrides.obstacleColors ?? this.obstacleColors,
             obstacleColor: overrides.obstacleColor ?? this.obstacleColor,
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
+            smoothLines: overrides.smoothLines ?? this.smoothLines,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -347,6 +360,11 @@ export function setTacticalGraphicsConfig(config: TacticalGraphicsConfig): void 
 /** Drop every override and go back to the doctrinal defaults. */
 export function resetTacticalGraphicsConfig(): void {
     _config = EMPTY_CONFIG;
+}
+
+/** Whether plain lines and areas are drawn with rounded corners. @see TacticalGraphicsConfigOptions.smoothLines */
+export function getSmoothLines(): boolean {
+    return _config.smoothLines ?? false;
 }
 
 export function getDefaultLabelSize(): number {
