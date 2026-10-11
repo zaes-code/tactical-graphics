@@ -4,7 +4,16 @@ import {LineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {createBaseFeature, createHandleFeature, createMeasureFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
 import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
-import {TacticalGraphicHostility, TacticalGraphicName, carriesRectangleLength, isRectangular, rectangleAmplifiers} from '@zaes/tactical-graphics';
+import {
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    carriesRectangleLength,
+    getSmoothLines,
+    isRectangular,
+    rectangleAmplifiers,
+    smoothingKindOf,
+    topmostSegmentIndex,
+} from '@zaes/tactical-graphics';
 import {toLonLat} from 'ol/proj';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
@@ -164,23 +173,22 @@ export class AreaGraphicBase implements PolygonGraphic {
         this.labels.setGeometry(labels as Point);
         this.handles.setGeometry(handles as MultiPoint);
 
-        // GroupOrSeriesOfTargets places its name on the northern-most segment.
-        // Anchor the labels feature there (instead of the centroid) so OL's
-        // feature-level culling keeps the text rendered when the user zooms in
-        // close to the label position. labelSegmentA/B are the segment endpoints
-        // used to rotate the text along the segment.
-        if (this.graphicName === TacticalGraphicName.GroupOrSeriesOfTargets && geom) {
-            const ring = geom.getCoordinates()[0];
+        // A smoothed outline cuts the traced corners away, so the labels read the ring as
+        // drawn rather than as traced. The same rule as the shared adapter's. @see buildPaintedGraphic
+        const drawnRing = graphic instanceof Polygon ? graphic.getCoordinates()[0] : undefined;
+        if (drawnRing && getSmoothLines() && smoothingKindOf(this.graphicName) === 'area') {
+            this.labels.set('polygonRing', drawnRing);
+        }
+
+        // GroupOrSeriesOfTargets places its name on the northern-most segment of the outline
+        // it draws, which is where its paint cuts the gap. Anchor the labels feature there
+        // (instead of the centroid) so OL's feature-level culling keeps the text rendered
+        // when the user zooms in close to the label position. labelSegmentA/B are the
+        // segment endpoints used to rotate the text along the segment. @see topmostSegmentIndex
+        if (this.graphicName === TacticalGraphicName.GroupOrSeriesOfTargets && drawnRing) {
+            const ring = drawnRing;
             if (ring.length >= 2) {
-                let bestIdx = 0;
-                let bestMidY = -Infinity;
-                for (let i = 0; i < ring.length - 1; i++) {
-                    const midY = (ring[i][1] + ring[i + 1][1]) / 2;
-                    if (midY > bestMidY) {
-                        bestMidY = midY;
-                        bestIdx = i;
-                    }
-                }
+                const bestIdx = topmostSegmentIndex(ring as [number, number][]);
                 const a = ring[bestIdx];
                 const b = ring[bestIdx + 1];
                 this.labels.setGeometry(new Point([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]));

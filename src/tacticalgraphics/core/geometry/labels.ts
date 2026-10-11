@@ -1,4 +1,5 @@
 import {Polygon, Position} from 'geojson';
+import {gapFits, pathLength, splitAtCorners, splitPathAroundAll} from '../../symbology/decorations';
 
 export function generateLabelGaps(
     polygon: Polygon,
@@ -65,62 +66,35 @@ export function generateLabelGaps(
         };
     }
 
-    const gapIndices = new Set([maxIdx, minIdx]);
-    const outlineSegments: Position[][] = [];
-    const labelPoints: Position[] = [];
-
     /* -----------------------------------
      * 2) Build outline + gaps
-     * ----------------------------------- */
-    // 5. Process all segments to create the outline and gaps
-    for (let i = 0; i < ring.length - 1; i++) {
+     * -----------------------------------
+     * **Along the ring, on the edge each extreme belongs to.** On a hard ring that is the
+     * segment itself, so this cuts what the one-segment version cut; on a smoothed ring the
+     * extreme segment is a short chord, which no gap fits, and the edge is the nearly straight
+     * stretch of curve around it. @see gapFits The ring is walked from halfway between
+     * the two extremes so neither gap straddles the seam, and what is left comes back as runs
+     * between real corners rather than one piece per segment: the teeth are laid per piece, and
+     * a chord shorter than a tooth would get none. @see splitAtCorners
+     */
+    const m = ring.length - 1;
+    const gapped = [maxIdx, minIdx].sort((a, b) => a - b).filter(i => gapFits(ring as [number, number][], i, 0.5, options.gapSize / 2, true));
+    const start = gapped.length ? (maxIdx + Math.floor((((minIdx - maxIdx) % m) + m) % m / 2)) % m : 0;
+    const walk = Array.from({length: m + 1}, (_, j) => ring[(start + j) % m] as [number, number]);
+    const gaps: {at: number; halfGap: number}[] = [];
+    const labelPoints: Position[] = [];
+
+    for (const i of gapped) {
         const p1 = ring[i];
         const p2 = ring[i + 1];
-
-        // Change in X and Y, and segment length (planar distance)
-        const dx = p2[0] - p1[0];
-        const dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        if (!gapIndices.has(i)) {
-            // Normal segment: add the full segment
-            outlineSegments.push([p1, p2]);
-            continue;
-        }
-
-        // Segment requires a gap and a label
-        if (segLen <= options.gapSize) {
-            // Segment is too short for a gap, add full segment
-            outlineSegments.push([p1, p2]);
-            continue;
-        }
-
-        // Interpolation function to find a point along the segment (linear interpolation)
-        const breakpoint = (t: number): Position => [
-            p1[0] + dx * t,
-            p1[1] + dy * t,
-        ];
-
-        // Calculate the fraction (t-value) for the start and end of the gap
-        const centerT = 0.5;
-        const halfGapRatio = (options.gapSize * 0.5) / segLen;
-
-        const tStart = centerT - halfGapRatio;
-        const tEnd = centerT + halfGapRatio;
-
-        const gapStart = breakpoint(tStart);
-        const gapEnd = breakpoint(tEnd);
-        const labelPos = breakpoint(centerT);
-
-        // Add the two line pieces around the gap
-        outlineSegments.push(
-            [p1, gapStart], // Piece before the gap
-            [gapEnd, p2]    // Piece after the gap
-        );
-
-        // Record the label position (midpoint of the gap)
-        labelPoints.push(labelPos);
+        const along = (i - start + m) % m;
+        gaps.push({at: pathLength(walk.slice(0, along + 1)) + Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 2, halfGap: options.gapSize / 2});
+        labelPoints.push([(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2]);
     }
+
+    const runs: Position[][] = splitPathAroundAll(walk, gaps);
+    if (gaps.length && runs.length > 1) runs.splice(0, 1, [...runs.pop()!, ...runs[0].slice(1)]);
+    const outlineSegments = runs.flatMap(run => splitAtCorners(run as [number, number][])).filter(run => run.length > 1);
 
     // 6. Return the results
     return {outlineSegments, labelPoints};

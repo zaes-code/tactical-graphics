@@ -1,8 +1,6 @@
 import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {IBaseGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiPoint} from "geojson";
-import {getSmoothLines} from "../core/config";
-import {chaikinLine} from "../core/smoothing";
 
 export class Phaseline extends TacticalGraphicsBase {
     name: string;
@@ -14,8 +12,7 @@ export class Phaseline extends TacticalGraphicsBase {
     }
 
     generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<LineString> {
-        if (!getSmoothLines() || base.geometry.coordinates.length < 3) return base;
-        return this.asLineStringFeature(chaikinLine(base.geometry.coordinates));
+        return base;
     }
 
     generateHandles(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<MultiPoint> {

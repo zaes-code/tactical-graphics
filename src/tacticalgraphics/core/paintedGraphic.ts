@@ -2,6 +2,9 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
+import {topmostSegmentIndex} from '../symbology/decorations';
+import {getSmoothLines} from './config';
+import {smoothingKindOf} from './smoothing';
 import {withHiddenAmplifiers} from '../symbology/paintFunctions';
 import {getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
@@ -183,6 +186,21 @@ export function carryPaintFlags(
         },
         previous.graphic.drawingResolution,
     );
+}
+
+/**
+ * The same graphic built again through its generator, from the base and description it holds.
+ *
+ * For a config change that moves **geometry** rather than paint, which `smoothLines` is: a
+ * renderer's restyle re-runs the paint functions over the geometry it already holds, so the new
+ * setting would not show until each graphic was edited. Every renderer building from this
+ * adapter calls this on such a change, so they all redraw the same way. The id, the drawing
+ * resolution and the paint flags carry over; a generator that refuses leaves the graphic as it
+ * was. @see geometryConfigKey
+ */
+export function rebuildPaintedGraphic<T extends PaintedGraphic>(graphic: T): T {
+    const rebuilt = buildPaintedGraphic(graphic.name, graphic.base.geometry, graphic.properties, graphic.graphic.drawingResolution);
+    return rebuilt ? {...graphic, ...carryPaintFlags(graphic, {...rebuilt, id: graphic.id})} : graphic;
 }
 
 let nextId = 0;
@@ -959,6 +977,28 @@ export function buildPaintedGraphic(
             ? labelGeometry.coordinates[0]
             : undefined;
 
+    /*
+     * The base first — an area the operator traced *is* its own outline — then the rendered
+     * shape, which is where a circular variant's outline comes from, since its base is a
+     * single point. **Unless the outline is drawn smooth**, when the traced corners are cut
+     * away and a label anchored on one would float outside the curve. @see outerRingOf
+     */
+    const smoothed = getSmoothLines() && smoothingKindOf(name) === 'area';
+    const ring = (smoothed ? outerRingOf(graphicGeometry) : undefined)
+        ?? outerRingOf(projectToMercator(baseGeometry))
+        ?? outerRingOf(graphicGeometry);
+    /*
+     * **Group or series of targets writes its name on the top edge of the outline it draws**,
+     * so the label is anchored there and turned along it, by the same rule the gap is cut
+     * with. OpenLayers' holder stamped this; nothing here did, so the designation had no
+     * segment to sit on and was never drawn on this engine. @see topmostSegmentIndex
+     */
+    const topRing = name === TacticalGraphicName.GroupOrSeriesOfTargets ? outerRingOf(graphicGeometry) : undefined;
+    const topIndex = topRing && topRing.length >= 2 ? topmostSegmentIndex(topRing) : undefined;
+    const labelSegment = topRing && topIndex !== undefined
+        ? [topRing[topIndex], topRing[topIndex + 1]] as [ProjectedPosition, ProjectedPosition]
+        : undefined;
+
     const shared = {
         properties: props,
         graphicSize: props.radius,
@@ -970,10 +1010,7 @@ export function buildPaintedGraphic(
         // bare anchor point and cannot work them out for itself, so whichever layer
         // owns the holder has to supply them. Here that is this adapter.
         bounds: boundsOf(graphicGeometry),
-        // The base first — an area the operator traced *is* its own outline — then the
-        // rendered shape, which is where a circular variant's outline comes from, since its
-        // base is a single point. @see outerRingOf
-        ring: outerRingOf(projectToMercator(baseGeometry)) ?? outerRingOf(graphicGeometry),
+        ring,
         // A range fan's bands reach the generator and come back as anonymous points,
         // so the label paint has to re-resolve them with the generator's own
         // defaults. `RangeFanGraphicBase` does the same call. @see resolveRangeFanBands
@@ -986,7 +1023,13 @@ export function buildPaintedGraphic(
         properties: props,
         base,
         graphic: {geometry: graphicGeometry, ...shared},
-        labels: labelGeometry ? {geometry: labelGeometry, ...shared} : undefined,
+        labels: labelSegment
+            ? {
+                geometry: {type: 'Point', coordinates: [(labelSegment[0][0] + labelSegment[1][0]) / 2, (labelSegment[0][1] + labelSegment[1][1]) / 2]},
+                ...shared,
+                labelSegment,
+            }
+            : labelGeometry ? {geometry: labelGeometry, ...shared} : undefined,
         // **`placed`, not `rendered`.** The security operations are generated centered
         // on the origin and moved onto their base here; taking the handles from the
         // raw output left all three graphics' handles at null island, so the symbol

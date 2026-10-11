@@ -402,6 +402,143 @@ export function splitAtCorners(path: ProjectedPosition[], cornerDegrees = CORNER
     return runs;
 }
 
+/** A path with a gap cut out of it for a glyph or a label. @see cutGapAlongPath */
+export interface PathGap {
+    /** What is left of the path, as one stroke per run between real corners. @see splitAtCorners */
+    outline: ProjectedPosition[][];
+    /** The path from its start to the gap. */
+    before: ProjectedPosition[];
+    /** The path from the gap to its end. */
+    after: ProjectedPosition[];
+    gapA: ProjectedPosition;
+    gapB: ProjectedPosition;
+    /** The gap's middle, on the path. */
+    center: ProjectedPosition;
+}
+
+/**
+ * `path` with a gap `halfGap` either side of a point on it, measured **along the path**.
+ *
+ * The point is given as segment `index` and fraction `t`, which is what `projectedMidSegment`
+ * and `centerSegmentIndex` answer. The gap used to be cut inside that one segment, which is
+ * right for a line drawn as a few long segments and wrong for a smoothed one, where the segment
+ * is a short chord of the curve and a glyph's gap runs off both ends of it. Measured along the
+ * path the two agree whenever the gap fits its segment, and the curve gets the same gap.
+ *
+ * The remaining line is returned as runs rather than one piece per segment, so a dash carries
+ * on along a curve instead of restarting at every chord.
+ */
+export function cutGapAlongPath(path: ProjectedPosition[], index: number, t: number, halfGap: number): PathGap {
+    const middle = pathLength(path.slice(0, index + 1)) + Math.hypot(path[index + 1][0] - path[index][0], path[index + 1][1] - path[index][1]) * t;
+    const total = pathLength(path);
+    const a = Math.max(0, middle - halfGap);
+    const b = Math.min(total, middle + halfGap);
+    const before = a > 0 ? pathBetween(path, 0, a) : [path[0]];
+    const after = b < total ? pathBetween(path, b, total) : [path[path.length - 1]];
+    const centerRun = pathBetween(path, 0, middle);
+    return {
+        outline: [...splitAtCorners(before), ...splitAtCorners(after)].filter(run => run.length > 1 && pathLength(run) > 0),
+        before,
+        after,
+        gapA: before[before.length - 1],
+        gapB: after[0],
+        center: centerRun.length ? centerRun[centerRun.length - 1] : path[0],
+    };
+}
+
+/**
+ * How far `path` runs either side of a point on it before turning more than `maxTurnDegrees`
+ * away from its direction there: **the edge a label or glyph at that point sits on**.
+ *
+ * The point is segment `index` at fraction `t`. On a hard line every corner turns past the
+ * limit, so the answer is the segment itself, split at the point, which is what the marks
+ * placed "in a segment" were always measured against. On a smoothed line that segment is a
+ * short chord and the answer is the nearly straight stretch of curve around it instead,
+ * which is the same thing the operator sees. `closed` walks a ring round its seam.
+ * @see CORNER_DEGREES
+ */
+export function straightStretch(
+    path: readonly ProjectedPosition[],
+    index: number,
+    t = 0.5,
+    closed = false,
+    maxTurnDegrees = CORNER_DEGREES,
+): {before: number; after: number} {
+    const m = path.length - 1;
+    const seg = (j: number) => {
+        const k = closed ? ((j % m) + m) % m : j;
+        if (k < 0 || k >= m) return undefined;
+        const [a, b] = [path[k], path[k + 1]];
+        return {dx: b[0] - a[0], dy: b[1] - a[1], length: Math.hypot(b[0] - a[0], b[1] - a[1])};
+    };
+    const here = seg(index);
+    if (!here || !here.length) return {before: 0, after: 0};
+    const limit = Math.cos((maxTurnDegrees * Math.PI) / 180);
+    const walk = (step: 1 | -1) => {
+        let total = 0;
+        for (let n = 1; n < m; n++) {
+            const next = seg(index + step * n);
+            if (!next) break;
+            if (!next.length) continue;
+            if ((next.dx * here.dx + next.dy * here.dy) / (next.length * here.length) < limit) break;
+            total += next.length;
+        }
+        return total;
+    };
+    return {before: here.length * t + walk(-1), after: here.length * (1 - t) + walk(1)};
+}
+
+/**
+ * Segment `index`'s direction, as long as the edge it belongs to.
+ *
+ * What a mark capped against "its segment" should be handed. On a hard line it is the segment
+ * itself; on a smoothed one the segment is a short chord and a glyph capped against it shrank
+ * to a dot. @see straightStretch
+ */
+export function runVector(path: readonly ProjectedPosition[], index: number, t = 0.5, closed = false): [number, number] {
+    const [a, b] = [path[index], path[index + 1]];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (!length) return [0, 0];
+    const {before, after} = straightStretch(path, index, t, closed);
+    const run = Math.max(length, before + after);
+    return [((b[0] - a[0]) / length) * run, ((b[1] - a[1]) / length) * run];
+}
+
+/**
+ * How far a smoothed outline may turn either side of a label gap and still count as the one
+ * edge it sits on. A hexagon's edge spans 60 degrees of turning and a square's 90, so 45 either
+ * side judges a curve the way a generous four-sided outline would be judged: a gap that would
+ * fit a side of the box it was drawn as fits the curve too. A hard outline's corners turn
+ * further than this almost always, so there the edge is still the segment. @see gapFits
+ */
+const GAP_EDGE_DEGREES = 45;
+
+/** Whether a gap `halfGap` either side of a point on `path` fits the edge it sits on. @see straightStretch */
+export function gapFits(path: readonly ProjectedPosition[], index: number, t: number, halfGap: number, closed = false): boolean {
+    const {before, after} = straightStretch(path, index, t, closed, GAP_EDGE_DEGREES);
+    return halfGap < Math.min(before, after);
+}
+
+/**
+ * The index of a ring's **topmost** segment: the one whose midpoint has the highest northing.
+ *
+ * Where group or series of targets writes its designation, cutting the ring for it. One
+ * statement for the gap, for each engine's label anchor and for the label's rotation, all
+ * read off the ring as drawn, smoothed or not, so the three cannot land on different edges.
+ */
+export function topmostSegmentIndex(ring: readonly ProjectedPosition[]): number {
+    let best = 0;
+    let bestY = -Infinity;
+    for (let i = 0; i < ring.length - 1; i++) {
+        const y = (ring[i][1] + ring[i + 1][1]) / 2;
+        if (y > bestY) {
+            bestY = y;
+            best = i;
+        }
+    }
+    return best;
+}
+
 /**
  * Where a whole number of items of `itemLength` sit along a run of `total`, centred.
  *

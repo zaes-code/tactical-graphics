@@ -25,8 +25,8 @@ class SolidManeuverArrow extends MovementGraphicBase {
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
             leftArrowBase[leftArrowBase.length - 1],
             leftArrowBase[leftArrowBase.length - 2],

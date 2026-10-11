@@ -13,6 +13,7 @@ import {
 import {ITacticalGraphic} from "../core/type";
 import {featureInGeneratorOrder} from "../core/drawOrder";
 import {axisFeature, optionsFromWidthPoint} from "../core/axisWidth";
+import {smoothedForGenerator} from "../core/smoothing";
 
 
 export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBaseGraphicOptions> implements IGraphicGenerator {
@@ -118,11 +119,17 @@ export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBase
         const axis = axisFeature(this.name, base);
         const drawn = featureInGeneratorOrder(this.name, axis);
         const options = optionsFromWidthPoint(this.name, base, opts);
+        /*
+         * **Smooth lines shape the line work and nothing else.** The handles and labels are
+         * built from the drawn points, so editing still moves what the user placed, and an
+         * arrow keeps the segment its head is built on. @see smoothedForGenerator
+         */
+        const shaped = smoothedForGenerator(this.name, drawn);
         return <ITacticalGraphic>{
             name: this.name,
             type: this.type,
             base: base,
-            graphic: this.generateGraphics(drawn, options),
+            graphic: this.generateGraphics(shaped, options),
             handles: this.generateHandles(drawn, options),
             labels: this.generateLabels(drawn, options),
         }
