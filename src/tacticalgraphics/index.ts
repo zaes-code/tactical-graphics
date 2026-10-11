@@ -146,6 +146,8 @@ export {
     configureTacticalGraphics,
     getDefaultLabelSize,
     getDefaultLineWidth,
+    geometryConfigKey,
+    getSmoothLines,
     getTacticalGraphicsConfig,
     resetTacticalGraphicsConfig,
     setDefaultLabelSize,
@@ -153,6 +155,8 @@ export {
     setTacticalGraphicsConfig,
 } from './core/config';
 export type {TacticalGraphicsConfigOptions} from './core/config';
+export {SMOOTHED_GRAPHICS, smoothingKindOf} from './core/smoothing';
+export type {SmoothingKind} from './core/smoothing';
 
 /**
  * Override readers, for a renderer resolving a color. Each returns `undefined` when the
@@ -218,6 +222,7 @@ export {
     publishesAnchorHandleOnly,
     ANCHOR_CONNECTOR_DASH_PX,
     anchorConnectorRun,
+    anchorConnectorRuns,
     drawsAnchorConnector,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
@@ -311,6 +316,7 @@ export {
     offsetBelow,
     pathLength,
     textWidth,
+    topmostSegmentIndex,
     uprightRotation,
 } from './symbology/decorations';
 export {
@@ -572,6 +578,7 @@ export {
     descriptionOf,
     paintGraphic,
     projectToMercator,
+    rebuildPaintedGraphic,
     withDrawingResolution,
 } from './core/paintedGraphic';
 export type {PaintedGraphic} from './core/paintedGraphic';

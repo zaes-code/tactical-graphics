@@ -362,9 +362,20 @@ export function resetTacticalGraphicsConfig(): void {
     _config = EMPTY_CONFIG;
 }
 
-/** Whether plain lines and areas are drawn with rounded corners. @see TacticalGraphicsConfigOptions.smoothLines */
+/** Whether free-drawn lines, areas and arrows are drawn smooth. @see TacticalGraphicsConfigOptions.smoothLines */
 export function getSmoothLines(): boolean {
     return _config.smoothLines ?? false;
+}
+
+/**
+ * A string that changes exactly when a config change moves **geometry**, not just paint.
+ *
+ * A renderer keeps the last value it built with and, when its restyle finds a different one,
+ * rebuilds its graphics through the generators instead of only re-running the paints.
+ * `smoothLines` is the only such setting today. @see rebuildPaintedGraphic
+ */
+export function geometryConfigKey(): string {
+    return `smooth:${getSmoothLines() ? 1 : 0}`;
 }
 
 export function getDefaultLabelSize(): number {

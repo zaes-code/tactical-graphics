@@ -41,6 +41,8 @@ import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 import {usesDrawnAnchors} from './handles';
 import {carriesWidthPointInBase} from './axisWidth';
+import {getSmoothLines} from './config';
+import {smoothingKindOf} from './smoothing';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -1213,6 +1215,31 @@ export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: re
      */
     if (carriesWidthPointInBase(name) && coordinates.length >= 3) return coordinates.slice(0, -1);
     return [...coordinates];
+}
+
+/**
+ * Every run of a selected graphic's drawn points an editor marks with the hashed construction
+ * line, in the base's own coordinates: **the one statement every engine draws it from.**
+ *
+ * The graphics `drawsAnchorConnector` names, as before. And, while smooth lines is on, every
+ * graphic it reshapes: the curve no longer passes through the points the operator placed, so
+ * the line through them is what shows where they are and what dragging one will move. On a
+ * hard drawing that line lies under the symbol's own, which is why it was never needed there.
+ * An area's run is its closed outline. @see SMOOTHED_GRAPHICS
+ */
+export function anchorConnectorRuns<T>(name: TacticalGraphicName, base: {type: string; coordinates?: unknown}): T[][] {
+    const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
+    if (base.type === 'LineString') {
+        const coordinates = base.coordinates as T[];
+        if (!drawsAnchorConnector(name) && !smoothed) return [];
+        const run = anchorConnectorRun(name, coordinates);
+        return run.length >= 2 ? [run] : [];
+    }
+    if (base.type === 'Polygon' && smoothed) {
+        const ring = (base.coordinates as T[][])[0];
+        return ring && ring.length >= 3 ? [ring] : [];
+    }
+    return [];
 }
 
 /** How far a security operation's arm reaches from the centre, in screen pixels. */

@@ -87,6 +87,7 @@ import {
     toSnapshot,
     SNAPSHOT_VERSION,
     snapshotVersionOf,
+    smoothingKindOf,
     type TacticalGraphicsSnapshot,
 } from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -449,6 +450,33 @@ function statePublishedFor(name: TacticalGraphicName, state: GraphicGeometryStat
     if (!usesDrawnAnchors(name)) return published;
     const {radius: _reach, rotation: _rotation, mirrored: _mirrored, ...carried} = published;
     return carried;
+}
+
+/**
+ * Rebuilds, in place, every graphic a geometry-moving config change reshapes.
+ *
+ * The OpenLayers half of `rebuildPaintedGraphic`: `smoothLines` changes what the generators
+ * build, and a restyle only re-runs the style functions over geometry already held. Each
+ * holder regenerates from its own base, keeping its features, its id, its selection and every
+ * scalar it holds. The minimum-length floors are suspended exactly as a restore suspends them,
+ * because the base is final and re-flooring it at today's zoom would lengthen it.
+ * @see geometryConfigKey
+ */
+export function rebuildGraphicsForConfig(manager: TacticalGraphicsManager): void {
+    for (const handler of manager.graphicControllers) {
+        const name = handler.getFeatures().map(f => f.get('graphicName')).find(Boolean);
+        if (!smoothingKindOf(name)) continue;
+        const base = handler.graphic.base;
+        if (!base.getGeometry()) continue;
+        const holder = handler.graphic as {suspendMinimumLength?: boolean};
+        const guarded = typeof holder.suspendMinimumLength === 'boolean';
+        if (guarded) holder.suspendMinimumLength = true;
+        try {
+            handler.graphic.setBaseFeature(base);
+        } finally {
+            if (guarded) holder.suspendMinimumLength = false;
+        }
+    }
 }
 
 export function serializeTacticalGraphics(

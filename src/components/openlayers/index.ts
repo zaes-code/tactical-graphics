@@ -131,6 +131,7 @@ export {SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from '@zaes/tactical-gr
 export type {TacticalGraphicsSnapshot} from '@zaes/tactical-graphics';
 export {
     applyRestoredGeometry,
+    rebuildGraphicsForConfig,
     restoreTacticalGraphics,
     serializeTacticalGraphics,
 } from './persistence';

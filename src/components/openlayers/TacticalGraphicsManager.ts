@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -782,6 +782,9 @@ export class TacticalGraphicsManager {
      * the operator can see, and a mission task's base is a single centre point whose
      * extent is a box of zero size. Handles are excluded — they are chrome, they stick
      * out past the symbol, and a box drawn round them grows every time one is shown.
+     * So is the base when it is shown as the hashed construction line: with smooth lines on
+     * it runs out to the drawn points, past the curve, and the other engines measure the
+     * symbol alone. @see anchorConnectorRuns
      */
     selectionBox = (): {x: number; y: number; width: number; height: number} | undefined => {
         const controller = this.selectedController;
@@ -789,7 +792,7 @@ export class TacticalGraphicsManager {
 
         let extent: Extent | undefined;
         for (const feature of controller.getFeatures()) {
-            if (feature.get('handle') || feature.get('hidden')) continue;
+            if (feature.get('handle') || feature.get('hidden') || feature.get('role') === 'base') continue;
             const geometry = feature.getGeometry();
             if (!geometry) continue;
             const featureExtent = geometry.getExtent();
@@ -2067,7 +2070,11 @@ export class TacticalGraphicsManager {
             if (feature.get('role') !== 'base') continue;
             if (selected && !selected.includes(feature)) continue;
             const name = feature.get('graphicName') as TacticalGraphicName | undefined;
-            if (name && drawsAnchorConnector(name)) feature.set('hidden', false);
+            // The shared rule, which also names a smoothed graphic's own points. @see anchorConnectorRuns
+            const geometry = feature.getGeometry() as unknown as {getType(): string; getCoordinates(): unknown} | undefined;
+            if (name && geometry && anchorConnectorRuns(name, {type: geometry.getType(), coordinates: geometry.getCoordinates()}).length) {
+                feature.set('hidden', false);
+            }
         }
     };
 

@@ -343,7 +343,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             />
             <ToggleSetting
                 label="Smooth Lines"
-                hint="Round the corners of plain lines and areas"
+                hint="Curve free-drawn lines, areas and arrows"
                 checked={settings.smoothLines === true}
                 onChange={smoothLines => onChange({smoothLines})}
             />
