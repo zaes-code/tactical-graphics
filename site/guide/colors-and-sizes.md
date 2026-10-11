@@ -19,6 +19,7 @@ configureTacticalGraphics({
     defaultLineColor: '#000000',   // unaffiliated line work, and label text with it
     obstacleColors: true,          // default true — see below
     obstacleColor: '#00AC00',      // the green itself
+    smoothLines: false,            // default false — see below
 });
 
 graphics.refreshStyles();   // repaint what is already drawn
@@ -30,6 +31,33 @@ revision is bumped, and MapLibre keeps drawing the paint results it baked into i
 GeoJSON source. `refreshStyles()` on the [`createTacticalGraphics`](/guide/rendering)
 handle does the right thing for either engine; on OpenLayers without the façade,
 `source.forEachFeature(f => f.changed())` does the same.
+
+## Smooth lines
+
+`smoothLines: true` draws every graphic the user traces as a free path with its corners
+rounded: the control lines and boundaries, the obstacle, wire and fortified lines, the
+irregular areas, and the arrows, both the thin direction-of-attack lines and the axis
+arrows with a body. `SMOOTHED_GRAPHICS` lists them, and `smoothingKindOf(name)` says how
+each is treated.
+
+- **Only the line work changes.** The points the user placed are what is saved, edited and
+  exported, exactly as before, so a file says nothing about the setting and opens hard or
+  smooth depending on the host that reads it.
+- **The curve rounds the corners rather than passing through them** (Chaikin corner
+  cutting). The ends of a line stay where they were drawn, and while a graphic is selected
+  every engine draws a dashed line through its points, so it is clear what a drag moves.
+- **An arrow keeps the segment its head is built on.** The last drawn segment stays
+  straight, so the head and anything on it (the aviation twist, the frontal attack's bar)
+  are drawn exactly as on a hard line. An axis arrow's two sides are rounded after they are
+  offset, so a tight bend cannot fold the body over on itself.
+- Graphics whose points are fixed anchors are never touched: the mission tasks, the two-
+  and three-point symbols, the rectangles and circles, and the air corridors and overhead
+  wire, which mark every vertex.
+
+It reshapes geometry, so `refreshStyles()` rebuilds the graphics it reaches instead of only
+repainting them. Every engine does this, the add-ons included. On OpenLayers without the
+façade, call `rebuildGraphicsForConfig(manager)` from `@zaes/tactical-graphics/openlayers`
+before invalidating the features.
 
 ## Obstacles are green, and that beats affiliation
 
