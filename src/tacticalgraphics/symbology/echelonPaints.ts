@@ -13,7 +13,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicStatus} from '../core/type';
-import {cutGapAlongPath, decorationScale, gapFits, pathLength, runVector, splitAtCorners, splitPathAroundAll} from './decorations';
+import {cutGapAlongPath, decorationScale, gapFits, joinedAtSeam, pathLength, runVector, splitAtCorners, splitPathAroundAll} from './decorations';
 import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -564,8 +564,7 @@ export function unexplodedOrdnanceAreaPaint(): AreaPaint {
         }
 
         // The runs left by the gaps, the two that meet at the walk's seam joined back up.
-        const runs = splitPathAroundAll(walk, gaps);
-        if (gaps.length && runs.length > 1) runs.splice(0, 1, [...runs.pop()!, ...runs[0].slice(1)]);
+        const runs = gaps.length ? joinedAtSeam(splitPathAroundAll(walk, gaps), walk) : [walk];
         const outline = runs.flatMap(run => splitAtCorners(run)).filter(run => run.length > 1);
         paints.push({geometry: {type: 'MultiLineString', coordinates: outline}, stroke: {color, widthPx: LINE_WIDTH()}});
         return paints;

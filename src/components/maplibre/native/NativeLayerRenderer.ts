@@ -1323,7 +1323,7 @@ function isScreenSized(name: TacticalGraphicName): boolean {
 export function connectorFeatures(graphics: readonly MapLibreTacticalGraphic[]): Feature[] {
     // Every run the shared rule names, which includes a smoothed graphic's own points.
     // @see anchorConnectorRuns
-    return graphics.flatMap(graphic => anchorConnectorRuns(graphic.name, graphic.base.geometry).map(run => ({
+    return graphics.flatMap(graphic => anchorConnectorRuns(graphic.name, graphic.base.geometry, graphic.properties?.width).map(run => ({
         type: 'Feature' as const,
         geometry: {type: 'LineString' as const, coordinates: run as number[][]},
         properties: {color: getInertHandleColor()},

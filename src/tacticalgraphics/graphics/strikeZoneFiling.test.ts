@@ -81,11 +81,21 @@ describe('reading a filed zone', () => {
 });
 
 describe('the snapshot and the closing edge', () => {
-    it('keeps the caller\'s array, which a caller may fill after wrapping it', () => {
-        const list: Feature<LineString>[] = [];
+    it("never changes the caller's list", () => {
+        const list: Feature<LineString>[] = [base(zone1)];
+        const before = list[0];
         const snapshot = toSnapshot(list);
-        list.push(base(zone1));
-        expect(snapshot.features).toBe(list);
-        expect(snapshot.features).toHaveLength(1);
+        expect(snapshot.features).not.toBe(list);
+        expect(list[0]).toBe(before);
+        expect((list[0].geometry as LineString).coordinates).toEqual(zone1);
+        expect((snapshot.features[0].geometry as LineString).coordinates).toHaveLength(zone1.length * 2);
+    });
+
+    it("reads another tool's two rings as zone 1 and zone 2, though its offset is a little off its width", () => {
+        // A zone 2 offset two percent wider than the width the file states, as a tool rounding the
+        // width or offsetting its own way would write it.
+        const foreign = [...zone1, ...strikeZone2(zone1, width * 1.02)];
+        expect(isFiledStrikeBase(foreign, width)).toBe(true);
+        expect(editableStrikeBase(foreign, width)).toEqual(zone1);
     });
 });

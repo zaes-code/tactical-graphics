@@ -36,6 +36,8 @@ import {
     RANGE_FAN_BAND_OFFSET,
     handleContract,
     hasClosingEdge,
+    nearestInsertionEdge,
+    takesInsertedVertices,
     handleRole,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
@@ -80,31 +82,6 @@ const VERTEX_GRAB_PX = 10;
  * what was meant. The vertex test runs first for the same reason.
  */
 const SEGMENT_GRAB_PX = 8;
-
-/**
- * The nearest point on a line segment to `p`, and how far away it is — all in screen
- * pixels.
- *
- * The point is what the hover hint is drawn at: OpenLayers shows the vertex you would
- * create sliding along the geometry under the cursor, so it has to be the projection
- * onto the segment rather than the cursor itself.
- */
-function closestPointOnSegment(
-    p: {x: number; y: number},
-    a: {x: number; y: number},
-    b: {x: number; y: number},
-): {distance: number; x: number; y: number} {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const lengthSquared = dx * dx + dy * dy;
-    // A degenerate segment is a point, and the nearest point on it is that point.
-    if (lengthSquared === 0) return {distance: Math.hypot(p.x - a.x, p.y - a.y), x: a.x, y: a.y};
-
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared));
-    const x = a.x + t * dx;
-    const y = a.y + t * dy;
-    return {distance: Math.hypot(p.x - x, p.y - y), x, y};
-}
 
 /**
  * How close two consecutive draw clicks have to be to count as one.
@@ -2014,6 +1991,8 @@ export class MapLibreInteractions {
          */
         const stretchesOnly = editStretches(graphic.name) && !usesStandoffWidth(graphic.name);
         if (baseVertexCount(graphic.name) !== undefined || stretchesOnly) return -1;
+        // Not the older two-ring record, on either engine. @see takesInsertedVertices
+        if (!takesInsertedVertices(graphic.name, graphic.properties.width)) return -1;
         // A rectangle's base is two anchor points and nothing else, so there is no
         // segment to insert into — `baseVertexCount` already says so above, and this
         // second guard was for the drawn box. @see RectangularArea
@@ -2047,23 +2026,17 @@ export class MapLibreInteractions {
         const positions = positionsOf(graphic.base.geometry);
         if (positions.length < 2) return undefined;
 
-        let best: {index: number; position: Position} | undefined;
-        let bestDistance = SEGMENT_GRAB_PX;
-        // The edge back to the first point, where the base is a ring stored as a line. Its index
-        // is one past the end, which `insertVertex` reads as an append. @see hasClosingEdge
-        const closes = hasClosingEdge(graphic.name, graphic.properties.width) && positions.length >= 3;
-        for (let i = 1; i < positions.length + (closes ? 1 : 0); i++) {
-            const a = this.map.project([positions[i - 1][0], positions[i - 1][1]]);
-            const end = positions[i % positions.length];
-            const b = this.map.project([end[0], end[1]]);
-            const near = closestPointOnSegment(point, a, b);
-            if (near.distance <= bestDistance) {
-                bestDistance = near.distance;
-                const lngLat = this.map.unproject([near.x, near.y]);
-                best = {index: i, position: [lngLat.lng, lngLat.lat]};
-            }
-        }
-        return best;
+        // The edge back to the first point counts where the base is a ring stored as a line; its
+        // index is one past the end, which `insertVertex` reads as an append. @see nearestInsertionEdge
+        const pixels = positions.map(p => {
+            const q = this.map.project([p[0], p[1]]);
+            return [q.x, q.y] as [number, number];
+        });
+        const closes = hasClosingEdge(graphic.name, graphic.properties.width);
+        const near = nearestInsertionEdge(pixels, [point.x, point.y], closes, SEGMENT_GRAB_PX);
+        if (!near) return undefined;
+        const lngLat = this.map.unproject(near.at);
+        return {index: near.index, position: [lngLat.lng, lngLat.lat]};
     }
 
     /**

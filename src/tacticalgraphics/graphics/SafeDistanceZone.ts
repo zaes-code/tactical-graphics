@@ -20,6 +20,7 @@ import * as turf from '../core/turf';
 import geometryService from '../core/GeometryService';
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {IBaseGraphicOptions, TacticalGraphicName} from '../core/type';
+import {groundMeters} from '../core/math';
 import {getSmoothLines} from '../core/config';
 import {chaikinRing, smoothingKindOf} from '../core/smoothing';
 
@@ -97,10 +98,25 @@ function standoffMetres(opts?: IBaseGraphicOptions): number | undefined {
     return half * 2;
 }
 
-/** Rough ground metres between two lon/lat points: only ever compared against a tolerance. */
-function groundGap(a: Position, b: Position): number {
-    const k = Math.cos(((a[1] + b[1]) / 2) * Math.PI / 180);
-    return Math.hypot((b[0] - a[0]) * 111320 * k, (b[1] - a[1]) * 110540);
+/**
+ * How far a received zone 2 may stray from the core's own offset and still be read as zone 2:
+ * 5% of the standoff, and never under a metre. Another tool computes the offset its own way and
+ * rounds the width; a tighter match read such a file's 2N points as one ring. @see isFiledStrikeBase
+ */
+const FILED_ZONE_TOLERANCE = 0.05;
+
+/** Shortest ground distance from `p` to the closed ring `ring`, on a flat projection local to `p`. */
+function metresToRing(p: Position, ring: Position[]): number {
+    const k = Math.cos((p[1] * Math.PI) / 180);
+    const xy = (q: Position): [number, number] => [(q[0] - p[0]) * 111320 * k, (q[1] - p[1]) * 110540];
+    let best = Infinity;
+    for (let i = 0; i < ring.length; i++) {
+        const [a, b] = [xy(ring[i]), xy(ring[(i + 1) % ring.length])];
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+        const t = Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / (dx * dx + dy * dy || 1)));
+        best = Math.min(best, Math.hypot(a[0] + dx * t, a[1] + dy * t));
+    }
+    return best;
 }
 
 /**
@@ -118,15 +134,26 @@ export function strikeZone2(zone1: Position[], standoff: number): Position[] {
  *
  * Told apart by the geometry rather than by a count or a version, so a raw feature handed to
  * `renderTacticalGraphic`, a file from before zone 2 was filed and one from after all read
- * correctly with nothing else to go on. A ring whose own second half happened to sit exactly
- * one standoff outside its first is not something an operator draws.
+ * correctly with nothing else to go on. A ring whose own second half happened to sit one
+ * standoff outside its first is not something an operator draws.
+ *
+ * **Matched loosely**, within {@link FILED_ZONE_TOLERANCE} (three times that at the vertices,
+ * where one tool's miter corner and another's need not agree), because a file may come from a
+ * tool that offsets its own way. And **rejected cheaply first**: an engine holds zone 1 alone, whose
+ * point halfway round lies on zone 1 itself rather than a standoff off it, so the offset is only
+ * computed for a base that could be filed. This runs on every build of the graphic.
  */
 export function isFiledStrikeBase(coords: Position[], standoff: number): boolean {
     const half = coords.length / 2;
     if (!Number.isInteger(half) || half < 3 || !(standoff > 0)) return false;
-    const expected = strikeZone2(coords.slice(0, half), standoff);
-    const tolerance = Math.max(1, standoff * 1e-3);
-    return coords.slice(half).every((p, i) => groundGap(p, expected[i]) <= tolerance);
+    const zone1 = coords.slice(0, half);
+    const tolerance = Math.max(1, standoff * FILED_ZONE_TOLERANCE);
+    // A miter corner stands further out than the standoff, up to four times at the sharpest
+    // corner the offset allows, and never nearer than it. A point of zone 1 itself stands at 0.
+    const out = metresToRing(coords[half], zone1);
+    if (out < standoff - tolerance || out > standoff * 4 + tolerance) return false;
+    const expected = strikeZone2(zone1, standoff);
+    return coords.slice(half).every((p, i) => groundMeters(p as [number, number], expected[i] as [number, number]) <= tolerance * 3);
 }
 
 /**

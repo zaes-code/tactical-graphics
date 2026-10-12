@@ -114,19 +114,18 @@ export function editableBaseGeometry(name: unknown, geometry: Geometry, bag: unk
  * The one line every engine's `snapshot()` goes through, so none can forget the stamp —
  * which is exactly how they came to disagree — or file a base differently from the others.
  *
- * **The snapshot holds the caller's own array.** It always has, and a caller builds on that:
- * the Exchange add-on wraps its list first and fills it after. So a base that files differently
- * is replaced in that array, as a new feature, rather than the array being copied, and an entry
- * added later is read as it stands, which every restore accepts. @see filedBaseGeometry
+ * **A new list, never the caller's.** The features are copied where a base files differently and
+ * passed through otherwise, so nothing the caller holds is changed. A caller that wraps its list
+ * before filling it has to wrap it again after. @see filedBaseGeometry
  */
 export function toSnapshot(features: Feature<Geometry>[]): TacticalGraphicsSnapshot {
-    features.forEach((feature, i) => {
+    const filed = features.map(feature => {
         const bag = (feature?.properties as {tacticalGraphic?: {name?: unknown}} | null | undefined)?.tacticalGraphic;
-        if (!feature?.geometry || !bag) return;
+        if (!feature?.geometry || !bag) return feature;
         const geometry = filedBaseGeometry(bag.name, feature.geometry, bag);
-        if (geometry !== feature.geometry) features[i] = {...feature, geometry};
+        return geometry === feature.geometry ? feature : {...feature, geometry};
     });
-    return {type: 'FeatureCollection', features, tacticalGraphicsVersion: SNAPSHOT_VERSION};
+    return {type: 'FeatureCollection', features: filed, tacticalGraphicsVersion: SNAPSHOT_VERSION};
 }
 
 /**

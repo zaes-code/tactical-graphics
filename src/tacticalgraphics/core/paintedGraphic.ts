@@ -2,9 +2,6 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
-import {topmostSegmentIndex} from '../symbology/decorations';
-import {getSmoothLines} from './config';
-import {smoothingKindOf} from './smoothing';
 import {withHiddenAmplifiers} from '../symbology/paintFunctions';
 import {getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
@@ -16,7 +13,7 @@ import {groundLength} from './mercator';
 import {boundsOf, outerRingOf, type Paint, type PaintContext, type PaintFeature, paintGeometryMembers, paintGeometryPositions, type ProjectedGeometry, type ProjectedInputGeometry, type ProjectedPosition} from './paint';
 import {renderTacticalGraphic, TACTICAL_GRAPHIC_KEY, type TacticalGraphicProperties, toGraphicOptions} from './render';
 import {describedProperties} from './snapshot';
-import {GLYPH_CUT_GAP_GRAPHICS, usesStandoffWidth} from './symbology';
+import {areaLabelRing, GLYPH_CUT_GAP_GRAPHICS, topEdgeLabel, usesStandoffWidth} from './symbology';
 import {TacticalGraphicName} from './type';
 import {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from './mercator';
 
@@ -983,21 +980,15 @@ export function buildPaintedGraphic(
      * single point. **Unless the outline is drawn smooth**, when the traced corners are cut
      * away and a label anchored on one would float outside the curve. @see outerRingOf
      */
-    const smoothed = getSmoothLines() && smoothingKindOf(name) === 'area';
-    const ring = (smoothed ? outerRingOf(graphicGeometry) : undefined)
-        ?? outerRingOf(projectToMercator(baseGeometry))
-        ?? outerRingOf(graphicGeometry);
+    // The ring the area labels read, by the rule OpenLayers' holder reads too. @see areaLabelRing
+    const ring = areaLabelRing(name, outerRingOf(projectToMercator(baseGeometry)), outerRingOf(graphicGeometry));
     /*
-     * **Group or series of targets writes its name on the top edge of the outline it draws**,
-     * so the label is anchored there and turned along it, by the same rule the gap is cut
-     * with. OpenLayers' holder stamped this; nothing here did, so the designation had no
-     * segment to sit on and was never drawn on this engine. @see topmostSegmentIndex
+     * **Group or series of targets writes its name on the top edge of the outline it draws.**
+     * OpenLayers' holder stamped this; nothing here did, so the designation had no segment to
+     * sit on on this engine. @see topEdgeLabel
      */
-    const topRing = name === TacticalGraphicName.GroupOrSeriesOfTargets ? outerRingOf(graphicGeometry) : undefined;
-    const topIndex = topRing && topRing.length >= 2 ? topmostSegmentIndex(topRing) : undefined;
-    const labelSegment = topRing && topIndex !== undefined
-        ? [topRing[topIndex], topRing[topIndex + 1]] as [ProjectedPosition, ProjectedPosition]
-        : undefined;
+    const top = topEdgeLabel(name, outerRingOf(graphicGeometry));
+    const labelSegment = top?.segment;
 
     const shared = {
         properties: props,
@@ -1025,7 +1016,7 @@ export function buildPaintedGraphic(
         graphic: {geometry: graphicGeometry, ...shared},
         labels: labelSegment
             ? {
-                geometry: {type: 'Point', coordinates: [(labelSegment[0][0] + labelSegment[1][0]) / 2, (labelSegment[0][1] + labelSegment[1][1]) / 2]},
+                geometry: {type: 'Point', coordinates: top!.anchor},
                 ...shared,
                 labelSegment,
             }
