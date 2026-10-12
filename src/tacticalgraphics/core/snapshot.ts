@@ -1,4 +1,6 @@
-import type {Feature, FeatureCollection, Geometry} from 'geojson';
+import type {Feature, FeatureCollection, Geometry, Position} from 'geojson';
+import {editableStrikeBase, filedStrikeBase} from '../graphics/SafeDistanceZone';
+import {TacticalGraphicName} from './type';
 
 /**
  * # The saved-graphics file format, stated once for every renderer
@@ -74,13 +76,56 @@ export function snapshotVersionOf(snapshot: unknown): number {
     return typeof declared === 'number' && Number.isFinite(declared) ? declared : LEGACY_SNAPSHOT_VERSION;
 }
 
+/** The name and standoff a base's description states, for the two functions below. */
+function strikeStandoff(name: unknown, bag: unknown): number | undefined {
+    if (name !== TacticalGraphicName.MinimumSafeDistanceMultipleStrike) return undefined;
+    const width = (bag as {width?: unknown} | undefined)?.width;
+    return typeof width === 'number' && width > 0 ? width : undefined;
+}
+
 /**
- * Wraps base features as a snapshot, with the version on it.
+ * A base's geometry **as a file carries it**, out of the geometry an engine edits.
  *
- * The one line both renderers' `snapshot()` goes through, so neither can forget the stamp —
- * which is exactly how they came to disagree.
+ * The same for every graphic but one. The multiple-strike safe distance zone is edited as zone 1
+ * alone, with zone 2 derived from its standoff, and filed with both rings' points as APP-06
+ * 272101 lists them (user, 2026-10-11). @see filedStrikeBase
+ */
+export function filedBaseGeometry(name: unknown, geometry: Geometry, bag: unknown): Geometry {
+    const standoff = strikeStandoff(name, bag);
+    if (standoff === undefined || geometry.type !== 'LineString') return geometry;
+    const coordinates = filedStrikeBase(geometry.coordinates as Position[], standoff);
+    return coordinates === geometry.coordinates ? geometry : {...geometry, coordinates};
+}
+
+/**
+ * The geometry an engine edits, out of a base as a file carries it: the reverse of
+ * {@link filedBaseGeometry}. Every restore reads a base through it.
+ */
+export function editableBaseGeometry(name: unknown, geometry: Geometry, bag: unknown): Geometry {
+    const standoff = strikeStandoff(name, bag);
+    if (standoff === undefined || geometry.type !== 'LineString') return geometry;
+    const coordinates = editableStrikeBase(geometry.coordinates as Position[], standoff);
+    return coordinates === geometry.coordinates ? geometry : {...geometry, coordinates};
+}
+
+/**
+ * Wraps base features as a snapshot, with the version on it, and each base **as filed**.
+ *
+ * The one line every engine's `snapshot()` goes through, so none can forget the stamp —
+ * which is exactly how they came to disagree — or file a base differently from the others.
+ *
+ * **The snapshot holds the caller's own array.** It always has, and a caller builds on that:
+ * the Exchange add-on wraps its list first and fills it after. So a base that files differently
+ * is replaced in that array, as a new feature, rather than the array being copied, and an entry
+ * added later is read as it stands, which every restore accepts. @see filedBaseGeometry
  */
 export function toSnapshot(features: Feature<Geometry>[]): TacticalGraphicsSnapshot {
+    features.forEach((feature, i) => {
+        const bag = (feature?.properties as {tacticalGraphic?: {name?: unknown}} | null | undefined)?.tacticalGraphic;
+        if (!feature?.geometry || !bag) return;
+        const geometry = filedBaseGeometry(bag.name, feature.geometry, bag);
+        if (geometry !== feature.geometry) features[i] = {...feature, geometry};
+    });
     return {type: 'FeatureCollection', features, tacticalGraphicsVersion: SNAPSHOT_VERSION};
 }
 

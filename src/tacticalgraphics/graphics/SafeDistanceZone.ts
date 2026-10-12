@@ -97,6 +97,59 @@ function standoffMetres(opts?: IBaseGraphicOptions): number | undefined {
     return half * 2;
 }
 
+/** Rough ground metres between two lon/lat points: only ever compared against a tolerance. */
+function groundGap(a: Position, b: Position): number {
+    const k = Math.cos(((a[1] + b[1]) / 2) * Math.PI / 180);
+    return Math.hypot((b[0] - a[0]) * 111320 * k, (b[1] - a[1]) * 110540);
+}
+
+/**
+ * Zone 2's points for zone 1's: the same ring held `standoff` metres outward, one point for
+ * each of zone 1's, so the two carry an equal number as 272101 requires. Zone 1 is open, as a
+ * base stores it, and so is what comes back.
+ */
+export function strikeZone2(zone1: Position[], standoff: number): Position[] {
+    return geometryService.offsetRingOutward(zone1, standoff);
+}
+
+/**
+ * Whether `coords` is a base **as filed**: zone 1's points then zone 2's, the second half
+ * being the first held off by `standoff`.
+ *
+ * Told apart by the geometry rather than by a count or a version, so a raw feature handed to
+ * `renderTacticalGraphic`, a file from before zone 2 was filed and one from after all read
+ * correctly with nothing else to go on. A ring whose own second half happened to sit exactly
+ * one standoff outside its first is not something an operator draws.
+ */
+export function isFiledStrikeBase(coords: Position[], standoff: number): boolean {
+    const half = coords.length / 2;
+    if (!Number.isInteger(half) || half < 3 || !(standoff > 0)) return false;
+    const expected = strikeZone2(coords.slice(0, half), standoff);
+    const tolerance = Math.max(1, standoff * 1e-3);
+    return coords.slice(half).every((p, i) => groundGap(p, expected[i]) <= tolerance);
+}
+
+/**
+ * The base as APP-06 272101 lists it: *"Points 1 through N/2 define the inner safe zone (zone 1).
+ * Points N/2 +1 though point N defines the outer zone (zone 2)."* What a file carries.
+ *
+ * Every engine edits zone 1 alone and derives zone 2, so zone 2 cannot be dragged out of step
+ * with the standoff; this writes it out on the way to a file. A base already filed comes back
+ * as it is. @see editableStrikeBase, toSnapshot
+ */
+export function filedStrikeBase(coords: Position[], standoff: number): Position[] {
+    if (coords.length < 3 || !(standoff > 0) || isFiledStrikeBase(coords, standoff)) return coords;
+    return [...coords, ...strikeZone2(coords, standoff)];
+}
+
+/**
+ * Zone 1 alone, out of a base that may be filed with zone 2 after it: what an engine edits.
+ * Zone 2 is dropped rather than trusted, since the standoff states it. @see filedStrikeBase
+ */
+export function editableStrikeBase(coords: Position[], standoff: number): Position[] {
+    return isFiledStrikeBase(coords, standoff) ? coords.slice(0, coords.length / 2) : coords;
+}
+
 /** APP-06 272100 — a centre and two radii. */
 export class MinimumSafeDistanceZone extends TacticalGraphicsBase {
     name: string = TacticalGraphicName.MinimumSafeDistanceZone;
@@ -170,9 +223,10 @@ export class MinimumSafeDistanceMultipleStrike extends TacticalGraphicsBase {
         const round = (ring: Position[]): Position[] => (smooth ? chaikinRing(ring) : ring);
 
         if (standoff !== undefined) {
-            // Zone 1 as traced; zone 2 derived. Fewer than three points is a graphic still
-            // being drawn — show the run rather than an empty symbol.
-            const traced = closed(c);
+            // Zone 1 as traced, whether or not the base was filed with zone 2 after it; zone 2
+            // derived. Fewer than three points is a graphic still being drawn — show the run
+            // rather than an empty symbol.
+            const traced = closed(editableStrikeBase(c, standoff));
             if (!traced) return this.asMultiLineStringFeature([c]);
             const inner = round(traced);
             return this.asMultiLineStringFeature([inner, geometryService.offsetRingOutward(inner, standoff)]);
@@ -196,8 +250,10 @@ export class MinimumSafeDistanceMultipleStrike extends TacticalGraphicsBase {
      * offer an edit the shape cannot hold. The standoff is changed in the properties
      * dialog instead, which is also the only way to state it as a real distance.
      */
-    generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
-        return this.asMultiPointFeature(base.geometry.coordinates);
+    generateHandles(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiPoint> {
+        const standoff = standoffMetres(opts);
+        const c = base.geometry.coordinates;
+        return this.asMultiPointFeature(standoff === undefined ? c : editableStrikeBase(c, standoff));
     }
 
     generateLabels(base: Feature<LineString>): Feature<MultiPoint> {

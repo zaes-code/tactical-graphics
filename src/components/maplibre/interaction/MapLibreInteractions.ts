@@ -35,6 +35,7 @@ import {
     turnBendFrom,
     RANGE_FAN_BAND_OFFSET,
     handleContract,
+    hasClosingEdge,
     handleRole,
     type TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
@@ -2005,7 +2006,14 @@ export class MapLibreInteractions {
      * @see updateVertexHint
      */
     private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
-        if (baseVertexCount(graphic.name) !== undefined || editStretches(graphic.name)) return -1;
+        /*
+         * **The multiple-strike zone stretches and takes vertices both**, as it does on OpenLayers,
+         * where `Modify` claims a press on an edge before the stretch sees it: an edge inserts a
+         * point, anywhere else on the symbol resizes. Refusing every stretching graphic here made
+         * an edge drag resize the zone on this engine and add a point on that one.
+         */
+        const stretchesOnly = editStretches(graphic.name) && !usesStandoffWidth(graphic.name);
+        if (baseVertexCount(graphic.name) !== undefined || stretchesOnly) return -1;
         // A rectangle's base is two anchor points and nothing else, so there is no
         // segment to insert into — `baseVertexCount` already says so above, and this
         // second guard was for the drawn box. @see RectangularArea
@@ -2041,9 +2049,13 @@ export class MapLibreInteractions {
 
         let best: {index: number; position: Position} | undefined;
         let bestDistance = SEGMENT_GRAB_PX;
-        for (let i = 1; i < positions.length; i++) {
+        // The edge back to the first point, where the base is a ring stored as a line. Its index
+        // is one past the end, which `insertVertex` reads as an append. @see hasClosingEdge
+        const closes = hasClosingEdge(graphic.name, graphic.properties.width) && positions.length >= 3;
+        for (let i = 1; i < positions.length + (closes ? 1 : 0); i++) {
             const a = this.map.project([positions[i - 1][0], positions[i - 1][1]]);
-            const b = this.map.project([positions[i][0], positions[i][1]]);
+            const end = positions[i % positions.length];
+            const b = this.map.project([end[0], end[1]]);
             const near = closestPointOnSegment(point, a, b);
             if (near.distance <= bestDistance) {
                 bestDistance = near.distance;

@@ -87,6 +87,7 @@ import {
     toSnapshot,
     SNAPSHOT_VERSION,
     snapshotVersionOf,
+    editableBaseGeometry,
     smoothingKindOf,
     type TacticalGraphicsSnapshot,
 } from '@zaes/tactical-graphics';
@@ -800,6 +801,11 @@ export function restoreTacticalGraphics(
         }
         const name = (bag.name ?? props.graphicName) as TacticalGraphicName | undefined;
         const symbolId = (props.symbolId as string) || crypto.randomUUID();
+        // The geometry an engine edits, out of the one the file carries. @see filedBaseGeometry
+        if (name && source.geometry) {
+            const editable = editableBaseGeometry(name, source.geometry, bag);
+            if (editable !== source.geometry) source = {...source, geometry: editable};
+        }
 
         if (!name) {
             report.failed.push({symbolId, error: 'feature has no graphic name'});
