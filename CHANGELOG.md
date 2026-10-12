@@ -15,6 +15,14 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Labels that sit on an area's outline are drawn again.** The four `PAA` markers on a
+  position area for artillery and the designation on a group or series of targets were shrunk
+  until they fit inside the shape, which a label riding the edge never does, so they came out
+  at size 0 on every engine. 4.5.0 made it visible: the group of targets now opens a gap in its
+  outline for the designation, and the gap was empty. The picker thumbnails had the same gap.
+
 ## [4.5.0] — 2026-10-12
 
 ### Added
