@@ -192,12 +192,16 @@ export interface TacticalGraphicsConfigOptions {
     altitudeUnit?: AltitudeUnit;
 
     /**
-     * Round the corners of plain lines and areas (Chaikin corner cutting). Default `false`.
+     * Draw every graphic the user traces as a free path with its corners rounded. Default `false`.
      *
-     * SPIKE: applies only to the pass-through generators (`Phaseline`, `AreaGraphic`). The
-     * rendered line no longer passes through the inner drawn vertices; the base, its handles
-     * and its labels are unchanged. Geometry, not style: a renderer has to regenerate its
-     * graphics when this changes, a restyle is not enough.
+     * Lines, areas and multi-point arrows: `SMOOTHED_GRAPHICS` lists them and `smoothingKindOf`
+     * says how each is treated. The curve rounds the corners (Chaikin corner cutting) rather than
+     * passing through them. Only the line work changes: the points the user placed are what is
+     * saved, edited and exported, and a selected graphic shows them as a dashed line. An arrow
+     * keeps its last segment straight, so its head is drawn as on a hard line.
+     *
+     * It reshapes geometry, so `refreshStyles()` rebuilds the graphics it reaches rather than
+     * only repainting them; every engine does this.
      */
     smoothLines?: boolean;
 
