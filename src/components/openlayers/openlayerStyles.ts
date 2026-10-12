@@ -19,7 +19,7 @@ import {
     TacticalGraphicStatus,
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
-import {assignRole, readGraphicLabels} from './graphicProperties';
+import {assignRole, readGraphicGeometryState, readGraphicLabels} from './graphicProperties';
 import {escortSymbolStyle, followTaskSymbolStyle, securityOperationCentreSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
@@ -42,7 +42,7 @@ import {
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
     LINE_WIDTH,
-    anchorConnectorRun,
+    anchorConnectorRuns,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
@@ -522,7 +522,7 @@ export const createMap = (target: HTMLElement) => {
  * `geometry` overrides which run it follows, for the demolition family whose stored base
  * ends in a width point rather than in an anchor. @see anchorConnectorRun
  */
-export const modifyStyle = (color: string, geometry?: LineString) => {
+export const modifyStyle = (color: string, geometry?: LineString | MultiLineString) => {
     return new Style({
         fill: undefined,
         geometry,
@@ -567,14 +567,15 @@ export const createBaseFeature = () => {
 
         const name = feature.get('graphicName') as TacticalGraphicName | undefined;
         const geometry = feature.getGeometry();
-        // Only a LineString has a run to trim; a polygon or a point base draws whole.
-        const run = name && geometry instanceof LineString
-            ? anchorConnectorRun(name, geometry.getCoordinates())
-            : undefined;
-        return modifyStyle(
-            getInertHandleColor(),
-            run && run.length !== (geometry as LineString).getCoordinates().length ? new LineString(run) : undefined,
-        );
+        // Only a LineString has a run to reshape; a polygon or a point base draws whole. The
+        // runs are the shared rule's, so this hashes what every other engine does: trimmed
+        // back to a centreline, or closed for a ring stored as a line. @see anchorConnectorRuns
+        const coordinates = geometry instanceof LineString ? geometry.getCoordinates() : undefined;
+        const width = readGraphicGeometryState(feature).width;
+        const runs = name && coordinates ? anchorConnectorRuns<Coordinate>(name, {type: 'LineString', coordinates}, width) : [];
+        const unchanged = runs.length === 1 && runs[0].length === coordinates?.length;
+        const geometryOf = () => (runs.length === 1 ? new LineString(runs[0]) : new MultiLineString(runs));
+        return modifyStyle(getInertHandleColor(), runs.length && !unchanged ? geometryOf() : undefined);
     });
 
     feature.set('base', true);

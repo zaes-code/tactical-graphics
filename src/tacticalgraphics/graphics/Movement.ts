@@ -4,6 +4,8 @@ import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojso
 import geometryService from "../core/GeometryService";
 import * as turf from '../core/turf';
 import {BY_FIRE_SHAFT, BY_FIRE_STANDOFF, tipOverhangOf, widthPointForBuiltAxis} from '../core/axisWidth';
+import {getSmoothLines} from '../core/config';
+import {chaikinKeepingEnds, smoothingKindOf} from '../core/smoothing';
 
 export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
     type = "LineString";
@@ -20,6 +22,25 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
      */
     protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
         return geometryService.trimLineEnd(base.geometry.coordinates, radius * tipOverhangOf(this.name));
+    }
+
+    /**
+     * One wall of the arrow's body: the center line offset by `offset` meters, **rounded when
+     * smooth lines is on**.
+     *
+     * The wall is rounded after the offset rather than the center line before it. A curve
+     * offset by the body's half-width folds back on itself wherever it bends tighter than
+     * that, and the corridors are wide enough that the folds showed; a wall offset first and
+     * rounded after can only be as tangled as the hard wall already was. Each wall keeps its
+     * last segment straight, so the head, the twist and the bars built on it come out exactly
+     * as they do on a hard line, and the turning movement keeps its first, where its bar is.
+     * @see chaikinKeepingEnds, SMOOTHED_GRAPHICS
+     */
+    protected parallel(centerline: Position[], offset: number): Position[] {
+        const wall = geometryService.computeParallelLineString(centerline, offset) as Position[];
+        const kind = smoothingKindOf(this.name);
+        if (!getSmoothLines() || (kind !== 'corridor' && kind !== 'corridorFixedTail')) return wall;
+        return chaikinKeepingEnds(wall, kind === 'corridorFixedTail', true);
     }
 
     /**
@@ -80,8 +101,8 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
             leftArrowBase[leftArrowBase.length - 1],
             leftArrowBase[leftArrowBase.length - 2],
@@ -168,8 +189,8 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
             leftArrowBase[leftArrowBase.length - 1],
             leftArrowBase[leftArrowBase.length - 2],
@@ -229,8 +250,8 @@ export class MainAttack extends MovementGraphicBase {
         let radius: number = opts?.radius || 20;
         let baseCoords = this.arrowCenterline(base, radius);
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         let arrowCoords: Position[] = geometryService.createMainAttackArrow(baseCoords, leftArrowBase, rightArrowBase, radius);
         return this.asMultiLineStringFeature([leftArrowBase, arrowCoords, rightArrowBase.reverse()]);
     }
@@ -272,8 +293,8 @@ export class AvenueOfApproach extends MainAttack {
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
         const centerline = this.arrowCenterline(base, radius);
-        const left = geometryService.computeParallelLineString(centerline, radius);
-        const right = geometryService.computeParallelLineString(centerline, -radius);
+        const left = this.parallel(centerline, radius);
+        const right = this.parallel(centerline, -radius);
         return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0]]);
     }
 }
@@ -285,8 +306,8 @@ export class MainAttackFeint extends MovementGraphicBase {
         let radius: number = opts?.radius || 20;
         let baseCoords = this.arrowCenterline(base, radius);
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         let arrowCoords: Position[] = geometryService.createMainAttackArrow(baseCoords, leftArrowBase, rightArrowBase, radius);
 
         const feintDashes = this.computeFeintOutline(baseCoords, radius);
@@ -355,8 +376,8 @@ export class SupportingAttack extends MovementGraphicBase {
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
             leftArrowBase[leftArrowBase.length - 1],
             leftArrowBase[leftArrowBase.length - 2],
@@ -395,8 +416,8 @@ export class Counterattack extends MovementGraphicBase {
         let lastLinePoint = baseCoords[baseCoords.length - 1];
         let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
 
-        const leftArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, radius);
-        const rightArrowBase: Position[] = geometryService.computeParallelLineString(baseCoords, -radius);
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
         const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
             leftArrowBase[leftArrowBase.length - 1],
             leftArrowBase[leftArrowBase.length - 2],

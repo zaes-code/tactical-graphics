@@ -39,8 +39,11 @@ import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
 import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
-import {usesDrawnAnchors} from './handles';
+import {hasClosingEdge, usesDrawnAnchors} from './handles';
 import {carriesWidthPointInBase} from './axisWidth';
+import {getSmoothLines} from './config';
+import {smoothingKindOf} from './smoothing';
+import {topmostSegmentIndex} from '../symbology/decorations';
 
 // ── Line weight ──────────────────────────────────────────────────────────────
 
@@ -1213,6 +1216,69 @@ export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: re
      */
     if (carriesWidthPointInBase(name) && coordinates.length >= 3) return coordinates.slice(0, -1);
     return [...coordinates];
+}
+
+/**
+ * Every run of a selected graphic's drawn points an editor marks with the hashed construction
+ * line, in the base's own coordinates: **the one statement every engine draws it from.**
+ *
+ * The graphics `drawsAnchorConnector` names, as before. And, while smooth lines is on, every
+ * graphic it reshapes: the curve no longer passes through the points the operator placed, so
+ * the line through them is what shows where they are and what dragging one will move. On a
+ * hard drawing that line lies under the symbol's own, which is why it was never needed there.
+ * An area's run is its closed outline, and so is a ring stored as a line (the multiple-strike
+ * safe distance zone), smooth or not: its points trace an outline, and an open run reads as a
+ * line someone forgot to finish. That zone needs its `width` to say which outline: with one, the
+ * base is zone 1; without, it is the older record of two rings end to end, and each ring closes
+ * on its own. @see SMOOTHED_GRAPHICS, hasClosingEdge
+ */
+export function anchorConnectorRuns<T>(name: TacticalGraphicName, base: {type: string; coordinates?: unknown}, width?: number): T[][] {
+    const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
+    const ring = smoothingKindOf(name) === 'ring';
+    if (base.type === 'LineString') {
+        const coordinates = base.coordinates as T[];
+        if (!drawsAnchorConnector(name) && !smoothed && !ring) return [];
+        const run = anchorConnectorRun(name, coordinates);
+        const close = (r: T[]): T[] => [...r, r[0]];
+        if (ring && hasClosingEdge(name, width) && run.length >= 3) return [close(run)];
+        if (ring && run.length >= 6) {
+            // The generator's own split: the first half is zone 1, the rest zone 2.
+            const half = Math.floor(run.length / 2);
+            return [close(run.slice(0, half)), close(run.slice(half))];
+        }
+        return run.length >= 2 ? [run] : [];
+    }
+    if (base.type === 'Polygon' && smoothed) {
+        const ring = (base.coordinates as T[][])[0];
+        return ring && ring.length >= 3 ? [ring] : [];
+    }
+    return [];
+}
+
+/**
+ * The ring an area's labels are placed against: **one rule for every engine**.
+ *
+ * The base first, since an area the operator traced is its own outline, then the drawn shape,
+ * which is where a circular variant's outline comes from, since its base is a single point.
+ * Unless the outline is drawn smooth: then the traced corners are cut away, and a label anchored
+ * on one would float outside the curve. @see buildPaintedGraphic, AreaGraphicBase
+ */
+export function areaLabelRing<T>(name: TacticalGraphicName, baseRing: T[] | undefined, drawnRing: T[] | undefined): T[] | undefined {
+    const smoothed = getSmoothLines() && smoothingKindOf(name) === 'area';
+    return (smoothed ? drawnRing : undefined) ?? baseRing ?? drawnRing;
+}
+
+/**
+ * Where a graphic that writes its name on its outline anchors it: the middle of the top edge of
+ * the outline it draws, and that edge, to turn the text along. Only group or series of targets
+ * does, and it cuts its gap by the same rule. `undefined` for every other graphic.
+ * @see topmostSegmentIndex, groupOrSeriesOfTargetsPaint
+ */
+export function topEdgeLabel<T extends readonly number[]>(name: TacticalGraphicName, drawnRing: T[] | undefined): {anchor: [number, number]; segment: [T, T]} | undefined {
+    if (name !== TacticalGraphicName.GroupOrSeriesOfTargets || !drawnRing || drawnRing.length < 2) return undefined;
+    const i = topmostSegmentIndex(drawnRing as unknown as [number, number][]);
+    const [a, b] = [drawnRing[i], drawnRing[i + 1]];
+    return {anchor: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], segment: [a, b]};
 }
 
 /** How far a security operation's arm reaches from the centre, in screen pixels. */

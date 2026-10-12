@@ -341,6 +341,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 max={MAX_LINE_WIDTH}
                 onChange={lineWidth => onChange({lineWidth})}
             />
+            <ToggleSetting
+                label="Smooth Lines"
+                hint="Curve free-drawn lines, areas and arrows"
+                checked={settings.smoothLines === true}
+                onChange={smoothLines => onChange({smoothLines})}
+            />
 
             <Divider/>
             <Typography sx={sectionSx}>Affiliation colors</Typography>

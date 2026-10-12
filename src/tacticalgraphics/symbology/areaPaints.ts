@@ -15,7 +15,18 @@ import type {HatchSpec, Paint, PaintContext, PaintFeature} from '../core/paint';
 import {paintGeometryMembers, paintLineWork} from '../core/paint';
 import {LINE_WIDTH, fontStyle, getColorByHostility, withOpacity} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicStatus} from '../core/type';
-import {crenellatedPath, encirclementToothSize, fortifiedRing, obstacleRing, ringIsClockwise, textWidth} from './decorations';
+import {
+    gapFits,
+    crenellatedPath,
+    cutGapAlongPath,
+    encirclementToothSize,
+    fortifiedRing,
+    obstacleRing,
+    ringIsClockwise,
+    splitAtCorners,
+    textWidth,
+    topmostSegmentIndex,
+} from './decorations';
 import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {terrainHatchColor} from './sectorModifierPaints';
 
@@ -159,48 +170,24 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
 
         const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)};
 
-        let bestIdx = 0;
-        let bestMidY = -Infinity;
-        for (let i = 0; i < ring.length - 1; i++) {
-            const midY = (ring[i][1] + ring[i + 1][1]) / 2;
-            if (midY > bestMidY) {
-                bestMidY = midY;
-                bestIdx = i;
-            }
-        }
-
+        const bestIdx = topmostSegmentIndex(ring);
         const text = (feature.properties.designation ?? '').trim();
         const scale = scaleOf(feature, context);
         const gapHalfMap = text ? (textWidth(context, text, fontStyle, scale) / 2 + 6) * context.resolution : 0;
 
-        const paints: Paint[] = [];
-        for (let i = 0; i < ring.length - 1; i++) {
-            const a = ring[i];
-            const b = ring[i + 1];
-
-            if (i === bestIdx && gapHalfMap > 0) {
-                const dx = b[0] - a[0];
-                const dy = b[1] - a[1];
-                const segLen = Math.hypot(dx, dy);
-                if (segLen > 2 * gapHalfMap) {
-                    const ux = dx / segLen;
-                    const uy = dy / segLen;
-                    const mx = (a[0] + b[0]) / 2;
-                    const my = (a[1] + b[1]) / 2;
-                    paints.push({
-                        geometry: {type: 'LineString', coordinates: [a, [mx - ux * gapHalfMap, my - uy * gapHalfMap]]},
-                        stroke,
-                    });
-                    paints.push({
-                        geometry: {type: 'LineString', coordinates: [[mx + ux * gapHalfMap, my + uy * gapHalfMap], b]},
-                        stroke,
-                    });
-                    continue;
-                }
-            }
-            paints.push({geometry: {type: 'LineString', coordinates: [a, b]}, stroke});
-        }
-        return paints;
+        /*
+         * Cut along the ring, and only where the gap fits the run between real corners the top
+         * edge belongs to: on a hard ring that is the edge itself, as it always was, and on a
+         * smoothed one the curve over the top. The ring is walked from the point opposite the
+         * top edge so the gap never straddles the walk's seam. @see cutGapAlongPath
+         */
+        const m = ring.length - 1;
+        const k = Math.floor(m / 2);
+        const walk = Array.from({length: m + 1}, (_, j) => ring[(((bestIdx - k + j) % m) + m) % m]);
+        const gapped = gapHalfMap > 0 && gapFits(ring, bestIdx, 0.5, gapHalfMap, true);
+        const cut = cutGapAlongPath(walk, k, 0.5, gapped ? gapHalfMap : 0);
+        const runs = gapped ? splitAtCorners([...cut.after, ...cut.before.slice(1)]) : splitAtCorners(walk);
+        return runs.filter(run => run.length > 1).map(run => ({geometry: {type: 'LineString', coordinates: run}, stroke}));
     };
 }
 

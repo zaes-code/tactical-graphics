@@ -11,7 +11,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {projectedMidSegment, textWidth} from './decorations';
+import {cutGapAlongPath, projectedMidSegment, runVector, textWidth} from './decorations';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
@@ -93,15 +93,9 @@ export function boundaryPaint(): LinePaint {
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
         const {index, t} = projectedMidSegment(coords);
-        const outline: ProjectedPosition[][] = [];
-        for (let i = 0; i < coords.length - 1; i++) {
-            if (i !== index) outline.push([coords[i], coords[i + 1]]);
-        }
-
-        const p1 = coords[index];
-        const p2 = coords[index + 1];
-        const dx = p2[0] - p1[0];
-        const dy = p2[1] - p1[1];
+        // As long as the run the middle sits on, so the glyph's cap is measured against the
+        // line it marks and not against one chord of a smoothed curve. @see runVector
+        const [dx, dy] = runVector(coords, index, t);
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
@@ -115,11 +109,9 @@ export function boundaryPaint(): LinePaint {
          */
         const glyphHalfPx = echelonWidthPx(dx, dy, context.resolution, echelon, scale) / 2;
         const gapHalfMap = (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution;
-        const gapRatio = gapHalfMap / segLen;
-
-        const gapA: ProjectedPosition = [p1[0] + dx * (t - gapRatio), p1[1] + dy * (t - gapRatio)];
-        const gapB: ProjectedPosition = [p1[0] + dx * (t + gapRatio), p1[1] + dy * (t + gapRatio)];
-        outline.push([p1, gapA], [gapB, p2]);
+        // Along the path, so a smoothed boundary, whose middle segment is a short chord of the
+        // curve, gets the same hole a straight one does. @see cutGapAlongPath
+        const {outline, center: midGap} = cutGapAlongPath(coords, index, t, gapHalfMap);
 
         let rotation = -Math.atan2(dy, dx);
         let perpSign = 1;
@@ -129,7 +121,6 @@ export function boundaryPaint(): LinePaint {
         }
         if (rotation > Math.PI) rotation -= 2 * Math.PI;
 
-        const midGap: ProjectedPosition = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
         const anchorMap =
             (BASE_FONT_SIZE_PX / 2 + echelonPerpExtentPx(echelon) + BOUNDARY_GAP_PX) * scale * context.resolution;
         const nx = perpSign * (-dy / segLen);

@@ -15,6 +15,60 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.5.0] — 2026-10-12
+
+### Added
+
+- **Smooth lines.** `configureTacticalGraphics({smoothLines: true})` draws every graphic the
+  user traces as a free path with its corners rounded: the control lines and boundaries, the
+  obstacle, wire and fortified lines, the irregular areas, the multiple-strike safe distance
+  zone, and the arrows, both the thin direction-of-attack lines and the axis arrows with a body.
+  162 graphics in all. The points the user placed are still what is saved, edited and exported,
+  and a selected graphic shows them as a dashed line. An arrow keeps the segment its head is
+  built on, and an axis arrow's sides are rounded after the offset so a bend cannot fold the
+  body. Graphics whose points are anchors (mission tasks, the two- and three-point symbols,
+  rectangles) and the routes that mark every vertex (air corridors, overhead wire) stay hard.
+  Default off.
+- `refreshStyles()` rebuilds the graphics a `smoothLines` change reshapes, on both engines. On
+  OpenLayers without the facade, `rebuildGraphicsForConfig(manager)` does it.
+- On the root entry: `SMOOTHED_GRAPHICS`, `smoothingKindOf`, `getSmoothLines`,
+  `geometryConfigKey`, `rebuildPaintedGraphic`, `anchorConnectorRuns`, `hasClosingEdge`,
+  `takesInsertedVertices`, `nearestInsertionEdge`, `areaLabelRing`, `topEdgeLabel`,
+  `topmostSegmentIndex`, `filedBaseGeometry`, `editableBaseGeometry`, `filedStrikeBase`,
+  `editableStrikeBase`, `isFiledStrikeBase` and `strikeZone2`. On `/openlayers`:
+  `rebuildGraphicsForConfig`.
+- **A point can be added on the multiple-strike zone's closing edge**, the edge from its last
+  point back to its first, on both engines. While it is selected, the dashed line through its
+  points closes into the ring it traces.
+
+### Changed
+
+- **The multiple-strike safe distance zone (272101) is saved with both rings' points**, as
+  APP-06 lists them: zone 1's, then zone 2's, the same number of each, with zone 2 one `width`
+  outside zone 1. It is still edited as zone 1 alone; zone 2 is read back from the width on
+  load, so the two cannot disagree. Files from earlier versions, zone 1 and a width or two rings
+  and no width, open as before. A host that reads this graphic's coordinates out of a saved file
+  sees twice the points it did.
+- **MapLibre inserts a point on the multiple-strike zone's edges**, as OpenLayers always has. A
+  drag on an edge used to resize the whole zone on MapLibre. Neither engine inserts into the
+  zone's older two-ring record (no width), where a point would shift the split between the rings.
+- Renderers building from the shared adapter draw the hashed construction line from
+  `anchorConnectorRuns`, the rule both engines now share.
+
+### Fixed
+
+- **Outlines drawn with many points kept their gaps, glyphs and labels only on a hard drawing.**
+  Gaps and echelon glyphs were measured against the one segment they sat in, so on a dense
+  outline the battle position and strong point squeezed their echelon glyph and lost their
+  opening, the prepared battle position's dashes stopped partway round, group or series of
+  targets had no gap, and the UXO area dropped its labels. They are measured along the line
+  now. The picker thumbnails for those five changed accordingly. Boundary, munition flight
+  path, mobility corridor and the hostile encirclement's gaps follow the same rule.
+- Group or series of targets publishes its label anchor and segment on MapLibre, which never had
+  one. Its designation is still drawn at zero size on both engines; that is a separate fix.
+- OpenLayers' selection box no longer counts the hashed construction line, so it fits the
+  symbol as the other engines' boxes do.
+
 ## [4.4.0] — 2026-09-28
 
 ### Added
@@ -1682,7 +1736,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...develop
+[4.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...v4.3.0
