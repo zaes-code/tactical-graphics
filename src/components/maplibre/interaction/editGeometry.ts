@@ -407,10 +407,15 @@ export function moveVertex(description: GraphicDescription, index: number, to: P
  * position last; inserting at 0 or at the end would put a vertex outside the ring's
  * closure and open the shape. Those two indices are refused, and every segment between
  * them is available — which is every segment a user can actually see.
+ *
+ * **One past the end appends, on a line.** That is the edge back from the last point to the
+ * first on a base that is a ring stored as a line, which the caller only offers where
+ * `hasClosingEdge` says the edge is real. @see hasClosingEdge
  */
 export function insertVertex(description: GraphicDescription, index: number, at: Position): GraphicDescription {
     const positions = positionsOf(description.geometry);
-    if (index <= 0 || index > positions.length - 1) return description;
+    const appends = index === positions.length && description.geometry.type === 'LineString';
+    if (index <= 0 || (index > positions.length - 1 && !appends)) return description;
 
     const isRing = description.geometry.type === 'Polygon' || description.geometry.type === 'MultiPolygon';
     if (isRing && index === positions.length - 1) return description;

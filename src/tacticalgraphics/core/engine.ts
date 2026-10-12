@@ -283,6 +283,10 @@ export interface TacticalGraphicsEngine {
      * again on the next frame — while MapLibre bakes each paint result into a GeoJSON
      * source and keeps drawing the old colors until something re-runs the paints. So a
      * host's whole theme change is `configureTacticalGraphics(palette)` **and** this.
+     *
+     * A setting that reshapes geometry, `smoothLines`, is handled here too: an engine rebuilds
+     * the graphics it reaches through the generators rather than only repainting them.
+     * @see geometryConfigKey
      */
     refreshStyles(): void;
 

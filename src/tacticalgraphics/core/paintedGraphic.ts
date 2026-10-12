@@ -13,7 +13,7 @@ import {groundLength} from './mercator';
 import {boundsOf, outerRingOf, type Paint, type PaintContext, type PaintFeature, paintGeometryMembers, paintGeometryPositions, type ProjectedGeometry, type ProjectedInputGeometry, type ProjectedPosition} from './paint';
 import {renderTacticalGraphic, TACTICAL_GRAPHIC_KEY, type TacticalGraphicProperties, toGraphicOptions} from './render';
 import {describedProperties} from './snapshot';
-import {GLYPH_CUT_GAP_GRAPHICS, usesStandoffWidth} from './symbology';
+import {areaLabelRing, GLYPH_CUT_GAP_GRAPHICS, topEdgeLabel, usesStandoffWidth} from './symbology';
 import {TacticalGraphicName} from './type';
 import {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from './mercator';
 
@@ -183,6 +183,21 @@ export function carryPaintFlags(
         },
         previous.graphic.drawingResolution,
     );
+}
+
+/**
+ * The same graphic built again through its generator, from the base and description it holds.
+ *
+ * For a config change that moves **geometry** rather than paint, which `smoothLines` is: a
+ * renderer's restyle re-runs the paint functions over the geometry it already holds, so the new
+ * setting would not show until each graphic was edited. Every renderer building from this
+ * adapter calls this on such a change, so they all redraw the same way. The id, the drawing
+ * resolution and the paint flags carry over; a generator that refuses leaves the graphic as it
+ * was. @see geometryConfigKey
+ */
+export function rebuildPaintedGraphic<T extends PaintedGraphic>(graphic: T): T {
+    const rebuilt = buildPaintedGraphic(graphic.name, graphic.base.geometry, graphic.properties, graphic.graphic.drawingResolution);
+    return rebuilt ? {...graphic, ...carryPaintFlags(graphic, {...rebuilt, id: graphic.id})} : graphic;
 }
 
 let nextId = 0;
@@ -959,6 +974,22 @@ export function buildPaintedGraphic(
             ? labelGeometry.coordinates[0]
             : undefined;
 
+    /*
+     * The base first — an area the operator traced *is* its own outline — then the rendered
+     * shape, which is where a circular variant's outline comes from, since its base is a
+     * single point. **Unless the outline is drawn smooth**, when the traced corners are cut
+     * away and a label anchored on one would float outside the curve. @see outerRingOf
+     */
+    // The ring the area labels read, by the rule OpenLayers' holder reads too. @see areaLabelRing
+    const ring = areaLabelRing(name, outerRingOf(projectToMercator(baseGeometry)), outerRingOf(graphicGeometry));
+    /*
+     * **Group or series of targets writes its name on the top edge of the outline it draws.**
+     * OpenLayers' holder stamped this; nothing here did, so the designation had no segment to
+     * sit on on this engine. @see topEdgeLabel
+     */
+    const top = topEdgeLabel(name, outerRingOf(graphicGeometry));
+    const labelSegment = top?.segment;
+
     const shared = {
         properties: props,
         graphicSize: props.radius,
@@ -970,10 +1001,7 @@ export function buildPaintedGraphic(
         // bare anchor point and cannot work them out for itself, so whichever layer
         // owns the holder has to supply them. Here that is this adapter.
         bounds: boundsOf(graphicGeometry),
-        // The base first — an area the operator traced *is* its own outline — then the
-        // rendered shape, which is where a circular variant's outline comes from, since its
-        // base is a single point. @see outerRingOf
-        ring: outerRingOf(projectToMercator(baseGeometry)) ?? outerRingOf(graphicGeometry),
+        ring,
         // A range fan's bands reach the generator and come back as anonymous points,
         // so the label paint has to re-resolve them with the generator's own
         // defaults. `RangeFanGraphicBase` does the same call. @see resolveRangeFanBands
@@ -986,7 +1014,13 @@ export function buildPaintedGraphic(
         properties: props,
         base,
         graphic: {geometry: graphicGeometry, ...shared},
-        labels: labelGeometry ? {geometry: labelGeometry, ...shared} : undefined,
+        labels: labelSegment
+            ? {
+                geometry: {type: 'Point', coordinates: top!.anchor},
+                ...shared,
+                labelSegment,
+            }
+            : labelGeometry ? {geometry: labelGeometry, ...shared} : undefined,
         // **`placed`, not `rendered`.** The security operations are generated centered
         // on the origin and moved onto their base here; taking the handles from the
         // raw output left all three graphics' handles at null island, so the symbol
