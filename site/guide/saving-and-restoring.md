@@ -43,3 +43,11 @@ companion object to keep, and no viewport state to lose.
 
 A base short of what its graphic needs is completed on the way in, so a record written
 by hand — or by an older version — arrives fully editable rather than half-drawn.
+
+**One graphic files more than the user drew.** The multiple-strike safe distance zone
+(APP-06 272101) is drawn as zone 1 and a `width`, and zone 2 is that ring held `width`
+meters outward. Its base is filed as APP-06 lists the points: zone 1's, then zone 2's, the
+same number of each. On the way in, zone 2 is read off and recomputed from `width`, so the
+two rings cannot disagree. A record holding zone 1 alone, written before this, still opens,
+and so does the older form with two rings and no `width`. `filedStrikeBase` and
+`editableStrikeBase` convert between the two if you build records yourself.

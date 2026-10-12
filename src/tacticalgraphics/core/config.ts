@@ -191,6 +191,20 @@ export interface TacticalGraphicsConfigOptions {
     /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.feet}. @see AltitudeUnit */
     altitudeUnit?: AltitudeUnit;
 
+    /**
+     * Draw every graphic the user traces as a free path with its corners rounded. Default `false`.
+     *
+     * Lines, areas and multi-point arrows: `SMOOTHED_GRAPHICS` lists them and `smoothingKindOf`
+     * says how each is treated. The curve rounds the corners (Chaikin corner cutting) rather than
+     * passing through them. Only the line work changes: the points the user placed are what is
+     * saved, edited and exported, and a selected graphic shows them as a dashed line. An arrow
+     * keeps its last segment straight, so its head is drawn as on a hard line.
+     *
+     * It reshapes geometry, so `refreshStyles()` rebuilds the graphics it reaches rather than
+     * only repainting them; every engine does this.
+     */
+    smoothLines?: boolean;
+
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these color the affordances a renderer draws so a user
     // can edit a graphic. They say "you can drag this", and that meaning must not shift
@@ -229,6 +243,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly labelUsesHostilityColor?: boolean;
     readonly labelHaloColor?: string;
     readonly altitudeUnit?: AltitudeUnit;
+    readonly smoothLines?: boolean;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -247,6 +262,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.labelUsesHostilityColor !== undefined) this.labelUsesHostilityColor = options.labelUsesHostilityColor;
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
         if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
+        if (options.smoothLines !== undefined) this.smoothLines = options.smoothLines;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -277,6 +293,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             obstacleColors: overrides.obstacleColors ?? this.obstacleColors,
             obstacleColor: overrides.obstacleColor ?? this.obstacleColor,
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
+            smoothLines: overrides.smoothLines ?? this.smoothLines,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -347,6 +364,22 @@ export function setTacticalGraphicsConfig(config: TacticalGraphicsConfig): void 
 /** Drop every override and go back to the doctrinal defaults. */
 export function resetTacticalGraphicsConfig(): void {
     _config = EMPTY_CONFIG;
+}
+
+/** Whether free-drawn lines, areas and arrows are drawn smooth. @see TacticalGraphicsConfigOptions.smoothLines */
+export function getSmoothLines(): boolean {
+    return _config.smoothLines ?? false;
+}
+
+/**
+ * A string that changes exactly when a config change moves **geometry**, not just paint.
+ *
+ * A renderer keeps the last value it built with and, when its restyle finds a different one,
+ * rebuilds its graphics through the generators instead of only re-running the paints.
+ * `smoothLines` is the only such setting today. @see rebuildPaintedGraphic
+ */
+export function geometryConfigKey(): string {
+    return `smooth:${getSmoothLines() ? 1 : 0}`;
 }
 
 export function getDefaultLabelSize(): number {

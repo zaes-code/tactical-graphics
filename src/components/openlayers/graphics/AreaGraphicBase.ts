@@ -4,7 +4,15 @@ import {LineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {createBaseFeature, createHandleFeature, createMeasureFeature, getAreaLabelStylesFn, getStyle} from '../openlayerStyles';
 import {PolygonGraphic} from '../controllers/PolygonGraphicController';
 import openlayersAdapter from '../openlayersAdapter';
-import {TacticalGraphicHostility, TacticalGraphicName, carriesRectangleLength, isRectangular, rectangleAmplifiers} from '@zaes/tactical-graphics';
+import {
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    carriesRectangleLength,
+    areaLabelRing,
+    isRectangular,
+    rectangleAmplifiers,
+    topEdgeLabel,
+} from '@zaes/tactical-graphics';
 import {toLonLat} from 'ol/proj';
 import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
 import {assignRole, writeGraphicProperties} from '../graphicProperties';
@@ -164,29 +172,20 @@ export class AreaGraphicBase implements PolygonGraphic {
         this.labels.setGeometry(labels as Point);
         this.handles.setGeometry(handles as MultiPoint);
 
-        // GroupOrSeriesOfTargets places its name on the northern-most segment.
-        // Anchor the labels feature there (instead of the centroid) so OL's
-        // feature-level culling keeps the text rendered when the user zooms in
-        // close to the label position. labelSegmentA/B are the segment endpoints
-        // used to rotate the text along the segment.
-        if (this.graphicName === TacticalGraphicName.GroupOrSeriesOfTargets && geom) {
-            const ring = geom.getCoordinates()[0];
-            if (ring.length >= 2) {
-                let bestIdx = 0;
-                let bestMidY = -Infinity;
-                for (let i = 0; i < ring.length - 1; i++) {
-                    const midY = (ring[i][1] + ring[i + 1][1]) / 2;
-                    if (midY > bestMidY) {
-                        bestMidY = midY;
-                        bestIdx = i;
-                    }
-                }
-                const a = ring[bestIdx];
-                const b = ring[bestIdx + 1];
-                this.labels.setGeometry(new Point([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]));
-                this.labels.set('labelSegmentA', a);
-                this.labels.set('labelSegmentB', b);
-            }
+        // The ring the area labels read, by the rule the shared adapter reads too. @see areaLabelRing
+        const drawnRing = graphic instanceof Polygon ? graphic.getCoordinates()[0] : undefined;
+        const labelRing = areaLabelRing(this.graphicName, geom?.getCoordinates()[0], drawnRing);
+        if (labelRing) this.labels.set('polygonRing', labelRing);
+
+        // Group or series of targets places its name on the top edge of the outline it draws,
+        // where its paint cuts the gap. Anchor the labels feature there (instead of the centroid)
+        // so OL's feature-level culling keeps the text rendered when the user zooms in close to
+        // it; labelSegmentA/B turn the text along the edge. @see topEdgeLabel
+        const top = topEdgeLabel(this.graphicName, drawnRing);
+        if (top) {
+            this.labels.setGeometry(new Point(top.anchor));
+            this.labels.set('labelSegmentA', top.segment[0]);
+            this.labels.set('labelSegmentB', top.segment[1]);
         }
 
         // A rectangle's width is doctrinal input, so a drag has to write it back.

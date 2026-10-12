@@ -37,7 +37,7 @@ and leaves your map alone.
 | `clearAll()` | remove every graphic and return to `view` |
 | `snapshot()` / `restore(fc)` | the whole map as GeoJSON, and back — see [Saving and restoring](/guide/saving-and-restoring) |
 | `setAmplifiersHidden(id, hidden)` / `amplifiersHidden(id)` | draw a graphic name-only, and read it back — see [Showing a graphic's name only](#showing-a-graphic-s-name-only). Not saved in a snapshot |
-| `refreshStyles()` | redraw against the current config, after `configureTacticalGraphics` |
+| `refreshStyles()` | redraw against the current config, after `configureTacticalGraphics`; rebuilds the graphics a change to `smoothLines` reshapes |
 | `destroy()` | detach every listener and interaction |
 
 Pass callbacks as the second argument — `onChange`, `onSelect`, `onDrawEnd`,

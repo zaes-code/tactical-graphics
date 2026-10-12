@@ -16,7 +16,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
-import {offsetAbove, offsetBelow, projectedMidSegment, textWidth, uprightRotation} from './decorations';
+import {cutGapAlongPath, offsetAbove, offsetBelow, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -252,23 +252,15 @@ export function munitionFlightPathPaint(): LinePaint {
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
-        // Every segment but the one carrying the label is drawn whole.
-        const outline: ProjectedPosition[][] = [];
-        for (let i = 0; i < coords.length - 1; i++) {
-            if (i !== index) outline.push([coords[i], coords[i + 1]]);
-        }
-
+        // The gap is cut along the path, so a smoothed line gets the same one. @see cutGapAlongPath
         const halfGapPx = textWidth(context, 'MFP', fontStyle, scale) / 2 + MFP_GAP_PADDING_PX;
-        const gapRatio = (halfGapPx * context.resolution) / segLen;
-        const gapA: ProjectedPosition = [p1[0] + dx * (t - gapRatio), p1[1] + dy * (t - gapRatio)];
-        const gapB: ProjectedPosition = [p1[0] + dx * (t + gapRatio), p1[1] + dy * (t + gapRatio)];
-        outline.push([p1, gapA], [gapB, p2]);
+        const {outline, center} = cutGapAlongPath(coords, index, t, halfGapPx * context.resolution);
 
         const start = coords[0];
         const afterStart = coords[1];
 
         return [
-            textMark(feature, [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2], 'MFP', scale, uprightRotation(p1, p2), 'center', 'middle'),
+            textMark(feature, center, 'MFP', scale, uprightRotation(p1, p2), 'center', 'middle'),
             // Left-aligned so the DTG begins exactly at the line's start, which is
             // the convention this symbol is drawn with.
             //

@@ -240,6 +240,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
         // next frame — but MapLibre bakes each paint into a GeoJSON source and keeps
         // drawing the old colors until the paints re-run. Every host needs both halves.
         // @see MapEngineHandle.refreshStyles
+        // A setting that moves geometry (smooth lines) is rebuilt by the same call.
         engineRef.current?.refreshStyles();
         localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
     }, [darkMode, settings]);

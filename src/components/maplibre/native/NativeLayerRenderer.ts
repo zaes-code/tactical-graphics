@@ -4,8 +4,7 @@ import {
     ANCHOR_CONNECTOR_DASH_PX,
     TacticalGraphicHostility,
     TacticalGraphicName,
-    anchorConnectorRun,
-    drawsAnchorConnector,
+    anchorConnectorRuns,
     getDrawMarkerColor,
     getHandleColor,
     LINE_WIDTH,
@@ -29,6 +28,9 @@ import {
     securitySymbolSidc,
     subscribeSecuritySymbolChange,
     toSnapshot,
+    geometryConfigKey,
+    rebuildPaintedGraphic,
+    smoothingKindOf,
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
@@ -331,6 +333,8 @@ export class NativeLayerRenderer {
     private symbolRevision = -1;
     /** The resolution the screen-sized graphics were last rebuilt at. */
     private lastRebuildResolution = Number.NaN;
+    /** The geometry-moving config the graphics were last built under. @see rebuildForConfig */
+    private lastGeometryKey = geometryConfigKey();
     /**
      * Whether handles belong to the selection alone rather than to every graphic.
      * True in `edit` mode only. @see handleBearers
@@ -546,6 +550,7 @@ export class NativeLayerRenderer {
         // Bucketed per graphic rather than in one pass, so each feature can be stamped
         // with the graphic it came from — which is what makes a rendered mark
         // hit-testable back to its symbol. @see GRAPHIC_ID_PROPERTY
+        this.rebuildForConfig();
         this.rebuildScreenSized(resolution);
         const visible = this.visibleGraphics();
         const paintedAt = performance.now();
@@ -633,6 +638,22 @@ export class NativeLayerRenderer {
 
     private setData(kind: string, features: Parameters<typeof featureCollection>[0]): void {
         (this.map.getSource(SOURCE_PREFIX + kind) as GeoJSONSource | undefined)?.setData(featureCollection(features));
+    }
+
+    /**
+     * Rebuilds the graphics a config change reshapes, when one has happened since the last pass.
+     *
+     * `refreshStyles` lands here, and a restyle alone re-runs the paints over geometry already
+     * held, so turning smooth lines on would not show until each graphic was edited. Only the
+     * graphics the setting reaches are rebuilt. @see geometryConfigKey, smoothingKindOf
+     */
+    private rebuildForConfig(): void {
+        const key = geometryConfigKey();
+        if (key === this.lastGeometryKey) return;
+        this.lastGeometryKey = key;
+        for (let i = 0; i < this.graphics.length; i++) {
+            if (smoothingKindOf(this.graphics[i].name)) this.graphics[i] = rebuildPaintedGraphic(this.graphics[i]);
+        }
     }
 
     /**
@@ -1300,17 +1321,13 @@ function isScreenSized(name: TacticalGraphicName): boolean {
  * @see drawsAnchorConnector, createBaseFeature — the OpenLayers half
  */
 export function connectorFeatures(graphics: readonly MapLibreTacticalGraphic[]): Feature[] {
-    return graphics.flatMap(graphic => {
-        const base = graphic.base.geometry;
-        if (base.type !== 'LineString' || !drawsAnchorConnector(graphic.name)) return [];
-        const run = anchorConnectorRun(graphic.name, base.coordinates);
-        if (run.length < 2) return [];
-        return [{
-            type: 'Feature' as const,
-            geometry: {type: 'LineString' as const, coordinates: run},
-            properties: {color: getInertHandleColor()},
-        }];
-    });
+    // Every run the shared rule names, which includes a smoothed graphic's own points.
+    // @see anchorConnectorRuns
+    return graphics.flatMap(graphic => anchorConnectorRuns(graphic.name, graphic.base.geometry, graphic.properties?.width).map(run => ({
+        type: 'Feature' as const,
+        geometry: {type: 'LineString' as const, coordinates: run as number[][]},
+        properties: {color: getInertHandleColor()},
+    })));
 }
 
 /** `Start 20 km`, or just `20 km`. The same assembly `createMeasureFeature` uses. */
