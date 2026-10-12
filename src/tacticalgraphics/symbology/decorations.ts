@@ -489,6 +489,22 @@ export function straightStretch(
 }
 
 /**
+ * The runs of a ring walked from `walk[0]`, with the two that meet at the walk's seam joined back
+ * into one, so a closed outline cut by gaps comes back as one stroke per stretch between gaps.
+ *
+ * **Only when both really reach the seam.** A gap that runs past the walk's start leaves the
+ * first run starting partway round, and joining it to the last would draw a chord across that
+ * gap. Points are compared exactly, since `pathBetween` copies the walk's own point at either end.
+ */
+export function joinedAtSeam<P extends readonly number[]>(runs: P[][], walk: readonly P[]): P[][] {
+    if (runs.length < 2) return runs;
+    const [first, last] = [runs[0], runs[runs.length - 1]];
+    const same = (a: P | undefined, b: P | undefined) => !!a && !!b && a[0] === b[0] && a[1] === b[1];
+    if (!same(first[0], walk[0]) || !same(last[last.length - 1], walk[walk.length - 1])) return runs;
+    return [[...last, ...first.slice(1)], ...runs.slice(1, -1)];
+}
+
+/**
  * Segment `index`'s direction, as long as the edge it belongs to.
  *
  * What a mark capped against "its segment" should be handed. On a hard line it is the segment

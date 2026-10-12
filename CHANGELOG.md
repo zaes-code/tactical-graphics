@@ -31,6 +31,7 @@ the npm publish dates — when a version actually became installable.
   OpenLayers without the facade, `rebuildGraphicsForConfig(manager)` does it.
 - On the root entry: `SMOOTHED_GRAPHICS`, `smoothingKindOf`, `getSmoothLines`,
   `geometryConfigKey`, `rebuildPaintedGraphic`, `anchorConnectorRuns`, `hasClosingEdge`,
+  `takesInsertedVertices`, `nearestInsertionEdge`, `areaLabelRing`, `topEdgeLabel`,
   `topmostSegmentIndex`, `filedBaseGeometry`, `editableBaseGeometry`, `filedStrikeBase`,
   `editableStrikeBase`, `isFiledStrikeBase` and `strikeZone2`. On `/openlayers`:
   `rebuildGraphicsForConfig`.
@@ -47,7 +48,8 @@ the npm publish dates — when a version actually became installable.
   and no width, open as before. A host that reads this graphic's coordinates out of a saved file
   sees twice the points it did.
 - **MapLibre inserts a point on the multiple-strike zone's edges**, as OpenLayers always has. A
-  drag on an edge used to resize the whole zone on MapLibre.
+  drag on an edge used to resize the whole zone on MapLibre. Neither engine inserts into the
+  zone's older two-ring record (no width), where a point would shift the split between the rings.
 - Renderers building from the shared adapter draw the hashed construction line from
   `anchorConnectorRuns`, the rule both engines now share.
 

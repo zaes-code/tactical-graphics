@@ -223,6 +223,8 @@ export {
     ANCHOR_CONNECTOR_DASH_PX,
     anchorConnectorRun,
     anchorConnectorRuns,
+    areaLabelRing,
+    topEdgeLabel,
     drawsAnchorConnector,
     CROSSED_MISSION_TASKS,
     RADIUS_GRAPHICS,
@@ -488,7 +490,7 @@ export {baseGeometryFor} from './core/render';
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
-export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, hasClosingEdge, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
+export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
 export {

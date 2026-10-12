@@ -1,5 +1,5 @@
 import {Polygon, Position} from 'geojson';
-import {gapFits, pathLength, splitAtCorners, splitPathAroundAll} from '../../symbology/decorations';
+import {gapFits, joinedAtSeam, pathLength, splitAtCorners, splitPathAroundAll} from '../../symbology/decorations';
 
 export function generateLabelGaps(
     polygon: Polygon,
@@ -92,8 +92,7 @@ export function generateLabelGaps(
         labelPoints.push([(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2]);
     }
 
-    const runs: Position[][] = splitPathAroundAll(walk, gaps);
-    if (gaps.length && runs.length > 1) runs.splice(0, 1, [...runs.pop()!, ...runs[0].slice(1)]);
+    const runs: Position[][] = gaps.length ? joinedAtSeam(splitPathAroundAll(walk, gaps), walk) : [walk];
     const outlineSegments = runs.flatMap(run => splitAtCorners(run as [number, number][])).filter(run => run.length > 1);
 
     // 6. Return the results

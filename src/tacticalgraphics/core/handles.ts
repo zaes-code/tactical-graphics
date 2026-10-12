@@ -21,6 +21,7 @@ import {carriesWidthPointInBase} from './axisWidth';
 import {hasAxisAndWidth, reservedLeadPx} from './decorationSizes';
 import {SECURITY_OPERATION_GRAPHICS, securityOperationBaseCentre} from '../graphics/SecurityOperation';
 import {usesStandoffWidth} from '../graphics/SafeDistanceZone';
+import {groundMeters} from './math';
 
 /**
  * What dragging a handle does.
@@ -1534,24 +1535,8 @@ export function rectangleAmplifiers(
     return {width, length: Math.round(groundMeters([minX, midY], [maxX, midY]))};
 }
 
-/**
- * Great-circle metres between two lon/lat positions.
- *
- * On the **mean** sphere, 6371008.8 m — what turf measures every other distance in this
- * library with, and what `ol/sphere.getDistance` uses on the other side of the boundary.
- * The equatorial radius was 0.11% larger, which is nothing on its own and everything when
- * two implementations of one amplifier are compared: it is the whole of the 391,193 m
- * against 390,756 m the two engines used to file for the same drawn box.
- */
-export function groundMeters(a: [number, number], b: [number, number]): number {
-    const R = 6371008.8;
-    const toRad = (degrees: number) => (degrees * Math.PI) / 180;
-    const dLat = toRad(b[1] - a[1]);
-    const dLon = toRad(b[0] - a[0]);
-    const h = Math.sin(dLat / 2) ** 2
-        + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-}
+// Moved to `math.ts` so a generator can measure without importing this module. @see groundMeters
+export {groundMeters};
 
 export function isRectangular(name: TacticalGraphicName): boolean {
     return RECTANGULAR_GRAPHICS.includes(name);
@@ -1906,6 +1891,52 @@ export function hidesAnchorGrip(name: TacticalGraphicName): boolean {
  */
 export function hasClosingEdge(name: TacticalGraphicName, width: number | undefined): boolean {
     return name === TacticalGraphicName.MinimumSafeDistanceMultipleStrike && typeof width === 'number' && width > 0;
+}
+
+/**
+ * Where a vertex inserted at `point` would go: the base edge nearest it within `reach` pixels,
+ * as the index the new vertex takes and the point on that edge it lands on. `undefined` when no
+ * edge is in reach.
+ *
+ * `closes` adds the edge from the last point back to the first, whose index is one past the end:
+ * an append. One answer for both engines' insertion and the hover marker that promises it, so the
+ * two cannot offer different edges. @see hasClosingEdge
+ */
+export function nearestInsertionEdge(
+    pixels: readonly (readonly [number, number])[],
+    point: readonly [number, number],
+    closes: boolean,
+    reach: number,
+): {index: number; at: [number, number]} | undefined {
+    let best: {index: number; at: [number, number]} | undefined;
+    let nearest = reach;
+    const edges = pixels.length + (closes && pixels.length >= 3 ? 1 : 0);
+    for (let i = 1; i < edges; i++) {
+        const [ax, ay] = pixels[i - 1];
+        const [bx, by] = pixels[i % pixels.length];
+        const [dx, dy] = [bx - ax, by - ay];
+        const lengthSq = dx * dx + dy * dy;
+        const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, ((point[0] - ax) * dx + (point[1] - ay) * dy) / lengthSq));
+        const at: [number, number] = [ax + dx * t, ay + dy * t];
+        const distance = Math.hypot(point[0] - at[0], point[1] - at[1]);
+        if (distance <= nearest) {
+            nearest = distance;
+            best = {index: i, at};
+        }
+    }
+    return best;
+}
+
+/**
+ * Whether a graphic's base may take an inserted vertex at all, given the width it states.
+ *
+ * Every free-path graphic may, except the multiple-strike zone's older record: two rings end to
+ * end with no width, split in half by the generator. A point added to it makes the count odd, so
+ * the halves no longer fall on the rings, and its seam (ring 1's last point to ring 2's first) is
+ * not an edge of either. One answer for both engines. @see acceptsInsertedVertex
+ */
+export function takesInsertedVertices(name: TacticalGraphicName, width: number | undefined): boolean {
+    return name !== TacticalGraphicName.MinimumSafeDistanceMultipleStrike || hasClosingEdge(name, width);
 }
 
 /**
