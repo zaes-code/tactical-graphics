@@ -282,6 +282,11 @@ describe('the OpenLayers style of the construction line', () => {
      * than `undefined`, which is what OpenLayers' `Style.getGeometry` returns when none
      * was given.
      */
+    it('closes the multiple-strike zone back to its first point, as the ring it traces', () => {
+        const style = styleOf(TacticalGraphicName.MinimumSafeDistanceMultipleStrike, [[0, 0], [1, 0], [1, 1]]);
+        expect(style.getGeometry()?.getCoordinates()).toEqual([[0, 0], [1, 0], [1, 1], [0, 0]]);
+    });
+
     it('leaves the geometry alone for a graphic whose whole base is the run', () => {
         expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0], [2, 1]]).getGeometry()).toBeNull();
     });
@@ -313,6 +318,13 @@ describe('MapLibre draws the same construction line', () => {
             graphic(TacticalGraphicName.ExplosivesStateOfReadiness1Safe, [[0, 0], [1, 0], [0.5, 1]]),
         ]);
         expect(feature.geometry).toEqual({type: 'LineString', coordinates: [[0, 0], [1, 0]]});
+    });
+
+    it('closes the multiple-strike zone too, exactly as OpenLayers does', () => {
+        const [feature] = connectorFeatures([
+            graphic(TacticalGraphicName.MinimumSafeDistanceMultipleStrike, [[0, 0], [1, 0], [1, 1]]),
+        ]);
+        expect(feature.geometry).toEqual({type: 'LineString', coordinates: [[0, 0], [1, 0], [1, 1], [0, 0]]});
     });
 
     it('skips a graphic whose base is a point', () => {
