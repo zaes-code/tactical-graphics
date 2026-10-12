@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.5.1] — 2026-10-12
+
 ### Fixed
 
 - **Labels that sit on an area's outline are drawn again.** The four `PAA` markers on a
@@ -1744,7 +1746,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...develop
+[4.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0
 [4.3.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...v4.3.1
