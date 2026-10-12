@@ -93,8 +93,10 @@ export function chaikinKeepingEnds(coords: Position[], keepFirst: boolean, keepL
  *   last segment straight. @see MovementGraphicBase.parallel
  * - `corridorFixedTail`: as `corridor`, keeping the first segment too, for the turning
  *   movement's bar.
+ * - `ring`: a closed outline stored as a line. The route stays as drawn and the generator
+ *   rounds each ring it builds. @see MinimumSafeDistanceMultipleStrike
  */
-export type SmoothingKind = 'line' | 'area' | 'arrow' | 'arrowFixedTail' | 'corridor' | 'corridorFixedTail';
+export type SmoothingKind = 'line' | 'area' | 'arrow' | 'arrowFixedTail' | 'corridor' | 'corridorFixedTail' | 'ring';
 
 /**
  * **Every graphic smooth lines applies to, and how.** One statement read by every engine.
@@ -102,9 +104,8 @@ export type SmoothingKind = 'line' | 'area' | 'arrow' | 'arrowFixedTail' | 'corr
  * The rule is the base, not the look: a graphic is here when the user draws it as a free path
  * of any number of points (a route, an outline). A graphic whose points are anchors with fixed
  * meanings (the mission tasks, the two- and three-point symbols, the rectangles) is absent.
- * So are four free paths that mark every vertex: the air corridor family draws a circle at each
- * turn point, the overhead wire a pylon at each, and the multiple-strike safe distance zone and
- * `Contain` read their points as anchors.
+ * So are the free paths that mark every vertex: the air corridor family draws a circle at each
+ * turn point and the overhead wire a pylon at each, and `Contain` reads its two points as anchors.
  *
  * @see SmoothingKind, chaikinKeepingEnds
  */
@@ -281,6 +282,9 @@ export const SMOOTHED_GRAPHICS: Readonly<Partial<Record<N, SmoothingKind>>> = Ob
     [N.ObstacleGroup]: 'area',
     [N.ObstacleFreeArea]: 'area',
     [N.ObstacleRestrictedArea]: 'area',
+
+    // ── Rings stored as a line ──
+    [N.MinimumSafeDistanceMultipleStrike]: 'ring',
 });
 
 /** How `name` is smoothed, or `undefined` when smooth lines never touches it. */
@@ -298,8 +302,9 @@ export function smoothingKindOf(name: N | string): SmoothingKind | undefined {
  */
 export function smoothedForGenerator(name: N | string, drawn: Feature): Feature {
     const kind = smoothingKindOf(name);
-    // A corridor's route stays as drawn: its generator rounds the walls. @see SmoothingKind
-    if (!kind || kind === 'corridor' || kind === 'corridorFixedTail' || !getSmoothLines()) return drawn;
+    // A corridor's route and a ring's points stay as drawn: the generator rounds what it
+    // builds from them. @see SmoothingKind
+    if (!kind || kind === 'corridor' || kind === 'corridorFixedTail' || kind === 'ring' || !getSmoothLines()) return drawn;
     const geometry = drawn.geometry;
     if (geometry.type === 'LineString' && geometry.coordinates.length >= 3) {
         const coordinates = kind === 'line'

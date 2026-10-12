@@ -78,3 +78,39 @@ describe('arrows keep the segments their parts are built on', () => {
         expect(smooth.handles.geometry).toEqual(hard.handles.geometry);
     });
 });
+
+describe('the multiple-strike safe distance zone rounds both of its rings', () => {
+    afterEach(() => resetTacticalGraphicsConfig());
+    const ring = [[0, 0], [0.04, 0.01], [0.05, -0.03], [0.01, -0.04]];
+    const render = (coordinates: number[][], width?: number) => renderTacticalGraphic({
+        type: 'Feature',
+        geometry: {type: 'LineString', coordinates},
+        properties: {tacticalGraphic: {name: TacticalGraphicName.MinimumSafeDistanceMultipleStrike, ...(width ? {width} : {})}},
+    } as any)!;
+    const rings = (g: any) => g.graphic.geometry.coordinates as number[][][];
+
+    it('zone 1 traced and zone 2 offset, each rounded, the drawn points kept', () => {
+        const hard = rings(render(ring, 2000));
+        configureTacticalGraphics({smoothLines: true});
+        const smooth = render(ring, 2000);
+        expect(rings(smooth).map(r => r.length)).toEqual(hard.map(r => (r.length - 1) * 8 + 1));
+        expect((smooth.handles.geometry as any).coordinates).toEqual(ring);
+    });
+
+    it('keeps zone 2 one width from zone 1 all the way round', () => {
+        configureTacticalGraphics({smoothLines: true});
+        const [inner, outer] = rings(render(ring, 2000));
+        const meters = (a: number[], b: number[]) =>
+            Math.hypot((b[0] - a[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (b[1] - a[1]) * 110540);
+        // Nearest point of the dense inner ring, close enough to the curve for a 2% check.
+        const gaps = outer.map(p => Math.min(...inner.map(q => meters(p, q))));
+        expect(Math.min(...gaps)).toBeGreaterThan(1900);
+        expect(Math.max(...gaps)).toBeLessThan(2100);
+    });
+
+    it('the older record, two rings end to end, rounds each ring on its own', () => {
+        const legacy = [...ring, ...ring.map(([x, y]) => [x * 1.5 - 0.01, y * 1.5 + 0.01])];
+        configureTacticalGraphics({smoothLines: true});
+        expect(rings(render(legacy)).map(r => r.length)).toEqual([4 * 8 + 1, 4 * 8 + 1]);
+    });
+});
