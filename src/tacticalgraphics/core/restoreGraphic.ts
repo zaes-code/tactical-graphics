@@ -2,7 +2,7 @@ import type {Feature, FeatureCollection} from 'geojson';
 import {upgradeAxisBase} from './axisWidth';
 import {completeDemolitionBase} from './drawnBase';
 import {applyAmplifierAliases, migrateRetiredGraphic, TACTICAL_GRAPHIC_KEY, type TacticalGraphicProperties} from './render';
-import {SNAPSHOT_VERSION, snapshotVersionOf} from './snapshot';
+import {SNAPSHOT_VERSION, editableBaseGeometry, snapshotVersionOf} from './snapshot';
 import {DEFAULT_OFFSET_PX, buildPaintedGraphic, type PaintedGraphic} from './paintedGraphic';
 
 /** One graphic read back out of a file, and the identity the file gave it. */
@@ -63,6 +63,8 @@ function restoreFeature(feature: Feature, version: number, resolution: number): 
         geometry = migrated.geometry;
     }
     if (!properties?.name || !geometry) return undefined;
+    // The geometry an engine edits, out of the one the file carries. @see filedBaseGeometry
+    geometry = editableBaseGeometry(properties.name, geometry, properties);
     // A demolition obstacle saved with two points (OpenLayers allowed it until
     // 2026-09-21) gets its third, whatever the version. @see completeDemolitionBase
     if (geometry.type === 'LineString') {

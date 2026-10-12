@@ -1895,6 +1895,20 @@ export function hidesAnchorGrip(name: TacticalGraphicName): boolean {
 }
 
 /**
+ * Whether a base's last point joins back to its first by an edge a vertex can be inserted into,
+ * though the base does not repeat its first point.
+ *
+ * The multiple-strike safe distance zone's zone 1 is a ring stored as a line, and every edge of
+ * it is an edge, the closing one included: the symbol draws it, the construction line draws it,
+ * and an operator reshaping the zone reaches for it like any other. A point inserted there goes
+ * on the end of the base. Only with a standoff: a zone with none is the older record of two rings
+ * end to end, where the last point and the first belong to different rings. @see anchorConnectorRuns
+ */
+export function hasClosingEdge(name: TacticalGraphicName, width: number | undefined): boolean {
+    return name === TacticalGraphicName.MinimumSafeDistanceMultipleStrike && typeof width === 'number' && width > 0;
+}
+
+/**
  * Whether a new base vertex may be inserted where the cursor is.
  *
  * **Reported as "abatis should not accept vertices within the triangle opening"** (user,

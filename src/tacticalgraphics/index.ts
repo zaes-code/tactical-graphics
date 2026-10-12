@@ -470,12 +470,13 @@ export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEd
 // Where an arc mission task's second click lands: on its start point, so the draw files the
 // rotation that puts it there. @see START_POINT_GRAPHICS
 export {rotationFromDrawnPoint} from './core/symbology';
-export {describedProperties, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
+export {describedProperties, editableBaseGeometry, filedBaseGeometry, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
 // turns it into metres once at draw time. @see MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX
 export {defaultStandoffMetres, usesStandoffWidth, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';
+export {editableStrikeBase, filedStrikeBase, isFiledStrikeBase, strikeZone2} from './graphics/SafeDistanceZone';
 export {baseGeometryFor} from './core/render';
 /**
  * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
@@ -487,7 +488,7 @@ export {baseGeometryFor} from './core/render';
  * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
  */
 export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
-export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
+export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, hasClosingEdge, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
 export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
 export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
 export {
