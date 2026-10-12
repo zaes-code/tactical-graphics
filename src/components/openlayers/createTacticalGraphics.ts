@@ -16,6 +16,7 @@ import type {FeatureCollection} from 'geojson';
 import {
     TacticalGraphicName,
     allowedGestures,
+    geometryConfigKey,
     type AllowedGestures,
     type EditMode,
     type GestureKind,
@@ -26,7 +27,7 @@ import {
     type TacticalGraphicsEngine,
 } from '@zaes/tactical-graphics';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
-import {clearAllGraphics, restoreTacticalGraphics, serializeOneGraphic, serializeTacticalGraphics} from './persistence';
+import {clearAllGraphics, rebuildGraphicsForConfig, restoreTacticalGraphics, serializeOneGraphic, serializeTacticalGraphics} from './persistence';
 import {amplifiersHiddenOn, stampAmplifierVisibility} from './amplifierVisibility';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
 
@@ -98,6 +99,9 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
 
     manager.onSelectionChange = controller => options.onSelect?.(asSelected(controller));
 
+    /** The geometry-moving config the graphics were last built under. @see refreshStyles */
+    let geometryKey = geometryConfigKey();
+
     return {
         capabilities: CAPABILITIES,
 
@@ -165,6 +169,13 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
         amplifiersHidden: (id: string) => amplifiersHiddenOn(manager.map, id),
 
         refreshStyles() {
+            // A setting that moves geometry needs the generators, not just the styles.
+            // @see rebuildGraphicsForConfig
+            const key = geometryConfigKey();
+            if (key !== geometryKey) {
+                geometryKey = key;
+                rebuildGraphicsForConfig(manager);
+            }
             // Explicit rather than waiting for the next frame: `ol/Object.set` and a
             // config write both leave a feature's cached style in place, and only
             // `changed()` dispatches the event that re-runs the style function.

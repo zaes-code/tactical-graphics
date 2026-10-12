@@ -584,3 +584,13 @@ describe('Turn edits about the points the plate names', () => {
         expect(setExtend({geometry: POINT, properties: props()}, [1, 1]).geometry).toBe(POINT);
     });
 });
+
+describe('inserting on a closing edge', () => {
+    it('appends one past the end of a line, and nowhere past a polygon', () => {
+        const line = {geometry: {type: 'LineString', coordinates: [[0, 0], [1, 0], [1, 1]]}} as any;
+        expect((insertVertex(line, 3, [0.4, 0.6]).geometry as any).coordinates).toEqual([[0, 0], [1, 0], [1, 1], [0.4, 0.6]]);
+        expect(insertVertex(line, 4, [0.4, 0.6])).toBe(line);
+        const ring = {geometry: {type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]]}} as any;
+        expect(insertVertex(ring, 4, [0.4, 0.6])).toBe(ring);
+    });
+});

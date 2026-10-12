@@ -16,7 +16,10 @@ import {TacticalGraphicEchelon} from '../core/type';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {
     centerSegmentIndex,
+    gapFits,
+    cutGapAlongPath,
     endFrame,
+    runVector,
     endMarkScale,
     offsetAbove,
     pathLength,
@@ -247,37 +250,32 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
 
         // The middle segment, split around the gap the echelon glyph sits in.
         const segIdx = centerSegmentIndex(path);
-        const a = path[segIdx];
-        const b = path[segIdx + 1];
-        const segLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-
-        const outline: ProjectedPosition[][] = [];
-        for (let i = 0; i < path.length - 1; i++) {
-            if (i !== segIdx) outline.push([path[i], path[i + 1]]);
-        }
+        // The direction of the middle, as long as the run it sits on. @see runVector
+        const [runX, runY] = runVector(path, segIdx);
 
         // Cut to fit the glyph rather than to a constant: the corridor takes every echelon
         // from a squad's dot to a corps' XXX, and one figure suits neither end.
         // @see echelonWidthPx
         const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
-        const glyphHalfPx = echelonWidthPx(b[0] - a[0], b[1] - a[1], context.resolution, echelon, scale) / 2;
+        const glyphHalfPx = echelonWidthPx(runX, runY, context.resolution, echelon, scale) / 2;
         const halfGap = (glyphHalfPx + ECHELON_GAP_PX * scale) * context.resolution;
-        const at = (u: number): ProjectedPosition => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
-        const gapped = segLen > halfGap * 2;
-        const t = gapped ? halfGap / segLen : 0;
-        if (gapped) outline.push([a, at(0.5 - t)], [at(0.5 + t), b]);
-        else outline.push([a, b]);
+        /*
+         * Cut along the path, and only where the gap fits the run between real corners the
+         * middle falls on: on a hard line that is the middle segment, as it always was, and on
+         * a smoothed one the curve around it, whose middle segment is a short chord.
+         * @see cutGapAlongPath, gapFits
+         */
+        const gapped = gapFits(path, segIdx, 0.5, halfGap);
+        const cut = cutGapAlongPath(path, segIdx, 0.5, gapped ? halfGap : 0);
+        const outline = cut.outline;
+        const mid = cut.center;
 
         // The line either side of the echelon, which is where the free text goes.
-        const runs: ProjectedPosition[][] = [
-            [...path.slice(0, segIdx + 1), at(0.5 - t)],
-            [at(0.5 + t), ...path.slice(segIdx + 1)],
-        ];
+        const runs: ProjectedPosition[][] = [cut.before, cut.after];
 
         const paints: Paint[] = [{geometry: {type: 'MultiLineString', coordinates: outline}, stroke}];
 
-        paints.push(...echelonMarks(mid, b[0] - a[0], b[1] - a[1], context.resolution, echelon, color, scale));
+        paints.push(...echelonMarks(mid, runX, runY, context.resolution, echelon, color, scale));
 
         const armScale = endMarkScale(path, context.resolution, FORK_ARM_PX);
         if (armScale > 0) {
@@ -334,7 +332,7 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
         const anchor = spot ? spot.point : mid;
         const along: [ProjectedPosition, ProjectedPosition] = spot
             ? [anchor, [anchor[0] + spot.tangent[0], anchor[1] + spot.tangent[1]]]
-            : [a, b];
+            : [mid, [mid[0] + runX, mid[1] + runY]];
 
         paints.push({
             geometry: {

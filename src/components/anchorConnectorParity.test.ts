@@ -38,6 +38,10 @@ import {connectorFeatures} from './maplibre/native/NativeLayerRenderer';
 import type {TacticalGraphicHandler} from './openlayers/openlayersAdapter';
 import type {MapLibreTacticalGraphic} from './maplibre/maplibreAdapter';
 
+/** The multiple-strike zone's older record: two rings of three end to end, and no width. */
+const TWO_RINGS = [[0, 0], [1, 0], [1, 1], [-1, -1], [2, -1], [2, 2]];
+const TWO_RINGS_CLOSED = [[[0, 0], [1, 0], [1, 1], [0, 0]], [[-1, -1], [2, -1], [2, 2], [-1, -1]]];
+
 /** The resolution the controllers are built at, in meters per pixel. */
 const RES = 100;
 
@@ -236,10 +240,11 @@ describe('the OpenLayers style of the construction line', () => {
     afterEach(() => resetTacticalGraphicsConfig());
 
     /** Resolves the base feature's style for a graphic with the given stored base. */
-    function styleOf(name: TacticalGraphicName, coordinates: number[][], hostility?: TacticalGraphicHostility) {
+    function styleOf(name: TacticalGraphicName, coordinates: number[][], hostility?: TacticalGraphicHostility, width?: number) {
         const feature = createBaseFeature();
         feature.setGeometry(new LineString(coordinates));
         feature.set('graphicName', name);
+        if (width) feature.set('tacticalGraphic', {name, width});
         feature.set('hidden', false);
         if (hostility) feature.set('hostility', hostility);
         const style = (feature.getStyle() as (f: Feature, r: number) => never)(feature, RES) as unknown as {
@@ -282,6 +287,16 @@ describe('the OpenLayers style of the construction line', () => {
      * than `undefined`, which is what OpenLayers' `Style.getGeometry` returns when none
      * was given.
      */
+    it('closes the multiple-strike zone back to its first point, as the ring it traces', () => {
+        const style = styleOf(TacticalGraphicName.MinimumSafeDistanceMultipleStrike, [[0, 0], [1, 0], [1, 1]], undefined, 500);
+        expect(style.getGeometry()?.getCoordinates()).toEqual([[0, 0], [1, 0], [1, 1], [0, 0]]);
+    });
+
+    it("closes each ring of the zone's older two-ring record on its own", () => {
+        const style = styleOf(TacticalGraphicName.MinimumSafeDistanceMultipleStrike, TWO_RINGS);
+        expect(style.getGeometry()?.getCoordinates()).toEqual(TWO_RINGS_CLOSED);
+    });
+
     it('leaves the geometry alone for a graphic whose whole base is the run', () => {
         expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0], [2, 1]]).getGeometry()).toBeNull();
     });
@@ -290,11 +305,11 @@ describe('the OpenLayers style of the construction line', () => {
 // ── 3. MapLibre builds the same mark from the same statement ─────────────────
 
 describe('MapLibre draws the same construction line', () => {
-    const graphic = (name: TacticalGraphicName, coordinates: number[][]): MapLibreTacticalGraphic => ({
+    const graphic = (name: TacticalGraphicName, coordinates: number[][], width?: number): MapLibreTacticalGraphic => ({
         id: name,
         name,
         base: {type: 'Feature', properties: {}, geometry: {type: 'LineString', coordinates}},
-        properties: {name},
+        properties: {name, ...(width ? {width} : {})},
         handles: [],
     } as unknown as MapLibreTacticalGraphic);
 
@@ -313,6 +328,18 @@ describe('MapLibre draws the same construction line', () => {
             graphic(TacticalGraphicName.ExplosivesStateOfReadiness1Safe, [[0, 0], [1, 0], [0.5, 1]]),
         ]);
         expect(feature.geometry).toEqual({type: 'LineString', coordinates: [[0, 0], [1, 0]]});
+    });
+
+    it('closes the multiple-strike zone too, exactly as OpenLayers does', () => {
+        const [feature] = connectorFeatures([
+            graphic(TacticalGraphicName.MinimumSafeDistanceMultipleStrike, [[0, 0], [1, 0], [1, 1]], 500),
+        ]);
+        expect(feature.geometry).toEqual({type: 'LineString', coordinates: [[0, 0], [1, 0], [1, 1], [0, 0]]});
+    });
+
+    it("closes each ring of the older two-ring record, exactly as OpenLayers does", () => {
+        const features = connectorFeatures([graphic(TacticalGraphicName.MinimumSafeDistanceMultipleStrike, TWO_RINGS)]);
+        expect(features.map(f => (f.geometry as {coordinates: number[][]}).coordinates)).toEqual(TWO_RINGS_CLOSED);
     });
 
     it('skips a graphic whose base is a point', () => {

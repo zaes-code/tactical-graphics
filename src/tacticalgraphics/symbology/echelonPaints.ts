@@ -13,7 +13,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicStatus} from '../core/type';
-import {decorationScale} from './decorations';
+import {cutGapAlongPath, decorationScale, gapFits, joinedAtSeam, pathLength, runVector, splitAtCorners, splitPathAroundAll} from './decorations';
 import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -81,7 +81,7 @@ function openingSegment(ring: ProjectedPosition[], rotation: number): [number, n
     if (ring.length < 2) return null;
     const unitRot = [Math.cos(rotation), Math.sin(rotation)];
     let best = -Infinity;
-    let found: [number, number] | null = null;
+    let found: number | null = null;
     for (let i = 0; i < ring.length - 1; i++) {
         const dx = ring[i + 1][0] - ring[i][0];
         const dy = ring[i + 1][1] - ring[i][1];
@@ -90,10 +90,11 @@ function openingSegment(ring: ProjectedPosition[], rotation: number): [number, n
         const dot = (-dy / segLen) * unitRot[0] + (dx / segLen) * unitRot[1];
         if (dot > best) {
             best = dot;
-            found = [dx, dy];
+            found = i;
         }
     }
-    return found;
+    // As long as the run the edge belongs to, which a smoothed outline's chord is not. @see runVector
+    return found === null ? null : runVector(ring, found, ECHELON_OPENING_MIDPOINT, true);
 }
 
 function openRing(
@@ -120,32 +121,27 @@ function openRing(
         }
     }
 
-    const p1 = ring[openIndex];
-    const p2 = ring[openIndex + 1];
-    const dx = p2[0] - p1[0];
-    const dy = p2[1] - p1[1];
-    const segLen = Math.hypot(dx, dy);
-    if (segLen === 0) return null;
+    const [dx, dy] = runVector(ring, openIndex, ECHELON_OPENING_MIDPOINT, true);
+    if (dx === 0 && dy === 0) return null;
 
-    const outline: ProjectedPosition[][] = [];
-    for (let i = 0; i < ring.length - 1; i++) {
-        if (i !== openIndex) outline.push([ring[i], ring[i + 1]]);
-    }
+    /*
+     * The hole is the glyph's own width plus clearance, centred on the segment — not the
+     * fixed fifth it used to be. @see echelonWidthPx
+     *
+     * **Cut along the ring, not inside the one segment.** A smoothed outline's opening edge is a
+     * short chord of the curve, which the hole overruns. So the ring is walked from the point
+     * opposite the opening, putting the opening in the middle of the walk, and the hole is cut
+     * along it; the walk is then joined back up at its seam. On a hard outline whose hole fits
+     * its edge this draws exactly what the one-segment cut did. @see cutGapAlongPath
+     */
+    const closed = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring : [...ring, ring[0]];
+    const m = closed.length - 1;
+    const k = Math.floor(m / 2);
+    const walk = Array.from({length: m + 1}, (_, j) => closed[(((openIndex - k + j) % m) + m) % m]);
+    const cut = cutGapAlongPath(walk, k, ECHELON_OPENING_MIDPOINT, (halfGapPx + ECHELON_GAP_PX) * resolution);
+    const outline = splitAtCorners([...cut.after, ...cut.before.slice(1)]).filter(run => run.length > 1);
 
-    // The hole is the glyph's own width plus clearance, centred on the segment — not the
-    // fixed fifth it used to be. @see echelonWidthPx
-    const gapRatio = ((halfGapPx + ECHELON_GAP_PX) * resolution) / segLen;
-    const gapA: ProjectedPosition = [
-        p1[0] + dx * (ECHELON_OPENING_MIDPOINT - gapRatio),
-        p1[1] + dy * (ECHELON_OPENING_MIDPOINT - gapRatio),
-    ];
-    const gapB: ProjectedPosition = [
-        p1[0] + dx * (ECHELON_OPENING_MIDPOINT + gapRatio),
-        p1[1] + dy * (ECHELON_OPENING_MIDPOINT + gapRatio),
-    ];
-    outline.push([p1, gapA], [gapB, p2]);
-
-    return {outline, midGap: [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2], dx, dy};
+    return {outline, midGap: cut.center, dx, dy};
 }
 
 /**
@@ -534,31 +530,29 @@ export function unexplodedOrdnanceAreaPaint(): AreaPaint {
         }
 
         const paints: Paint[] = [];
-        const outline: ProjectedPosition[][] = [];
         const scale = scaleOf(feature, context);
 
-        for (let i = 0; i < ring.length - 1; i++) {
+        /*
+         * **The gaps are cut along the ring, on the edge each extreme belongs to.** On a
+         * hard outline that is the segment itself, so this is the one-segment cut it always
+         * was; on a smoothed one the extreme edge is a short chord, and judging the gap against
+         * the chord dropped both gaps and both labels. The ring is walked from halfway between
+         * the two extremes, so neither gap straddles the walk's seam. @see gapFits
+         */
+        const m = ring.length - 1;
+        const start = (maxIndex + Math.floor((((minIndex - maxIndex) % m) + m) % m / 2)) % m;
+        const walk = Array.from({length: m + 1}, (_, j) => ring[(start + j) % m]);
+        const gaps: {at: number; halfGap: number}[] = [];
+
+        for (const i of [maxIndex, minIndex]) {
             const p1 = ring[i];
             const p2 = ring[i + 1];
-            const dx = p2[0] - p1[0];
-            const dy = p2[1] - p1[1];
-            const segLen = Math.hypot(dx, dy);
-
-            if (i !== maxIndex && i !== minIndex) {
-                outline.push([p1, p2]);
-                continue;
-            }
-            if (segLen < gapMap) {
-                outline.push([p1, p2]);
-                continue;
-            }
-
-            const halfGapRatio = gapMap / 2 / segLen;
-            const at = (t: number): ProjectedPosition => [p1[0] + dx * t, p1[1] + dy * t];
-            outline.push([p1, at(0.5 - halfGapRatio)], [at(0.5 + halfGapRatio), p2]);
+            if (!gapFits(ring, i, 0.5, gapMap / 2, true)) continue;
+            const along = (i - start + m) % m;
+            gaps.push({at: pathLength(walk.slice(0, along + 1)) + Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 2, halfGap: gapMap / 2});
 
             paints.push({
-                geometry: {type: 'Point', coordinates: at(0.5)},
+                geometry: {type: 'Point', coordinates: [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2]},
                 text: {
                     text: 'UXO',
                     font: fontStyle,
@@ -569,6 +563,9 @@ export function unexplodedOrdnanceAreaPaint(): AreaPaint {
             });
         }
 
+        // The runs left by the gaps, the two that meet at the walk's seam joined back up.
+        const runs = gaps.length ? joinedAtSeam(splitPathAroundAll(walk, gaps), walk) : [walk];
+        const outline = runs.flatMap(run => splitAtCorners(run)).filter(run => run.length > 1);
         paints.push({geometry: {type: 'MultiLineString', coordinates: outline}, stroke: {color, widthPx: LINE_WIDTH()}});
         return paints;
     };

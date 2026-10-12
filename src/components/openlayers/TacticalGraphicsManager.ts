@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, drawsAnchorConnector, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -22,6 +22,7 @@ import {Coordinate} from "ol/coordinate";
 import {EventsKey} from "ol/events";
 import {Extent, extend as extendExtent} from "ol/extent";
 import {unByKey} from "ol/Observable";
+import {readGraphicGeometryState} from "./graphicProperties";
 
 export enum InteractionType {
     'resize',
@@ -226,6 +227,10 @@ export class TacticalGraphicsManager {
     map: Map;
     draw: Draw | undefined = undefined;
     modify: Modify | undefined = undefined;
+    /** Inserts on a ring's closing edge, ahead of `modify`. @see insertOnClosingEdge */
+    private closingEdge: Pointer | undefined = undefined;
+    /** The marker for a vertex the closing edge would take, drawn in `modify`'s overlay. */
+    private closingHint: Feature<Point> | undefined = undefined;
     /** @see handleResize — latched at pointer-down, for the whole gesture. */
     private resizeOriginNearCenter: boolean = false;
     /**
@@ -782,6 +787,9 @@ export class TacticalGraphicsManager {
      * the operator can see, and a mission task's base is a single centre point whose
      * extent is a box of zero size. Handles are excluded — they are chrome, they stick
      * out past the symbol, and a box drawn round them grows every time one is shown.
+     * So is the base when it is shown as the hashed construction line: with smooth lines on
+     * it runs out to the drawn points, past the curve, and the other engines measure the
+     * symbol alone. @see anchorConnectorRuns
      */
     selectionBox = (): {x: number; y: number; width: number; height: number} | undefined => {
         const controller = this.selectedController;
@@ -789,7 +797,7 @@ export class TacticalGraphicsManager {
 
         let extent: Extent | undefined;
         for (const feature of controller.getFeatures()) {
-            if (feature.get('handle') || feature.get('hidden')) continue;
+            if (feature.get('handle') || feature.get('hidden') || feature.get('role') === 'base') continue;
             const geometry = feature.getGeometry();
             if (!geometry) continue;
             const featureExtent = geometry.getExtent();
@@ -1963,48 +1971,99 @@ export class TacticalGraphicsManager {
             insertVertexCondition: event => this.insertVertexAllowed(baseFeatures, event),
         });
         this.map.addInteraction(this.modify);
-        this.modify.on('modifyend', (e: ModifyEvent) => {
-            e.features.forEach(feature => {
-                let symbolId = feature.get('symbolId');
-                if (!symbolId) return;
-                let geom = feature.getGeometry();
-                if (geom instanceof Point || geom instanceof LineString || geom instanceof Polygon) {
-                    let graphicController = this.getFeatureControllerBySymbolId(symbolId);
-                    if (!graphicController) return;
-
-                    /*
-                     * **A `Modify` drag authors the shape too**, so the floors that guard a
-                     * drawn shape apply to it — which they did not, because this is the one
-                     * door into `setBaseFeature` that never said so. 271400 is the case: the
-                     * only graphic of the three `minimumFirstSegmentPx` names whose grip is
-                     * not a vertex drag on this engine, so its bow-tie was floored on
-                     * MapLibre and on nothing here. @see LineGraphicBase.shapingFromGesture
-                     */
-                    const authoring = graphicController as unknown as {
-                        graphic?: {shapingFromGesture?: boolean; reshapingExisting?: boolean};
-                        setGestureResolution?: (resolution: number | undefined) => void;
-                    };
-                    const wasShaping = authoring.graphic?.shapingFromGesture;
-                    if (authoring.graphic) {
-                        authoring.graphic.shapingFromGesture = true;
-                        authoring.graphic.reshapingExisting = true;
-                    }
-                    authoring.setGestureResolution?.(this.map.getView().getResolution() ?? undefined);
-                    try {
-                        // re-renders the tactical graphic based on the new geometry.
-                        graphicController.setBaseFeature(feature);
-                    } finally {
-                        if (authoring.graphic) {
-                            authoring.graphic.shapingFromGesture = wasShaping ?? false;
-                            authoring.graphic.reshapingExisting = false;
-                        }
-                        authoring.setGestureResolution?.(undefined);
-                    }
-                    return;
+        /*
+         * **The edge from a ring's last point back to its first.** `Modify` offers every segment
+         * of the geometry it edits, and a ring stored as a line has no segment there, though the
+         * symbol and its construction line both draw one. So this interaction, added after
+         * `Modify` and therefore handed each event first, takes a press on that edge itself: the
+         * point is added on the first move of the drag and follows the pointer, and on release
+         * the graphic is rebuilt exactly as `Modify`'s own edits are. A press anywhere else is
+         * left to `Modify` and the map, and a click with no drag adds nothing, as on MapLibre.
+         * @see hasClosingEdge, applyEditedBase
+         */
+        const modifyOverlay = this.modify.getOverlay();
+        let pending: {feature: Feature; geometry: LineString; inserted: boolean} | undefined;
+        this.closingEdge = new Pointer({
+            handleDownEvent: event => {
+                this.clearClosingHint();
+                const hit = this.closingEdgeAt(baseFeatures, event.pixel);
+                if (!hit) return false;
+                pending = {feature: hit.feature, geometry: hit.geometry, inserted: false};
+                return true;
+            },
+            handleDragEvent: event => {
+                if (!pending) return;
+                const coords = pending.geometry.getCoordinates();
+                if (pending.inserted) coords[coords.length - 1] = event.coordinate;
+                else coords.push(event.coordinate);
+                pending.inserted = true;
+                pending.geometry.setCoordinates(coords);
+            },
+            handleUpEvent: () => {
+                const done = pending;
+                pending = undefined;
+                if (done?.inserted) this.applyEditedBase(done.feature);
+                return false;
+            },
+            handleMoveEvent: event => {
+                const hit = event.dragging ? undefined : this.closingEdgeAt(baseFeatures, event.pixel);
+                if (!hit) return this.clearClosingHint();
+                if (!this.closingHint) {
+                    this.closingHint = new Feature(new Point(hit.at));
+                    modifyOverlay.getSource()?.addFeature(this.closingHint);
+                } else {
+                    this.closingHint.getGeometry()?.setCoordinates(hit.at);
                 }
-
-            });
+            },
         });
+        this.map.addInteraction(this.closingEdge);
+        this.modify.on('modifyend', (e: ModifyEvent) => {
+            e.features.forEach(feature => this.applyEditedBase(feature as Feature));
+        });
+    };
+
+    /**
+     * Rebuilds a graphic from a base the user just reshaped: `Modify`'s edits, and a point added on
+     * a ring's closing edge. One door, so both apply the same floors. @see addModifyInteraction
+     */
+    private applyEditedBase = (feature: Feature): void => {
+        let symbolId = feature.get('symbolId');
+        if (!symbolId) return;
+        let geom = feature.getGeometry();
+        if (geom instanceof Point || geom instanceof LineString || geom instanceof Polygon) {
+            let graphicController = this.getFeatureControllerBySymbolId(symbolId);
+            if (!graphicController) return;
+
+            /*
+             * **A `Modify` drag authors the shape too**, so the floors that guard a
+             * drawn shape apply to it — which they did not, because this is the one
+             * door into `setBaseFeature` that never said so. 271400 is the case: the
+             * only graphic of the three `minimumFirstSegmentPx` names whose grip is
+             * not a vertex drag on this engine, so its bow-tie was floored on
+             * MapLibre and on nothing here. @see LineGraphicBase.shapingFromGesture
+             */
+            const authoring = graphicController as unknown as {
+                graphic?: {shapingFromGesture?: boolean; reshapingExisting?: boolean};
+                setGestureResolution?: (resolution: number | undefined) => void;
+            };
+            const wasShaping = authoring.graphic?.shapingFromGesture;
+            if (authoring.graphic) {
+                authoring.graphic.shapingFromGesture = true;
+                authoring.graphic.reshapingExisting = true;
+            }
+            authoring.setGestureResolution?.(this.map.getView().getResolution() ?? undefined);
+            try {
+                // re-renders the tactical graphic based on the new geometry.
+                graphicController.setBaseFeature(feature);
+            } finally {
+                if (authoring.graphic) {
+                    authoring.graphic.shapingFromGesture = wasShaping ?? false;
+                    authoring.graphic.reshapingExisting = false;
+                }
+                authoring.setGestureResolution?.(undefined);
+            }
+            return;
+        }
     };
 
     /**
@@ -2030,9 +2089,14 @@ export class TacticalGraphicsManager {
 
         for (const feature of bases) {
             const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+            const geometry = feature.getGeometry();
+            // Not the older two-ring record, on either engine. @see takesInsertedVertices
+            if (name && geometry instanceof LineString && !takesInsertedVertices(name, readGraphicGeometryState(feature).width)) {
+                const landing = this.map.getPixelFromCoordinate(geometry.getClosestPoint(event.coordinate));
+                if (landing && Math.hypot(landing[0] - event.pixel[0], landing[1] - event.pixel[1]) <= MODIFY_PIXEL_TOLERANCE) return false;
+            }
             if (!name || reservedLeadPx(name) === undefined) continue;
 
-            const geometry = feature.getGeometry();
             if (!(geometry instanceof LineString)) continue;
 
             // Where the vertex would land, and whether the cursor is near enough for this
@@ -2067,8 +2131,45 @@ export class TacticalGraphicsManager {
             if (feature.get('role') !== 'base') continue;
             if (selected && !selected.includes(feature)) continue;
             const name = feature.get('graphicName') as TacticalGraphicName | undefined;
-            if (name && drawsAnchorConnector(name)) feature.set('hidden', false);
+            // The shared rule, which also names a smoothed graphic's own points. @see anchorConnectorRuns
+            const geometry = feature.getGeometry() as unknown as {getType(): string; getCoordinates(): unknown} | undefined;
+            const width = readGraphicGeometryState(feature).width;
+            if (name && geometry && anchorConnectorRuns(name, {type: geometry.getType(), coordinates: geometry.getCoordinates()}, width).length) {
+                feature.set('hidden', false);
+            }
         }
+    };
+
+    /** The closing-edge marker, gone. @see addModifyInteraction */
+    private clearClosingHint = (): void => {
+        if (this.closingHint) this.modify?.getOverlay().getSource()?.removeFeature(this.closingHint);
+        this.closingHint = undefined;
+    };
+
+    /**
+     * Where on a ring's closing edge the cursor is, if it is within `Modify`'s reach of one and
+     * not on either end, which `Modify` drags as vertices already. @see hasClosingEdge
+     */
+    private closingEdgeAt = (bases: Feature[], pixel: number[]): {feature: Feature; geometry: LineString; at: Coordinate} | undefined => {
+        for (const feature of bases) {
+            const name = feature.get('graphicName') as TacticalGraphicName | undefined;
+            const geometry = feature.getGeometry();
+            if (!name || !(geometry instanceof LineString)) continue;
+            if (!hasClosingEdge(name, readGraphicGeometryState(feature).width)) continue;
+            const coords = geometry.getCoordinates();
+            if (coords.length < 3) continue;
+            const pixels = coords.map(c => this.map.getPixelFromCoordinate(c) as [number, number]);
+            if (pixels.some(p => !p)) continue;
+            // Only when the closing edge is the nearest edge, and not on either end of it, which
+            // `Modify` drags as vertices already. @see nearestInsertionEdge
+            const near = nearestInsertionEdge(pixels, pixel as [number, number], true, MODIFY_PIXEL_TOLERANCE);
+            if (!near || near.index !== pixels.length) continue;
+            const [a, b] = [pixels[pixels.length - 1], pixels[0]];
+            if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) <= MODIFY_PIXEL_TOLERANCE) continue;
+            if (Math.hypot(pixel[0] - b[0], pixel[1] - b[1]) <= MODIFY_PIXEL_TOLERANCE) continue;
+            return {feature, geometry, at: this.map.getCoordinateFromPixel(near.at)};
+        }
+        return undefined;
     };
 
     removeModifyInteraction = () => {
@@ -2077,6 +2178,9 @@ export class TacticalGraphicsManager {
         // hiding by that flag would leave those on the map after the mode is left.
         let baseFeatures = this.renderingVectorSource.getFeatures().filter(feature => feature.get('role') === 'base');
         baseFeatures.forEach(feature => feature.set('hidden', true));
+        this.clearClosingHint();
+        if (this.closingEdge) this.map.removeInteraction(this.closingEdge);
+        this.closingEdge = undefined;
         if (this.modify) this.map.removeInteraction(this.modify);
         // Dropped, not just detached: a handle kept here is one this class would try to
         // remove a second time and, worse, one it would not replace.
