@@ -1233,6 +1233,8 @@ export function anchorConnectorRuns<T>(name: TacticalGraphicName, base: {type: s
         const coordinates = base.coordinates as T[];
         if (!drawsAnchorConnector(name) && !smoothed) return [];
         const run = anchorConnectorRun(name, coordinates);
+        // A ring stored as a line closes back on its first point, as the symbol does.
+        if (smoothed && smoothingKindOf(name) === 'ring' && run.length >= 3) return [[...run, run[0]]];
         return run.length >= 2 ? [run] : [];
     }
     if (base.type === 'Polygon' && smoothed) {

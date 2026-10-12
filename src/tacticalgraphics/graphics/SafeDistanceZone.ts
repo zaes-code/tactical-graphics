@@ -20,6 +20,8 @@ import * as turf from '../core/turf';
 import geometryService from '../core/GeometryService';
 import {TacticalGraphicsBase} from './TacticalGraphicsBase';
 import {IBaseGraphicOptions, TacticalGraphicName} from '../core/type';
+import {getSmoothLines} from '../core/config';
+import {chaikinRing, smoothingKindOf} from '../core/smoothing';
 
 /**
  * The standoff a freshly drawn multiple-strike zone starts with, in screen pixels.
@@ -156,12 +158,23 @@ export class MinimumSafeDistanceMultipleStrike extends TacticalGraphicsBase {
     generateGraphics(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiLineString> {
         const c = base.geometry.coordinates;
         const standoff = standoffMetres(opts);
+        /*
+         * **Smooth lines round zone 1, and zone 2 is offset from the rounded ring.** The two
+         * are locked together by the standoff: zone 2 is that distance from zone 1 all the way
+         * round, smooth or not, which is the point of stating it. Rounding each ring after its
+         * own offset would break that wherever they bend. The offset is a miter, one vertex per
+         * vertex, so the rings still carry equal numbers of points, as 272101 asks. The older
+         * record states no standoff and holds two independent rings, so each is rounded alone.
+         */
+        const smooth = getSmoothLines() && smoothingKindOf(this.name) === 'ring';
+        const round = (ring: Position[]): Position[] => (smooth ? chaikinRing(ring) : ring);
 
         if (standoff !== undefined) {
             // Zone 1 as traced; zone 2 derived. Fewer than three points is a graphic still
             // being drawn — show the run rather than an empty symbol.
-            const inner = closed(c);
-            if (!inner) return this.asMultiLineStringFeature([c]);
+            const traced = closed(c);
+            if (!traced) return this.asMultiLineStringFeature([c]);
+            const inner = round(traced);
             return this.asMultiLineStringFeature([inner, geometryService.offsetRingOutward(inner, standoff)]);
         }
 
@@ -173,7 +186,7 @@ export class MinimumSafeDistanceMultipleStrike extends TacticalGraphicsBase {
 
         const inner = closed(c.slice(0, half));
         const outer = closed(c.slice(half, half * 2));
-        return this.asMultiLineStringFeature([inner, outer].filter((r): r is Position[] => r !== null));
+        return this.asMultiLineStringFeature([inner, outer].filter((r): r is Position[] => r !== null).map(round));
     }
 
     /**
