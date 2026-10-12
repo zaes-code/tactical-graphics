@@ -136,6 +136,7 @@ const {
     GRAPHIC_CATEGORIES,
     isRectangular,
     CORRIDOR_GRAPHICS,
+    topEdgeLabel,
 } = lib;
 
 // ── 4326 → 3857 ─────────────────────────────────────────────────────────────
@@ -799,10 +800,10 @@ function paintsFor(name, resolution, drop) {
         }
         : undefined;
 
-    const run = (fn, geom) => {
+    const run = (fn, geom, extra) => {
         if (!fn || !geom) return null;
         try {
-            const r = fn({geometry: geom, properties: paintProps, graphicSize: props.radius, ring, bounds}, ctx);
+            const r = fn({geometry: geom, properties: paintProps, graphicSize: props.radius, ring, bounds, ...extra}, ctx);
             // Each half fitted on its own, as both renderers do. @see withFittedDashes
             return Array.isArray(r) ? withFittedDashes(r, ctx) : [];
         } catch (e) {
@@ -823,9 +824,13 @@ function paintsFor(name, resolution, drop) {
     // label anchors is saying this symbol carries no text, and both fords do. Falling
     // back for them drew an ALPHA and a DTG pair straight across the rails — text the
     // app never draws, invented by the harness.
-    const labelGeom = project(render.labels && render.labels.geometry);
+    // Group or series of targets writes its name on the top edge of the outline it draws,
+    // which every engine finds the same way. Without the segment the label paint draws
+    // nothing, and the outline still opens its gap for it. @see topEdgeLabel
+    const top = topEdgeLabel(name, ringOf(projectedGraphic));
+    const labelGeom = top ? {type: 'Point', coordinates: top.anchor} : project(render.labels && render.labels.geometry);
     const declaresNoLabels = !!labelGeom && labelGeom.coordinates.length === 0;
-    let l = run(painters.label, labelGeom);
+    let l = run(painters.label, labelGeom, top && {labelSegment: top.segment});
     if ((l === null || l.length === 0) && !declaresNoLabels) {
         const viaBase = run(painters.label, projectedBase);
         if (viaBase && viaBase.length) l = viaBase;

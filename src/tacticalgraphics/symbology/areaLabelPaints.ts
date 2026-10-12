@@ -105,6 +105,13 @@ function stack(
     lines: string[],
     scale: number,
     rotation = 0,
+    /**
+     * Whether the block must fit inside the shape. False for a label that rides the outline,
+     * whose box is half outside by construction: fitting it would shrink it to nothing, which
+     * is what the PAA markers and the group-of-targets designation did. Those are bounded by
+     * the graphic cap alone. @see outsideScaleOf
+     */
+    fitInside = true,
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
@@ -116,7 +123,7 @@ function stack(
             align: 'center',
             baseline: 'middle',
             rotation,
-            scale: fitLabelScale(feature, context, at, lines, fontStyle, scale),
+            scale: fitInside ? fitLabelScale(feature, context, at, lines, fontStyle, scale) : scale,
         },
     };
 }
@@ -578,7 +585,7 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
             [cx, bounds.minY],
             [bounds.minX, cy],
             [bounds.maxX, cy],
-        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale));
+        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
 
         const at = anchorOf(feature);
         const lines = [
@@ -607,7 +614,7 @@ export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): Are
         const text = getFullLabel(name, feature.properties.designation ?? '').trim();
         if (!at || !segment || !text) return [];
 
-        return [stack(feature, context, at, [text], outsideScaleOf(feature, context), uprightRotation(segment[0], segment[1]))];
+        return [stack(feature, context, at, [text], outsideScaleOf(feature, context), uprightRotation(segment[0], segment[1]), false)];
     };
 }
 
