@@ -42,7 +42,7 @@ import {
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
     LINE_WIDTH,
-    anchorConnectorRun,
+    anchorConnectorRuns,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_LABEL_FRACTION,
@@ -567,14 +567,13 @@ export const createBaseFeature = () => {
 
         const name = feature.get('graphicName') as TacticalGraphicName | undefined;
         const geometry = feature.getGeometry();
-        // Only a LineString has a run to trim; a polygon or a point base draws whole.
-        const run = name && geometry instanceof LineString
-            ? anchorConnectorRun(name, geometry.getCoordinates())
-            : undefined;
-        return modifyStyle(
-            getInertHandleColor(),
-            run && run.length !== (geometry as LineString).getCoordinates().length ? new LineString(run) : undefined,
-        );
+        // Only a LineString has a run to reshape; a polygon or a point base draws whole. The
+        // runs are the shared rule's, so this hashes what every other engine does: trimmed
+        // back to a centreline, or closed for a ring stored as a line. @see anchorConnectorRuns
+        const coordinates = geometry instanceof LineString ? geometry.getCoordinates() : undefined;
+        const runs = name && coordinates ? anchorConnectorRuns<Coordinate>(name, {type: 'LineString', coordinates}) : [];
+        const unchanged = runs.length === 1 && runs[0].length === coordinates?.length;
+        return modifyStyle(getInertHandleColor(), runs.length && !unchanged ? new LineString(runs[0]) : undefined);
     });
 
     feature.set('base', true);

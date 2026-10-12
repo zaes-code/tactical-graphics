@@ -1225,16 +1225,19 @@ export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: re
  * graphic it reshapes: the curve no longer passes through the points the operator placed, so
  * the line through them is what shows where they are and what dragging one will move. On a
  * hard drawing that line lies under the symbol's own, which is why it was never needed there.
- * An area's run is its closed outline. @see SMOOTHED_GRAPHICS
+ * An area's run is its closed outline, and so is a ring stored as a line (the multiple-strike
+ * safe distance zone), smooth or not: its points trace an outline, and an open run reads as a
+ * line someone forgot to finish. @see SMOOTHED_GRAPHICS
  */
 export function anchorConnectorRuns<T>(name: TacticalGraphicName, base: {type: string; coordinates?: unknown}): T[][] {
     const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
+    const ring = smoothingKindOf(name) === 'ring';
     if (base.type === 'LineString') {
         const coordinates = base.coordinates as T[];
-        if (!drawsAnchorConnector(name) && !smoothed) return [];
+        if (!drawsAnchorConnector(name) && !smoothed && !ring) return [];
         const run = anchorConnectorRun(name, coordinates);
         // A ring stored as a line closes back on its first point, as the symbol does.
-        if (smoothed && smoothingKindOf(name) === 'ring' && run.length >= 3) return [[...run, run[0]]];
+        if (ring && run.length >= 3) return [[...run, run[0]]];
         return run.length >= 2 ? [run] : [];
     }
     if (base.type === 'Polygon' && smoothed) {
