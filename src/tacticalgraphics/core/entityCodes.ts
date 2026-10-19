@@ -1,4 +1,4 @@
-import {TacticalGraphicName} from './type';
+import {RouteDirection, TacticalGraphicName} from './type';
 
 /**
  * The six-digit entity code each graphic carries in the published symbology.
@@ -349,6 +349,38 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.FortifiedLine]:                               '290900',  // Fortified Line
 };
 
+/**
+ * Codes that name a supply route *with its traffic arrows*, rather than a graphic of their own.
+ *
+ * APP-06 Table 8-21 gives each route a subtype per traffic pattern: `330301` is a main supply
+ * route carrying one-way traffic. This library draws all of those as the parent graphic with
+ * the `direction` amplifier set, so a variant code resolves to that pair and the pair emits the
+ * variant code back. `Route` has no two-way subtype in the table, so a two-way route keeps the
+ * parent code; `general` is the parent code by definition.
+ */
+const ROUTE_TRAFFIC_CODES: ReadonlyArray<readonly [code: string, name: TacticalGraphicName, direction: RouteDirection]> = [
+    ['330301', TacticalGraphicName.MainSupplyRoute, RouteDirection.oneWay],          // One Way Traffic
+    ['330302', TacticalGraphicName.MainSupplyRoute, RouteDirection.twoWay],          // Two Way Traffic
+    ['330303', TacticalGraphicName.MainSupplyRoute, RouteDirection.alternating],     // Alternating Traffic
+    ['330401', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.oneWay],     // One Way Traffic
+    ['330402', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.twoWay],     // Two Way Traffic
+    ['330403', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.alternating], // Alternating Traffic
+    ['330501', TacticalGraphicName.Route, RouteDirection.oneWay],                    // One Way Traffic
+    ['330502', TacticalGraphicName.Route, RouteDirection.alternating],               // Alternating Traffic
+];
+
+/** What a code stands for: the graphic, plus the amplifier a variant code implies. */
+export interface EntityCodeResolution {
+    name: TacticalGraphicName;
+    /** Set only when the code is one of a supply route's traffic subtypes. */
+    direction?: RouteDirection;
+}
+
+/** The amplifiers that can change which code a graphic carries. */
+export interface EntityCodeAmplifiers {
+    direction?: RouteDirection;
+}
+
 const DISTINCT_CODES: string[] = [];
 
 /** Reverse index. Built once; a code may name more than one graphic -- see {@link listNamesByEntityCode}. */
@@ -372,8 +404,17 @@ const NAMES_BY_CODE: ReadonlyMap<string, readonly TacticalGraphicName[]> = (() =
  *
  * `undefined` means FM 1-02.2 defines the graphic and no coded catalog does. It is not
  * an error and not a lookup miss.
+ *
+ * Pass the graphic's amplifiers to get the subtype they select: a main supply route with
+ * `direction: RouteDirection.oneWay` is `330301`, not `330300`. Without them, or where the
+ * standard has no subtype for that combination, the graphic's own code comes back.
  */
-export function getEntityCode(name: TacticalGraphicName): string | undefined {
+export function getEntityCode(name: TacticalGraphicName, amplifiers?: EntityCodeAmplifiers): string | undefined {
+    const direction = amplifiers?.direction;
+    if (direction) {
+        const variant = ROUTE_TRAFFIC_CODES.find(([, n, d]) => n === name && d === direction);
+        if (variant) return variant[0];
+    }
     return GRAPHIC_ENTITY_CODES[name] ?? undefined;
 }
 
@@ -385,7 +426,9 @@ export function getEntityCode(name: TacticalGraphicName): string | undefined {
  * graphics. Order follows `GRAPHIC_ENTITY_CODES`. An unknown code returns empty.
  */
 export function listNamesByEntityCode(code: string): readonly TacticalGraphicName[] {
-    return NAMES_BY_CODE.get(code.trim()) ?? [];
+    const key = code.trim();
+    const variant = ROUTE_TRAFFIC_CODES.find(([c]) => c === key);
+    return variant ? [variant[1]] : (NAMES_BY_CODE.get(key) ?? []);
 }
 
 /**
@@ -393,11 +436,35 @@ export function listNamesByEntityCode(code: string): readonly TacticalGraphicNam
  * names more than one. Use {@link listNamesByEntityCode} when a code may be shared.
  */
 export function getNameByEntityCode(code: string): TacticalGraphicName | undefined {
-    const names = listNamesByEntityCode(code);
-    return names.length === 1 ? names[0] : undefined;
+    return resolveEntityCode(code)?.name;
 }
 
-/** Every entity code in use, ascending, with no duplicates. */
+/**
+ * The graphic a code names together with any amplifier the code implies, or `undefined`
+ * when the code is unknown or names more than one graphic.
+ *
+ * Use it when reading a feed: `resolveEntityCode('330301')` is a main supply route with
+ * one-way traffic, which {@link getNameByEntityCode} alone would report as a plain one.
+ */
+export function resolveEntityCode(code: string): EntityCodeResolution | undefined {
+    const key = code.trim();
+    const variant = ROUTE_TRAFFIC_CODES.find(([c]) => c === key);
+    if (variant) return {name: variant[1], direction: variant[2]};
+    const names = listNamesByEntityCode(key);
+    return names.length === 1 ? {name: names[0]} : undefined;
+}
+
+/**
+ * Every graphic's own entity code, ascending, with no duplicates.
+ *
+ * The supply-route traffic subtypes are not listed: they are amplifier settings on a listed
+ * graphic. {@link listEntityVariantCodes} has them.
+ */
 export function listEntityCodes(): string[] {
     return DISTINCT_CODES.slice().sort();
+}
+
+/** The subtype codes {@link resolveEntityCode} maps to a graphic plus an amplifier, ascending. */
+export function listEntityVariantCodes(): string[] {
+    return ROUTE_TRAFFIC_CODES.map(([code]) => code).sort();
 }

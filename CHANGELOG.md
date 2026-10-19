@@ -15,6 +15,16 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
+  own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
+  the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`
+  returns the graphic and the direction, `getNameByEntityCode` accepts the subtype codes, and
+  `getEntityCode(name, {direction})` returns the subtype code. `listEntityVariantCodes()` lists the
+  eight codes this covers.
+
+
 ## [4.5.1] — 2026-10-12
 
 ### Fixed

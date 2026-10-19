@@ -1,8 +1,8 @@
 import {readFileSync} from 'fs';
 import {join} from 'path';
-import {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listEntityCodes, listNamesByEntityCode} from './entityCodes';
+import {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listEntityCodes, listEntityVariantCodes, listNamesByEntityCode, resolveEntityCode} from './entityCodes';
 import {TacticalGraphicSpecification, getSpecifications, hasSpecification} from './specifications';
-import {TacticalGraphicName} from './type';
+import {RouteDirection, TacticalGraphicName} from './type';
 
 const names = () => Object.keys(GRAPHIC_ENTITY_CODES) as TacticalGraphicName[];
 
@@ -106,5 +106,47 @@ describe('lookup by code', () => {
         // 309 over 308 while 271204 was switched off; it is back as the picture 3.4.0
         // shipped, its own construction still unsettled. @see ai/excluded-graphics.md
         expect(codes).toHaveLength(309);
+    });
+});
+
+describe('supply-route traffic codes', () => {
+    // APP-06 Table 8-21 codes each traffic pattern as a subtype of its route; this library
+    // draws them as the parent graphic plus the direction amplifier.
+    const VARIANTS: [string, TacticalGraphicName, RouteDirection][] = [
+        ['330301', TacticalGraphicName.MainSupplyRoute, RouteDirection.oneWay],
+        ['330302', TacticalGraphicName.MainSupplyRoute, RouteDirection.twoWay],
+        ['330303', TacticalGraphicName.MainSupplyRoute, RouteDirection.alternating],
+        ['330401', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.oneWay],
+        ['330402', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.twoWay],
+        ['330403', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.alternating],
+        ['330501', TacticalGraphicName.Route, RouteDirection.oneWay],
+        ['330502', TacticalGraphicName.Route, RouteDirection.alternating],
+    ];
+
+    it.each(VARIANTS)('resolves %s to its route and direction, and back', (code, name, direction) => {
+        expect(resolveEntityCode(code)).toEqual({name, direction});
+        expect(getNameByEntityCode(code)).toBe(name);
+        expect(listNamesByEntityCode(code)).toEqual([name]);
+        expect(getEntityCode(name, {direction})).toBe(code);
+    });
+
+    it('keeps the parent code where the standard has no subtype', () => {
+        expect(getEntityCode(TacticalGraphicName.MainSupplyRoute)).toBe('330300');
+        expect(getEntityCode(TacticalGraphicName.MainSupplyRoute, {direction: RouteDirection.general})).toBe('330300');
+        // Table 8-21 gives Route no two-way subtype.
+        expect(getEntityCode(TacticalGraphicName.Route, {direction: RouteDirection.twoWay})).toBe('330500');
+        // A direction on a graphic that takes none changes nothing.
+        expect(getEntityCode(TacticalGraphicName.PhaseLine, {direction: RouteDirection.oneWay})).toBe('140300');
+    });
+
+    it('resolves a plain code with no amplifier, and a shared one to nothing', () => {
+        expect(resolveEntityCode('330300')).toEqual({name: TacticalGraphicName.MainSupplyRoute});
+        expect(resolveEntityCode('141100')).toBeUndefined();
+        expect(resolveEntityCode('999999')).toBeUndefined();
+    });
+
+    it('lists the variants apart from the graphics own codes', () => {
+        expect(listEntityVariantCodes()).toEqual(VARIANTS.map(([code]) => code));
+        for (const code of listEntityVariantCodes()) expect(listEntityCodes()).not.toContain(code);
     });
 });
