@@ -353,6 +353,16 @@ FM 1-02.2 publishes no identifiers of its own. `getNameByEntityCode('140300')` g
 other way, for reading a symbol out of a feed that addresses graphics by code — it takes
 the code as a string too.
 
+A supply route's traffic arrows have codes of their own in APP-06, and they resolve to the
+route plus its `direction` amplifier:
+
+```ts
+import {getEntityCode, resolveEntityCode, RouteDirection, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+resolveEntityCode('330301');   // → {name: 'MainSupplyRoute', direction: 'One Way'}
+getEntityCode(TacticalGraphicName.MainSupplyRoute, {direction: RouteDirection.oneWay}); // → '330301'
+```
+
 `TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
 at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
 `tacticalGraphic.name` is readable in a raw GeoJSON file. TypeScript still wants the member
