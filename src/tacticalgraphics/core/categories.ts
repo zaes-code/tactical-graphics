@@ -130,6 +130,9 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
 
     // ── Fire Support Coordination Control Measures ──────────────────────────── OK
     [TacticalGraphicName.FieldsOfFire]:                     TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FinalProtectiveFireRight]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.PrincipalDirectionOfFire]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.SecondaryDirectionOfFire]:         TacticalGraphicCategory.FireSupportCoordination,
     [TacticalGraphicName.FreeFireAreaCircular]:             TacticalGraphicCategory.FireSupportCoordination,
     [TacticalGraphicName.FreeFireAreaIrregular]:            TacticalGraphicCategory.FireSupportCoordination,
     [TacticalGraphicName.FreeFireAreaRectangular]:          TacticalGraphicCategory.FireSupportCoordination,

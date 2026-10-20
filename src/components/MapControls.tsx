@@ -37,7 +37,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import type {EditMode} from '@zaes/tactical-graphics';
 import type {MapEngineCapabilities} from './mapEngine';
-import {getDisplayName, isRectangular, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {getDisplayName, isFieldOfFire, isRectangular, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from '@zaes/tactical-graphics';
 import {getSpecifications, TacticalGraphicSpecification} from '@zaes/tactical-graphics';
 import {DEFAULT_PALETTE} from '@zaes/tactical-graphics';
@@ -1028,7 +1028,7 @@ function getPointHint(name: TacticalGraphicName): string | null {
     if (twoPoint.includes(name)) return '2 points';
     // Both are the same three-point V: a vertex and two arrowhead tips, in APP-06's own
     // numbering. @see SWAP_FIRST_TWO
-    if (name === TacticalGraphicName.FieldsOfFire || name === TacticalGraphicName.SearchArea) return '3 points';
+    if (isFieldOfFire(name) || name === TacticalGraphicName.SearchArea) return '3 points';
     // 343100: the tip, the end of the symbol, and the length of its four angled lines.
     // @see exploitationAnchors
     if (name === TacticalGraphicName.Exploitation) return '3 points';

@@ -18,7 +18,7 @@ the npm publish dates — when a version actually became installable.
 ### Added
 
 - **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
-  every graphic MIL-STD-2525E Change 1 has: 284 of the 319, read from its control-measure table
+  every graphic MIL-STD-2525E Change 1 has: 287 of the 322, read from its control-measure table
   by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
   `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']` (the governing standard first), and `listNamesBySpecification` answers which 2525E
   control measures the library draws. Code that compared a specification list to `['APP-06']`
@@ -26,6 +26,13 @@ the npm publish dates — when a version actually became installable.
 - **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
   direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
   nor APP-06, so it is the one graphic tagged MIL-STD-2525 alone. Drawn on both engines.
+- **MIL-STD-2525E Change 1's fields-of-fire variants.** Change 1 (March 2025) coded four symbols on
+  the fields-of-fire V. Final protective fire (left), `140501`, is the picture fields of fire
+  already draws (APP-06 `140500`), so `resolveEntityCode('140501')` reads it as fields of fire. The
+  other three are new graphics: `FinalProtectiveFireRight` (`140502`, the blade on the other leg),
+  `PrincipalDirectionOfFire` (`140503`, no blade) and `SecondaryDirectionOfFire` (`140504`, no blade,
+  dashed). They share the V's geometry, handles and editing, and are tagged MIL-STD-2525 only.
+  `FIELD_OF_FIRE_GRAPHICS` and `isFieldOfFire` list the family.
 - **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
   own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
   the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`

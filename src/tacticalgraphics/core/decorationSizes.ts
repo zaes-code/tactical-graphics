@@ -32,6 +32,9 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FollowAndAssume]: 20,
     [TacticalGraphicName.FollowAndSupport]: 20,
     [TacticalGraphicName.FieldsOfFire]: 20,
+    [TacticalGraphicName.FinalProtectiveFireRight]: 20,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: 20,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: 20,
     // The zigzag's half-wavelength: the distance from one apex to the next. Driving the
     // symbol off a screen size rather than off the drawn length is what lets a long
     // obstacle carry *more* teeth instead of bigger ones. @see Fix
