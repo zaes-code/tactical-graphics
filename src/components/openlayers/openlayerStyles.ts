@@ -2074,8 +2074,8 @@ export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): Styl
 
 
 /** **Ported.** @see mobilityPaints.ts, `fieldsOfFirePaint`. */
-export function fieldOfFireStyleFunc(): StyleFunction {
-    return asStyleFunction(fieldsOfFirePaint());
+export function fieldOfFireStyleFunc(name: TacticalGraphicName = TacticalGraphicName.FieldsOfFire): StyleFunction {
+    return asStyleFunction(fieldsOfFirePaint(name), name);
 }
 
 
