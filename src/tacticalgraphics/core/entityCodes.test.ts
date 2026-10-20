@@ -26,7 +26,8 @@ const codesFromSpecificationComments = (): Map<string, string> => {
      * `^\s*` with the `m` flag is what makes "at the start of the line" the test, so a
      * commented entry is skipped while a live one with its trailing comment still matches.
      */
-    const pattern = /^\s*\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ APP-06 (\d{6})/gm;
+    // Line of contact is the one code sourced from MIL-STD-2525: APP-06 prints "Code: N/A" for it.
+    const pattern = /^\s*\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ (?:APP-06|MIL-STD-2525) (\d{6})/gm;
     let match = pattern.exec(source);
     while (match) {
         found.set(match[1], match[2]);
@@ -80,12 +81,17 @@ describe('lookup by code', () => {
         expect(getEntityCode(TacticalGraphicName.KillZone)).toBeUndefined();
     });
 
-    it('reports both graphics that share APP-06 141100', () => {
-        // "Line of Departure/Line of Contact" is one APP-06 entity that this library
-        // draws as two graphics, so the code -> name mapping is not one-to-one. The
-        // ambiguity is real and callers have to see it.
-        expect(listNamesByEntityCode('141100')).toEqual([TacticalGraphicName.LineOfDepartureOrLineOfContact, TacticalGraphicName.LineOfContact]);
-        expect(getNameByEntityCode('141100')).toBeUndefined();
+    it('codes line of contact apart from line of departure/line of contact', () => {
+        // Two graphics with two codes. Line of contact used to borrow 141100 because APP-06
+        // prints "Code: N/A" for it; MIL-STD-2525D and E code it 140200.
+        expect(getEntityCode(TacticalGraphicName.LineOfContact)).toBe('140200');
+        expect(getEntityCode(TacticalGraphicName.LineOfDepartureOrLineOfContact)).toBe('141100');
+        expect(getNameByEntityCode('140200')).toBe(TacticalGraphicName.LineOfContact);
+        expect(getNameByEntityCode('141100')).toBe(TacticalGraphicName.LineOfDepartureOrLineOfContact);
+    });
+
+    it('shares no code between two graphics', () => {
+        for (const code of listEntityCodes()) expect(listNamesByEntityCode(code)).toHaveLength(1);
     });
 
     it('resolves an unambiguous code to its one graphic', () => {
@@ -102,10 +108,10 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 310 assignments over 309 distinct codes -- 141100 is the one shared pair. It was
-        // 309 over 308 while 271204 was switched off; it is back as the picture 3.4.0
-        // shipped, its own construction still unsettled. @see ai/excluded-graphics.md
-        expect(codes).toHaveLength(309);
+        // 310 assignments over 310 distinct codes. 141100 was shared until line of contact
+        // took its own 140200. 271204 was switched off for a while and is back as the picture
+        // 3.4.0 shipped, its own construction still unsettled. @see ai/excluded-graphics.md
+        expect(codes).toHaveLength(310);
     });
 });
 
@@ -139,9 +145,8 @@ describe('supply-route traffic codes', () => {
         expect(getEntityCode(TacticalGraphicName.PhaseLine, {direction: RouteDirection.oneWay})).toBe('140300');
     });
 
-    it('resolves a plain code with no amplifier, and a shared one to nothing', () => {
+    it('resolves a plain code with no amplifier, and an unknown one to nothing', () => {
         expect(resolveEntityCode('330300')).toEqual({name: TacticalGraphicName.MainSupplyRoute});
-        expect(resolveEntityCode('141100')).toBeUndefined();
         expect(resolveEntityCode('999999')).toBeUndefined();
     });
 
