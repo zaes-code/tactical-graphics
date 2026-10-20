@@ -5,7 +5,9 @@ import {RouteDirection, TacticalGraphicName} from './type';
  *
  * The number comes from APP-06 Edition E Annex A, Table A-32, and it is the same
  * code MIL-STD-2525 assigns the symbol: for the control-measure symbol set the two
- * standards are harmonised on one numbering, so `140300` is Phase Line in both. A
+ * standards are harmonised on one numbering, so `140300` is Phase Line in both. The
+ * one exception is line of contact, which APP-06 lists with no code and MIL-STD-2525
+ * codes `140200`; it carries the MIL-STD-2525 code. A
  * full MIL-STD-2525 SIDC prefixes the control-measure symbol set (`25`) and appends
  * affiliation and status digits; this is the entity portion, which is the part that
  * identifies *which* graphic.
@@ -301,7 +303,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.GroupOrSeriesOfTargets]:                      '240805',  // Series or Groups of Targets
     [TacticalGraphicName.WeaponSensorRangeFanCircular]:                '242100',  // Weapon/Sensor Range Fan, Circular
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                  '242200',  // Weapon/Sensor Range Fan, Sector
-    [TacticalGraphicName.LineOfContact]:                               '141100',  // Line of Departure/Line of Contact
+    [TacticalGraphicName.LineOfContact]:                               '140200',  // Line of Contact (MIL-STD-2525; APP-06 prints N/A)
     [TacticalGraphicName.AttackByFire]:                                '152000',  // Attack by Fire
     [TacticalGraphicName.Defeat]:                                      '344300',  // Defeat
     [TacticalGraphicName.Destroy]:                                     '340900',  // Destroy
@@ -421,9 +423,10 @@ export function getEntityCode(name: TacticalGraphicName, amplifiers?: EntityCode
 /**
  * Every graphic carrying an entity code, for callers that address graphics by code.
  *
- * Returns an array because the mapping is not one-to-one: APP-06 `141100` is
- * "Line of Departure/Line of Contact", which this library draws as two separate
- * graphics. Order follows `GRAPHIC_ENTITY_CODES`. An unknown code returns empty.
+ * Returns an array so a code shared by two graphics can report both. No code is shared
+ * today: `LineOfContact` used to borrow `141100` from line of departure/line of contact
+ * until it took its own MIL-STD-2525 code, `140200`. Order follows `GRAPHIC_ENTITY_CODES`.
+ * An unknown code returns empty.
  */
 export function listNamesByEntityCode(code: string): readonly TacticalGraphicName[] {
     const key = code.trim();

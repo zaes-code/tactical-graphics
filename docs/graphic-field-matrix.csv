@@ -173,7 +173,7 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "light line",LightLine,"APP-06",110200,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "limit of advance",LimitOfAdvance,"FM 1-02.2 + APP-06",140900,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "limited access area",LimitedAccessArea,"FM 1-02.2 + APP-06",151100,,,,Y,Y,,,,,,,Y,,,,,,,,,
-"line of contact",LineOfContact,"FM 1-02.2 + APP-06",141100,,,,,,,,,,,,,,,,,,,,,
+"line of contact",LineOfContact,"FM 1-02.2 + APP-06",140200,,,,,,,,,,,,,,,,,,,,,
 "line of departure",LineOfDeparture,"FM 1-02.2 + APP-06",141000,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "line of departure or line of contact",LineOfDepartureOrLineOfContact,"FM 1-02.2 + APP-06",141100,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "line, generic",LineGeneric,"APP-06",110400,Y,,,Y,Y,,Y,Y,,,,,,,,,,,,,

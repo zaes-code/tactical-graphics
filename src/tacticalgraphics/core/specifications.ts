@@ -339,7 +339,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.GroupOrSeriesOfTargets]:                       BOTH,      // APP-06 240805 Series or Groups of Targets
     [TacticalGraphicName.WeaponSensorRangeFanCircular]:                 BOTH,      // APP-06 242100 Weapon/Sensor Range Fan, Circular
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                   BOTH,      // APP-06 242200 Weapon/Sensor Range Fan, Sector
-    [TacticalGraphicName.LineOfContact]:                                BOTH,      // APP-06 141100 Line of Departure/Line of Contact
+    // APP-06 lists Line of Contact with "Code: N/A" (drawn as the two FLOTs together);
+    // MIL-STD-2525D and E code it 140200, so that is the code it carries.
+    [TacticalGraphicName.LineOfContact]:                                BOTH,      // MIL-STD-2525 140200 Line of Contact
     [TacticalGraphicName.AttackByFire]:                                 BOTH,      // APP-06 152000 Attack by Fire
     [TacticalGraphicName.Defeat]:                                       APP6_ONLY, // APP-06 344300 Defeat
     [TacticalGraphicName.Destroy]:                                      BOTH,      // APP-06 340900 Destroy

@@ -24,6 +24,13 @@ the npm publish dates — when a version actually became installable.
   `getEntityCode(name, {direction})` returns the subtype code. `listEntityVariantCodes()` lists the
   eight codes this covers.
 
+### Changed
+
+- **Line of contact has its own code, `140200`.** It used to report `141100`, which belongs to
+  line of departure/line of contact, a separate graphic. APP-06 lists line of contact with no
+  code; MIL-STD-2525D and E code it `140200`. `getEntityCode(TacticalGraphicName.LineOfContact)`
+  now returns `'140200'`, and `getNameByEntityCode('141100')` now returns the line of departure/line
+  of contact instead of `undefined`.
 
 ## [4.5.1] — 2026-10-12
 

@@ -181,7 +181,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | light line | APP-06 | 110200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | limit of advance | FM 1-02.2 + APP-06 | 140900 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | limited access area | FM 1-02.2 + APP-06 | 151100 |  |  |  | Y | Y |  |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |
-| line of contact | FM 1-02.2 + APP-06 | 141100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| line of contact | FM 1-02.2 + APP-06 | 140200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | line of departure | FM 1-02.2 + APP-06 | 141000 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | line of departure or line of contact | FM 1-02.2 + APP-06 | 141100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | line, generic | APP-06 | 110400 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
