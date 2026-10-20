@@ -35,6 +35,11 @@ the npm publish dates — when a version actually became installable.
 
 ### Changed
 
+- **The obstacle line's teeth follow the drawing order.** They sit on the left of the direction
+  of travel and the label on the right, as APP-06 290100 orients the symbol by the order of its
+  anchor points. A line drawn west to east looks as before; one drawn east to west now has its
+  teeth below and its label above, where both used to stay up and down whichever way it was drawn.
+
 - **Line of contact has its own code, `140200`.** It used to report `141100`, which belongs to
   line of departure/line of contact, a separate graphic. APP-06 and MIL-STD-2525E describe line
   of contact with no code; MIL-STD-2525D codes it `140200`. `getEntityCode(TacticalGraphicName.LineOfContact)`

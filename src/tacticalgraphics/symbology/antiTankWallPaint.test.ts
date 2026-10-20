@@ -3,8 +3,8 @@
  *
  * MIL-STD-2525 290204, in neither FM 1-02.2 nor APP-06. Its plate (2525D Table H-XIX) draws
  * PT 1 to PT 2 left to right with V teeth hanging below and no amplifier, and says the teeth
- * "typically point toward enemy forces". So the side is the meaning: it has to follow the
- * drawing order, where the obstacle line keeps its teeth up whichever way it was drawn.
+ * "typically point toward enemy forces". So the side is the meaning and follows the drawing
+ * order, on the right where the obstacle line's teeth go on the left.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -54,7 +54,7 @@ describe('MIL-STD-2525 290204 antitank wall', () => {
         expect(Math.min(...xs)).toBeCloseTo(0, 6);
     });
 
-    it('is the obstacle line mirrored, where the obstacle line ignores drawing order', () => {
+    it('is the obstacle line mirrored: same teeth, the other side of travel', () => {
         // Same tooth, same run: only the side differs.
         const forward = line([0, 0], [900_000, 0]);
         const wall = vertices(antiTankWallPaint()(forward, context));
