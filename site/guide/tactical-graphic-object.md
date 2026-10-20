@@ -346,11 +346,10 @@ getSpecifications(TacticalGraphicName.PhaseLine);               // → ['MIL-STD
 ```
 
 **Every graphic says which standard defines it, and carries the identifier that standard
-gives it.** `getSpecifications(name)` answers with any of three: 225 graphics are in both
-FM 1-02.2 and APP-06, 85 are APP-06 only, 8 are FM 1-02.2 only, and 5 are in MIL-STD-2525
-alone. `'MIL-STD-2525'` is added to every graphic MIL-STD-2525E Change 1 has, 288 of the 323,
-so `listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)`
-answers which 2525E control measures the library draws. `getEntityCode(name)`
+gives it.** `getSpecifications(name)` answers with any of three. **288 of the 323 graphics are
+in MIL-STD-2525E Change 1**, and `listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)`
+lists them; 5 of those are in MIL-STD-2525 alone. By the other two publications, 225 graphics
+are in both FM 1-02.2 and APP-06, 85 are APP-06 only and 8 are FM 1-02.2 only. `getEntityCode(name)`
 returns the six-digit entity code **as a string**: APP-06's where it has one, and
 MIL-STD-2525's for line of contact, kill zone and the five 2525-only graphics, which APP-06
 leaves uncoded. It returns
