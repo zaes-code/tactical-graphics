@@ -28,7 +28,7 @@ import {
 } from './boundaryBreakPaints';
 import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+import {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 import {
     fortifiedPositionPaint,
     mineClusterPaint,
@@ -73,6 +73,7 @@ import {exfiltratePaint, reliefInPlacePaint, turnPaint} from './routedTaskPaints
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 import {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './scallopPaints';
 import {fieldsOfFirePaint, passageLanePaint} from './mobilityPaints';
+import {FIELD_OF_FIRE_GRAPHICS} from '../core/fieldOfFire';
 import {overheadWirePaint, safeLaneOrGapPaint} from './overheadWirePaints';
 import {
     barSymbolPaint,
@@ -749,6 +750,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
         [TacticalGraphicName.ObstacleLine]: {graphic: obstacleLinePaint(TacticalGraphicName.ObstacleLine)},
+        [TacticalGraphicName.AntiTankWall]: {graphic: antiTankWallPaint()},
 
         // ── APP-06's protection lines ────────────────────────────────────────
         [TacticalGraphicName.Capture]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Capture))},
@@ -991,7 +993,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.MunitionFlightPath] = {graphic: munitionFlightPathPaint()};
     registry[TacticalGraphicName.ForwardLineOfOwnTroops] = {graphic: forwardLineOfOwnTroopsPaint()};
     registry[TacticalGraphicName.LineOfContact] = {graphic: lineOfContactPaint()};
-    registry[TacticalGraphicName.FieldsOfFire] = {graphic: fieldsOfFirePaint()};
+    for (const name of FIELD_OF_FIRE_GRAPHICS) registry[name] = {graphic: fieldsOfFirePaint(name)};
     registry[TacticalGraphicName.PassageLane] = {graphic: passageLanePaint()};
     /*
      * The safe lane calls the passage lane's own paint for its line work, so the outline

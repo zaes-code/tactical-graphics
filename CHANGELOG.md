@@ -15,6 +15,51 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.6.0] — 2026-10-20
+
+### Added
+
+- **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
+  every graphic MIL-STD-2525E Change 1 has: 288 of the 323, read from its control-measure table
+  by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
+  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']`, the governing standard first, and
+  `listNamesBySpecification` answers which 2525E control measures the library draws. Five of
+  them are in MIL-STD-2525 alone: antitank wall and the four fields-of-fire symbols below. Code
+  that compared a specification list to `['APP-06']` exactly should test membership instead.
+- **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
+  direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
+  nor APP-06, so it is tagged MIL-STD-2525 only.
+- **MIL-STD-2525E Change 1's fields-of-fire variants.** Change 1 (March 2025) coded four symbols on
+  the fields-of-fire V, and all four are new graphics: `FinalProtectiveFireLeft` (`140501`, the
+  same picture as fields of fire, which keeps APP-06's `140500`), `FinalProtectiveFireRight`
+  (`140502`, the blade on the other leg),
+  `PrincipalDirectionOfFire` (`140503`, no blade) and `SecondaryDirectionOfFire` (`140504`, no blade,
+  dashed). They share the V's geometry, handles and editing, and are tagged MIL-STD-2525 only.
+  `FIELD_OF_FIRE_GRAPHICS` and `isFieldOfFire` list the family.
+- **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
+  own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
+  the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`
+  returns the graphic and the direction, `getNameByEntityCode` accepts the subtype codes, and
+  `getEntityCode(name, {direction})` returns the subtype code. `listEntityVariantCodes()` lists the
+  eight codes this covers.
+
+### Changed
+
+- **The obstacle line's teeth follow the drawing order.** They sit on the left of the direction
+  of travel and the label on the right, as APP-06 290100 orients the symbol by the order of its
+  anchor points. A line drawn west to east looks as before; one drawn east to west now has its
+  teeth below and its label above, where both used to stay up and down whichever way it was drawn.
+
+- **Line of contact has its own code, `140200`.** It used to report `141100`, which belongs to
+  line of departure/line of contact, a separate graphic. APP-06 and MIL-STD-2525E describe line
+  of contact with no code; MIL-STD-2525D codes it `140200`. `getEntityCode(TacticalGraphicName.LineOfContact)`
+  now returns `'140200'`, and `getNameByEntityCode('141100')` now returns the line of departure/line
+  of contact instead of `undefined`.
+
+- **Kill zone has a code, `242800`.** It is not in APP-06, but MIL-STD-2525E codes it, so
+  `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`, and
+  its specifications are MIL-STD-2525 and FM 1-02.2. Seven FM-only graphics remain uncoded.
+
 ## [4.5.1] — 2026-10-12
 
 ### Fixed
@@ -1746,7 +1791,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.0...develop
+[4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.0
 [4.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0

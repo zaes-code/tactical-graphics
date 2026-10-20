@@ -721,6 +721,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
     [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false),
+    [TacticalGraphicName.FinalProtectiveFireLeft]: f(true, false, false, false, false),
+    [TacticalGraphicName.FinalProtectiveFireRight]: f(true, false, false, false, false),
+    [TacticalGraphicName.PrincipalDirectionOfFire]: f(true, false, false, false, false),
+    [TacticalGraphicName.SecondaryDirectionOfFire]: f(true, false, false, false, false),
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
@@ -795,6 +799,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchCompleted]: SHAPE_ONLY,
+    // 2525's plate and table carry no amplifier.
+    [TacticalGraphicName.AntiTankWall]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: SHAPE_ONLY,
     // The wire obstacles: no identifier, no dates, and no status - none of them has a
     // planned form to dash, so offering the control would put a setting in the dialog that

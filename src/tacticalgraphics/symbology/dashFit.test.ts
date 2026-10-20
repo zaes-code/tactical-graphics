@@ -247,8 +247,8 @@ describe('every dashed line in the catalog', () => {
 describe('the graphics whose dash is the symbol', () => {
     const NAMES = Object.keys(DASHED_PARTS) as TacticalGraphicName[];
 
-    it('are seven, and every index they name is a part their generator returns', () => {
-        expect(NAMES).toHaveLength(7);
+    it('are eight, and every index they name is a part their generator returns', () => {
+        expect(NAMES).toHaveLength(8);
         for (const name of NAMES) {
             const rendered = renderTacticalGraphic({type: 'Feature', geometry: baseFor(name) as never, properties: {tacticalGraphic: {name, radius: 20_000}}} as never);
             const parts = (rendered.graphic.geometry as {coordinates: unknown[]}).coordinates;

@@ -1291,6 +1291,15 @@ export enum TacticalGraphicName {
 
     // Field Fortification Symbols
     FortifiedLine = 'FortifiedLine',
+    // MIL-STD-2525 290204, in neither FM 1-02.2 nor APP-06. Appended so the sample sheets
+    // keep every earlier cell where it was. @see antiTankWallPaint
+    AntiTankWall = 'AntiTankWall',
+    // MIL-STD-2525E Change 1's fields-of-fire variants, in neither FM 1-02.2 nor APP-06.
+    // Appended for the same reason. @see FIELD_OF_FIRE_GRAPHICS
+    FinalProtectiveFireLeft = 'FinalProtectiveFireLeft',   // 2525E 140501
+    FinalProtectiveFireRight = 'FinalProtectiveFireRight',   // 2525E 140502
+    PrincipalDirectionOfFire = 'PrincipalDirectionOfFire',   // 2525E 140503
+    SecondaryDirectionOfFire = 'SecondaryDirectionOfFire',   // 2525E 140504
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
@@ -1379,6 +1388,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
+    [TacticalGraphicName.AntiTankWall]: 'Anti-Tank Wall',
     // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
@@ -1401,6 +1411,10 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.FordDifficult]: 'ford, difficult',
     [TacticalGraphicName.UnmannedAircraftCorridor]: 'unmanned aircraft (UA) corridor',
     [TacticalGraphicName.FieldsOfFire]: 'fields of fire / sector of fire',
+    [TacticalGraphicName.FinalProtectiveFireLeft]: 'final protective fire (left)',
+    [TacticalGraphicName.FinalProtectiveFireRight]: 'final protective fire (right)',
+    [TacticalGraphicName.PrincipalDirectionOfFire]: 'principal direction of fire',
+    [TacticalGraphicName.SecondaryDirectionOfFire]: 'secondary direction of fire',
     [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: 'unexploded explosive ordnance (UXO) area',
     [TacticalGraphicName.StandardUseArmyAircraftFlightRoute]: 'standard use Army aircraft flight route',
     [TacticalGraphicName.GroupOrSeriesOfTargets]: 'group/series of targets',

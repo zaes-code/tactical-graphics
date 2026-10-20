@@ -100,6 +100,7 @@ import {OSM} from 'ol/source';
  */
 import {
     antiTankDitchPaint,
+    antiTankWallPaint,
     arcMissionTaskPaint,
     airCoordinatingAreaLabelPaint,
     airfieldPaint,
@@ -2041,6 +2042,11 @@ export function antiTankDitchStyleFunc(name: TacticalGraphicName): StyleFunction
     return asStyleFunction(antiTankDitchPaint(name), name);
 }
 
+/** **Ported.** @see obstaclePaints.ts, `antiTankWallPaint`. */
+export function antiTankWallStyleFunc(name: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(antiTankWallPaint(), name);
+}
+
 /** **Ported.** @see missionTaskPaints.ts, `barSymbolPaint`. */
 export function barSymbolStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(barSymbolPaint(name), name);
@@ -2068,8 +2074,8 @@ export function forwardLineOfOwnTroopsStyleFunc(name: TacticalGraphicName): Styl
 
 
 /** **Ported.** @see mobilityPaints.ts, `fieldsOfFirePaint`. */
-export function fieldOfFireStyleFunc(): StyleFunction {
-    return asStyleFunction(fieldsOfFirePaint());
+export function fieldOfFireStyleFunc(name: TacticalGraphicName = TacticalGraphicName.FieldsOfFire): StyleFunction {
+    return asStyleFunction(fieldsOfFirePaint(name), name);
 }
 
 

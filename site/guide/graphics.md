@@ -4,11 +4,11 @@
 
 The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
 
-**Which plate that is depends on the graphic, and each one records its own answer.** 225 are defined by both FM 1-02.2 and NATO APP-06, 85 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
+**Which plate that is depends on the graphic, and each one records its own answer.** 288 of them are in MIL-STD-2525E Change 1, and 5 of those are in it alone: antitank wall and the four fields-of-fire symbols Change 1 added. By the other two publications, 225 are defined by both FM 1-02.2 and NATO APP-06, 85 by APP-06 alone and 8 by FM 1-02.2 alone. `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns the six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Interdict, Neutralize, Suppress) resize, but refuse to **rotate** — their X turned 45° is a different symbol — and so do Defeat and Airfield. The weapon and sensor range fans refuse a whole-graphic **resize**, because each band's range is a stated number rather than one found by eye; a band is sized by typing its range or dragging its own rim. Cover, Guard and Screen were fixed-size badges until 3.0.0; APP-06 gives them four anchor points, so they are drawn from two now — one arrow, with the other derived — and they take every gesture. Ask `allowedGestures(name)` rather than guessing.*
 
-(The [gallery at the top](/guide/introduction) draws every graphic whose shape and labels are verified, which today is all 318 names `listTacticalGraphicNames()` returns, and the table below covers the same set. It has more rows than that because some rows name the variants of one graphic separately: the four boundary statuses, the three route traffic flows, a battle position that is planned but not prepared. The table is the verified set: drawable, correctly shaped and labeled, and fully editable.)
+(The [gallery at the top](/guide/introduction) draws every graphic whose shape and labels are verified, which today is all 323 names `listTacticalGraphicNames()` returns, and the table below covers the same set. It has more rows than that because some rows name the variants of one graphic separately: the four boundary statuses, the three route traffic flows, a battle position that is planned but not prepared. The table is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 
 | Graphic | Entity |
 |---|---|
@@ -89,6 +89,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Free-Fire Area, Irregular | Fires Areas |
 | Free-Fire Area, Rectangular | Fires Areas |
 | Group/Series Of Targets | Fires Areas |
+| Kill Zone | Fires Areas |
 | Linear Smoke Target | Fires Areas |
 | Linear Target | Fires Areas |
 | No-Fire Area, Circular | Fires Areas |
@@ -127,7 +128,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Common Sensor Boundary | FM 1-02.2 only |
 | Delay Line | FM 1-02.2 only |
 | Gap | FM 1-02.2 only |
-| Kill Zone | FM 1-02.2 only |
 | Movement To Contact | FM 1-02.2 only |
 | Obstacle Group | FM 1-02.2 only |
 | Passage Lane | FM 1-02.2 only |
@@ -182,6 +182,8 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Direction Of Supporting Attack | Manoeuvre Lines |
 | Fields Of Fire/Sector Of Fire | Manoeuvre Lines |
 | Final Coordination Line | Manoeuvre Lines |
+| Final Protective Fire (left) | Manoeuvre Lines |
+| Final Protective Fire (right) | Manoeuvre Lines |
 | Forward Edge Of The Battle Area | Manoeuvre Lines |
 | Forward Line Of Own Troops | Manoeuvre Lines |
 | Handover Line | Manoeuvre Lines |
@@ -194,8 +196,10 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Mobility Corridor | Manoeuvre Lines |
 | Named Area Of Interest Line | Manoeuvre Lines |
 | Phase Line | Manoeuvre Lines |
+| Principal Direction Of Fire | Manoeuvre Lines |
 | Probable Line Of Deployment | Manoeuvre Lines |
 | Release Line | Manoeuvre Lines |
+| Secondary Direction Of Fire | Manoeuvre Lines |
 | Active Maneuver Area | Maritime Control Areas |
 | Cued Acquisition Doctrine | Maritime Control Areas |
 | Defended Area, Ellipse/Circle | Maritime Control Areas |
@@ -301,6 +305,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Anti-Tank Ditch - Completed | Protection Lines |
 | Anti-Tank Ditch - Under Construction | Protection Lines |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Protection Lines |
+| Antitank Wall | Protection Lines |
 | Ferry Crossing | Protection Lines |
 | Fortified/Fighting Position | Protection Lines |
 | Fortified/Trench Line | Protection Lines |

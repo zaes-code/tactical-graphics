@@ -415,10 +415,14 @@ function box(lon: number, lat: number): Geometry {
  * drawn irregularly reads as a mistake rather than as the shape's own freedom.
  */
 function pentagon(lon: number, lat: number): Geometry {
+    // A degree of longitude shrinks with latitude, so equal degree offsets drew a pentagon
+    // 1.7 times taller than wide in the rows near 56 degrees. Widening the longitude offsets
+    // by 1 / cos(lat) keeps it regular on the ground in every row.
+    const widen = 1 / Math.cos((lat * Math.PI) / 180);
     const corners: Position[] = [];
     for (let i = 0; i < 5; i++) {
         const angle = Math.PI / 2 + (i * 2 * Math.PI) / 5;
-        corners.push([lon + HALF * Math.cos(angle), lat + HALF * Math.sin(angle)]);
+        corners.push([lon + HALF * widen * Math.cos(angle), lat + HALF * Math.sin(angle)]);
     }
     corners.push(corners[0]);
     return {type: 'Polygon', coordinates: [corners]};

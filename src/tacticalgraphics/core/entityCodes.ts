@@ -1,25 +1,30 @@
-import {TacticalGraphicName} from './type';
+import {RouteDirection, TacticalGraphicName} from './type';
 
 /**
  * The six-digit entity code each graphic carries in the published symbology.
  *
  * The number comes from APP-06 Edition E Annex A, Table A-32, and it is the same
  * code MIL-STD-2525 assigns the symbol: for the control-measure symbol set the two
- * standards are harmonised on one numbering, so `140300` is Phase Line in both. A
+ * standards are harmonised on one numbering, so `140300` is Phase Line in both. The
+ * exceptions are line of contact, which APP-06 and MIL-STD-2525E describe with no code
+ * and MIL-STD-2525D coded `140200`, and kill zone, which APP-06 lacks and MIL-STD-2525E
+ * codes `242800`. Antitank wall, `290204`, is in MIL-STD-2525 alone.
+ * Both carry the MIL-STD-2525 code, marked `// MIL-STD-2525` in `specifications.ts`. A
  * full MIL-STD-2525 SIDC prefixes the control-measure symbol set (`25`) and appends
  * affiliation and status digits; this is the entity portion, which is the part that
  * identifies *which* graphic.
  *
  * FM 1-02.2 publishes no identifier of its own -- it defers to MIL-STD-2525 for
- * machine codes and prints only the drawn symbol -- so the eight graphics FM defines
- * and APP-06 does not are `null` here. That is a real absence, not a gap in the
- * table: a graphic with no counterpart in either coded catalog has no code to carry.
+ * machine codes and prints only the drawn symbol -- so the graphics FM defines and
+ * neither coded catalog does are `null` here. That is a real absence, not a gap in the
+ * table. Kill zone is FM-only by this library's two-standard tagging but MIL-STD-2525E
+ * codes it `242800`, so it carries that code; seven graphics are `null`.
  *
  * Exhaustive by construction, like `GRAPHIC_SPECIFICATIONS`. Adding a
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **283 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
+ * **316 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -98,7 +103,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.CorpsSupportArea]:                            '310800',  // Corps Support Area
     [TacticalGraphicName.DropZone]:                                    '150600',  // Drop Zone (DZ)
     [TacticalGraphicName.LandingZone]:                                 '150800',  // Landing Zone (LZ)
-    [TacticalGraphicName.KillZone]:                                    null,
+    [TacticalGraphicName.KillZone]:                                    '242800',  // Kill Zone (MIL-STD-2525E; not in APP-06)
     [TacticalGraphicName.PickupZone]:                                  '150900',  // Pick-Up Zone (PZ)
     [TacticalGraphicName.BattlePosition]:                              '151200',  // Battle Position
     [TacticalGraphicName.StrongPoint]:                                 '151203',  // Strong Point
@@ -240,6 +245,11 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:              '290201',  // Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                      '290202',  // Antitank Ditch Completed
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]:            '290203',  // Antitank Ditch Reinforced, with Antitank Mines
+    [TacticalGraphicName.AntiTankWall]:                                '290204',  // Antitank Wall (MIL-STD-2525 only)
+    [TacticalGraphicName.FinalProtectiveFireLeft]:                     '140501',  // Final Protective Fire (Left) (MIL-STD-2525 only)
+    [TacticalGraphicName.FinalProtectiveFireRight]:                    '140502',  // Final Protective Fire (Right) (MIL-STD-2525 only)
+    [TacticalGraphicName.PrincipalDirectionOfFire]:                    '140503',  // Principal Direction of Fire (MIL-STD-2525 only)
+    [TacticalGraphicName.SecondaryDirectionOfFire]:                    '140504',  // Secondary Direction of Fire (MIL-STD-2525 only)
     [TacticalGraphicName.WireUnspecified]:                             '290301',  // Unspecified
     [TacticalGraphicName.WireSingleFence]:                             '290302',  // Single Fence
     [TacticalGraphicName.WireDoubleFence]:                             '290303',  // Double Fence
@@ -301,7 +311,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.GroupOrSeriesOfTargets]:                      '240805',  // Series or Groups of Targets
     [TacticalGraphicName.WeaponSensorRangeFanCircular]:                '242100',  // Weapon/Sensor Range Fan, Circular
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                  '242200',  // Weapon/Sensor Range Fan, Sector
-    [TacticalGraphicName.LineOfContact]:                               '141100',  // Line of Departure/Line of Contact
+    [TacticalGraphicName.LineOfContact]:                               '140200',  // Line of Contact (MIL-STD-2525D; APP-06 and 2525E print none)
     [TacticalGraphicName.AttackByFire]:                                '152000',  // Attack by Fire
     [TacticalGraphicName.Defeat]:                                      '344300',  // Defeat
     [TacticalGraphicName.Destroy]:                                     '340900',  // Destroy
@@ -349,6 +359,38 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.FortifiedLine]:                               '290900',  // Fortified Line
 };
 
+/**
+ * Codes that name a supply route *with its traffic arrows*, rather than a graphic of their own.
+ *
+ * APP-06 Table 8-21 gives each route a subtype per traffic pattern: `330301` is a main supply
+ * route carrying one-way traffic. This library draws all of those as the parent graphic with
+ * the `direction` amplifier set, so a variant code resolves to that pair and the pair emits the
+ * variant code back. `Route` has no two-way subtype in the table, so a two-way route keeps the
+ * parent code; `general` is the parent code by definition.
+ */
+const ROUTE_TRAFFIC_CODES: ReadonlyArray<readonly [code: string, name: TacticalGraphicName, direction: RouteDirection]> = [
+    ['330301', TacticalGraphicName.MainSupplyRoute, RouteDirection.oneWay],          // One Way Traffic
+    ['330302', TacticalGraphicName.MainSupplyRoute, RouteDirection.twoWay],          // Two Way Traffic
+    ['330303', TacticalGraphicName.MainSupplyRoute, RouteDirection.alternating],     // Alternating Traffic
+    ['330401', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.oneWay],     // One Way Traffic
+    ['330402', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.twoWay],     // Two Way Traffic
+    ['330403', TacticalGraphicName.AlternateSupplyRoute, RouteDirection.alternating], // Alternating Traffic
+    ['330501', TacticalGraphicName.Route, RouteDirection.oneWay],                    // One Way Traffic
+    ['330502', TacticalGraphicName.Route, RouteDirection.alternating],               // Alternating Traffic
+];
+
+/** What a code stands for: the graphic, plus the amplifier a variant code implies. */
+export interface EntityCodeResolution {
+    name: TacticalGraphicName;
+    /** Set only when the code is one of a supply route's traffic subtypes. */
+    direction?: RouteDirection;
+}
+
+/** The amplifiers that can change which code a graphic carries. */
+export interface EntityCodeAmplifiers {
+    direction?: RouteDirection;
+}
+
 const DISTINCT_CODES: string[] = [];
 
 /** Reverse index. Built once; a code may name more than one graphic -- see {@link listNamesByEntityCode}. */
@@ -372,20 +414,33 @@ const NAMES_BY_CODE: ReadonlyMap<string, readonly TacticalGraphicName[]> = (() =
  *
  * `undefined` means FM 1-02.2 defines the graphic and no coded catalog does. It is not
  * an error and not a lookup miss.
+ *
+ * Pass the graphic's amplifiers to get the subtype they select: a main supply route with
+ * `direction: RouteDirection.oneWay` is `330301`, not `330300`. Without them, or where the
+ * standard has no subtype for that combination, the graphic's own code comes back.
  */
-export function getEntityCode(name: TacticalGraphicName): string | undefined {
+export function getEntityCode(name: TacticalGraphicName, amplifiers?: EntityCodeAmplifiers): string | undefined {
+    const direction = amplifiers?.direction;
+    if (direction) {
+        const variant = ROUTE_TRAFFIC_CODES.find(([, n, d]) => n === name && d === direction);
+        if (variant) return variant[0];
+    }
     return GRAPHIC_ENTITY_CODES[name] ?? undefined;
 }
 
 /**
  * Every graphic carrying an entity code, for callers that address graphics by code.
  *
- * Returns an array because the mapping is not one-to-one: APP-06 `141100` is
- * "Line of Departure/Line of Contact", which this library draws as two separate
- * graphics. Order follows `GRAPHIC_ENTITY_CODES`. An unknown code returns empty.
+ * Returns an array so a code shared by two graphics can report both. No code is shared
+ * today: `LineOfContact` used to borrow `141100` from line of departure/line of contact
+ * until it took its own MIL-STD-2525 code, `140200`. Order follows `GRAPHIC_ENTITY_CODES`.
+ * An unknown code returns empty.
  */
 export function listNamesByEntityCode(code: string): readonly TacticalGraphicName[] {
-    return NAMES_BY_CODE.get(code.trim()) ?? [];
+    const key = code.trim();
+    const variant = ROUTE_TRAFFIC_CODES.find(([c]) => c === key);
+    if (variant) return [variant[1]];
+    return NAMES_BY_CODE.get(key) ?? [];
 }
 
 /**
@@ -393,11 +448,35 @@ export function listNamesByEntityCode(code: string): readonly TacticalGraphicNam
  * names more than one. Use {@link listNamesByEntityCode} when a code may be shared.
  */
 export function getNameByEntityCode(code: string): TacticalGraphicName | undefined {
-    const names = listNamesByEntityCode(code);
-    return names.length === 1 ? names[0] : undefined;
+    return resolveEntityCode(code)?.name;
 }
 
-/** Every entity code in use, ascending, with no duplicates. */
+/**
+ * The graphic a code names together with any amplifier the code implies, or `undefined`
+ * when the code is unknown or names more than one graphic.
+ *
+ * Use it when reading a feed: `resolveEntityCode('330301')` is a main supply route with
+ * one-way traffic, which {@link getNameByEntityCode} alone would report as a plain one.
+ */
+export function resolveEntityCode(code: string): EntityCodeResolution | undefined {
+    const key = code.trim();
+    const variant = ROUTE_TRAFFIC_CODES.find(([c]) => c === key);
+    if (variant) return {name: variant[1], direction: variant[2]};
+    const names = listNamesByEntityCode(key);
+    return names.length === 1 ? {name: names[0]} : undefined;
+}
+
+/**
+ * Every graphic's own entity code, ascending, with no duplicates.
+ *
+ * The supply-route traffic subtypes are not listed: they are amplifier settings on a listed
+ * graphic. {@link listEntityVariantCodes} has them.
+ */
 export function listEntityCodes(): string[] {
     return DISTINCT_CODES.slice().sort();
+}
+
+/** The subtype codes {@link resolveEntityCode} maps to a graphic plus an amplifier, ascending. */
+export function listEntityVariantCodes(): string[] {
+    return ROUTE_TRAFFIC_CODES.map(([code]) => code).sort();
 }
