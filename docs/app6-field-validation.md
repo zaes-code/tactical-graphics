@@ -246,4 +246,4 @@ Nothing from this sweep. Two things it deliberately did not cover:
   plate stacks `FFA` on its own line above the designation, and we render the literal as a prefix
   on the same line. That is a layout question across the whole area family, not a field one.
 - **The graphics with no APP-06 counterpart**, eight today. FM 1-02.2 only; nothing in Chapter 8
-  to read them against. `getSpecifications(name)` names them.
+  to read them against. (Kill zone has a MIL-STD-2525E code, `242800`, but no APP-06 plate.) `getSpecifications(name)` names them.

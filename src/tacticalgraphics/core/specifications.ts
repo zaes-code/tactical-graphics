@@ -128,7 +128,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.CorpsSupportArea]:                             BOTH,      // APP-06 310800 Corps Support Area
     [TacticalGraphicName.DropZone]:                                     BOTH,      // APP-06 150600 Drop Zone (DZ)
     [TacticalGraphicName.LandingZone]:                                  BOTH,      // APP-06 150800 Landing Zone (LZ)
-    [TacticalGraphicName.KillZone]:                                     FM_ONLY,
+    // Not in APP-06 Edition E; MIL-STD-2525E codes it 242800, so it carries that code.
+    [TacticalGraphicName.KillZone]:                                     FM_ONLY,   // MIL-STD-2525 242800 Kill Zone
     [TacticalGraphicName.PickupZone]:                                   BOTH,      // APP-06 150900 Pick-Up Zone (PZ)
     [TacticalGraphicName.BattlePosition]:                               BOTH,      // APP-06 151200 Battle Position
     [TacticalGraphicName.StrongPoint]:                                  BOTH,      // APP-06 151203 Strong Point

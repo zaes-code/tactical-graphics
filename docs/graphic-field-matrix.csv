@@ -167,7 +167,7 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "isolate",Isolate,"FM 1-02.2 + APP-06",341500,,,,,,,,,,,,,,,,,,Y,,,
 "joint engagement zone",JointEngagementZone,"FM 1-02.2 + APP-06",171500,Y,,,,Y,Y,Y,Y,,,,,,Y,Y,,,,,,
 "joint tactical action area",JointTacticalActionArea,"APP-06",150501,Y,,,,Y,,Y,Y,,,,,,,,,,,,,
-"kill zone",KillZone,"FM 1-02.2",,Y,,,,Y,Y,,,,,,,,,,,,,,,
+"kill zone",KillZone,"FM 1-02.2",242800,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "landing zone",LandingZone,"FM 1-02.2 + APP-06",150800,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "launch area, ellipse/circle",LaunchAreaEllipse,"APP-06",200101,Y,,,,,,,,,,,,,,,Y,Y,,,,
 "light line",LightLine,"APP-06",110200,Y,,,,Y,Y,,,,,,,,,,,,,,,

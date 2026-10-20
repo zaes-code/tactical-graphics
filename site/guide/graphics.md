@@ -89,6 +89,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Free-Fire Area, Irregular | Fires Areas |
 | Free-Fire Area, Rectangular | Fires Areas |
 | Group/Series Of Targets | Fires Areas |
+| Kill Zone | Fires Areas |
 | Linear Smoke Target | Fires Areas |
 | Linear Target | Fires Areas |
 | No-Fire Area, Circular | Fires Areas |
@@ -127,7 +128,6 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Common Sensor Boundary | FM 1-02.2 only |
 | Delay Line | FM 1-02.2 only |
 | Gap | FM 1-02.2 only |
-| Kill Zone | FM 1-02.2 only |
 | Movement To Contact | FM 1-02.2 only |
 | Obstacle Group | FM 1-02.2 only |
 | Passage Lane | FM 1-02.2 only |
