@@ -373,7 +373,8 @@ describe('movement to contact and advance to contact are different symbols', () 
     it('files them under one specification each, not both', () => {
         expect(getSpecifications(TacticalGraphicName.MovementToContact))
             .toEqual([TacticalGraphicSpecification.FM1_02_2]);
+        // 2525E's 342900 is advance to contact's drawing too, so it carries MIL-STD-2525 as well.
         expect(getSpecifications(TacticalGraphicName.AdvanceToContact))
-            .toEqual([TacticalGraphicSpecification.APP6]);
+            .toEqual([TacticalGraphicSpecification.APP6, TacticalGraphicSpecification.MIL_STD_2525]);
     });
 });

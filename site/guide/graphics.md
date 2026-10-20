@@ -4,11 +4,11 @@
 
 The graphics below are **fully implemented and verified** — each can be drawn, labeled, repositioned and modified, and rotated and resized wherever the symbol admits it, with its shape and labels checked against the plate that defines it. This is the library's real, proven capability.
 
-**Which plate that is depends on the graphic, and each one records its own answer.** 225 are defined by both FM 1-02.2 and NATO APP-06, 85 by APP-06 alone, and 8 by FM 1-02.2 alone — `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns APP-06's six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
+**Which plate that is depends on the graphic, and each one records its own answer.** 225 are defined by both FM 1-02.2 and NATO APP-06, 85 by APP-06 alone, 8 by FM 1-02.2 alone, and 1 (antitank wall) by MIL-STD-2525 alone. 284 of them are also in MIL-STD-2525E Change 1. `getSpecifications(name)` returns the answer for any of them, and `getEntityCode(name)` returns the six-digit identifier where there is one. Where the two standards draw the same symbol differently, the divergence is recorded beside the graphic rather than silently resolved.
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Interdict, Neutralize, Suppress) resize, but refuse to **rotate** — their X turned 45° is a different symbol — and so do Defeat and Airfield. The weapon and sensor range fans refuse a whole-graphic **resize**, because each band's range is a stated number rather than one found by eye; a band is sized by typing its range or dragging its own rim. Cover, Guard and Screen were fixed-size badges until 3.0.0; APP-06 gives them four anchor points, so they are drawn from two now — one arrow, with the other derived — and they take every gesture. Ask `allowedGestures(name)` rather than guessing.*
 
-(The [gallery at the top](/guide/introduction) draws every graphic whose shape and labels are verified, which today is all 318 names `listTacticalGraphicNames()` returns, and the table below covers the same set. It has more rows than that because some rows name the variants of one graphic separately: the four boundary statuses, the three route traffic flows, a battle position that is planned but not prepared. The table is the verified set: drawable, correctly shaped and labeled, and fully editable.)
+(The [gallery at the top](/guide/introduction) draws every graphic whose shape and labels are verified, which today is all 319 names `listTacticalGraphicNames()` returns, and the table below covers the same set. It has more rows than that because some rows name the variants of one graphic separately: the four boundary statuses, the three route traffic flows, a battle position that is planned but not prepared. The table is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 
 | Graphic | Entity |
 |---|---|
@@ -301,6 +301,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Anti-Tank Ditch - Completed | Protection Lines |
 | Anti-Tank Ditch - Under Construction | Protection Lines |
 | Anti-Tank Ditch Reinforced, With Anti-Tank Mines | Protection Lines |
+| Antitank Wall | Protection Lines |
 | Ferry Crossing | Protection Lines |
 | Fortified/Fighting Position | Protection Lines |
 | Fortified/Trench Line | Protection Lines |

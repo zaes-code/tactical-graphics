@@ -213,6 +213,12 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.NavigationalLine,
 ];
 
+/**
+ * In MIL-STD-2525 and neither FM 1-02.2 nor APP-06 Edition E. 290204 is printed in 2525D
+ * Table H-XIX and in 2525E Change 1; APP-06's antitank obstacles stop at 290203.
+ */
+const MIL_STD_2525_ONLY_GRAPHICS: TacticalGraphicName[] = [TacticalGraphicName.AntiTankWall];
+
 describe('graphic specifications', () => {
     const names = Object.keys(GRAPHIC_SPECIFICATIONS) as TacticalGraphicName[];
 
@@ -230,12 +236,12 @@ describe('graphic specifications', () => {
 
     it('lists only the pinned exceptions as absent from FM 1-02.2', () => {
         const absent = names.filter(name => !hasSpecification(name, TacticalGraphicSpecification.FM1_02_2));
-        expect(absent.sort()).toEqual(APP6_ONLY_GRAPHICS.slice().sort());
+        expect(absent.sort()).toEqual([...APP6_ONLY_GRAPHICS, ...MIL_STD_2525_ONLY_GRAPHICS].sort());
     });
 
     it('lists only the pinned exceptions as absent from APP-06', () => {
         const absent = names.filter((name) => !hasSpecification(name, TacticalGraphicSpecification.APP6));
-        expect(absent.sort()).toEqual(FM_ONLY_GRAPHICS.slice().sort());
+        expect(absent.sort()).toEqual([...FM_ONLY_GRAPHICS, ...MIL_STD_2525_ONLY_GRAPHICS].sort());
     });
 
     /**
@@ -245,17 +251,21 @@ describe('graphic specifications', () => {
      */
     it('quotes the real counts in its doc comment', () => {
         const source = readFileSync(join(__dirname, 'specifications.ts'), 'utf8');
-        const quoted = source.match(/\*\*(\d+) graphics: (\d+) in both catalogs, (\d+) FM 1-02\.2 only, (\d+) APP-06 only\*\*/);
+        const quoted = source.match(/\*\*(\d+) graphics: (\d+) in both catalogs, (\d+) FM 1-02\.2 only, (\d+) APP-06 only, (\d+) MIL-STD-2525 only\*\*/);
         expect(quoted).not.toBeNull();
         const both = names.filter(n => hasSpecification(n, TacticalGraphicSpecification.APP6) && hasSpecification(n, TacticalGraphicSpecification.FM1_02_2));
-        expect(quoted!.slice(1).map(Number)).toEqual([names.length, both.length, FM_ONLY_GRAPHICS.length, APP6_ONLY_GRAPHICS.length]);
+        expect(quoted!.slice(1).map(Number)).toEqual([
+            names.length, both.length, FM_ONLY_GRAPHICS.length, APP6_ONLY_GRAPHICS.length, MIL_STD_2525_ONLY_GRAPHICS.length,
+        ]);
+        const in2525 = source.match(/\*\*(\d+) of (\d+) graphics are in MIL-STD-2525\.\*\*/);
+        expect(in2525!.slice(1).map(Number)).toEqual([listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525).length, names.length]);
     });
 
     it('partitions the registry both ways', () => {
         const inApp6 = listNamesBySpecification(TacticalGraphicSpecification.APP6);
         const inFm = listNamesBySpecification(TacticalGraphicSpecification.FM1_02_2);
-        expect(inApp6.length + FM_ONLY_GRAPHICS.length).toBe(names.length);
-        expect(inFm.length + APP6_ONLY_GRAPHICS.length).toBe(names.length);
+        expect(inApp6.length + FM_ONLY_GRAPHICS.length + MIL_STD_2525_ONLY_GRAPHICS.length).toBe(names.length);
+        expect(inFm.length + APP6_ONLY_GRAPHICS.length + MIL_STD_2525_ONLY_GRAPHICS.length).toBe(names.length);
         // Neither specification covers the whole registry on its own, which is the
         // whole point of carrying the axis.
         expect(inApp6.length).toBeLessThan(names.length);
@@ -264,7 +274,7 @@ describe('graphic specifications', () => {
 
     it('returns names in enum declaration order', () => {
         const inApp6 = listNamesBySpecification(TacticalGraphicSpecification.APP6);
-        const expected = names.filter((name) => !FM_ONLY_GRAPHICS.includes(name));
+        const expected = names.filter((name) => !FM_ONLY_GRAPHICS.includes(name) && !MIL_STD_2525_ONLY_GRAPHICS.includes(name));
         expect(inApp6).toEqual(expected);
     });
 
@@ -294,7 +304,23 @@ describe('graphic specifications', () => {
     ];
 
     it.each(RETAGGED_TO_BOTH)('%s is in both catalogs (%s)', (name) => {
-        expect(getSpecifications(name)).toEqual([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6]);
+        expect(getSpecifications(name)).toEqual(expect.arrayContaining([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6]));
+    });
+
+    it('puts 284 graphics in MIL-STD-2525E and leaves 35 out', () => {
+        // The 35 are pinned in specifications.ts; this holds the totals still so a graphic
+        // added without checking 2525E's table shows up as a changed count.
+        expect(listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)).toHaveLength(284);
+        expect(names.filter((n) => !hasSpecification(n, TacticalGraphicSpecification.MIL_STD_2525))).toHaveLength(35);
+        // Every uncoded FM-only graphic is outside 2525, and kill zone, coded 242800, is in it.
+        for (const name of FM_ONLY_GRAPHICS.filter((n) => n !== TacticalGraphicName.KillZone)) {
+            expect(hasSpecification(name, TacticalGraphicSpecification.MIL_STD_2525)).toBe(false);
+        }
+        expect(getSpecifications(TacticalGraphicName.KillZone)).toEqual([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.MIL_STD_2525]);
+        expect(getSpecifications(TacticalGraphicName.AntiTankWall)).toEqual([TacticalGraphicSpecification.MIL_STD_2525]);
+        expect(getSpecifications(TacticalGraphicName.PhaseLine)).toEqual([
+            TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6, TacticalGraphicSpecification.MIL_STD_2525,
+        ]);
     });
 
     it('does not hand out a mutable specification array', () => {

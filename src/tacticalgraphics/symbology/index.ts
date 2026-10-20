@@ -73,7 +73,7 @@ export {
 } from './areaLabelPaints';
 
 export {fitLabelScale, liftedAnchor} from './labelFit';
-export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 export {
     fortifiedPositionPaint,
     mineClusterPaint,

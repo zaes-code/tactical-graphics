@@ -17,6 +17,15 @@ the npm publish dates — when a version actually became installable.
 
 ### Added
 
+- **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
+  every graphic MIL-STD-2525E Change 1 has: 284 of the 319, read from its control-measure table
+  by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
+  `['FM 1-02.2', 'APP-06', 'MIL-STD-2525']`, and `listNamesBySpecification` answers which 2525E
+  control measures the library draws. Code that compared a specification list to `['APP-06']`
+  exactly should test membership instead.
+- **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
+  direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
+  nor APP-06, so it is the one graphic tagged MIL-STD-2525 alone. Drawn on both engines.
 - **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
   own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
   the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`
@@ -27,14 +36,14 @@ the npm publish dates — when a version actually became installable.
 ### Changed
 
 - **Line of contact has its own code, `140200`.** It used to report `141100`, which belongs to
-  line of departure/line of contact, a separate graphic. APP-06 lists line of contact with no
-  code; MIL-STD-2525D and E code it `140200`. `getEntityCode(TacticalGraphicName.LineOfContact)`
+  line of departure/line of contact, a separate graphic. APP-06 and MIL-STD-2525E describe line
+  of contact with no code; MIL-STD-2525D codes it `140200`. `getEntityCode(TacticalGraphicName.LineOfContact)`
   now returns `'140200'`, and `getNameByEntityCode('141100')` now returns the line of departure/line
   of contact instead of `undefined`.
 
 - **Kill zone has a code, `242800`.** It is not in APP-06, but MIL-STD-2525E codes it, so
-  `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`. It is
-  still tagged FM 1-02.2 only. Seven FM-only graphics remain uncoded.
+  `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`, and
+  its specifications are FM 1-02.2 and MIL-STD-2525. Seven FM-only graphics remain uncoded.
 
 ## [4.5.1] — 2026-10-12
 

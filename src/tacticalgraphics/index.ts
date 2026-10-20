@@ -382,7 +382,7 @@ export {
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
 export {capLabelToSpan, fitLabelScale, LABEL_SPAN_SHARE, liftedAnchor} from './symbology/labelFit';
-export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
 export {
     fortifiedPositionPaint,
     mineClusterPaint,
