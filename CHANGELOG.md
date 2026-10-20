@@ -20,8 +20,8 @@ the npm publish dates — when a version actually became installable.
 - **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
   every graphic MIL-STD-2525E Change 1 has: 287 of the 322, read from its control-measure table
   by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
-  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']` (the governing standard first), and `listNamesBySpecification` answers which 2525E
-  control measures the library draws. Code that compared a specification list to `['APP-06']`
+  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']`, the governing standard first, and
+  `listNamesBySpecification` answers which 2525E control measures the library draws. Code that compared a specification list to `['APP-06']`
   exactly should test membership instead.
 - **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
   direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
@@ -55,7 +55,7 @@ the npm publish dates — when a version actually became installable.
 
 - **Kill zone has a code, `242800`.** It is not in APP-06, but MIL-STD-2525E codes it, so
   `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`, and
-  its specifications are FM 1-02.2 and MIL-STD-2525. Seven FM-only graphics remain uncoded.
+  its specifications are MIL-STD-2525 and FM 1-02.2. Seven FM-only graphics remain uncoded.
 
 ## [4.5.1] — 2026-10-12
 
