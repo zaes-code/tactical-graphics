@@ -1296,6 +1296,7 @@ export enum TacticalGraphicName {
     AntiTankWall = 'AntiTankWall',
     // MIL-STD-2525E Change 1's fields-of-fire variants, in neither FM 1-02.2 nor APP-06.
     // Appended for the same reason. @see FIELD_OF_FIRE_GRAPHICS
+    FinalProtectiveFireLeft = 'FinalProtectiveFireLeft',   // 2525E 140501
     FinalProtectiveFireRight = 'FinalProtectiveFireRight',   // 2525E 140502
     PrincipalDirectionOfFire = 'PrincipalDirectionOfFire',   // 2525E 140503
     SecondaryDirectionOfFire = 'SecondaryDirectionOfFire',   // 2525E 140504
@@ -1410,6 +1411,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.FordDifficult]: 'ford, difficult',
     [TacticalGraphicName.UnmannedAircraftCorridor]: 'unmanned aircraft (UA) corridor',
     [TacticalGraphicName.FieldsOfFire]: 'fields of fire / sector of fire',
+    [TacticalGraphicName.FinalProtectiveFireLeft]: 'final protective fire (left)',
     [TacticalGraphicName.FinalProtectiveFireRight]: 'final protective fire (right)',
     [TacticalGraphicName.PrincipalDirectionOfFire]: 'principal direction of fire',
     [TacticalGraphicName.SecondaryDirectionOfFire]: 'secondary direction of fire',

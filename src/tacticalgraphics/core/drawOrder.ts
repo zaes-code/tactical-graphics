@@ -145,6 +145,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // legs and leave the vertex in the middle. It gets a swap instead. @see SWAP_FIRST_TWO
     TacticalGraphicName.FieldsOfFire,                     // 140500
     // 2525E's variants on the same V number their points the same way.
+    TacticalGraphicName.FinalProtectiveFireLeft,         // 140501
     TacticalGraphicName.FinalProtectiveFireRight,         // 140502
     TacticalGraphicName.PrincipalDirectionOfFire,         // 140503
     TacticalGraphicName.SecondaryDirectionOfFire,         // 140504

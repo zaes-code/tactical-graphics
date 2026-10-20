@@ -8,7 +8,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 
 *Some symbols are fixed by doctrine rather than sized to the ground, and refuse the gestures that would misrepresent them: the crossed mission tasks (Destroy, Interdict, Neutralize, Suppress) resize, but refuse to **rotate** — their X turned 45° is a different symbol — and so do Defeat and Airfield. The weapon and sensor range fans refuse a whole-graphic **resize**, because each band's range is a stated number rather than one found by eye; a band is sized by typing its range or dragging its own rim. Cover, Guard and Screen were fixed-size badges until 3.0.0; APP-06 gives them four anchor points, so they are drawn from two now — one arrow, with the other derived — and they take every gesture. Ask `allowedGestures(name)` rather than guessing.*
 
-(The [gallery at the top](/guide/introduction) draws every graphic whose shape and labels are verified, which today is all 322 names `listTacticalGraphicNames()` returns, and the table below covers the same set. It has more rows than that because some rows name the variants of one graphic separately: the four boundary statuses, the three route traffic flows, a battle position that is planned but not prepared. The table is the verified set: drawable, correctly shaped and labeled, and fully editable.)
+(The [gallery at the top](/guide/introduction) draws every graphic whose shape and labels are verified, which today is all 323 names `listTacticalGraphicNames()` returns, and the table below covers the same set. It has more rows than that because some rows name the variants of one graphic separately: the four boundary statuses, the three route traffic flows, a battle position that is planned but not prepared. The table is the verified set: drawable, correctly shaped and labeled, and fully editable.)
 
 | Graphic | Entity |
 |---|---|
@@ -182,6 +182,7 @@ The graphics below are **fully implemented and verified** — each can be drawn,
 | Direction Of Supporting Attack | Manoeuvre Lines |
 | Fields Of Fire/Sector Of Fire | Manoeuvre Lines |
 | Final Coordination Line | Manoeuvre Lines |
+| Final Protective Fire (left) | Manoeuvre Lines |
 | Final Protective Fire (right) | Manoeuvre Lines |
 | Forward Edge Of The Battle Area | Manoeuvre Lines |
 | Forward Line Of Own Troops | Manoeuvre Lines |

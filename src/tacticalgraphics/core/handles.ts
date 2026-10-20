@@ -1118,6 +1118,7 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
 const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Two segments, three points. The only graphic here that is not two points.
     [TacticalGraphicName.FieldsOfFire]: 3,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: 3,
     [TacticalGraphicName.FinalProtectiveFireRight]: 3,
     [TacticalGraphicName.PrincipalDirectionOfFire]: 3,
     [TacticalGraphicName.SecondaryDirectionOfFire]: 3,
@@ -1403,6 +1404,7 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
  */
 const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FieldsOfFire]: 0,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: 0,
     [TacticalGraphicName.FinalProtectiveFireRight]: 0,
     [TacticalGraphicName.PrincipalDirectionOfFire]: 0,
     [TacticalGraphicName.SecondaryDirectionOfFire]: 0,
@@ -1627,6 +1629,7 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaCircular,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.FieldsOfFire,
+    TacticalGraphicName.FinalProtectiveFireLeft,
     TacticalGraphicName.FinalProtectiveFireRight,
     TacticalGraphicName.PrincipalDirectionOfFire,
     TacticalGraphicName.SecondaryDirectionOfFire,
@@ -1777,6 +1780,7 @@ const RESHAPES_BY_VERTEX: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
     TacticalGraphicName.RoadblockCompleteExecuted,
     TacticalGraphicName.FieldsOfFire,
+    TacticalGraphicName.FinalProtectiveFireLeft,
     TacticalGraphicName.FinalProtectiveFireRight,
     TacticalGraphicName.PrincipalDirectionOfFire,
     TacticalGraphicName.SecondaryDirectionOfFire,

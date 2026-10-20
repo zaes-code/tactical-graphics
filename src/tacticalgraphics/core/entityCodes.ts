@@ -24,7 +24,7 @@ import {RouteDirection, TacticalGraphicName} from './type';
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **315 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
+ * **316 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -246,6 +246,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.AntiTankDitchCompleted]:                      '290202',  // Antitank Ditch Completed
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]:            '290203',  // Antitank Ditch Reinforced, with Antitank Mines
     [TacticalGraphicName.AntiTankWall]:                                '290204',  // Antitank Wall (MIL-STD-2525 only)
+    [TacticalGraphicName.FinalProtectiveFireLeft]:                     '140501',  // Final Protective Fire (Left) (MIL-STD-2525 only)
     [TacticalGraphicName.FinalProtectiveFireRight]:                    '140502',  // Final Protective Fire (Right) (MIL-STD-2525 only)
     [TacticalGraphicName.PrincipalDirectionOfFire]:                    '140503',  // Principal Direction of Fire (MIL-STD-2525 only)
     [TacticalGraphicName.SecondaryDirectionOfFire]:                    '140504',  // Secondary Direction of Fire (MIL-STD-2525 only)
@@ -378,18 +379,6 @@ const ROUTE_TRAFFIC_CODES: ReadonlyArray<readonly [code: string, name: TacticalG
     ['330502', TacticalGraphicName.Route, RouteDirection.alternating],               // Alternating Traffic
 ];
 
-/**
- * Codes another standard gives a graphic this table codes differently, read as that graphic.
- *
- * MIL-STD-2525E Change 1 codes the blade-on-the-left-leg V `140501` Final Protective Fire
- * (Left), the same picture APP-06 codes `140500` Field of Fire. A graphic carries one code, and
- * fields of fire keeps APP-06's (Esri and mil-sym read it too), so the 2525E code resolves here
- * instead. Read only: `getEntityCode` still answers `140500`.
- */
-const CODE_ALIASES: Readonly<Record<string, TacticalGraphicName>> = {
-    '140501': TacticalGraphicName.FieldsOfFire,
-};
-
 /** What a code stands for: the graphic, plus the amplifier a variant code implies. */
 export interface EntityCodeResolution {
     name: TacticalGraphicName;
@@ -451,8 +440,7 @@ export function listNamesByEntityCode(code: string): readonly TacticalGraphicNam
     const key = code.trim();
     const variant = ROUTE_TRAFFIC_CODES.find(([c]) => c === key);
     if (variant) return [variant[1]];
-    const alias = CODE_ALIASES[key];
-    return alias ? [alias] : (NAMES_BY_CODE.get(key) ?? []);
+    return NAMES_BY_CODE.get(key) ?? [];
 }
 
 /**

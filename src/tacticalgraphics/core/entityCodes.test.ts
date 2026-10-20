@@ -117,11 +117,11 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 315 assignments over 315 distinct codes. 141100 was shared until line of contact
+        // 316 assignments over 316 distinct codes. 141100 was shared until line of contact
         // took its own 140200; kill zone took 242800, and antitank wall (290204) and 2525E's
-        // 140502-140504 arrived the same day. 271204 was switched off for a while and is back as the picture
+        // 140501-140504 arrived the same day. 271204 was switched off for a while and is back as the picture
         // 3.4.0 shipped, its own construction still unsettled. @see ai/excluded-graphics.md
-        expect(codes).toHaveLength(315);
+        expect(codes).toHaveLength(316);
     });
 });
 
