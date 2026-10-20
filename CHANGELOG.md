@@ -32,6 +32,10 @@ the npm publish dates — when a version actually became installable.
   now returns `'140200'`, and `getNameByEntityCode('141100')` now returns the line of departure/line
   of contact instead of `undefined`.
 
+- **Kill zone has a code, `242800`.** It is not in APP-06, but MIL-STD-2525E codes it, so
+  `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`. It is
+  still tagged FM 1-02.2 only. Seven FM-only graphics remain uncoded.
+
 ## [4.5.1] — 2026-10-12
 
 ### Fixed

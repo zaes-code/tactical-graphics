@@ -348,8 +348,10 @@ getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02
 **Every graphic says which standard defines it, and carries the identifier that standard
 gives it.** `getSpecifications(name)` answers with one or both — 225 graphics are in both
 FM 1-02.2 and APP-06, 85 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
-returns APP-06's six-digit entity code **as a string**, or `undefined` for those 8, since
-FM 1-02.2 publishes no identifiers of its own. `getNameByEntityCode('140300')` goes the
+returns the six-digit entity code **as a string**: APP-06's where it has one, and
+MIL-STD-2525's for line of contact and kill zone, which APP-06 leaves uncoded. It returns
+`undefined` for the other 7 FM-only graphics, since FM 1-02.2 publishes no identifiers of
+its own. `getNameByEntityCode('140300')` goes the
 other way, for reading a symbol out of a feed that addresses graphics by code — it takes
 the code as a string too.
 

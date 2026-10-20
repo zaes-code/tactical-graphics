@@ -175,7 +175,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | isolate | FM 1-02.2 + APP-06 | 341500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | joint engagement zone | FM 1-02.2 + APP-06 | 171500 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
 | joint tactical action area | APP-06 | 150501 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| kill zone | FM 1-02.2 |  | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| kill zone | FM 1-02.2 | 242800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | landing zone | FM 1-02.2 + APP-06 | 150800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | launch area, ellipse/circle | APP-06 | 200101 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
 | light line | APP-06 | 110200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |

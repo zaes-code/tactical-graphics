@@ -26,7 +26,8 @@ const codesFromSpecificationComments = (): Map<string, string> => {
      * `^\s*` with the `m` flag is what makes "at the start of the line" the test, so a
      * commented entry is skipped while a live one with its trailing comment still matches.
      */
-    // Line of contact is the one code sourced from MIL-STD-2525: APP-06 prints "Code: N/A" for it.
+    // Two codes are sourced from MIL-STD-2525 rather than APP-06: line of contact (APP-06
+    // prints "Code: N/A") and kill zone (not in APP-06 at all).
     const pattern = /^\s*\[TacticalGraphicName\.(\w+)\]:[^\n]*?\/\/ (?:APP-06|MIL-STD-2525) (\d{6})/gm;
     let match = pattern.exec(source);
     while (match) {
@@ -48,9 +49,10 @@ describe('GRAPHIC_ENTITY_CODES', () => {
     it('assigns a code to every graphic a coded catalog defines, and none to the rest', () => {
         for (const name of names()) {
             const code = GRAPHIC_ENTITY_CODES[name];
-            // FM 1-02.2 publishes no identifiers, so an FM-only graphic has no code to
-            // carry. Every other graphic is in APP-06 and therefore has one.
-            expect(code === null).toBe(!hasSpecification(name, TacticalGraphicSpecification.APP6));
+            // Every graphic in APP-06 has a code. An FM-only graphic has none, since FM 1-02.2
+            // publishes no identifiers, unless MIL-STD-2525 codes it: kill zone, 242800.
+            if (hasSpecification(name, TacticalGraphicSpecification.APP6)) expect(code).not.toBeNull();
+            else expect(code === null).toBe(name !== TacticalGraphicName.KillZone);
             if (code !== null) expect(code).toMatch(/^\d{6}$/);
         }
     });
@@ -60,8 +62,9 @@ describe('GRAPHIC_ENTITY_CODES', () => {
         // Nine when `gap` was untagged from 290600 -- that code is APP-06's "safe lane or
         // gap", a different symbol. **Eight since 2026-09-05**: `FightingPosition` was
         // retired as a duplicate of `FortifiedPosition`, which draws the same bracket and
-        // is in both publications. @see ai/excluded-graphics.md, specifications.test.ts
-        expect(uncoded).toHaveLength(8);
+        // is in both publications. **Seven since 2026-10-20**: kill zone took MIL-STD-2525E's
+        // 242800. @see ai/excluded-graphics.md, specifications.test.ts
+        expect(uncoded).toHaveLength(7);
         for (const name of uncoded) {
             expect(getSpecifications(name)).toEqual([TacticalGraphicSpecification.FM1_02_2]);
         }
@@ -78,7 +81,13 @@ describe('lookup by code', () => {
     });
 
     it('returns undefined for a graphic the standards do not code', () => {
-        expect(getEntityCode(TacticalGraphicName.KillZone)).toBeUndefined();
+        expect(getEntityCode(TacticalGraphicName.DelayLine)).toBeUndefined();
+    });
+
+    it('codes kill zone from MIL-STD-2525E though APP-06 lacks it', () => {
+        expect(getSpecifications(TacticalGraphicName.KillZone)).toEqual([TacticalGraphicSpecification.FM1_02_2]);
+        expect(getEntityCode(TacticalGraphicName.KillZone)).toBe('242800');
+        expect(getNameByEntityCode('242800')).toBe(TacticalGraphicName.KillZone);
     });
 
     it('codes line of contact apart from line of departure/line of contact', () => {
@@ -108,10 +117,10 @@ describe('lookup by code', () => {
         const codes = listEntityCodes();
         expect(codes).toEqual([...codes].sort());
         expect(new Set(codes).size).toBe(codes.length);
-        // 310 assignments over 310 distinct codes. 141100 was shared until line of contact
-        // took its own 140200. 271204 was switched off for a while and is back as the picture
+        // 311 assignments over 311 distinct codes. 141100 was shared until line of contact
+        // took its own 140200, and kill zone took 242800 the same day. 271204 was switched off for a while and is back as the picture
         // 3.4.0 shipped, its own construction still unsettled. @see ai/excluded-graphics.md
-        expect(codes).toHaveLength(310);
+        expect(codes).toHaveLength(311);
     });
 });
 

@@ -6,22 +6,24 @@ import {RouteDirection, TacticalGraphicName} from './type';
  * The number comes from APP-06 Edition E Annex A, Table A-32, and it is the same
  * code MIL-STD-2525 assigns the symbol: for the control-measure symbol set the two
  * standards are harmonised on one numbering, so `140300` is Phase Line in both. The
- * one exception is line of contact, which APP-06 lists with no code and MIL-STD-2525
- * codes `140200`; it carries the MIL-STD-2525 code. A
+ * exceptions are line of contact, which APP-06 lists with no code and MIL-STD-2525
+ * codes `140200`, and kill zone, which APP-06 lacks and MIL-STD-2525E codes `242800`.
+ * Both carry the MIL-STD-2525 code, marked `// MIL-STD-2525` in `specifications.ts`. A
  * full MIL-STD-2525 SIDC prefixes the control-measure symbol set (`25`) and appends
  * affiliation and status digits; this is the entity portion, which is the part that
  * identifies *which* graphic.
  *
  * FM 1-02.2 publishes no identifier of its own -- it defers to MIL-STD-2525 for
- * machine codes and prints only the drawn symbol -- so the eight graphics FM defines
- * and APP-06 does not are `null` here. That is a real absence, not a gap in the
- * table: a graphic with no counterpart in either coded catalog has no code to carry.
+ * machine codes and prints only the drawn symbol -- so the graphics FM defines and
+ * neither coded catalog does are `null` here. That is a real absence, not a gap in the
+ * table. Kill zone is FM-only by this library's two-standard tagging but MIL-STD-2525E
+ * codes it `242800`, so it carries that code; seven graphics are `null`.
  *
  * Exhaustive by construction, like `GRAPHIC_SPECIFICATIONS`. Adding a
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **283 codes, 8 nulls.** Count it, don't trust it. The trailing comment on each
+ * **311 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -100,7 +102,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.CorpsSupportArea]:                            '310800',  // Corps Support Area
     [TacticalGraphicName.DropZone]:                                    '150600',  // Drop Zone (DZ)
     [TacticalGraphicName.LandingZone]:                                 '150800',  // Landing Zone (LZ)
-    [TacticalGraphicName.KillZone]:                                    null,
+    [TacticalGraphicName.KillZone]:                                    '242800',  // Kill Zone (MIL-STD-2525E; not in APP-06)
     [TacticalGraphicName.PickupZone]:                                  '150900',  // Pick-Up Zone (PZ)
     [TacticalGraphicName.BattlePosition]:                              '151200',  // Battle Position
     [TacticalGraphicName.StrongPoint]:                                 '151203',  // Strong Point
