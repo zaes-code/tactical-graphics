@@ -15,17 +15,20 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.6.0] — 2026-10-20
+
 ### Added
 
 - **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
   every graphic MIL-STD-2525E Change 1 has: 288 of the 323, read from its control-measure table
   by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
   `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']`, the governing standard first, and
-  `listNamesBySpecification` answers which 2525E control measures the library draws. Code that compared a specification list to `['APP-06']`
-  exactly should test membership instead.
+  `listNamesBySpecification` answers which 2525E control measures the library draws. Five of
+  them are in MIL-STD-2525 alone: antitank wall and the four fields-of-fire symbols below. Code
+  that compared a specification list to `['APP-06']` exactly should test membership instead.
 - **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
   direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
-  nor APP-06, so it is the one graphic tagged MIL-STD-2525 alone. Drawn on both engines.
+  nor APP-06, so it is tagged MIL-STD-2525 only.
 - **MIL-STD-2525E Change 1's fields-of-fire variants.** Change 1 (March 2025) coded four symbols on
   the fields-of-fire V, and all four are new graphics: `FinalProtectiveFireLeft` (`140501`, the
   same picture as fields of fire, which keeps APP-06's `140500`), `FinalProtectiveFireRight`
@@ -1788,7 +1791,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.0...develop
+[4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.0
 [4.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0
