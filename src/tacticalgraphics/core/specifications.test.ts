@@ -258,11 +258,16 @@ describe('graphic specifications', () => {
      */
     it('quotes the real counts in its doc comment', () => {
         const source = readFileSync(join(__dirname, 'specifications.ts'), 'utf8');
-        const quoted = source.match(/\*\*(\d+) graphics: (\d+) in both catalogs, (\d+) FM 1-02\.2 only, (\d+) APP-06 only, (\d+) MIL-STD-2525 only\*\*/);
+        const quoted = source.match(/\*\*(\d+) graphics: (\d+) in MIL-STD-2525E, (\d+) of them only there; (\d+) in both FM 1-02\.2 and APP-06,\s+\* (\d+) FM 1-02\.2 only, (\d+) APP-06 only\*\*/);
         expect(quoted).not.toBeNull();
         const both = names.filter(n => hasSpecification(n, TacticalGraphicSpecification.APP6) && hasSpecification(n, TacticalGraphicSpecification.FM1_02_2));
         expect(quoted!.slice(1).map(Number)).toEqual([
-            names.length, both.length, FM_ONLY_GRAPHICS.length, APP6_ONLY_GRAPHICS.length, MIL_STD_2525_ONLY_GRAPHICS.length,
+            names.length,
+            listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525).length,
+            MIL_STD_2525_ONLY_GRAPHICS.length,
+            both.length,
+            FM_ONLY_GRAPHICS.length,
+            APP6_ONLY_GRAPHICS.length,
         ]);
         const in2525 = source.match(/\*\*(\d+) of (\d+) graphics are in MIL-STD-2525\.\*\*/);
         expect(in2525!.slice(1).map(Number)).toEqual([listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525).length, names.length]);
