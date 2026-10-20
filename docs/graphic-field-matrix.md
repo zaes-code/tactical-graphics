@@ -7,324 +7,324 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 
 | Graphic | Spec | Code | identifier1 | identifier2 | countryCodes | additionalInfo | hostility | status | dtg1 | dtg2 | echelon | direction | mineType | mobility | terrain | altitude1 | altitude2 | width | length | radius | grids | weapon | rangeFan |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| abatis | FM 1-02.2 + APP-06 + MIL-STD-2525 | 280100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| active maneuver area | APP-06 + MIL-STD-2525 | 200500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| advance to contact | APP-06 + MIL-STD-2525 | 342900 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| air corridor | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170100 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| air space coordination area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240103 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  | Y | Y |  |  |
-| air space coordination area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240101 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  | Y |  |  |
-| air space coordination area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240102 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y | Y |  |  | Y |  |  |
-| air to air refueling restricted operations zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171100 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| airborne or aviation axis of advance | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| airfield | FM 1-02.2 + APP-06 + MIL-STD-2525 | 131900 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| airfield zone | APP-06 + MIL-STD-2525 | 120400 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| airhead line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141300 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| alternate supply route | FM 1-02.2 + APP-06 + MIL-STD-2525 | 330400 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
-| ambush | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Anti-Tank Ditch Reinforced, with Anti-Tank Mines | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Anti-Tank Ditch, Completed | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Anti-Tank Ditch, Under Construction | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| abatis | MIL-STD-2525 + FM 1-02.2 + APP-06 | 280100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| active maneuver area | MIL-STD-2525 + APP-06 | 200500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| advance to contact | MIL-STD-2525 + APP-06 | 342900 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| air corridor | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170100 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| air space coordination area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240103 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  | Y | Y |  |  |
+| air space coordination area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240101 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  | Y |  |  |
+| air space coordination area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240102 | Y | Y |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y | Y |  |  | Y |  |  |
+| air to air refueling restricted operations zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171100 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| airborne or aviation axis of advance | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| airfield | MIL-STD-2525 + FM 1-02.2 + APP-06 | 131900 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| airfield zone | MIL-STD-2525 + APP-06 | 120400 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| airhead line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141300 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| alternate supply route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 330400 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
+| ambush | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Anti-Tank Ditch Reinforced, with Anti-Tank Mines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Anti-Tank Ditch, Completed | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Anti-Tank Ditch, Under Construction | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | Anti-Tank Wall | MIL-STD-2525 | 290204 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| area | APP-06 + MIL-STD-2525 | 150100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| area defense | FM 1-02.2 + APP-06 + MIL-STD-2525 | 152600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| area of operations | FM 1-02.2 + APP-06 + MIL-STD-2525 | 120100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| area, generic | APP-06 + MIL-STD-2525 | 120700 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| area | MIL-STD-2525 + APP-06 | 150100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| area defense | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| area of operations | MIL-STD-2525 + FM 1-02.2 + APP-06 | 120100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| area, generic | MIL-STD-2525 + APP-06 | 120700 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | artillery maneuver area | APP-06 | 242400 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | artillery reserved area | APP-06 | 242500 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| artillery target intelligence zone circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241103 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| artillery target intelligence zone irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241101 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| artillery target intelligence zone rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241102 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| assault crossing | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271300 |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| assault position | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| assembly area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 150200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| attack by fire | FM 1-02.2 + APP-06 + MIL-STD-2525 | 152000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| attack helicopter axis of advance | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| attack position | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| artillery target intelligence zone circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241103 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| artillery target intelligence zone irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241101 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| artillery target intelligence zone rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241102 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| assault crossing | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271300 |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| assault position | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| assembly area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 150200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| attack by fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| attack helicopter axis of advance | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| attack position | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | avenue of approach | APP-06 | 152300 | Y |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| aviation direction of attack | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140601 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| base camp | FM 1-02.2 + APP-06 + MIL-STD-2525 | 120500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| base defense zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| battle position | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151200 | Y |  |  |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
-| battle position prepared but not occupied | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151202 | Y |  |  |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
-| battlefield coordination line | APP-06 + MIL-STD-2525 | 260400 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| battlefield handover line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141900 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line | APP-06 + MIL-STD-2525 | 220100 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, acoustic | APP-06 + MIL-STD-2525 | 220103 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, acoustic (ambiguous) | APP-06 + MIL-STD-2525 | 220104 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, electro-optical intercept | APP-06 + MIL-STD-2525 | 220106 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, electromagnetic warfare (EW) | APP-06 + MIL-STD-2525 | 220102 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, electronic | APP-06 + MIL-STD-2525 | 220101 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, jammer | APP-06 + MIL-STD-2525 | 220107 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, radio direction finder (RDF) | APP-06 + MIL-STD-2525 | 220108 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bearing line, torpedo | APP-06 + MIL-STD-2525 | 220105 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| biological contaminated area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| aviation direction of attack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140601 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| base camp | MIL-STD-2525 + FM 1-02.2 + APP-06 | 120500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| base defense zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| battle position | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151200 | Y |  |  |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
+| battle position prepared but not occupied | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151202 | Y |  |  |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
+| battlefield coordination line | MIL-STD-2525 + APP-06 | 260400 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| battlefield handover line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141900 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line | MIL-STD-2525 + APP-06 | 220100 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, acoustic | MIL-STD-2525 + APP-06 | 220103 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, acoustic (ambiguous) | MIL-STD-2525 + APP-06 | 220104 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, electro-optical intercept | MIL-STD-2525 + APP-06 | 220106 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, electromagnetic warfare (EW) | MIL-STD-2525 + APP-06 | 220102 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, electronic | MIL-STD-2525 + APP-06 | 220101 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, jammer | MIL-STD-2525 + APP-06 | 220107 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, radio direction finder (RDF) | MIL-STD-2525 + APP-06 | 220108 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bearing line, torpedo | MIL-STD-2525 + APP-06 | 220105 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| biological contaminated area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | biological contaminated area, toxic industrial material | APP-06 | 271701 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| block | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| block | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270501 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| blue kill box circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242303 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| blue kill box irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242301 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| blue kill box rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242302 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| bomb area | APP-06 + MIL-STD-2525 | 240808 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| boundary | FM 1-02.2 + APP-06 + MIL-STD-2525 | 110100 | Y | Y | Y |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
-| breach | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bridge | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| block | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| block | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270501 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| blue kill box circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242303 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| blue kill box irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242301 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| blue kill box rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242302 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| bomb area | MIL-STD-2525 + APP-06 | 240808 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| boundary | MIL-STD-2525 + FM 1-02.2 + APP-06 | 110100 | Y | Y | Y |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
+| breach | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bridge | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | bridgehead | APP-06 | 120800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bridgehead line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| brigade support area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 310600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bypass | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| call for fire zone circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241203 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| call for fire zone irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241201 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| call for fire zone rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241202 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| canalize | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bridgehead line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| brigade support area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bypass | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| call for fire zone circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241203 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| call for fire zone irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241201 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| call for fire zone rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241202 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| canalize | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | capture | APP-06 | 343000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| censor zone circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241303 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| censor zone irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241301 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| censor zone rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241302 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| chemical contaminated area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271800 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| censor zone circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241303 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| censor zone irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241301 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| censor zone rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241302 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| chemical contaminated area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271800 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | chemical contaminated area, toxic industrial material | APP-06 | 271801 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| clear | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| clear | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | common sensor boundary | FM 1-02.2 |  | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| contain | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151204 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| contain | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151204 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | control | FM 1-02.2 + APP-06 | 343200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| coordinated fire line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 260200 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| cordon and knock | APP-06 + MIL-STD-2525 | 342600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| cordon and search | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| corps support area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 310800 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| counterattack | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340600 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| counterattack by fire | APP-06 + MIL-STD-2525 | 340700 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| cover | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| critical friendly zone circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| critical friendly zone irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| critical friendly zone rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| cued acquisition doctrine | APP-06 + MIL-STD-2525 | 200600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
-| dead space area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241503 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| dead space area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241501 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| dead space area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241502 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| coordinated fire line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 260200 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| cordon and knock | MIL-STD-2525 + APP-06 | 342600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| cordon and search | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| corps support area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310800 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| counterattack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340600 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| counterattack by fire | MIL-STD-2525 + APP-06 | 340700 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| cover | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| critical friendly zone circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| critical friendly zone irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241401 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| critical friendly zone rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241402 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| cued acquisition doctrine | MIL-STD-2525 + APP-06 | 200600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
+| dead space area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241503 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| dead space area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241501 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| dead space area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241502 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | decision line | APP-06 | 110500 | Y |  | Y |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| defeat | APP-06 + MIL-STD-2525 | 344300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| defended area, ellipse/circle | APP-06 + MIL-STD-2525 | 200201 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
-| defended area, rectangle | APP-06 + MIL-STD-2525 | 200202 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| delay | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| defeat | MIL-STD-2525 + APP-06 | 344300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| defended area, ellipse/circle | MIL-STD-2525 + APP-06 | 200201 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
+| defended area, rectangle | MIL-STD-2525 + APP-06 | 200202 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| delay | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | delay line | FM 1-02.2 |  | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| demonstration | FM 1-02.2 + APP-06 + MIL-STD-2525 | 343300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| demonstration | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | deny | APP-06 | 343400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| destroy | FM 1-02.2 + APP-06 + MIL-STD-2525 | 340900 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| detainee holding area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 310100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| direction of main attack | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140602 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| destroy | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340900 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| detainee holding area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| direction of main attack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140602 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | direction of main attack feint | FM 1-02.2 + APP-06 | 140605 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| direction of supporting attack | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140603 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| disengage | FM 1-02.2 + APP-06 + MIL-STD-2525 | 344400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| disrupt | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| disrupt | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270502 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| division support area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 310700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| drop zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 150600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| encirclement | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151800 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| enemy prisoner of war holding area | APP-06 + MIL-STD-2525 | 310200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| engagement area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| engineer work line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 110300 | Y | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| envelopment | FM 1-02.2 + APP-06 + MIL-STD-2525 | 343500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| direction of supporting attack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140603 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| disengage | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| disrupt | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| disrupt | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270502 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| division support area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| drop zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 150600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| encirclement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151800 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| enemy prisoner of war holding area | MIL-STD-2525 + APP-06 | 310200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| engagement area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| engineer work line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 110300 | Y | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| envelopment | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | escort | APP-06 | 343600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| evacuate | APP-06 + MIL-STD-2525 | 344500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| evacuate | MIL-STD-2525 + APP-06 | 344500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | exfiltrate | FM 1-02.2 + APP-06 | 343700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| exploitation | FM 1-02.2 + APP-06 + MIL-STD-2525 | 343100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Explosives, Planned State of Readiness | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Explosives, State of Readiness 1 (Safe) | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Explosives, State of Readiness 2 (Armed but Passable) | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| extraction zone | APP-06 + MIL-STD-2525 | 150700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| ferry crossing | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fields of fire / sector of fire | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140500 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fighter engagement zone | APP-06 + MIL-STD-2525 | 171400 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| final coordination line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| final protective fire | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240703 | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |
-| fire support area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241003 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| fire support area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241001 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fire support area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 241002 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| fire support coordination line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 260100 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fix | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fix | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270503 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| follow and assume | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| follow and support | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341300 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| ford, difficult | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| ford, easy | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fortified area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fortified/fighting position | FM 1-02.2 + APP-06 + MIL-STD-2525 | 291000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fortified/trench line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| forward arming and refueling point | FM 1-02.2 + APP-06 + MIL-STD-2525 | 310300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| forward edge of battle area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| forward line of own troops | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140100 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| forward passage of lines | FM 1-02.2 + APP-06 + MIL-STD-2525 | 344100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| free fire area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240203 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| free fire area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240201 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| free fire area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240202 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| frontal attack | FM 1-02.2 + APP-06 + MIL-STD-2525 | 152700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| exploitation | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Explosives, Planned State of Readiness | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Explosives, State of Readiness 1 (Safe) | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Explosives, State of Readiness 2 (Armed but Passable) | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| extraction zone | MIL-STD-2525 + APP-06 | 150700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| ferry crossing | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fields of fire / sector of fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140500 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fighter engagement zone | MIL-STD-2525 + APP-06 | 171400 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| final coordination line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| final protective fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240703 | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |
+| fire support area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241003 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| fire support area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241001 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fire support area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241002 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| fire support coordination line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 260100 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fix | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fix | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270503 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| follow and assume | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| follow and support | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341300 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| ford, difficult | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| ford, easy | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fortified area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fortified/fighting position | MIL-STD-2525 + FM 1-02.2 + APP-06 | 291000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fortified/trench line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| forward arming and refueling point | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| forward edge of battle area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| forward line of own troops | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140100 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| forward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| free fire area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240203 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| free fire area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240201 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| free fire area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240202 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| frontal attack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | gap | FM 1-02.2 |  | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| group/series of targets | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240805 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| guard | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| guerrilla base | FM 1-02.2 + APP-06 + MIL-STD-2525 | 120600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| halted convoy | FM 1-02.2 + APP-06 + MIL-STD-2525 | 330200 |  |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  | Y |  |
-| handover line | APP-06 + MIL-STD-2525 | 141800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| high altitude missile engagement zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171800 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| high density airspace control zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170900 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| holding line | APP-06 + MIL-STD-2525 | 141500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| group/series of targets | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240805 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| guard | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| guerrilla base | MIL-STD-2525 + FM 1-02.2 + APP-06 | 120600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| halted convoy | MIL-STD-2525 + FM 1-02.2 + APP-06 | 330200 |  |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  | Y |  |
+| handover line | MIL-STD-2525 + APP-06 | 141800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| high altitude missile engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171800 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| high density airspace control zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170900 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| holding line | MIL-STD-2525 + APP-06 | 141500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | human terrain | APP-06 | 370100 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| identification friend or foe off | FM 1-02.2 + APP-06 + MIL-STD-2525 | 190100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| identification friend or foe on | FM 1-02.2 + APP-06 + MIL-STD-2525 | 190200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| infiltration | FM 1-02.2 + APP-06 + MIL-STD-2525 | 343800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| infiltration lane | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140800 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| intelligence coordination line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 300100 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| interdict | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| isolate | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| joint engagement zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171500 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| joint tactical action area | APP-06 + MIL-STD-2525 | 150501 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| kill zone | FM 1-02.2 + MIL-STD-2525 | 242800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| landing zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 150800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| launch area, ellipse/circle | APP-06 + MIL-STD-2525 | 200101 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
-| light line | APP-06 + MIL-STD-2525 | 110200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| limit of advance | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140900 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| limited access area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151100 |  |  |  | Y | Y |  |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |
-| line of contact | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| line of departure | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141000 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| line of departure or line of contact | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| line, generic | APP-06 + MIL-STD-2525 | 110400 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| linear smoke target | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240702 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| linear target | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240701 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| identification friend or foe off | MIL-STD-2525 + FM 1-02.2 + APP-06 | 190100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| identification friend or foe on | MIL-STD-2525 + FM 1-02.2 + APP-06 | 190200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| infiltration | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| infiltration lane | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140800 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| intelligence coordination line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 300100 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| interdict | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| isolate | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| joint engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171500 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| joint tactical action area | MIL-STD-2525 + APP-06 | 150501 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| kill zone | MIL-STD-2525 + FM 1-02.2 | 242800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| landing zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 150800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| launch area, ellipse/circle | MIL-STD-2525 + APP-06 | 200101 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
+| light line | MIL-STD-2525 + APP-06 | 110200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| limit of advance | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140900 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| limited access area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151100 |  |  |  | Y | Y |  |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |
+| line of contact | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| line of departure | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141000 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| line of departure or line of contact | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141100 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| line, generic | MIL-STD-2525 + APP-06 | 110400 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| linear smoke target | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240702 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| linear target | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240701 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | locate | APP-06 | 343900 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| low altitude missile engagement zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171700 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| low level transit route | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170200 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| main axis of advance | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| low altitude missile engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171700 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| low level transit route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170200 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| main axis of advance | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151403 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | main axis of advance feint | FM 1-02.2 + APP-06 | 151406 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| main supply route | FM 1-02.2 + APP-06 + MIL-STD-2525 | 330300 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
-| mine cluster | APP-06 + MIL-STD-2525 | 290400 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| mined area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270800 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
-| mined area, fenced | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270801 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
-| minefield, dynamic depiction | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270707 |  |  |  | Y | Y |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
-| mineline | APP-06 + MIL-STD-2525 | 290101 |  |  |  |  | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
-| minimum risk route | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170300 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| minimum safe distance zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 272100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| minimum safe distance zone, multiple strike (STRIKWARN) | FM 1-02.2 + APP-06 + MIL-STD-2525 | 272101 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| missile engagement zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171600 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| mobile defense | FM 1-02.2 + APP-06 + MIL-STD-2525 | 152800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| main supply route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 330300 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
+| mine cluster | MIL-STD-2525 + APP-06 | 290400 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| mined area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270800 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
+| mined area, fenced | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270801 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
+| minefield, dynamic depiction | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270707 |  |  |  | Y | Y |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
+| mineline | MIL-STD-2525 + APP-06 | 290101 |  |  |  |  | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
+| minimum risk route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170300 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| minimum safe distance zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 272100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| minimum safe distance zone, multiple strike (STRIKWARN) | MIL-STD-2525 + FM 1-02.2 + APP-06 | 272101 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| missile engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171600 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| mobile defense | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | mobility corridor | APP-06 | 142100 |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
 | movement to contact | FM 1-02.2 |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| moving convoy | FM 1-02.2 + APP-06 + MIL-STD-2525 | 330100 |  |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  | Y |  |
-| munition flight path | FM 1-02.2 + APP-06 + MIL-STD-2525 | 260600 |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| named area of interest | FM 1-02.2 + APP-06 + MIL-STD-2525 | 120200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| moving convoy | MIL-STD-2525 + FM 1-02.2 + APP-06 | 330100 |  |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  | Y |  |
+| munition flight path | MIL-STD-2525 + FM 1-02.2 + APP-06 | 260600 |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| named area of interest | MIL-STD-2525 + FM 1-02.2 + APP-06 | 120200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | named area of interest line | APP-06 | 142000 | Y |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| navigational line | APP-06 + MIL-STD-2525 | 218400 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| navigational line | MIL-STD-2525 + APP-06 | 218400 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | navigational rhumb line | APP-06 | 220109 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| neutralize | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| no attack (NOTACK) zone | APP-06 + MIL-STD-2525 | 200300 |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| no fire area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240303 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| no fire area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240301 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| no fire area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240302 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| no fire line | APP-06 + MIL-STD-2525 | 260300 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| nuclear contaminated area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271900 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| objective area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle belt | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270100 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle bypass difficult | APP-06 + MIL-STD-2525 | 270602 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle bypass easy | APP-06 + MIL-STD-2525 | 270601 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle bypass impossible | APP-06 + MIL-STD-2525 | 270603 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle free area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270300 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| neutralize | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| no attack (NOTACK) zone | MIL-STD-2525 + APP-06 | 200300 |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| no fire area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240303 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| no fire area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240301 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| no fire area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240302 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| no fire line | MIL-STD-2525 + APP-06 | 260300 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| nuclear contaminated area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271900 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| objective area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle belt | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270100 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle bypass difficult | MIL-STD-2525 + APP-06 | 270602 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle bypass easy | MIL-STD-2525 + APP-06 | 270601 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle bypass impossible | MIL-STD-2525 + APP-06 | 270603 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle free area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270300 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | obstacle group | FM 1-02.2 |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290100 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle restricted area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270400 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| obstacle zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| occupy | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| overhead wire | APP-06 + MIL-STD-2525 | 282003 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290100 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle restricted area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270400 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| obstacle zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| occupy | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| overhead wire | MIL-STD-2525 + APP-06 | 282003 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | passage lane | FM 1-02.2 |  |  |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| penetration | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| penetration box | APP-06 + MIL-STD-2525 | 151900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| phase line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 140300 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| pickup zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 150900 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| position area artillery circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240502 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| position area artillery irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240503 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| position area artillery rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240501 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| probable line of deployment | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| penetration | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| penetration box | MIL-STD-2525 + APP-06 | 151900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| phase line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140300 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| pickup zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 150900 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| position area artillery circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240502 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| position area artillery irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240503 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| position area artillery rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240501 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| probable line of deployment | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | PsyOps zone, circular | APP-06 | 242703 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | PsyOps zone, irregular | APP-06 | 242701 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | PsyOps zone, rectangular | APP-06 | 242702 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| purple kill box circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242306 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| purple kill box irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242304 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| purple kill box rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242305 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| pursuit | FM 1-02.2 + APP-06 + MIL-STD-2525 | 344000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| radar search doctrine | APP-06 + MIL-STD-2525 | 200700 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |
-| radiation dose rate contour line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 272200 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| radiological contaminated area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 272000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| purple kill box circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242306 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| purple kill box irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242304 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| purple kill box rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242305 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| pursuit | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| radar search doctrine | MIL-STD-2525 + APP-06 | 200700 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |
+| radiation dose rate contour line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 272200 |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| radiological contaminated area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 272000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | radiological contaminated area, toxic industrial material | APP-06 | 272001 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| raft site | APP-06 + MIL-STD-2525 | 290800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| rearward passage of lines | FM 1-02.2 + APP-06 + MIL-STD-2525 | 344200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| raft site | MIL-STD-2525 + APP-06 | 290800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| rearward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | recover | APP-06 | 344600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| refugee holding area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 310400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| regimental support area | APP-06 + MIL-STD-2525 | 310500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| release line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 141600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| relief in place | FM 1-02.2 + APP-06 + MIL-STD-2525 | 341900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| restricted operations zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171000 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| refugee holding area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| regimental support area | MIL-STD-2525 + APP-06 | 310500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| release line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| relief in place | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| restricted operations zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171000 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
 | restricted terrain | APP-06 | 152400 |  |  |  | Y |  |  |  |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |
-| restrictive fire area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240403 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| restrictive fire area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240401 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| restrictive fire area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240402 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| restrictive fire line | FM 1-02.2 + APP-06 + MIL-STD-2525 | 260500 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| retain | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151205 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| retirement | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Roadblock Complete (Executed) | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271204 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| route | FM 1-02.2 + APP-06 + MIL-STD-2525 | 330500 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
-| safe lane | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170400 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| safe lane or gap | APP-06 + MIL-STD-2525 | 290600 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| screen | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| search area / reconnaissance area | APP-06 + MIL-STD-2525 | 152200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| secure | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| seize | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| restrictive fire area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240403 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| restrictive fire area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240401 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| restrictive fire area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240402 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| restrictive fire line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 260500 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| retain | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151205 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| retirement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Roadblock Complete (Executed) | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271204 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 330500 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
+| safe lane | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170400 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| safe lane or gap | MIL-STD-2525 + APP-06 | 290600 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| screen | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| search area / reconnaissance area | MIL-STD-2525 + APP-06 | 152200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| secure | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| seize | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | severely restricted terrain | APP-06 | 152500 |  |  |  | Y |  |  |  |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |
-| ship area of interest, ellipse/circle | APP-06 + MIL-STD-2525 | 200401 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
-| ship area of interest, rectangle | APP-06 + MIL-STD-2525 | 200402 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| short range air defense engagement zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171900 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| smoke obscurant | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240806 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| special corridor | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170700 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| standard use Army aircraft flight route | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170500 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| strong point | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151203 | Y |  |  |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
-| submarine action area | APP-06 + MIL-STD-2525 | 150502 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| submarine-generated action area | APP-06 + MIL-STD-2525 | 150503 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| support by fire | FM 1-02.2 + APP-06 + MIL-STD-2525 | 152100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| supporting axis of advance | FM 1-02.2 + APP-06 + MIL-STD-2525 | 151404 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| suppress | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342800 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target area circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240803 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
-| target area irregular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240801 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target area of interest | FM 1-02.2 + APP-06 + MIL-STD-2525 | 120300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target area rectangular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 240802 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
+| ship area of interest, ellipse/circle | MIL-STD-2525 + APP-06 | 200401 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
+| ship area of interest, rectangle | MIL-STD-2525 + APP-06 | 200402 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| short range air defense engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171900 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| smoke obscurant | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240806 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| special corridor | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170700 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| standard use Army aircraft flight route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170500 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| strong point | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151203 | Y |  |  |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
+| submarine action area | MIL-STD-2525 + APP-06 | 150502 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| submarine-generated action area | MIL-STD-2525 + APP-06 | 150503 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| support by fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| supporting axis of advance | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151404 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| suppress | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342800 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240803 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
+| target area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240801 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target area of interest | MIL-STD-2525 + FM 1-02.2 + APP-06 | 120300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240802 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
 | target area, single target (AEGIS) | APP-06 | 240804 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| target build up area circular | APP-06 + MIL-STD-2525 | 241703 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target build up area irregular | APP-06 + MIL-STD-2525 | 241701 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target build up area rectangular | APP-06 + MIL-STD-2525 | 241702 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| target value area circular | APP-06 + MIL-STD-2525 | 241803 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target value area irregular | APP-06 + MIL-STD-2525 | 241801 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| target value area rectangular | APP-06 + MIL-STD-2525 | 241802 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| terminally guided munition footprint | APP-06 + MIL-STD-2525 | 242000 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| transit corridor | FM 1-02.2 + APP-06 + MIL-STD-2525 | 170600 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| trip wire | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| turn | FM 1-02.2 + APP-06 + MIL-STD-2525 | 344700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| turn | FM 1-02.2 + APP-06 + MIL-STD-2525 | 270504 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| turning movement | FM 1-02.2 + APP-06 + MIL-STD-2525 | 152900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| unexploded explosive ordnance (UXO) area | FM 1-02.2 + APP-06 + MIL-STD-2525 | 271000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target build up area circular | MIL-STD-2525 + APP-06 | 241703 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target build up area irregular | MIL-STD-2525 + APP-06 | 241701 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target build up area rectangular | MIL-STD-2525 + APP-06 | 241702 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| target value area circular | MIL-STD-2525 + APP-06 | 241803 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target value area irregular | MIL-STD-2525 + APP-06 | 241801 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target value area rectangular | MIL-STD-2525 + APP-06 | 241802 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| terminally guided munition footprint | MIL-STD-2525 + APP-06 | 242000 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| transit corridor | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170600 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
+| trip wire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| turn | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| turn | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270504 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| turning movement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| unexploded explosive ordnance (UXO) area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | unmanned aircraft (UA) corridor | FM 1-02.2 |  | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
-| unmanned aircraft restricted operations zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171200 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| weapon engagement zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 171300 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| weapon sensor range fan circular | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  | Y |
-| weapon sensor range fan sector | FM 1-02.2 + APP-06 + MIL-STD-2525 | 242200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  | Y |
-| weapons free zone | FM 1-02.2 + APP-06 + MIL-STD-2525 | 172000 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
-| Wire, Double Apron Fence | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290304 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Double Fence | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290303 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Double Strand Concertina | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290308 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, High Wire Fence | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290306 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Low Wire Fence | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290305 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Single Concertina | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290307 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Single Fence | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290302 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Triple Strand Concertina | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290309 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Wire, Unspecified | FM 1-02.2 + APP-06 + MIL-STD-2525 | 290301 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| withdraw | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342400 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| withdraw under pressure | FM 1-02.2 + APP-06 + MIL-STD-2525 | 342500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| unmanned aircraft restricted operations zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171200 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| weapon engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171300 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| weapon sensor range fan circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  | Y |
+| weapon sensor range fan sector | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  | Y |
+| weapons free zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 172000 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
+| Wire, Double Apron Fence | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290304 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Double Fence | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290303 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Double Strand Concertina | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290308 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, High Wire Fence | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290306 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Low Wire Fence | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290305 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Single Concertina | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290307 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Single Fence | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290302 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Triple Strand Concertina | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290309 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Wire, Unspecified | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290301 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| withdraw | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342400 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| withdraw under pressure | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | zone of fire | APP-06 | 242600 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| zone of responsibility circular | APP-06 + MIL-STD-2525 | 241903 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| zone of responsibility irregular | APP-06 + MIL-STD-2525 | 241901 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| zone of responsibility rectangular | APP-06 + MIL-STD-2525 | 241902 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| zone of responsibility circular | MIL-STD-2525 + APP-06 | 241903 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| zone of responsibility irregular | MIL-STD-2525 + APP-06 | 241901 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| zone of responsibility rectangular | MIL-STD-2525 + APP-06 | 241902 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 
 | **Totals** | | | 179 | 6 | 20 | 27 | 267 | 84 | 110 | 109 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 46 | 5 | 26 | 3 | 3 | 3 |

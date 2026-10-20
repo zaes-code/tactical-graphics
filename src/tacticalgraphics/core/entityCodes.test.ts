@@ -85,7 +85,7 @@ describe('lookup by code', () => {
     });
 
     it('codes kill zone from MIL-STD-2525E though APP-06 lacks it', () => {
-        expect(getSpecifications(TacticalGraphicName.KillZone)).toEqual([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.MIL_STD_2525]);
+        expect(getSpecifications(TacticalGraphicName.KillZone)).toEqual([TacticalGraphicSpecification.MIL_STD_2525, TacticalGraphicSpecification.FM1_02_2]);
         expect(getEntityCode(TacticalGraphicName.KillZone)).toBe('242800');
         expect(getNameByEntityCode('242800')).toBe(TacticalGraphicName.KillZone);
     });

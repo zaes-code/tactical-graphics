@@ -342,7 +342,7 @@ listTacticalGraphicNames();                                     // → ['Abatis'
 GRAPHIC_CATEGORIES[TacticalGraphicName.PhaseLine];              // → 'Lines'
 getDisplayName(TacticalGraphicName.MainAxisOfAdvance);          // → 'main axis of advance'
 getEntityCode(TacticalGraphicName.PhaseLine);                   // → '140300'
-getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02.2', 'APP-06', 'MIL-STD-2525']
+getSpecifications(TacticalGraphicName.PhaseLine);               // → ['MIL-STD-2525', 'FM 1-02.2', 'APP-06']
 ```
 
 **Every graphic says which standard defines it, and carries the identifier that standard

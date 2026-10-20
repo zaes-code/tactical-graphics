@@ -13,16 +13,19 @@ import {TacticalGraphicName} from './type';
  * the key keeps the form people still search for.
  */
 export enum TacticalGraphicSpecification {
+    /**
+     * MIL-STD-2525E Change 1 (2 March 2025), *Joint Military Symbology*. Membership is read
+     * from its Appendix A control-measure table by entity code, with the names compared.
+     *
+     * First because it is the governing standard: FM 1-02.2 "compiles ... MIL-STD-2525E approved
+     * military symbols" for land operations, and APP-06 is NATO's counterpart, harmonized with it.
+     * @see NOT_IN_MIL_STD_2525
+     */
+    MIL_STD_2525 = 'MIL-STD-2525',
     /** US Army FM 1-02.2, *Military Symbols*. The catalog this library was built from. */
     FM1_02_2 = 'FM 1-02.2',
     /** NATO APP-06, *NATO Joint Military Symbology*, Edition E Version 2 (October 2025). */
     APP6 = 'APP-06',
-    /**
-     * MIL-STD-2525E Change 1 (2 March 2025), *Joint Military Symbology*. Membership is read
-     * from its Appendix A control-measure table by entity code, with the names compared.
-     * @see NOT_IN_MIL_STD_2525
-     */
-    MIL_STD_2525 = 'MIL-STD-2525',
 }
 
 const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6] as const;
@@ -474,8 +477,8 @@ const NOT_IN_MIL_STD_2525: ReadonlySet<TacticalGraphicName> = new Set([
 ]);
 
 /**
- * Which specifications define each graphic: FM 1-02.2 and APP-06 as tagged by hand, plus
- * MIL-STD-2525 for every graphic MIL-STD-2525E Change 1 has.
+ * Which specifications define each graphic: MIL-STD-2525 for every graphic MIL-STD-2525E
+ * Change 1 has, then FM 1-02.2 and APP-06 as tagged by hand. Listed in that order.
  *
  * **284 of 319 graphics are in MIL-STD-2525.** Count it, don't trust it.
  */
@@ -485,7 +488,7 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     const withMilStd = new Map<readonly TacticalGraphicSpecification[], readonly TacticalGraphicSpecification[]>();
     const add = (specs: readonly TacticalGraphicSpecification[]) => {
         let found = withMilStd.get(specs);
-        if (!found) withMilStd.set(specs, (found = Object.freeze([...specs, TacticalGraphicSpecification.MIL_STD_2525])));
+        if (!found) withMilStd.set(specs, (found = Object.freeze([TacticalGraphicSpecification.MIL_STD_2525, ...specs])));
         return found;
     };
     return Object.fromEntries(
