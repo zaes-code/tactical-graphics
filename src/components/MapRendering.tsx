@@ -323,7 +323,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                                 textTransform: 'none',
                             }}
                         >
-                            FM 1-02.2 &middot; NATO APP-06
+                            MIL-STD-2525E &middot; FM 1-02.2 &middot; NATO APP-06
                         </Typography>
                     </Typography>
 

@@ -78,6 +78,7 @@ export const OBSTACLE_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.AntiTankDitchUnderConstruction, // 290201
     TacticalGraphicName.AntiTankDitchCompleted, // 290202
     TacticalGraphicName.AntiTankDitchReinforcedWithMines, // 290203
+    TacticalGraphicName.AntiTankWall, // 290204
     TacticalGraphicName.WireUnspecified, // 290301
     TacticalGraphicName.WireSingleFence, // 290302
     TacticalGraphicName.WireDoubleFence, // 290303

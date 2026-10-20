@@ -21,6 +21,7 @@ export const PROVEN_GRAPHICS: TacticalGraphicName[] = [
     TacticalGraphicName.AntiTankDitchCompleted,
     TacticalGraphicName.AntiTankDitchReinforcedWithMines,
     TacticalGraphicName.AntiTankDitchUnderConstruction,
+    TacticalGraphicName.AntiTankWall,
     TacticalGraphicName.Area,
     TacticalGraphicName.AreaDefense,
     TacticalGraphicName.AreaGeneric,

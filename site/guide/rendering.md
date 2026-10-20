@@ -281,7 +281,7 @@ after a restore: a restore keeps each graphic's saved `symbolId`, so the same id
 
 ## A picture for a menu
 
-A list of names does not tell an operator what is about to land on their map, and 318 of
+A list of names does not tell an operator what is about to land on their map, and 319 of
 them do not tell them apart. `@zaes/tactical-graphics/thumbnails` carries one small SVG
 per graphic for exactly that:
 
@@ -359,7 +359,7 @@ const {graphic, labels} = prepareFeatures(rendered);
 
 source.addFeature(graphic);
 
-// `labels` is undefined for 114 of the 318 graphics — the ones that keep every glyph
+// `labels` is undefined for 115 of the 319 graphics — the ones that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
 // Adding a label feature for one of those draws its designation twice.
 if (labels) source.addFeature(labels);

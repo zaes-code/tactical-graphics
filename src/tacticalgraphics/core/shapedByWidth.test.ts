@@ -129,7 +129,7 @@ describe(`shapedByWidth against what the generators actually read (${NAMES.lengt
     it('is 34 graphics, and the rest are untouched by the field', () => {
         const reads = NAMES.filter(shapedByWidth);
         expect(reads).toHaveLength(34);
-        expect(NAMES.length - reads.length).toBe(284);
+        expect(NAMES.length - reads.length).toBe(285);
     });
 
     /**
