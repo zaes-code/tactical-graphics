@@ -56,7 +56,8 @@ async function exportFile({page, engine}, tag) {
 async function importFile({page}, path) {
     await page.getByRole('button', {name: /clear all/i}).click();
     await page.waitForTimeout(1200);
-    await page.locator('input[type="file"]').setInputFiles(path);
+    // The panel's GeoJSON input by what it accepts: add-on tools put inputs of their own on the page.
+    await page.locator('input[type="file"][accept*="geojson"]').setInputFiles(path);
     await page.waitForTimeout(5000);
 }
 

@@ -293,7 +293,7 @@ const main = async () => {
 
     await openDialogAt(page, releaseMid);
     await page.fill('#name-input', 'RL1');
-    await chooseSelectOption(page, 'Status', 'planned');
+    await chooseSelectOption(page, 'Status', 'Planned');
     await applyAndCloseDialog(page);
     await page.waitForTimeout(300);
     await page.screenshot({path: join(SHOTS, '03-planned.png')});
@@ -301,7 +301,7 @@ const main = async () => {
     features = await readFeatures(page);
     check(
         'status persisted onto the feature',
-        features.some(f => f.tacticalGraphic?.status === 'planned'),
+        features.some(f => f.tacticalGraphic?.status === 'Planned'),
         JSON.stringify(features.map(f => f.tacticalGraphic?.status).filter(Boolean)),
     );
     const planned = await readRenderedStyle(page, 'ReleaseLine');
@@ -396,7 +396,7 @@ const main = async () => {
 
     await openDialogAt(page, routeMid);
     await page.fill('#name-input', 'MSR1');
-    await chooseSelectOption(page, 'Direction', 'ONE_WAY');
+    await chooseSelectOption(page, 'Direction', 'One Way');
     await applyAndCloseDialog(page);
     await page.waitForTimeout(400);
     await page.screenshot({path: join(SHOTS, '04-route-direction.png')});
@@ -408,7 +408,7 @@ const main = async () => {
     check('identifier survives the direction change', oneWay?.texts.some(t => t.includes('MSR1')), JSON.stringify(oneWay?.texts));
 
     await openDialogAt(page, routeMid);
-    await chooseSelectOption(page, 'Direction', 'TWO_WAY');
+    await chooseSelectOption(page, 'Direction', 'Two Way');
     await applyAndCloseDialog(page);
     await page.waitForTimeout(400);
     const twoWay = await readRouteFigure();
@@ -416,8 +416,8 @@ const main = async () => {
 
     // The one the plate is explicit about: ALT sits *between* two outward arrows.
     await openDialogAt(page, routeMid);
-    await chooseSelectOption(page, 'Direction', 'ALTERNATING');
-    await chooseSelectOption(page, 'Status', 'planned');
+    await chooseSelectOption(page, 'Direction', 'Alternating');
+    await chooseSelectOption(page, 'Status', 'Planned');
     await applyAndCloseDialog(page);
     await page.waitForTimeout(400);
     await page.screenshot({path: join(SHOTS, '04b-route-alternating.png')});
@@ -696,7 +696,8 @@ const main = async () => {
 
     // The hidden input the Import button clicks on the user's behalf. Driving it
     // directly is the same code path — the click only opens the picker.
-    await page.locator('input[type="file"]').setInputFiles(savedPath);
+    // The panel's GeoJSON input by what it accepts: add-on tools put inputs of their own on the page.
+    await page.locator('input[type="file"][accept*="geojson"]').setInputFiles(savedPath);
     await page.waitForTimeout(4000);
     const afterImport = await snap();
     const importedCount = afterImport?.features?.length ?? -1;
@@ -776,18 +777,23 @@ const main = async () => {
 
     await selectGraphic(page, 'cover');
     /*
-     * **Two clicks, not one.** Cover, guard and screen were dropped on a single anchor at a
-     * fixed screen size until 2026-08-29; APP-06 gives them four anchor points, so the
-     * operator draws one arrow — point 1 at the arrowhead, point 2 at its inner end — and
-     * the other is derived. The centre of the finished symbol is past point 2, which is
-     * where the unit symbol sits and therefore where this clicks to open the dialog.
+     * **Four clicks, one per anchor point.** APP-06 gives cover, guard and screen four: the
+     * first arrow's tip and inner end, then the second's inner end and tip. The draw takes
+     * them as clicked (`drawClickCount` is 4); it used to take two and derive the rest.
      */
-    const armTip = [box.x + box.width * 0.3, box.y + box.height * 0.4];
-    const armInner = [box.x + box.width * 0.45, box.y + box.height * 0.4];
-    await page.mouse.click(armTip[0], armInner[1]);
-    await page.mouse.dblclick(armInner[0], armInner[1]);
+    const y = box.y + box.height * 0.4;
+    for (const fx of [0.3, 0.45, 0.55, 0.7]) await page.mouse.click(box.x + box.width * fx, y);
     await page.waitForTimeout(DRAW_END_GUARD_MS);
-    const coverAt = [armInner[0] + (armInner[0] - armTip[0]) * 0.21, armInner[1]];
+    // The unit symbol sits midway between stored points 2 and 3. Read off the saved base
+    // rather than assumed from the clicks: the gap between the arrows is derived.
+    const coverAt = await page.evaluate(() => {
+        const base = window.__tacticalEngine.snapshot().features.find(f => f.properties.tacticalGraphic.name === 'Cover').geometry.coordinates;
+        const mid = [(base[1][0] + base[2][0]) / 2, (base[1][1] + base[2][1]) / 2];
+        const map = window.__tacticalGraphics.map;
+        const px = map.getPixelFromCoordinate(window.__olFromLonLat(mid));
+        const r = map.getTargetElement().getBoundingClientRect();
+        return [px[0] + r.left, px[1] + r.top];
+    });
 
     const coverBefore = await readDrawnStyles(page, 'Cover');
     const symbolBefore = coverBefore.styles.find(s => s.src);

@@ -1,5 +1,6 @@
 import {Feature, LineString, Position} from 'geojson';
 import {TacticalGraphicName} from './type';
+import {FIELD_OF_FIRE_GRAPHICS} from './fieldOfFire';
 
 /**
  * # Which end of a drawn line is the arrowhead
@@ -143,6 +144,11 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // drawn second and sits *between* the two legs, so a reversal would only swap the
     // legs and leave the vertex in the middle. It gets a swap instead. @see SWAP_FIRST_TWO
     TacticalGraphicName.FieldsOfFire,                     // 140500
+    // 2525E's variants on the same V number their points the same way.
+    TacticalGraphicName.FinalProtectiveFireLeft,         // 140501
+    TacticalGraphicName.FinalProtectiveFireRight,         // 140502
+    TacticalGraphicName.PrincipalDirectionOfFire,         // 140503
+    TacticalGraphicName.SecondaryDirectionOfFire,         // 140504
     // 152200 reads the same way -- "Point 1 defines the vertex of the graphic. Points 2
     // and 3 define the tips of the arrowheads" -- and is built the same way, apex in the
     // middle. So it joins fields of fire in `SWAP_FIRST_TWO` rather than being reversed.
@@ -166,7 +172,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
  * Swapping two elements is its own inverse, exactly as reversal is, so the same function
  * serves both directions here too.
  */
-const SWAP_FIRST_TWO = new Set<string>([TacticalGraphicName.FieldsOfFire, TacticalGraphicName.SearchArea]);
+const SWAP_FIRST_TWO = new Set<string>([...FIELD_OF_FIRE_GRAPHICS, TacticalGraphicName.SearchArea]);
 
 const TIP_FIRST = new Set<string>(TIP_FIRST_GRAPHICS);
 

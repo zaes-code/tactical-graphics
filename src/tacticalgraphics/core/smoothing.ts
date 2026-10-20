@@ -147,6 +147,7 @@ export const SMOOTHED_GRAPHICS: Readonly<Partial<Record<N, SmoothingKind>>> = Ob
     [N.Abatis]: 'line',
     [N.AntiTankDitchUnderConstruction]: 'line',
     [N.AntiTankDitchCompleted]: 'line',
+    [N.AntiTankWall]: 'line',
     [N.AntiTankDitchReinforcedWithMines]: 'line',
     [N.DecisionLine]: 'line',
     [N.FortifiedLine]: 'line',

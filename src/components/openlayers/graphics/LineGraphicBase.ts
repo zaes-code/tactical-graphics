@@ -33,6 +33,7 @@ import {
     nestedZoneStyleFunc,
     obstacleBypassStyleFunc,
     obstacleLineStyle,
+    antiTankWallStyleFunc,
     overheadWireStyle,
     passageLaneGraphicStyle,
     safeLaneOrGapStyle,
@@ -104,7 +105,11 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.MunitionFlightPath:
                     return munitionFlightPathStyleFunc()(feature, resolution);
                 case TacticalGraphicName.FieldsOfFire:
-                    return fieldOfFireStyleFunc()(feature, resolution);
+                case TacticalGraphicName.FinalProtectiveFireLeft:
+                case TacticalGraphicName.FinalProtectiveFireRight:
+                case TacticalGraphicName.PrincipalDirectionOfFire:
+                case TacticalGraphicName.SecondaryDirectionOfFire:
+                    return fieldOfFireStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.ForwardLineOfOwnTroops:
                     return forwardLineOfOwnTroopsStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.LineOfContact:
@@ -161,6 +166,8 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.AntiTankDitchCompleted:
                 case TacticalGraphicName.AntiTankDitchReinforcedWithMines:
                     return antiTankDitchStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.AntiTankWall:
+                    return antiTankWallStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.MinimumSafeDistanceZone:

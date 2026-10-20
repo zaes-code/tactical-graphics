@@ -10,6 +10,9 @@ import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {dateRangeLabel} from './midLabelLinePaints';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {strokeParts} from './dashFit';
+import {FIELD_OF_FIRE_BLADE} from '../core/fieldOfFire';
+import {TacticalGraphicName} from '../core/type';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -161,6 +164,11 @@ function along(a: ProjectedPosition, b: ProjectedPosition, ratio: number): Proje
  * Fields of fire: a V with a solid bar across the middle of its left leg and the
  * weapon's designation hanging below the vertex.
  *
+ * **And its three MIL-STD-2525E Change 1 variants**, which differ only in the bar and the
+ * dash: final protective fire (right) carries it on the PT 1 to PT 3 leg, principal direction
+ * of fire has none, and secondary direction of fire has none and is dashed. "Left" is the leg
+ * to PT 2, which the V hands over first. @see FIELD_OF_FIRE_BLADE
+ *
  * The bar is drawn as a thick butt-capped stroke rather than as a filled polygon,
  * which is what makes its ends square — a rounded cap would read as a lozenge. It
  * is part of the symbol, so it takes the same standard-identity color as the legs
@@ -170,16 +178,20 @@ function along(a: ProjectedPosition, b: ProjectedPosition, ratio: number): Proje
  * halo only thickens the glyph; every other amplifier in the library sits on or
  * beside line work and needs one.
  */
-export function fieldsOfFirePaint(): LinePaint {
+export function fieldsOfFirePaint(name: TacticalGraphicName = TacticalGraphicName.FieldsOfFire): LinePaint {
+    const blade = FIELD_OF_FIRE_BLADE[name];
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
 
         const color = lineColorOf(feature);
-        const paints: Paint[] = [{geometry, stroke: {color, widthPx: LINE_WIDTH()}}];
+        // The V and its two arrowheads; the secondary line dashes the V. @see DASHED_PARTS
+        const paints: Paint[] = strokeParts(name, geometry.coordinates, {color, widthPx: LINE_WIDTH()});
 
-        const leg = geometry.coordinates[0] ?? [];
-        if (leg.length >= 2) {
+        const vee = geometry.coordinates[0] ?? [];
+        // [PT 2, PT 1, PT 3]: the bladed leg runs from its tip to the vertex.
+        const leg = blade === 3 && vee.length >= 3 ? [vee[2], vee[1]] : vee;
+        if (blade && leg.length >= 2) {
             // Capped against the leg's own on-screen length, so the bar keeps its share of
             // the symbol at every size instead of a fixed number of pixels.
             const legPx = Math.hypot(leg[1][0] - leg[0][0], leg[1][1] - leg[0][1]) / context.resolution;
@@ -200,9 +212,9 @@ export function fieldsOfFirePaint(): LinePaint {
         }
 
         const label = feature.properties.designation ?? '';
-        if (leg.length >= 3 && label) {
+        if (vee.length >= 3 && label) {
             paints.push({
-                geometry: {type: 'Point', coordinates: leg[1]},
+                geometry: {type: 'Point', coordinates: vee[1]},
                 text: {
                     text: label,
                     font: fontStyle,

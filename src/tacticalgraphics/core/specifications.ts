@@ -13,6 +13,15 @@ import {TacticalGraphicName} from './type';
  * the key keeps the form people still search for.
  */
 export enum TacticalGraphicSpecification {
+    /**
+     * MIL-STD-2525E Change 1 (2 March 2025), *Joint Military Symbology*. Membership is read
+     * from its Appendix A control-measure table by entity code, with the names compared.
+     *
+     * First because it is the governing standard: FM 1-02.2 "compiles ... MIL-STD-2525E approved
+     * military symbols" for land operations, and APP-06 is NATO's counterpart, harmonized with it.
+     * @see NOT_IN_MIL_STD_2525
+     */
+    MIL_STD_2525 = 'MIL-STD-2525',
     /** US Army FM 1-02.2, *Military Symbols*. The catalog this library was built from. */
     FM1_02_2 = 'FM 1-02.2',
     /** NATO APP-06, *NATO Joint Military Symbology*, Edition E Version 2 (October 2025). */
@@ -38,23 +47,27 @@ const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecificatio
  */
 const APP6_ONLY = [TacticalGraphicSpecification.APP6] as const;
 const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
+/** In MIL-STD-2525 and neither of the other two: antitank wall and the four fields-of-fire symbols. */
+const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
 
 /**
- * Which specifications define each graphic.
+ * Which of FM 1-02.2 and APP-06 define each graphic, as tagged by hand. MIL-STD-2525 is
+ * added on top of this by {@link GRAPHIC_SPECIFICATIONS}; only a graphic in neither of
+ * these two names it here.
  *
  * Exhaustive by construction, like `GRAPHIC_CATEGORIES` -- adding a
  * `TacticalGraphicName` member will not compile until it is classified here.
  *
  * The trailing comment on each APP-06 entry is its entity code from Annex A,
  * Table A-32, so a claim can be checked against the standard rather than taken on
- * trust.
+ * trust. Where APP-06 has no code and MIL-STD-2525 does, the comment says so.
  *
- * **318 graphics: 225 in both catalogs, 8 FM 1-02.2 only, 85 APP-06 only** (2026-09-24). The axis
- * runs both ways, which it did not when it was first added -- every graphic was then
- * in FM 1-02.2, so filtering by that specification hid nothing. Count it, don't trust
- * it. See `ai/app-6.md` for the source document and how the mapping was derived.
+ * **323 graphics: 288 in MIL-STD-2525E, 5 of them only there; 225 in both FM 1-02.2 and APP-06,
+ * 8 FM 1-02.2 only, 85 APP-06 only** (2026-10-20). The axis runs both ways, which it did not when it was first added -- every
+ * graphic was then in FM 1-02.2, so filtering by that specification hid nothing. Count it,
+ * don't trust it. See `ai/app-6.md` for the source document and how the mapping was derived.
  */
-export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = {
+const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = {
     [TacticalGraphicName.BaseDefenseZone]:                              BOTH,      // APP-06 170800 Base Defence Zone
     [TacticalGraphicName.MainAxisOfAdvance]:                            BOTH,      // APP-06 151403 Main Attack
     [TacticalGraphicName.MainAxisOfAdvanceFeint]:                       BOTH,      // APP-06 151406 Feint
@@ -128,7 +141,8 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.CorpsSupportArea]:                             BOTH,      // APP-06 310800 Corps Support Area
     [TacticalGraphicName.DropZone]:                                     BOTH,      // APP-06 150600 Drop Zone (DZ)
     [TacticalGraphicName.LandingZone]:                                  BOTH,      // APP-06 150800 Landing Zone (LZ)
-    [TacticalGraphicName.KillZone]:                                     FM_ONLY,
+    // Not in APP-06 Edition E; MIL-STD-2525E codes it 242800, so it carries that code.
+    [TacticalGraphicName.KillZone]:                                     FM_ONLY,   // MIL-STD-2525 242800 Kill Zone
     [TacticalGraphicName.PickupZone]:                                   BOTH,      // APP-06 150900 Pick-Up Zone (PZ)
     [TacticalGraphicName.BattlePosition]:                               BOTH,      // APP-06 151200 Battle Position
     [TacticalGraphicName.StrongPoint]:                                  BOTH,      // APP-06 151203 Strong Point
@@ -339,7 +353,9 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.GroupOrSeriesOfTargets]:                       BOTH,      // APP-06 240805 Series or Groups of Targets
     [TacticalGraphicName.WeaponSensorRangeFanCircular]:                 BOTH,      // APP-06 242100 Weapon/Sensor Range Fan, Circular
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                   BOTH,      // APP-06 242200 Weapon/Sensor Range Fan, Sector
-    [TacticalGraphicName.LineOfContact]:                                BOTH,      // APP-06 141100 Line of Departure/Line of Contact
+    // APP-06 and MIL-STD-2525E both describe Line of Contact with no code (drawn as the two
+    // FLOTs together); MIL-STD-2525D coded it 140200, so that is the code it carries.
+    [TacticalGraphicName.LineOfContact]:                                BOTH,      // MIL-STD-2525 140200 Line of Contact
     [TacticalGraphicName.AttackByFire]:                                 BOTH,      // APP-06 152000 Attack by Fire
     [TacticalGraphicName.Defeat]:                                       APP6_ONLY, // APP-06 344300 Defeat
     [TacticalGraphicName.Destroy]:                                      BOTH,      // APP-06 340900 Destroy
@@ -405,7 +421,88 @@ export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly Tactic
     [TacticalGraphicName.ExtractionZone]: APP6_ONLY,  // APP-06 150700 Extraction Zone (EZ)
     [TacticalGraphicName.RegimentalSupportArea]: APP6_ONLY,  // APP-06 310500 Regimental Support Area
     [TacticalGraphicName.FortifiedLine]:                                BOTH,      // APP-06 290900 Fortified Line
+    // MIL-STD-2525D Table H-XIX; in neither FM 1-02.2 nor APP-06 Edition E.
+    [TacticalGraphicName.AntiTankWall]:                                 MIL_STD_2525_ONLY, // MIL-STD-2525 290204 Antitank Wall
+    // MIL-STD-2525E Change 1 Table L-VII; added March 2025, so in neither of the others yet.
+    [TacticalGraphicName.FinalProtectiveFireLeft]:                      MIL_STD_2525_ONLY, // MIL-STD-2525 140501 Final Protective Fire (Left)
+    [TacticalGraphicName.FinalProtectiveFireRight]:                     MIL_STD_2525_ONLY, // MIL-STD-2525 140502 Final Protective Fire (Right)
+    [TacticalGraphicName.PrincipalDirectionOfFire]:                     MIL_STD_2525_ONLY, // MIL-STD-2525 140503 Principal Direction of Fire
+    [TacticalGraphicName.SecondaryDirectionOfFire]:                     MIL_STD_2525_ONLY, // MIL-STD-2525 140504 Secondary Direction of Fire
 };
+
+/**
+ * The graphics MIL-STD-2525E Change 1 does not have. Every other graphic is in it.
+ *
+ * Derived 2026-10-20 from the control-measure table (symbol set 25) in Appendix A of
+ * MIL-STD-2525E Change 1, by entity code with the names compared. mil-sym-java's `mse.txt`
+ * (rows tagged version 15) agrees on every graphic but line of contact: Change 1 describes
+ * that symbol under the forward line of troops with no code of its own, so it is in 2525E
+ * while its `140200` is a 2525D code. Shorter to pin the 35 absences than the 288 members,
+ * and a new graphic defaults to "in 2525", so check it against the table before leaving
+ * it off.
+ */
+const NOT_IN_MIL_STD_2525: ReadonlySet<TacticalGraphicName> = new Set([
+    // FM 1-02.2 only, with no code in any catalog.
+    TacticalGraphicName.CommonSensorBoundary,
+    TacticalGraphicName.DelayLine,
+    TacticalGraphicName.Gap,
+    TacticalGraphicName.MovementToContact,
+    TacticalGraphicName.ObstacleGroup,
+    TacticalGraphicName.PassageLane,
+    TacticalGraphicName.UnmannedAircraftCorridor,
+    // APP-06 codes with no 2525E row. The two feints are in 2525D and were dropped in E.
+    TacticalGraphicName.MainAxisOfAdvanceFeint, // 151406
+    TacticalGraphicName.DirectionOfMainAttackFeint, // 140605
+    TacticalGraphicName.Bridgehead, // 120800
+    TacticalGraphicName.DecisionLine, // 110500
+    TacticalGraphicName.NamedAreaOfInterestLine, // 142000
+    TacticalGraphicName.MobilityCorridor, // 142100
+    TacticalGraphicName.AvenueOfApproach, // 152300
+    TacticalGraphicName.RestrictedTerrain, // 152400
+    TacticalGraphicName.SeverelyRestrictedTerrain, // 152500
+    TacticalGraphicName.NavigationalRhumbLine, // 220109
+    TacticalGraphicName.ArtilleryManeuverArea, // 242400
+    TacticalGraphicName.ArtilleryReservedArea, // 242500
+    TacticalGraphicName.ZoneOfFire, // 242600
+    TacticalGraphicName.PsyOpsZoneIrregular, // 242701
+    TacticalGraphicName.PsyOpsZoneRectangular, // 242702
+    TacticalGraphicName.PsyOpsZoneCircular, // 242703
+    TacticalGraphicName.TargetAreaSingleTargetAegis, // 240804
+    TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial, // 271701
+    TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial, // 271801
+    TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial, // 272001
+    TacticalGraphicName.Capture, // 343000
+    TacticalGraphicName.Control, // 343200
+    TacticalGraphicName.Deny, // 343400
+    TacticalGraphicName.Escort, // 343600
+    TacticalGraphicName.Exfiltrate, // 343700
+    TacticalGraphicName.Locate, // 343900
+    TacticalGraphicName.Recover, // 344600
+    TacticalGraphicName.HumanTerrain, // 370100
+]);
+
+/**
+ * Which specifications define each graphic: MIL-STD-2525 for every graphic MIL-STD-2525E
+ * Change 1 has, then FM 1-02.2 and APP-06 as tagged by hand. Listed in that order.
+ *
+ * **288 of 323 graphics are in MIL-STD-2525.** Count it, don't trust it.
+ */
+export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = (() => {
+    // One frozen array per combination, shared like the consts above, so a caller that
+    // mutated one could not corrupt every other graphic holding it.
+    const withMilStd = new Map<readonly TacticalGraphicSpecification[], readonly TacticalGraphicSpecification[]>();
+    const add = (specs: readonly TacticalGraphicSpecification[]) => {
+        let found = withMilStd.get(specs);
+        if (!found) withMilStd.set(specs, (found = Object.freeze([TacticalGraphicSpecification.MIL_STD_2525, ...specs])));
+        return found;
+    };
+    return Object.fromEntries(
+        (Object.entries(FM_AND_APP6) as [TacticalGraphicName, readonly TacticalGraphicSpecification[]][]).map(([name, specs]) => [
+            name,
+            specs.includes(TacticalGraphicSpecification.MIL_STD_2525) || NOT_IN_MIL_STD_2525.has(name) ? specs : add(specs),
+        ]),
+    ) as Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]>;
+})();
 
 /** The specifications a graphic belongs to. Never empty. */
 export function getSpecifications(name: TacticalGraphicName): readonly TacticalGraphicSpecification[] {

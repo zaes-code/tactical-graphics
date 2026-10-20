@@ -103,7 +103,8 @@ export {
 
 export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
 export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
-export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes} from './core/entityCodes';
+export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes, listEntityVariantCodes, resolveEntityCode} from './core/entityCodes';
+export type {EntityCodeAmplifiers, EntityCodeResolution} from './core/entityCodes';
 export {
     DoctrinalIssueKind,
     getDoctrinalRequirements,
@@ -332,6 +333,7 @@ export {
     withFittedDashes,
 } from './symbology/dashFit';
 export {DASHED_PARTS, dashedPartsOf} from './core/dashedParts';
+export {FIELD_OF_FIRE_BLADE, FIELD_OF_FIRE_GRAPHICS, isFieldOfFire} from './core/fieldOfFire';
 export {drawIsComplete} from './core/drawCompletion';
 export {completeDemolitionBase} from './core/drawnBase';
 export {
@@ -381,7 +383,7 @@ export {
     zoneLabelPaint,
 } from './symbology/areaLabelPaints';
 export {capLabelToSpan, fitLabelScale, LABEL_SPAN_SHARE, liftedAnchor} from './symbology/labelFit';
-export {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
 export {
     fortifiedPositionPaint,
     mineClusterPaint,

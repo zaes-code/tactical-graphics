@@ -130,6 +130,10 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
 
     // ── Fire Support Coordination Control Measures ──────────────────────────── OK
     [TacticalGraphicName.FieldsOfFire]:                     TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FinalProtectiveFireLeft]:          TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FinalProtectiveFireRight]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.PrincipalDirectionOfFire]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.SecondaryDirectionOfFire]:         TacticalGraphicCategory.FireSupportCoordination,
     [TacticalGraphicName.FreeFireAreaCircular]:             TacticalGraphicCategory.FireSupportCoordination,
     [TacticalGraphicName.FreeFireAreaIrregular]:            TacticalGraphicCategory.FireSupportCoordination,
     [TacticalGraphicName.FreeFireAreaRectangular]:          TacticalGraphicCategory.FireSupportCoordination,
@@ -210,6 +214,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchCompleted]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankWall]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireUnspecified]:                       TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireSingleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireDoubleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,

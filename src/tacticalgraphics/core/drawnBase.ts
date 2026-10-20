@@ -26,6 +26,7 @@
 import type {Position} from 'geojson';
 import {asVee} from '../graphics/FieldsOfFire';
 import {TacticalGraphicName} from './type';
+import {isFieldOfFire} from './fieldOfFire';
 import {generatorOrder, storedOrder} from './drawOrder';
 import {baseVertexCount, carriesSeparationInBase, drawsAsRailCrossing} from './handles';
 import {carriesWidthPointInBase, squareWidthPoint, tipOverhangOf} from './axisWidth';
@@ -157,7 +158,7 @@ export function normalizeDrawnBase(
         return clampSCurveAnchor(deduped, resolution);
     }
 
-    if (name === TacticalGraphicName.FieldsOfFire) {
+    if (isFieldOfFire(name)) {
         return storedOrder(name, asVee(generatorOrder(name, deduped)));
     }
 
