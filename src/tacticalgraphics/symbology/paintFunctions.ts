@@ -409,6 +409,9 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
 /** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
 const OBSTACLE_LABEL_GAP_PX = 8;
 
+/** `crenellatedPath`'s side sign for the left of the direction of travel. */
+const LEFT_OF_TRAVEL = 1;
+
 /**
  * A line wearing triangular teeth, with its designation below.
  *
@@ -417,11 +420,13 @@ const OBSTACLE_LABEL_GAP_PX = 8;
  * second renderer in one function. A MapLibre `line` layer renders what its
  * source holds; there is no expression that can add a tooth.
  *
- * The label takes the lower side and the teeth the upper, whichever way the line
- * was drawn, so the two never compete. "Lower" is the perpendicular with a
- * negative northing rather than one derived from the direction of travel — that
- * is what stopped the label changing sides when the same line was drawn
- * right-to-left. A vertical line has no lower side, so the tie breaks east.
+ * The teeth take the left of the direction of travel and the label the right, so the
+ * two never compete. APP-06 290100's plate draws PT 1 to PT 2 left to right with the
+ * teeth up and says orientation "is determined by the order in which the anchor points
+ * are entered", so drawing the line the other way puts both on the other side. They
+ * used to be pinned to the map's up and down whichever way the line was drawn
+ * (2026-08-03); that kept them still and ignored the plate. @see antiTankWallPaint, the
+ * same line with its teeth on the right.
  */
 export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
@@ -444,8 +449,8 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         const dir: ProjectedPosition = [segDx / segLength, segDy / segLength];
         const mid: ProjectedPosition = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
 
-        let normal: ProjectedPosition = [-dir[1], dir[0]];
-        if (normal[1] > 0 || (normal[1] === 0 && normal[0] < 0)) normal = [-normal[0], -normal[1]];
+        // The right of travel, opposite the teeth.
+        const normal: ProjectedPosition = [dir[1], -dir[0]];
 
         // Stand off the line by a constant number of pixels. Both terms are
         // screen-sized, because text does not scale with the map — this used to be a
@@ -474,7 +479,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
 
         const {heightMap, baseMap, gapMap} = obstacleToothSize(coords, false, context.resolution);
         paints.push({
-            geometry: {type: 'LineString', coordinates: crenellatedPath(coords, heightMap, baseMap, gapMap, 'up')},
+            geometry: {type: 'LineString', coordinates: crenellatedPath(coords, heightMap, baseMap, gapMap, LEFT_OF_TRAVEL)},
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         });
 

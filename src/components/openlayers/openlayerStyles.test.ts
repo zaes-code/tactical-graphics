@@ -645,23 +645,25 @@ describe('obstacle line', () => {
     const WEST_TO_EAST = [[0, 0], [1000, 0]];
     const EAST_TO_WEST = [[1000, 0], [0, 0]];
 
-    it('puts the label under the line whichever way it was drawn', () => {
+    it('puts the label right of travel, so it flips with the drawing order', () => {
         expect(labelPointFor(WEST_TO_EAST, 10)[1]).toBeLessThan(0);
-        expect(labelPointFor(EAST_TO_WEST, 10)[1]).toBeLessThan(0);
+        expect(labelPointFor(EAST_TO_WEST, 10)[1]).toBeGreaterThan(0);
     });
 
-    it('puts the teeth above it whichever way it was drawn', () => {
-        for (const drawn of [WEST_TO_EAST, EAST_TO_WEST]) {
-            const apexes = toothedPath(drawn, 10).filter(([, y]) => Math.abs(y) > 0.001);
+    it('puts the teeth left of travel, as APP-06 290100 orients them by anchor order', () => {
+        for (const [drawn, up] of [[WEST_TO_EAST, true], [EAST_TO_WEST, false]] as const) {
+            const apexes = toothedPath(drawn as unknown as number[][], 10).filter(([, y]) => Math.abs(y) > 0.001);
             expect(apexes.length).toBeGreaterThan(0);
-            expect(apexes.every(([, y]) => y > 0)).toBe(true);
+            expect(apexes.every(([, y]) => (up ? y > 0 : y < 0))).toBe(true);
         }
     });
 
     it('keeps the label and the teeth on opposite sides, so they never compete', () => {
-        const label = labelPointFor(WEST_TO_EAST, 10);
-        const apexes = toothedPath(WEST_TO_EAST, 10).filter(([, y]) => Math.abs(y) > 0.001);
-        expect(Math.sign(label[1])).toBe(-Math.sign(apexes[0][1]));
+        for (const drawn of [WEST_TO_EAST, EAST_TO_WEST]) {
+            const label = labelPointFor(drawn, 10);
+            const apexes = toothedPath(drawn, 10).filter(([, y]) => Math.abs(y) > 0.001);
+            expect(Math.sign(label[1])).toBe(-Math.sign(apexes[0][1]));
+        }
     });
 
     it('anchors the label at the same place either way — the line is the same line', () => {

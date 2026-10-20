@@ -157,9 +157,9 @@ const RIGHT_OF_TRAVEL = -1;
  *
  * Its plate draws PT 1 to PT 2 left to right with the teeth hanging below, and says the
  * teeth "typically point toward enemy forces". Which side they are on is the content of
- * the symbol, so it follows the drawing order, where {@link obstacleLinePaint} keeps its
- * teeth up whichever way the line was drawn. The antitank ditches' teeth sit on the same
- * side. In neither FM 1-02.2 nor APP-06.
+ * the symbol, so it follows the drawing order, as {@link obstacleLinePaint}'s does on the
+ * other side. The antitank ditches' teeth sit on the same side. In neither FM 1-02.2 nor
+ * APP-06.
  */
 export function antiTankWallPaint(): ObstaclePaint {
     return (feature, context) => {
