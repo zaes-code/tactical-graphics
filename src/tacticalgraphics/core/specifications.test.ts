@@ -316,10 +316,10 @@ describe('graphic specifications', () => {
         for (const name of FM_ONLY_GRAPHICS.filter((n) => n !== TacticalGraphicName.KillZone)) {
             expect(hasSpecification(name, TacticalGraphicSpecification.MIL_STD_2525)).toBe(false);
         }
-        expect(getSpecifications(TacticalGraphicName.KillZone)).toEqual([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.MIL_STD_2525]);
+        expect(getSpecifications(TacticalGraphicName.KillZone)).toEqual([TacticalGraphicSpecification.MIL_STD_2525, TacticalGraphicSpecification.FM1_02_2]);
         expect(getSpecifications(TacticalGraphicName.AntiTankWall)).toEqual([TacticalGraphicSpecification.MIL_STD_2525]);
         expect(getSpecifications(TacticalGraphicName.PhaseLine)).toEqual([
-            TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6, TacticalGraphicSpecification.MIL_STD_2525,
+            TacticalGraphicSpecification.MIL_STD_2525, TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6,
         ]);
     });
 

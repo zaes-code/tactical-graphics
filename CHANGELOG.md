@@ -20,7 +20,7 @@ the npm publish dates — when a version actually became installable.
 - **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
   every graphic MIL-STD-2525E Change 1 has: 284 of the 319, read from its control-measure table
   by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
-  `['FM 1-02.2', 'APP-06', 'MIL-STD-2525']`, and `listNamesBySpecification` answers which 2525E
+  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']` (the governing standard first), and `listNamesBySpecification` answers which 2525E
   control measures the library draws. Code that compared a specification list to `['APP-06']`
   exactly should test membership instead.
 - **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
