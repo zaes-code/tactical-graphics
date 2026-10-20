@@ -47,7 +47,7 @@ const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecificatio
  */
 const APP6_ONLY = [TacticalGraphicSpecification.APP6] as const;
 const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
-/** In MIL-STD-2525 and neither of the other two: antitank wall and three fields-of-fire variants. */
+/** In MIL-STD-2525 and neither of the other two: antitank wall and the four fields-of-fire symbols. */
 const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
 
 /**
@@ -62,8 +62,8 @@ const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
  * Table A-32, so a claim can be checked against the standard rather than taken on
  * trust. Where APP-06 has no code and MIL-STD-2525 does, the comment says so.
  *
- * **323 graphics: 225 in both catalogs, 8 FM 1-02.2 only, 85 APP-06 only, 5 MIL-STD-2525 only**
- * (2026-10-20). The axis runs both ways, which it did not when it was first added -- every
+ * **323 graphics: 288 in MIL-STD-2525E, 5 of them only there; 225 in both FM 1-02.2 and APP-06,
+ * 8 FM 1-02.2 only, 85 APP-06 only** (2026-10-20). The axis runs both ways, which it did not when it was first added -- every
  * graphic was then in FM 1-02.2, so filtering by that specification hid nothing. Count it,
  * don't trust it. See `ai/app-6.md` for the source document and how the mapping was derived.
  */
