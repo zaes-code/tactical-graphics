@@ -139,32 +139,34 @@ const ALL_CATEGORIES: TacticalGraphicCategory[] = Object.values(TacticalGraphicC
 
 const ALL_SPECIFICATIONS: TacticalGraphicSpecification[] = Object.values(TacticalGraphicSpecification);
 
+/** How each standard is named on screen. The tag says MIL-STD-2525; the edition the tag was read from is E. */
+const SPECIFICATION_LABEL: Record<TacticalGraphicSpecification, string> = {
+    [TacticalGraphicSpecification.MIL_STD_2525]: 'MIL-STD-2525E',
+    [TacticalGraphicSpecification.FM1_02_2]: 'FM 1-02.2',
+    [TacticalGraphicSpecification.APP6]: 'APP-06',
+};
+
 /**
- * How the panel filters by standard.
+ * How the panel filters by standard: everything, one standard's graphics, or the ones all three share.
  *
- * Exclusive choices rather than a checkbox per specification, and the last three
- * are a genuine partition: every graphic is in both catalogues, or in exactly one.
- *
- * It was three options while every graphic in the registry was in FM 1-02.2 — an
- * "FM 1-02.2" tick box hid nothing then and read as broken. Now that NATO defines
- * seven the manual does not, both "only" halves are worth asking for.
+ * One option per standard rather than "both" and "only" options, which stopped meaning anything
+ * once there were three standards. A graphic is in as many standards as define it, so the three
+ * single-standard counts overlap and add up to more than the registry.
  */
-type SpecificationFilter = 'all' | 'both' | 'fmOnly' | 'app6Only';
+type SpecificationFilter = 'all' | TacticalGraphicSpecification | 'allThree';
 
 const SPECIFICATION_FILTERS: {value: SpecificationFilter; label: string; help: string}[] = [
     {value: 'all', label: 'All', help: 'Every graphic in the registry'},
-    {value: 'both', label: 'Both', help: 'Defined by FM 1-02.2 and NATO APP-06 alike'},
-    {value: 'fmOnly', label: 'FM only', help: 'FM 1-02.2 defines these and APP-06 does not'},
-    {value: 'app6Only', label: 'APP-06 only', help: 'NATO APP-06 defines these and FM 1-02.2 does not'},
+    {value: TacticalGraphicSpecification.MIL_STD_2525, label: '2525E', help: 'Graphics in MIL-STD-2525E Change 1'},
+    {value: TacticalGraphicSpecification.FM1_02_2, label: 'FM 1-02.2', help: 'Graphics in US Army FM 1-02.2'},
+    {value: TacticalGraphicSpecification.APP6, label: 'APP-06', help: 'Graphics in NATO APP-06'},
+    {value: 'allThree', label: 'All three', help: 'Graphics in all three standards'},
 ];
 
 function matchesSpecificationFilter(option: GraphicOption, filter: SpecificationFilter): boolean {
     if (filter === 'all') return true;
-    const inApp6 = option.specifications.includes(TacticalGraphicSpecification.APP6);
-    const inFm = option.specifications.includes(TacticalGraphicSpecification.FM1_02_2);
-    if (filter === 'both') return inApp6 && inFm;
-    if (filter === 'fmOnly') return inFm && !inApp6;
-    return inApp6 && !inFm;
+    if (filter === 'allThree') return ALL_SPECIFICATIONS.every(s => option.specifications.includes(s));
+    return option.specifications.includes(filter);
 }
 
 const LS_CATEGORIES = 'tg_enabledCategories';
@@ -427,17 +429,15 @@ const MapControls: React.FC<Props> = ({
                         Tactical Graphics
                     </Typography>
                     {/*
-                     * The two standards this library implements. Worth stating in the
+                     * The standards this library implements. Worth stating in the
                      * header rather than burying in the filter: which catalogue a symbol
                      * comes from is the first thing a NATO user asks, and until now the
                      * app only ever claimed FM 1-02.2 by implication.
                      */}
                     <Typography sx={{fontSize: '0.6rem', letterSpacing: '0.06em', color: 'text.secondary', mt: 0.15}}>
-                        {specificationFilter === 'fmOnly'
-                            ? `${TacticalGraphicSpecification.FM1_02_2} only`
-                            : specificationFilter === 'app6Only'
-                                ? `${TacticalGraphicSpecification.APP6} only`
-                                : ALL_SPECIFICATIONS.join(' · ')}
+                        {specificationFilter === 'all' || specificationFilter === 'allThree'
+                            ? ALL_SPECIFICATIONS.map(s => SPECIFICATION_LABEL[s]).join(' · ')
+                            : SPECIFICATION_LABEL[specificationFilter]}
                     </Typography>
                 </Box>
                 <Tooltip title={hiddenGraphicCount > 0 ? `Filter graphics (${hiddenGraphicCount} hidden)` : 'Filter graphics'}>
@@ -912,7 +912,7 @@ const MapControls: React.FC<Props> = ({
                         const count = ALL_OPTIONS.filter(o => matchesSpecificationFilter(o, value)).length;
                         return (
                             <Tooltip key={value} title={help}>
-                                <ToggleButton value={value} sx={{fontSize: '0.68rem', py: 0.4, textTransform: 'none'}}>
+                                <ToggleButton value={value} sx={{fontSize: '0.68rem', py: 0.4, textTransform: 'none', whiteSpace: 'nowrap'}}>
                                     {label}
                                     <Box component="span" sx={{ml: 0.5, fontSize: '0.6rem', color: 'text.disabled'}}>
                                         {count}

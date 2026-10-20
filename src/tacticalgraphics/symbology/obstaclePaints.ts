@@ -22,7 +22,7 @@ import {
     ANTI_TANK_TOOTH_PX,
 } from '../graphics/AntiTankDitch';
 import {DEFAULT_WIRE_STYLE, WIRE_MARK_PX, WIRE_STYLES} from '../graphics/WireObstacle';
-import {castellatedPath, centerSegmentIndex, centredRun, decorationScale, FORTIFIED_CRENEL_PX, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX, offsetBelow, parallelPath, pathLength, splitAtCorners, uprightRotation, walkPath} from './decorations';
+import {castellatedPath, centerSegmentIndex, centredRun, crenellatedPath, decorationScale, FORTIFIED_CRENEL_PX, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX, obstacleToothSize, offsetBelow, parallelPath, pathLength, splitAtCorners, uprightRotation, walkPath} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -147,6 +147,29 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
  */
 const MINE_CLEARANCE = 0.85;
 const MINE_DEPTH_FRACTION = 0.62;
+
+/** `crenellatedPath`'s side sign for the right of the direction of travel. */
+const RIGHT_OF_TRAVEL = -1;
+
+/**
+ * Antitank wall (MIL-STD-2525 290204): the obstacle line's teeth on the right of the
+ * direction of travel, with no label.
+ *
+ * Its plate draws PT 1 to PT 2 left to right with the teeth hanging below, and says the
+ * teeth "typically point toward enemy forces". Which side they are on is the content of
+ * the symbol, so it follows the drawing order, as {@link obstacleLinePaint}'s does on the
+ * other side. The antitank ditches' teeth sit on the same side. In neither FM 1-02.2 nor
+ * APP-06.
+ */
+export function antiTankWallPaint(): ObstaclePaint {
+    return (feature, context) => {
+        const path = drawnPath(feature);
+        if (path.length < 2) return [];
+        const {heightMap, baseMap, gapMap} = obstacleToothSize(path, false, context.resolution);
+        const coordinates = heightMap > 0 ? crenellatedPath(path, heightMap, baseMap, gapMap, RIGHT_OF_TRAVEL) : path;
+        return [{geometry: {type: 'LineString', coordinates}, stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()}}];
+    };
+}
 
 /**
  * The three anti-tank ditches: under construction, completed, and reinforced with

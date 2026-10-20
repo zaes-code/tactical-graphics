@@ -28,7 +28,7 @@ import {
 } from './boundaryBreakPaints';
 import {CROSSED_MISSION_TASKS} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {antiTankDitchPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
+import {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstaclePaint} from './obstaclePaints';
 import {
     fortifiedPositionPaint,
     mineClusterPaint,
@@ -749,6 +749,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     const registry: Partial<Record<TacticalGraphicName, GraphicPainters>> = {
         [TacticalGraphicName.PhaseLine]: {graphic: phaseLinePaint(TacticalGraphicName.PhaseLine)},
         [TacticalGraphicName.ObstacleLine]: {graphic: obstacleLinePaint(TacticalGraphicName.ObstacleLine)},
+        [TacticalGraphicName.AntiTankWall]: {graphic: antiTankWallPaint()},
 
         // ── APP-06's protection lines ────────────────────────────────────────
         [TacticalGraphicName.Capture]: {graphic: sweptArcTaskPaint(getLabel(TacticalGraphicName.Capture))},

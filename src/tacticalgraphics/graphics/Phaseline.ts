@@ -27,9 +27,15 @@ export class Phaseline extends TacticalGraphicsBase {
 }
 
 
+/** Obstacle line, and antitank wall, which is the same line with its teeth on the other side. */
 export class ObstacleLine extends TacticalGraphicsBase {
-    name: string = TacticalGraphicName.ObstacleLine;
+    name: string;
     type: string = "LineString";
+
+    constructor(tacticalGraphicName: TacticalGraphicName = TacticalGraphicName.ObstacleLine) {
+        super();
+        this.name = tacticalGraphicName;
+    }
 
     /** The drawn line, undecorated — the teeth are drawn in screen space. @see Obstacle */
     generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<LineString> {

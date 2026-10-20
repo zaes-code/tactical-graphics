@@ -127,7 +127,9 @@ describe('obstacle teeth are sized against the shape', () => {
         expect(shortLineFinesse).toBeCloseTo(longLineCoarse, 10);
     });
 
-    it('puts the label below the line and the teeth above, either drawn direction', () => {
+    it('puts the teeth left of travel and the label right, so both flip with drawing order', () => {
+        // APP-06 290100: "Orientation is determined by the order in which the anchor points
+        // are entered." LONG_LINE runs west to east, so left of travel is up.
         const forward = paintObstacle(feature, context(1000));
         const backward = paintObstacle(
             lineFeature([...LONG_LINE].reverse() as ProjectedPosition[], {properties: {name: TacticalGraphicName.ObstacleLine}}),
@@ -138,10 +140,16 @@ describe('obstacle teeth are sized against the shape', () => {
             const g = paints[0].geometry;
             return g.type === 'Point' ? g.coordinates[1] : NaN;
         };
-        // Below the line in both cases — the side is picked from the map's own
-        // "down", not from the direction of travel.
+        const toothYs = (paints: ReturnType<typeof paintObstacle>) => {
+            const g = paints[paints.length - 1].geometry;
+            return g.type === 'LineString' ? g.coordinates.map(([, y]) => y).filter((y) => Math.abs(y) > 1e-6) : [];
+        };
         expect(labelY(forward)).toBeLessThan(0);
-        expect(labelY(backward)).toBeLessThan(0);
+        expect(toothYs(forward).every((y) => y > 0)).toBe(true);
+        expect(labelY(backward)).toBeGreaterThan(0);
+        expect(toothYs(backward).every((y) => y < 0)).toBe(true);
+        expect(toothYs(forward).length).toBeGreaterThan(0);
+        expect(toothYs(backward).length).toBeGreaterThan(0);
     });
 });
 

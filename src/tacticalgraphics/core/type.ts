@@ -1291,6 +1291,9 @@ export enum TacticalGraphicName {
 
     // Field Fortification Symbols
     FortifiedLine = 'FortifiedLine',
+    // MIL-STD-2525 290204, in neither FM 1-02.2 nor APP-06. Appended so the sample sheets
+    // keep every earlier cell where it was. @see antiTankWallPaint
+    AntiTankWall = 'AntiTankWall',
 }
 
 const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
@@ -1379,6 +1382,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: 'Anti-Tank Ditch, Under Construction',
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
+    [TacticalGraphicName.AntiTankWall]: 'Anti-Tank Wall',
     // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',

@@ -36,8 +36,8 @@ const SAMPLE = [
 afterEach(() => resetTacticalGraphicsConfig());
 
 describe('the obstacle colour rule', () => {
-    it('covers the 35 graphics the plates draw green, and not the category', () => {
-        expect(OBSTACLE_GRAPHICS.size).toBe(35);
+    it('covers the 36 graphics the plates draw green, and not the category', () => {
+        expect(OBSTACLE_GRAPHICS.size).toBe(36);
         // UXO area is filed under Areas, not Mobility, and is still an obstruction.
         expect(drawsAsObstacle(TacticalGraphicName.UnexplodedExplosiveOrdnanceArea)).toBe(true);
         // Mobility measures are not obstacles: a route is a thing you travel, not one

@@ -795,6 +795,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchCompleted]: SHAPE_ONLY,
+    // 2525's plate and table carry no amplifier.
+    [TacticalGraphicName.AntiTankWall]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: SHAPE_ONLY,
     // The wire obstacles: no identifier, no dates, and no status - none of them has a
     // planned form to dash, so offering the control would put a setting in the dialog that
