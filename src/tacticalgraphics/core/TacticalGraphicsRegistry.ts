@@ -195,6 +195,7 @@ let phaseLineGraphicNames: TacticalGraphicName[] = [
 phaseLineGraphicNames.forEach((name) => TacticalGraphicsRegistry.register(new Phaseline(name)));
 
 TacticalGraphicsRegistry.register(new FieldsOfFire());
+TacticalGraphicsRegistry.register(new FieldsOfFire(TacticalGraphicName.FinalProtectiveFireLeft));
 TacticalGraphicsRegistry.register(new FieldsOfFire(TacticalGraphicName.FinalProtectiveFireRight));
 TacticalGraphicsRegistry.register(new FieldsOfFire(TacticalGraphicName.PrincipalDirectionOfFire));
 TacticalGraphicsRegistry.register(new FieldsOfFire(TacticalGraphicName.SecondaryDirectionOfFire));

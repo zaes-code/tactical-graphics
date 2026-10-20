@@ -105,6 +105,7 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.MunitionFlightPath:
                     return munitionFlightPathStyleFunc()(feature, resolution);
                 case TacticalGraphicName.FieldsOfFire:
+                case TacticalGraphicName.FinalProtectiveFireLeft:
                 case TacticalGraphicName.FinalProtectiveFireRight:
                 case TacticalGraphicName.PrincipalDirectionOfFire:
                 case TacticalGraphicName.SecondaryDirectionOfFire:

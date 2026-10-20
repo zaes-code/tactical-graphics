@@ -128,6 +128,7 @@ Graphic,Enum,Specification,APP-06 code,identifier1,identifier2,countryCodes,addi
 "fighter engagement zone",FighterEngagementZone,"MIL-STD-2525 + APP-06",171400,Y,,,,Y,Y,Y,Y,,,,,,Y,Y,,,,,,
 "final coordination line",FinalCoordinationLine,"MIL-STD-2525 + FM 1-02.2 + APP-06",140700,Y,,,,Y,Y,,,,,,,,,,,,,,,
 "final protective fire",FinalProtectiveFire,"MIL-STD-2525 + FM 1-02.2 + APP-06",240703,Y,Y,,,Y,,,,,,,,,,,,,,,Y,
+"final protective fire (left)",FinalProtectiveFireLeft,"MIL-STD-2525",140501,Y,,,,Y,,,,,,,,,,,,,,,,
 "final protective fire (right)",FinalProtectiveFireRight,"MIL-STD-2525",140502,Y,,,,Y,,,,,,,,,,,,,,,,
 "fire support area circular",FireSupportAreaCircular,"MIL-STD-2525 + FM 1-02.2 + APP-06",241003,Y,,,,Y,,Y,Y,,,,,,,,,,Y,,,
 "fire support area irregular",FireSupportAreaIrregular,"MIL-STD-2525 + FM 1-02.2 + APP-06",241001,Y,,,,Y,,Y,Y,,,,,,,,,,,,,

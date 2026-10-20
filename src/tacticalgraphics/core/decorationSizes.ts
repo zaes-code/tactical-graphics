@@ -32,6 +32,7 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FollowAndAssume]: 20,
     [TacticalGraphicName.FollowAndSupport]: 20,
     [TacticalGraphicName.FieldsOfFire]: 20,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: 20,
     [TacticalGraphicName.FinalProtectiveFireRight]: 20,
     [TacticalGraphicName.PrincipalDirectionOfFire]: 20,
     [TacticalGraphicName.SecondaryDirectionOfFire]: 20,
