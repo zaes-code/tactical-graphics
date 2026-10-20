@@ -24,7 +24,7 @@ import {RouteDirection, TacticalGraphicName} from './type';
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **312 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
+ * **316 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -246,6 +246,10 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.AntiTankDitchCompleted]:                      '290202',  // Antitank Ditch Completed
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]:            '290203',  // Antitank Ditch Reinforced, with Antitank Mines
     [TacticalGraphicName.AntiTankWall]:                                '290204',  // Antitank Wall (MIL-STD-2525 only)
+    [TacticalGraphicName.FinalProtectiveFireLeft]:                     '140501',  // Final Protective Fire (Left) (MIL-STD-2525 only)
+    [TacticalGraphicName.FinalProtectiveFireRight]:                    '140502',  // Final Protective Fire (Right) (MIL-STD-2525 only)
+    [TacticalGraphicName.PrincipalDirectionOfFire]:                    '140503',  // Principal Direction of Fire (MIL-STD-2525 only)
+    [TacticalGraphicName.SecondaryDirectionOfFire]:                    '140504',  // Secondary Direction of Fire (MIL-STD-2525 only)
     [TacticalGraphicName.WireUnspecified]:                             '290301',  // Unspecified
     [TacticalGraphicName.WireSingleFence]:                             '290302',  // Single Fence
     [TacticalGraphicName.WireDoubleFence]:                             '290303',  // Double Fence
@@ -435,7 +439,8 @@ export function getEntityCode(name: TacticalGraphicName, amplifiers?: EntityCode
 export function listNamesByEntityCode(code: string): readonly TacticalGraphicName[] {
     const key = code.trim();
     const variant = ROUTE_TRAFFIC_CODES.find(([c]) => c === key);
-    return variant ? [variant[1]] : (NAMES_BY_CODE.get(key) ?? []);
+    if (variant) return [variant[1]];
+    return NAMES_BY_CODE.get(key) ?? [];
 }
 
 /**

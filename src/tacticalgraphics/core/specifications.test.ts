@@ -215,9 +215,16 @@ const APP6_ONLY_GRAPHICS: TacticalGraphicName[] = [
 
 /**
  * In MIL-STD-2525 and neither FM 1-02.2 nor APP-06 Edition E. 290204 is printed in 2525D
- * Table H-XIX and in 2525E Change 1; APP-06's antitank obstacles stop at 290203.
+ * Table H-XIX and in 2525E Change 1; APP-06's antitank obstacles stop at 290203. 140502 to
+ * 140504 were added to 2525E in Change 1 (March 2025), after APP-06 Edition E.
  */
-const MIL_STD_2525_ONLY_GRAPHICS: TacticalGraphicName[] = [TacticalGraphicName.AntiTankWall];
+const MIL_STD_2525_ONLY_GRAPHICS: TacticalGraphicName[] = [
+    TacticalGraphicName.AntiTankWall,
+    TacticalGraphicName.FinalProtectiveFireLeft,
+    TacticalGraphicName.FinalProtectiveFireRight,
+    TacticalGraphicName.PrincipalDirectionOfFire,
+    TacticalGraphicName.SecondaryDirectionOfFire,
+];
 
 describe('graphic specifications', () => {
     const names = Object.keys(GRAPHIC_SPECIFICATIONS) as TacticalGraphicName[];
@@ -307,10 +314,10 @@ describe('graphic specifications', () => {
         expect(getSpecifications(name)).toEqual(expect.arrayContaining([TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecification.APP6]));
     });
 
-    it('puts 284 graphics in MIL-STD-2525E and leaves 35 out', () => {
+    it('puts 288 graphics in MIL-STD-2525E and leaves 35 out', () => {
         // The 35 are pinned in specifications.ts; this holds the totals still so a graphic
         // added without checking 2525E's table shows up as a changed count.
-        expect(listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)).toHaveLength(284);
+        expect(listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)).toHaveLength(288);
         expect(names.filter((n) => !hasSpecification(n, TacticalGraphicSpecification.MIL_STD_2525))).toHaveLength(35);
         // Every uncoded FM-only graphic is outside 2525, and kill zone, coded 242800, is in it.
         for (const name of FM_ONLY_GRAPHICS.filter((n) => n !== TacticalGraphicName.KillZone)) {

@@ -49,9 +49,15 @@ export function asVee(coords: Position[]): Position[] {
     return [end, apex, swung.geometry.coordinates];
 }
 
+/** Fields of fire, and the three MIL-STD-2525E variants drawn on the same V. @see FIELD_OF_FIRE_GRAPHICS */
 export class FieldsOfFire extends TacticalGraphicsBase {
-    name: string = TacticalGraphicName.FieldsOfFire;
+    name: string;
     type: string = "LineString";
+
+    constructor(tacticalGraphicName: TacticalGraphicName = TacticalGraphicName.FieldsOfFire) {
+        super();
+        this.name = tacticalGraphicName;
+    }
 
     generateGraphics(base: Feature<LineString>, opts: IBaseGraphicOptions | undefined): Feature<MultiLineString> {
         const coords = asVee(base.geometry.coordinates);

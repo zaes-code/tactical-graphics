@@ -42,6 +42,8 @@
     // is named here. It reads a FeatureCollection the demo happens to define.
     "src/components/maplibre/spikeDriver.ts",
     // Demo-only too: terrain, sky and camera are the host's basemap, not symbology.
-    "src/components/maplibre/tiltView.ts"
+    "src/components/maplibre/tiltView.ts",
+    // The demo's sample sheet. Nothing exported reaches it, so it was dead weight in the tarball.
+    "src/components/maplibre/sampleGallery.ts"
   ]
 }

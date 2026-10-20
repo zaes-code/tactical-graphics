@@ -18,14 +18,21 @@ the npm publish dates — when a version actually became installable.
 ### Added
 
 - **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
-  every graphic MIL-STD-2525E Change 1 has: 284 of the 319, read from its control-measure table
+  every graphic MIL-STD-2525E Change 1 has: 288 of the 323, read from its control-measure table
   by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
-  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']` (the governing standard first), and `listNamesBySpecification` answers which 2525E
-  control measures the library draws. Code that compared a specification list to `['APP-06']`
+  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']`, the governing standard first, and
+  `listNamesBySpecification` answers which 2525E control measures the library draws. Code that compared a specification list to `['APP-06']`
   exactly should test membership instead.
 - **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
   direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
   nor APP-06, so it is the one graphic tagged MIL-STD-2525 alone. Drawn on both engines.
+- **MIL-STD-2525E Change 1's fields-of-fire variants.** Change 1 (March 2025) coded four symbols on
+  the fields-of-fire V, and all four are new graphics: `FinalProtectiveFireLeft` (`140501`, the
+  same picture as fields of fire, which keeps APP-06's `140500`), `FinalProtectiveFireRight`
+  (`140502`, the blade on the other leg),
+  `PrincipalDirectionOfFire` (`140503`, no blade) and `SecondaryDirectionOfFire` (`140504`, no blade,
+  dashed). They share the V's geometry, handles and editing, and are tagged MIL-STD-2525 only.
+  `FIELD_OF_FIRE_GRAPHICS` and `isFieldOfFire` list the family.
 - **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
   own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
   the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`
@@ -48,7 +55,7 @@ the npm publish dates — when a version actually became installable.
 
 - **Kill zone has a code, `242800`.** It is not in APP-06, but MIL-STD-2525E codes it, so
   `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`, and
-  its specifications are FM 1-02.2 and MIL-STD-2525. Seven FM-only graphics remain uncoded.
+  its specifications are MIL-STD-2525 and FM 1-02.2. Seven FM-only graphics remain uncoded.
 
 ## [4.5.1] — 2026-10-12
 

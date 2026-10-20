@@ -721,6 +721,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
     [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false),
+    [TacticalGraphicName.FinalProtectiveFireLeft]: f(true, false, false, false, false),
+    [TacticalGraphicName.FinalProtectiveFireRight]: f(true, false, false, false, false),
+    [TacticalGraphicName.PrincipalDirectionOfFire]: f(true, false, false, false, false),
+    [TacticalGraphicName.SecondaryDirectionOfFire]: f(true, false, false, false, false),
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
