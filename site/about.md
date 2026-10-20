@@ -2,7 +2,7 @@
 
 ## Roadmap
 
-Keep pace with FM 1-02.2 and APP-06 as they are revised. Every graphic this library tracks is
+Keep pace with MIL-STD-2525E, FM 1-02.2 and APP-06 as they are revised. Every graphic this library tracks is
 complete today, so a new edition's additions are what [Upcoming graphics](/guide/graphics#upcoming-graphics)
 will list next.
 
@@ -10,8 +10,8 @@ will list next.
 
 ## References
 
+- [DoD Joint Military Symbology (MIL-STD-2525E), with Change 1 (March 2025)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
 - [FM 1-02.2, Military Symbols](https://armypubs.army.mil) — US Army, from the Army Publishing Directorate
-- [DoD Joint Military Symbology (MIL-STD-2525E)](https://quicksearch.dla.mil/qsDocDetails.aspx?ident_number=114934)
 - [APP-06, NATO Joint Military Symbology](https://nso.nato.int/nso/nsdd/main/standards), Edition E — retrieved from the
   NATO Standardization Document Database. NATO is acknowledged as its publisher; NATO
   charges no fee for its standardization documents
