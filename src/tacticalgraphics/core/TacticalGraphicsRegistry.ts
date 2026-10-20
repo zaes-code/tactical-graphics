@@ -118,6 +118,7 @@ TacticalGraphicsRegistry.register(new RoadblockComplete());
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchUnderConstruction));
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchCompleted));
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchReinforcedWithMines));
+TacticalGraphicsRegistry.register(new ObstacleLine(TacticalGraphicName.AntiTankWall));
 
 TacticalGraphicsRegistry.register(new AttackHelicopterAxisOfAdvance());
 TacticalGraphicsRegistry.register(new AviationAxisOfAdvance());

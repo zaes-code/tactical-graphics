@@ -149,17 +149,19 @@ const ALL_SPECIFICATIONS: TacticalGraphicSpecification[] = Object.values(Tactica
  * "FM 1-02.2" tick box hid nothing then and read as broken. Now that NATO defines
  * seven the manual does not, both "only" halves are worth asking for.
  */
-type SpecificationFilter = 'all' | 'both' | 'fmOnly' | 'app6Only';
+type SpecificationFilter = 'all' | 'both' | 'fmOnly' | 'app6Only' | 'in2525';
 
 const SPECIFICATION_FILTERS: {value: SpecificationFilter; label: string; help: string}[] = [
     {value: 'all', label: 'All', help: 'Every graphic in the registry'},
     {value: 'both', label: 'Both', help: 'Defined by FM 1-02.2 and NATO APP-06 alike'},
     {value: 'fmOnly', label: 'FM only', help: 'FM 1-02.2 defines these and APP-06 does not'},
     {value: 'app6Only', label: 'APP-06 only', help: 'NATO APP-06 defines these and FM 1-02.2 does not'},
+    {value: 'in2525', label: '2525E', help: 'In MIL-STD-2525E Change 1, whatever else defines them'},
 ];
 
 function matchesSpecificationFilter(option: GraphicOption, filter: SpecificationFilter): boolean {
     if (filter === 'all') return true;
+    if (filter === 'in2525') return option.specifications.includes(TacticalGraphicSpecification.MIL_STD_2525);
     const inApp6 = option.specifications.includes(TacticalGraphicSpecification.APP6);
     const inFm = option.specifications.includes(TacticalGraphicSpecification.FM1_02_2);
     if (filter === 'both') return inApp6 && inFm;
@@ -427,7 +429,7 @@ const MapControls: React.FC<Props> = ({
                         Tactical Graphics
                     </Typography>
                     {/*
-                     * The two standards this library implements. Worth stating in the
+                     * The standards this library implements. Worth stating in the
                      * header rather than burying in the filter: which catalogue a symbol
                      * comes from is the first thing a NATO user asks, and until now the
                      * app only ever claimed FM 1-02.2 by implication.
@@ -437,7 +439,9 @@ const MapControls: React.FC<Props> = ({
                             ? `${TacticalGraphicSpecification.FM1_02_2} only`
                             : specificationFilter === 'app6Only'
                                 ? `${TacticalGraphicSpecification.APP6} only`
-                                : ALL_SPECIFICATIONS.join(' · ')}
+                                : specificationFilter === 'in2525'
+                                    ? `${TacticalGraphicSpecification.MIL_STD_2525}E`
+                                    : ALL_SPECIFICATIONS.join(' · ')}
                     </Typography>
                 </Box>
                 <Tooltip title={hiddenGraphicCount > 0 ? `Filter graphics (${hiddenGraphicCount} hidden)` : 'Filter graphics'}>

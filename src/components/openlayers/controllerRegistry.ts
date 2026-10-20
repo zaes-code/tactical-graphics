@@ -864,6 +864,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.RoadblockCompleteExecuted]: demolition,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
+    [TacticalGraphicName.AntiTankWall]: line(),
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: line(),
     [TacticalGraphicName.WireUnspecified]:                 line(),
     [TacticalGraphicName.WireSingleFence]:                 line(),

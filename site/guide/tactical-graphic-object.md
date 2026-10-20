@@ -12,7 +12,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **38 of the 318 graphics need a geometry input as well**:
+`name` is always required, and **38 of the 319 graphics need a geometry input as well**:
 the one-point mission tasks, the circular areas and the other symbols sized from a center
 (movement to contact, the airfield) take their size from `radius`, since a single point
 has none. Without it you get a `TacticalGraphicError` naming the field rather
@@ -342,12 +342,15 @@ listTacticalGraphicNames();                                     // → ['Abatis'
 GRAPHIC_CATEGORIES[TacticalGraphicName.PhaseLine];              // → 'Lines'
 getDisplayName(TacticalGraphicName.MainAxisOfAdvance);          // → 'main axis of advance'
 getEntityCode(TacticalGraphicName.PhaseLine);                   // → '140300'
-getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02.2', 'APP-06']
+getSpecifications(TacticalGraphicName.PhaseLine);               // → ['FM 1-02.2', 'APP-06', 'MIL-STD-2525']
 ```
 
 **Every graphic says which standard defines it, and carries the identifier that standard
-gives it.** `getSpecifications(name)` answers with one or both — 225 graphics are in both
-FM 1-02.2 and APP-06, 85 are APP-06 only, and 8 are FM 1-02.2 only. `getEntityCode(name)`
+gives it.** `getSpecifications(name)` answers with any of three: 225 graphics are in both
+FM 1-02.2 and APP-06, 85 are APP-06 only, 8 are FM 1-02.2 only, and antitank wall is in
+MIL-STD-2525 alone. `'MIL-STD-2525'` is added to every graphic MIL-STD-2525E Change 1 has,
+284 of the 319, so `listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)`
+answers which 2525E control measures the library draws. `getEntityCode(name)`
 returns the six-digit entity code **as a string**: APP-06's where it has one, and
 MIL-STD-2525's for line of contact and kill zone, which APP-06 leaves uncoded. It returns
 `undefined` for the other 7 FM-only graphics, since FM 1-02.2 publishes no identifiers of

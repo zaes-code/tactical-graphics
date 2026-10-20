@@ -210,6 +210,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchCompleted]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankWall]: TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireUnspecified]:                       TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireSingleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.WireDoubleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,

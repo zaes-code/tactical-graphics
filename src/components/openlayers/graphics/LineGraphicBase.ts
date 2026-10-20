@@ -33,6 +33,7 @@ import {
     nestedZoneStyleFunc,
     obstacleBypassStyleFunc,
     obstacleLineStyle,
+    antiTankWallStyleFunc,
     overheadWireStyle,
     passageLaneGraphicStyle,
     safeLaneOrGapStyle,
@@ -161,6 +162,8 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.AntiTankDitchCompleted:
                 case TacticalGraphicName.AntiTankDitchReinforcedWithMines:
                     return antiTankDitchStyleFunc(name)(feature, resolution);
+                case TacticalGraphicName.AntiTankWall:
+                    return antiTankWallStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.FortifiedLine:
                     return fortifiedLineStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.MinimumSafeDistanceZone:

@@ -6,8 +6,9 @@ import {RouteDirection, TacticalGraphicName} from './type';
  * The number comes from APP-06 Edition E Annex A, Table A-32, and it is the same
  * code MIL-STD-2525 assigns the symbol: for the control-measure symbol set the two
  * standards are harmonised on one numbering, so `140300` is Phase Line in both. The
- * exceptions are line of contact, which APP-06 lists with no code and MIL-STD-2525
- * codes `140200`, and kill zone, which APP-06 lacks and MIL-STD-2525E codes `242800`.
+ * exceptions are line of contact, which APP-06 and MIL-STD-2525E describe with no code
+ * and MIL-STD-2525D coded `140200`, and kill zone, which APP-06 lacks and MIL-STD-2525E
+ * codes `242800`. Antitank wall, `290204`, is in MIL-STD-2525 alone.
  * Both carry the MIL-STD-2525 code, marked `// MIL-STD-2525` in `specifications.ts`. A
  * full MIL-STD-2525 SIDC prefixes the control-measure symbol set (`25`) and appends
  * affiliation and status digits; this is the entity portion, which is the part that
@@ -23,7 +24,7 @@ import {RouteDirection, TacticalGraphicName} from './type';
  * `TacticalGraphicName` member will not compile until it is given a code or an
  * explicit `null`.
  *
- * **311 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
+ * **312 codes, 7 nulls.** Count it, don't trust it. The trailing comment on each
  * entry is the entity name as the standard writes it; `entityCodes.test.ts` asserts
  * every code here against the one recorded beside the same graphic in
  * `specifications.ts`, so the two cannot drift.
@@ -244,6 +245,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:              '290201',  // Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                      '290202',  // Antitank Ditch Completed
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]:            '290203',  // Antitank Ditch Reinforced, with Antitank Mines
+    [TacticalGraphicName.AntiTankWall]:                                '290204',  // Antitank Wall (MIL-STD-2525 only)
     [TacticalGraphicName.WireUnspecified]:                             '290301',  // Unspecified
     [TacticalGraphicName.WireSingleFence]:                             '290302',  // Single Fence
     [TacticalGraphicName.WireDoubleFence]:                             '290303',  // Double Fence
@@ -305,7 +307,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.GroupOrSeriesOfTargets]:                      '240805',  // Series or Groups of Targets
     [TacticalGraphicName.WeaponSensorRangeFanCircular]:                '242100',  // Weapon/Sensor Range Fan, Circular
     [TacticalGraphicName.WeaponSensorRangeFanSector]:                  '242200',  // Weapon/Sensor Range Fan, Sector
-    [TacticalGraphicName.LineOfContact]:                               '140200',  // Line of Contact (MIL-STD-2525; APP-06 prints N/A)
+    [TacticalGraphicName.LineOfContact]:                               '140200',  // Line of Contact (MIL-STD-2525D; APP-06 and 2525E print none)
     [TacticalGraphicName.AttackByFire]:                                '152000',  // Attack by Fire
     [TacticalGraphicName.Defeat]:                                      '344300',  // Defeat
     [TacticalGraphicName.Destroy]:                                     '340900',  // Destroy
