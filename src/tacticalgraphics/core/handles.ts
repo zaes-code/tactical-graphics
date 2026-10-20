@@ -1118,6 +1118,9 @@ const RECTANGULAR_GRAPHICS: readonly TacticalGraphicName[] = [
 const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
     // Two segments, three points. The only graphic here that is not two points.
     [TacticalGraphicName.FieldsOfFire]: 3,
+    [TacticalGraphicName.FinalProtectiveFireRight]: 3,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: 3,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: 3,
 
     /*
      * **The four placed point by point, from 2026-09-05.** These are the anchor counts the
@@ -1400,6 +1403,9 @@ const BASE_VERTEX_COUNT: Partial<Record<TacticalGraphicName, number>> = {
  */
 const ANCHOR_VERTEX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.FieldsOfFire]: 0,
+    [TacticalGraphicName.FinalProtectiveFireRight]: 0,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: 0,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: 0,
     /*
      * The search area's vertex, for the same reason and at the same index: 152200 numbers
      * it point 1 and the arms' tips points 2 and 3, so the base stores `[end, apex, end]`
@@ -1621,6 +1627,9 @@ const EDIT_STRETCHES: readonly TacticalGraphicName[] = [
     TacticalGraphicName.DeadSpaceAreaCircular,
     TacticalGraphicName.Envelopment,
     TacticalGraphicName.FieldsOfFire,
+    TacticalGraphicName.FinalProtectiveFireRight,
+    TacticalGraphicName.PrincipalDirectionOfFire,
+    TacticalGraphicName.SecondaryDirectionOfFire,
     TacticalGraphicName.FireSupportAreaCircular,
     TacticalGraphicName.FreeFireAreaCircular,
     TacticalGraphicName.Isolate,
@@ -1768,6 +1777,9 @@ const RESHAPES_BY_VERTEX: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
     TacticalGraphicName.RoadblockCompleteExecuted,
     TacticalGraphicName.FieldsOfFire,
+    TacticalGraphicName.FinalProtectiveFireRight,
+    TacticalGraphicName.PrincipalDirectionOfFire,
+    TacticalGraphicName.SecondaryDirectionOfFire,
     TacticalGraphicName.Bridge,
     TacticalGraphicName.Gap,
     TacticalGraphicName.AssaultCrossing,

@@ -137,6 +137,7 @@ const {
     isRectangular,
     CORRIDOR_GRAPHICS,
     topEdgeLabel,
+    FIELD_OF_FIRE_GRAPHICS,
 } = lib;
 
 // ── 4326 → 3857 ─────────────────────────────────────────────────────────────
@@ -248,7 +249,8 @@ const straightBase = span => () => [
 ];
 
 const SHAPED_BASES = {
-    [TacticalGraphicName.FieldsOfFire]: veeBase,
+    // Fields of fire and 2525E's three variants on the same V.
+    ...Object.fromEntries(FIELD_OF_FIRE_GRAPHICS.map(name => [name, veeBase])),
     // The bowtie and the label are both fixed screen sizes sitting ON the line, so a
     // short run packs them into each other however the tile is fitted.
     [TacticalGraphicName.AviationDirectionOfAttack]: straightBase(3.1),

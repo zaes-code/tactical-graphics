@@ -12,7 +12,7 @@ Everything the library needs lives in one object on the feature's `properties`:
 }
 ```
 
-`name` is always required, and **38 of the 319 graphics need a geometry input as well**:
+`name` is always required, and **38 of the 322 graphics need a geometry input as well**:
 the one-point mission tasks, the circular areas and the other symbols sized from a center
 (movement to contact, the airfield) take their size from `radius`, since a single point
 has none. Without it you get a `TacticalGraphicError` naming the field rather
@@ -347,12 +347,13 @@ getSpecifications(TacticalGraphicName.PhaseLine);               // → ['MIL-STD
 
 **Every graphic says which standard defines it, and carries the identifier that standard
 gives it.** `getSpecifications(name)` answers with any of three: 225 graphics are in both
-FM 1-02.2 and APP-06, 85 are APP-06 only, 8 are FM 1-02.2 only, and antitank wall is in
-MIL-STD-2525 alone. `'MIL-STD-2525'` is added to every graphic MIL-STD-2525E Change 1 has,
-284 of the 319, so `listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)`
+FM 1-02.2 and APP-06, 85 are APP-06 only, 8 are FM 1-02.2 only, and 4 are in MIL-STD-2525
+alone. `'MIL-STD-2525'` is added to every graphic MIL-STD-2525E Change 1 has, 287 of the 322,
+so `listNamesBySpecification(TacticalGraphicSpecification.MIL_STD_2525)`
 answers which 2525E control measures the library draws. `getEntityCode(name)`
 returns the six-digit entity code **as a string**: APP-06's where it has one, and
-MIL-STD-2525's for line of contact and kill zone, which APP-06 leaves uncoded. It returns
+MIL-STD-2525's for line of contact, kill zone and the four 2525-only graphics, which APP-06
+leaves uncoded. 2525E's `140501` reads back as fields of fire, whose picture it is. It returns
 `undefined` for the other 7 FM-only graphics, since FM 1-02.2 publishes no identifiers of
 its own. `getNameByEntityCode('140300')` goes the
 other way, for reading a symbol out of a feed that addresses graphics by code — it takes

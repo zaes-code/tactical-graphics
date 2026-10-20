@@ -794,6 +794,9 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // The apex is vertex 0: APP-06 140500 numbers this symbol from its vertex, and the
     // base follows the standard now. It was 1 while the legs were drawn first. @see anchorVertex
     [TacticalGraphicName.FieldsOfFire]:                     vertexLine(3, 3),
+    [TacticalGraphicName.FinalProtectiveFireRight]:         vertexLine(3, 3),
+    [TacticalGraphicName.PrincipalDirectionOfFire]:         vertexLine(3, 3),
+    [TacticalGraphicName.SecondaryDirectionOfFire]:         vertexLine(3, 3),
 
     // ── Boundary (special line) ────────────────────────────────────────────
     [TacticalGraphicName.Boundary]: (_name, res) =>

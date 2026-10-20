@@ -47,7 +47,7 @@ const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecificatio
  */
 const APP6_ONLY = [TacticalGraphicSpecification.APP6] as const;
 const FM_ONLY = [TacticalGraphicSpecification.FM1_02_2] as const;
-/** In MIL-STD-2525 and neither of the other two. Antitank wall is the one. */
+/** In MIL-STD-2525 and neither of the other two: antitank wall and three fields-of-fire variants. */
 const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
 
 /**
@@ -62,7 +62,7 @@ const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
  * Table A-32, so a claim can be checked against the standard rather than taken on
  * trust. Where APP-06 has no code and MIL-STD-2525 does, the comment says so.
  *
- * **319 graphics: 225 in both catalogs, 8 FM 1-02.2 only, 85 APP-06 only, 1 MIL-STD-2525 only**
+ * **322 graphics: 225 in both catalogs, 8 FM 1-02.2 only, 85 APP-06 only, 4 MIL-STD-2525 only**
  * (2026-10-20). The axis runs both ways, which it did not when it was first added -- every
  * graphic was then in FM 1-02.2, so filtering by that specification hid nothing. Count it,
  * don't trust it. See `ai/app-6.md` for the source document and how the mapping was derived.
@@ -423,6 +423,10 @@ const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecifica
     [TacticalGraphicName.FortifiedLine]:                                BOTH,      // APP-06 290900 Fortified Line
     // MIL-STD-2525D Table H-XIX; in neither FM 1-02.2 nor APP-06 Edition E.
     [TacticalGraphicName.AntiTankWall]:                                 MIL_STD_2525_ONLY, // MIL-STD-2525 290204 Antitank Wall
+    // MIL-STD-2525E Change 1 Table L-VII; added March 2025, so in neither of the others yet.
+    [TacticalGraphicName.FinalProtectiveFireRight]:                     MIL_STD_2525_ONLY, // MIL-STD-2525 140502 Final Protective Fire (Right)
+    [TacticalGraphicName.PrincipalDirectionOfFire]:                     MIL_STD_2525_ONLY, // MIL-STD-2525 140503 Principal Direction of Fire
+    [TacticalGraphicName.SecondaryDirectionOfFire]:                     MIL_STD_2525_ONLY, // MIL-STD-2525 140504 Secondary Direction of Fire
 };
 
 /**
@@ -432,7 +436,7 @@ const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecifica
  * MIL-STD-2525E Change 1, by entity code with the names compared. mil-sym-java's `mse.txt`
  * (rows tagged version 15) agrees on every graphic but line of contact: Change 1 describes
  * that symbol under the forward line of troops with no code of its own, so it is in 2525E
- * while its `140200` is a 2525D code. Shorter to pin the 35 absences than the 284 members,
+ * while its `140200` is a 2525D code. Shorter to pin the 35 absences than the 287 members,
  * and a new graphic defaults to "in 2525", so check it against the table before leaving
  * it off.
  */
@@ -480,7 +484,7 @@ const NOT_IN_MIL_STD_2525: ReadonlySet<TacticalGraphicName> = new Set([
  * Which specifications define each graphic: MIL-STD-2525 for every graphic MIL-STD-2525E
  * Change 1 has, then FM 1-02.2 and APP-06 as tagged by hand. Listed in that order.
  *
- * **284 of 319 graphics are in MIL-STD-2525.** Count it, don't trust it.
+ * **287 of 322 graphics are in MIL-STD-2525.** Count it, don't trust it.
  */
 export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = (() => {
     // One frozen array per combination, shared like the consts above, so a caller that

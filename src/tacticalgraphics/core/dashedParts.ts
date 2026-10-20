@@ -31,6 +31,8 @@ export const DASHED_PARTS: Readonly<Partial<Record<TacticalGraphicName, readonly
     [TacticalGraphicName.FordEasy]: [0, 1],
     // [upper bar, lower bar, zigzag]
     [TacticalGraphicName.FordDifficult]: [0, 1],
+    // [the V, arrowhead, arrowhead]: 2525E 140504's Example dashes the legs.
+    [TacticalGraphicName.SecondaryDirectionOfFire]: [0],
 };
 
 /** The dashed part indices of `name`'s graphic, or an empty list for a graphic with none. */

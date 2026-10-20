@@ -333,6 +333,7 @@ export {
     withFittedDashes,
 } from './symbology/dashFit';
 export {DASHED_PARTS, dashedPartsOf} from './core/dashedParts';
+export {FIELD_OF_FIRE_BLADE, FIELD_OF_FIRE_GRAPHICS, isFieldOfFire} from './core/fieldOfFire';
 export {drawIsComplete} from './core/drawCompletion';
 export {completeDemolitionBase} from './core/drawnBase';
 export {
