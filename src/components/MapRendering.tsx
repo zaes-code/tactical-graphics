@@ -433,9 +433,11 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
 
                 {/* Add-on tools, on a developer's machine only; the public sample has none. @see demoAddons.ts
                   * Kept left of the camera buttons (`ViewControls`, top right), and scrolled rather than
-                  * grown past the top of the map: three tool panels stacked over them and covered them. */}
+                  * grown past the top of the map: three tool panels stacked over them and covered them.
+                  * At the same z-index as the other controls, above the edit box (`EditAffordances`, 900):
+                  * a selected graphic's dashed outline was drawn over the panels. */}
                 {demoTools.length > 0 && (
-                    <Box sx={{position: 'absolute', right: 64, bottom: 32, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380, maxHeight: 'calc(100% - 48px)', overflowY: 'auto'}}>
+                    <Box sx={{position: 'absolute', right: 64, bottom: 32, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 380, maxHeight: 'calc(100% - 48px)', overflowY: 'auto'}}>
                         {/* An add-on may load its panel lazily, as the engines do. */}
                         {demoTools.map(tool => (
                             <AddonErrorBoundary key={tool.id} label={tool.label}>
