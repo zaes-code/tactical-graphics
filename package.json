@@ -200,9 +200,9 @@
     "typedoc-vitepress-theme": "^1.1.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.1",
-    "vite": "^8.2.2",
+    "vite": "^8.3.5",
     "vitepress": "2.0.0-alpha.20",
-    "vitest": "^5.0.0",
+    "vitest": "^5.0.5",
     "web-vitals": "^2.1.4"
   }
 }
