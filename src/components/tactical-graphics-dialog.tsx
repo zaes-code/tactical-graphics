@@ -428,6 +428,11 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
              * of the edit affordances, which is how this surfaced. A non-modal dialog
              * that deliberately leaves its host usable has to say so; the paper opts
              * back in so the form itself still works.
+             *
+             * **The root too.** `.MuiDialog-root` is itself a full-viewport layer at z-index
+             * 1300 with `pointer-events: auto`, so with only the container let through, a
+             * click on a second graphic still never reached the map: the dialog stayed on
+             * the first one, and its "Name only" switch read as if carried to the second.
              */}
             <Dialog
                 open
@@ -436,6 +441,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                 PaperComponent={DraggablePaper}
                 disableEnforceFocus
                 sx={{
+                    pointerEvents: 'none',
                     '& .MuiDialog-container': {pointerEvents: 'none'},
                     '& .MuiDialog-paper': {pointerEvents: 'auto'},
                 }}
