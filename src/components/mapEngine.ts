@@ -100,6 +100,12 @@ export interface ViewCamera {
     resetNorth(): void;
     /** Where the top of the screen points. */
     bearing(): number;
+    /**
+     * How opaque the map under the graphics is, 0 to 1. An engine that offers it gets a sixth
+     * button in the view controls, with a slider; one that does not, gets no button.
+     */
+    mapOpacity?(): number;
+    setMapOpacity?(opacity: number): void;
 }
 
 export const FULL_CAPABILITIES: MapEngineCapabilities = {

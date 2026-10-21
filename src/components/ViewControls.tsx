@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
-import {Divider, IconButton, Paper, Tooltip} from '@mui/material';
+import {Box, Divider, IconButton, Paper, Slider, Tooltip} from '@mui/material';
+import OpacityIcon from '@mui/icons-material/Opacity';
 import NavigationIcon from '@mui/icons-material/Navigation';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -17,9 +18,15 @@ const TURN_STEP = 22.5;
  * Both 3D views take a right-drag or Ctrl+drag to tilt, which a trackpad or touch user may
  * not have. These do the same from clicks. The compass points north and turns the view back
  * to it, which is also the way out of a view that has been turned and lost.
+ *
+ * An engine whose camera offers `setMapOpacity` gets a sixth button, which opens a slider to its
+ * left for the map's opacity under the graphics, and closes it again.
  */
 const ViewControls: React.FC<{camera: ViewCamera}> = ({camera}) => {
     const [bearing, setBearing] = useState(() => camera.bearing());
+    const [opacityOpen, setOpacityOpen] = useState(false);
+    const [opacity, setOpacity] = useState(() => camera.mapOpacity?.() ?? 1);
+    useEffect(() => setOpacity(camera.mapOpacity?.() ?? 1), [camera]);
 
     // Polled, not subscribed: the two engines report camera motion differently, and one
     // number read per frame is cheaper than either engine's event plumbing.
@@ -65,6 +72,35 @@ const ViewControls: React.FC<{camera: ViewCamera}> = ({camera}) => {
             <Divider flexItem sx={{my: 0.25}}/>
             {button('Turn left', () => camera.turn(-TURN_STEP), <RotateLeftIcon fontSize="small"/>)}
             {button('Turn right', () => camera.turn(TURN_STEP), <RotateRightIcon fontSize="small"/>)}
+            {camera.setMapOpacity && (
+                <>
+                    <Divider flexItem sx={{my: 0.25}}/>
+                    <Box sx={{position: 'relative'}}>
+                        {button(opacityOpen ? 'Hide map opacity' : 'Map opacity', () => setOpacityOpen(open => !open), <OpacityIcon fontSize="small" color={opacityOpen ? 'primary' : undefined}/>)}
+                        {opacityOpen && (
+                            <Paper
+                                elevation={3}
+                                sx={{position: 'absolute', right: 'calc(100% + 10px)', top: '50%', transform: 'translateY(-50%)', width: 180, px: 2, py: 0.5, borderRadius: 1.5, display: 'flex', alignItems: 'center'}}
+                            >
+                                <Slider
+                                    size="small"
+                                    min={0}
+                                    max={100}
+                                    value={Math.round(opacity * 100)}
+                                    valueLabelDisplay="auto"
+                                    valueLabelFormat={value => `${value}%`}
+                                    onChange={(_, value) => {
+                                        const next = (value as number) / 100;
+                                        setOpacity(next);
+                                        camera.setMapOpacity?.(next);
+                                    }}
+                                    aria-label="Map opacity"
+                                />
+                            </Paper>
+                        )}
+                    </Box>
+                </>
+            )}
         </Paper>
     );
 };
