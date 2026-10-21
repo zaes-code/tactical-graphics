@@ -37,7 +37,7 @@ them holds a fixed pixel size — and all six stop growing at the same 96 px cei
 
 Register nothing and the arms and labels draw with an empty center — no error, no
 missing module. That is what makes `milsymbol` an *actually* optional peer
-dependency: a consumer who wants the geometry, or the other 312 graphics, never
+dependency: a consumer who wants the geometry, or the other 317 graphics, never
 resolves it.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
