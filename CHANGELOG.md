@@ -15,7 +15,15 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-## [4.6.0] — 2026-10-20
+## [4.6.1] — 2026-10-20
+
+### Fixed
+
+- **4.6.0 was published without its build and withdrawn.** Its package carried the 4.6.0
+  documentation over the 4.5.1 code, so none of the changes below were in it. It was unpublished
+  the same day. 4.6.1 is the release 4.6.0 describes, with no other changes.
+
+## [4.6.0] — 2026-10-20 (withdrawn)
 
 ### Added
 
@@ -1792,8 +1800,9 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.0...develop
-[4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.0
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...develop
+[4.6.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
+[4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
 [4.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0
