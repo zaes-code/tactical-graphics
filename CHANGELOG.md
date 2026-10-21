@@ -35,7 +35,8 @@ the npm publish dates — when a version actually became installable.
   (`140502`, the blade on the other leg),
   `PrincipalDirectionOfFire` (`140503`, no blade) and `SecondaryDirectionOfFire` (`140504`, no blade,
   dashed). They share the V's geometry, handles and editing, and are tagged MIL-STD-2525 only.
-  `FIELD_OF_FIRE_GRAPHICS` and `isFieldOfFire` list the family.
+  `FIELD_OF_FIRE_GRAPHICS` and `isFieldOfFire` list the family. Like fields of fire, all four store
+  their vertex first, so `TIP_FIRST_GRAPHICS` grows from 27 to 31.
 - **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
   own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
   the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`

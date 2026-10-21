@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: Tactical Graphics
-  text: FM 1-02.2 and APP-06 as plain GeoJSON
+  text: MIL-STD-2525E tactical graphics as plain GeoJSON
   tagline: Axis-of-advance arrows, phase lines, mission tasks, range fans and boundaries, for OpenLayers, MapLibre or anything that reads GeoJSON.
   actions:
     - theme: brand
@@ -23,8 +23,8 @@ features:
   - title: Two renderers, one paint layer
     details: OpenLayers and MapLibre draw from the same symbology code, with drawing, editing and a shared createTacticalGraphics façade.
     link: /guide/rendering
-  - title: Every graphic in both standards
-    details: The line and area graphics of FM 1-02.2 and APP-06, each drawable, checked against the plate that defines it, and editable wherever the symbol allows.
+  - title: Every graphic in all three standards
+    details: The line and area graphics of MIL-STD-2525E, FM 1-02.2 and APP-06, each drawable, checked against the plate that defines it, and editable wherever the symbol allows.
     link: /guide/graphics
   - title: Pictures for a picker
     details: One small SVG per graphic from the thumbnails entry point, drawn by the same paint layer as the map.

@@ -379,12 +379,13 @@ rather than the literal, so pass the enum.
 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol."* So on an
 axis of advance the **first** coordinate is the head and the last is the tail.
 
-**Twenty-seven graphics are listed in `TIP_FIRST_GRAPHICS`**: the ones whose stored order
+**Thirty-one graphics are listed in `TIP_FIRST_GRAPHICS`**: the ones whose stored order
 the library turns around before its generator reads it. The list is the axis-of-advance
 family, avenue of approach, both follow tasks, both counterattacks, advance to contact,
 frontal attack, turning movement, mobile defense, the seven retrograde canes, both fixes,
-fields of fire, search area and the two convoys. Fields of fire and search area are the
-odd ones: APP-06 numbers their **vertex** first, so their first two points swap rather than
+fields of fire and the four symbols MIL-STD-2525E Change 1 draws on its V, search area and
+the two convoys. The fields-of-fire family and search area are the odd ones: APP-06 numbers
+their **vertex** first, so their first two points swap rather than
 the whole line reversing. `generatorOrder(name, coords)` and `storedOrder(name, coords)`
 apply the right one.
 
@@ -397,7 +398,7 @@ stored.
 import {TIP_FIRST_GRAPHICS, drawsTipFirst} from '@zaes/tactical-graphics';
 
 drawsTipFirst(TacticalGraphicName.MainAxisOfAdvance);   // → true
-TIP_FIRST_GRAPHICS.length;                              // → 27
+TIP_FIRST_GRAPHICS.length;                              // → 31
 ```
 
 Nothing about the rendered symbol changes — the shape, its decorations, its handles and
@@ -407,8 +408,8 @@ arrow points at.
 **3.0.0 changed this and saved data is not migrated.** There is no version marker in
 `properties.tacticalGraphic` to detect an older graphic by, so if you hold data written by
 1.x or 2.x, apply 3.0.0's list to it: reverse the coordinate array of every graphic
-`drawsTipFirst` returns true for today (search area and the two convoys did not exist
-then), and of the eight named above that have left the list since. The one exception is
+`drawsTipFirst` returns true for today (search area, the two convoys and the four
+fields-of-fire symbols did not exist then), and of the eight named above that have left the list since. The one exception is
 fields of fire, whose first two points swap instead; `storedOrder` does that for you. The
 multipoint graphics that were never on the list — the ones drawn from anchor points,
 demonstration, the obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate, the
