@@ -24,7 +24,7 @@ import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
 import {rememberAmplifiersHidden, rememberedAmplifiersHidden} from './amplifierVisibility';
-import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
+import {dateTimeLocalToDtg, dtgToDateTimeLocal} from './dtg';
 import {
     getDisplayName,
     RangeFanBand,
@@ -116,8 +116,10 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.hostility) labels.confidence = stored.confidence;
     if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
     if (fields.direction) labels.direction = stored.direction;
-    if (fields.dtg1) labels.startDate = stored.startDate ?? nowDtg();
-    if (fields.dtg2) labels.endDate = stored.endDate ?? nowDtg();
+    // No date stays no date. Defaulting to now put a time on every graphic whose dialog was
+    // merely opened and closed with OK.
+    if (fields.dtg1) labels.startDate = stored.startDate;
+    if (fields.dtg2) labels.endDate = stored.endDate;
     if (fields.altitude1) labels.minAltitude = stored.minAltitude;
     if (fields.altitude2) labels.maxAltitude = stored.maxAltitude;
     // One datum for both, since a floor and a ceiling measured from different things

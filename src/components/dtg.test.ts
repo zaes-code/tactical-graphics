@@ -48,7 +48,17 @@ describe('dtgToDateTimeLocal', () => {
     it('returns empty for anything that is not a DTG', () => {
         expect(dtgToDateTimeLocal('')).toBe('');
         expect(dtgToDateTimeLocal('021200JUN26')).toBe('');
-        expect(dtgToDateTimeLocal('2026-06-02T12:00')).toBe('');
+        expect(dtgToDateTimeLocal('2026-06-02')).toBe('');
+        expect(dtgToDateTimeLocal('2026-06-02T12')).toBe('');
+    });
+
+    it('reads ISO 8601 as well, in Zulu', () => {
+        // Imported graphics carry these; unread, the input showed no date at all.
+        expect(dtgToDateTimeLocal('2026-10-21T14:00:00Z')).toBe('2026-10-21T14:00');
+        expect(dtgToDateTimeLocal('2026-10-21T14:00:00.000Z')).toBe('2026-10-21T14:00');
+        expect(dtgToDateTimeLocal('2026-06-02T12:00')).toBe('2026-06-02T12:00');
+        expect(dtgToDateTimeLocal('2026-10-21T16:30:00+02:00')).toBe('2026-10-21T14:30');
+        expect(dtgToDateTimeLocal('2026-12-31T23:00:00-05:00')).toBe('2027-01-01T04:00');
     });
 });
 
