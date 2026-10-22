@@ -42,11 +42,13 @@ function twoDigitYear(year: number): string {
 /**
  * DTG → datetime-local value (`021200ZJUN26` → `2026-06-02T12:00`).
  *
- * Reads the four-digit form too. Dropping it would not merely fail to display an older
+ * Reads the four-digit form too, and ISO 8601. Dropping it would not merely fail to display an older
  * graphic's date — the input would come up empty, and saving the dialog would write that
  * emptiness back over a value the user never touched.
  */
 export function dtgToDateTimeLocal(dtg: string): string {
+    const iso = isoToDateTimeLocal(dtg);
+    if (iso) return iso;
     const m = dtg.match(DTG_PATTERN);
     if (!m) return '';
     const [, dd, hh, min, mon, year] = m;
@@ -55,6 +57,26 @@ export function dtgToDateTimeLocal(dtg: string): string {
     const month = String(monthIdx + 1).padStart(2, '0');
     const yyyy = year.length === 4 ? year : String(DTG_CENTURY + parseInt(year, 10));
     return `${yyyy}-${month}-${dd}T${hh}:${min}`;
+}
+
+/** An ISO 8601 date-time, with or without seconds and a zone; none means Zulu, as a DTG does. */
+const ISO_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+/**
+ * ISO 8601 → datetime-local value in Zulu (`2026-10-21T14:00:00Z` → `2026-10-21T14:00`).
+ *
+ * Imported graphics often carry ISO times rather than DTGs, and the add-ons read both. Unread,
+ * the input came up empty for a date the graphic plainly has.
+ */
+function isoToDateTimeLocal(value: string): string {
+    const m = value.match(ISO_PATTERN);
+    if (!m) return '';
+    const [, yyyy, month, dd, hh, min, , zone] = m;
+    if (!zone || zone === 'Z') return `${yyyy}-${month}-${dd}T${hh}:${min}`;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
 
 /** datetime-local value → DTG (`2026-06-02T12:00` → `021200ZJUN26`). */
