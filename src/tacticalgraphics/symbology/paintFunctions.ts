@@ -45,7 +45,7 @@ import {
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
@@ -91,6 +91,37 @@ export function amplifierText(feature: PaintFeature, value: string): string {
 export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
     if (!hidden) return paints;
     return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * Takes away text too small to read, leaving the rest of its mark.
+ *
+ * Labels sized to their graphic shrink with it, and a label a few pixels tall is a smudge,
+ * not an amplifier: zoomed out, every name on the map became a grey dot, and an "ACP"
+ * fitted to a circle under a pixel across came out with a negative size, which MapLibre drew
+ * across the whole world. Under `MIN_LEGIBLE_TEXT_PX` the text goes. (User, 2026-10-23.)
+ *
+ * Applied where `withHiddenAmplifiers` is, so every engine drops the same text. The size is
+ * the font's own pixel size times the mark's scale, as both renderers draw it.
+ */
+export function withLegibleText(paints: Paint[]): Paint[] {
+    const out: Paint[] = [];
+    for (const paint of paints) {
+        if (!paint.text || renderedTextPx(paint.text.font, paint.text.scale ?? 1) >= MIN_LEGIBLE_TEXT_PX) {
+            out.push(paint);
+            continue;
+        }
+        const {text: _hidden, ...rest} = paint;
+        if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    }
+    return out;
+}
+
+/** The pixel size text is drawn at: the font shorthand's size times the mark's scale. */
+function renderedTextPx(font: string, scale: number): number {
+    const match = font.match(/(\d*\.?\d+)px/);
+    const px = (match ? parseFloat(match[1]) : BASE_FONT_SIZE_PX) * scale;
+    return Number.isFinite(px) ? px : 0;
 }
 
 /**

@@ -239,6 +239,16 @@ export interface TextSpec {
      * line's own angle. The measure read-out is the only user today.
      */
     placement?: 'point' | 'line';
+    /**
+     * One letter of a run laid along a curve. @see textAlongPath
+     *
+     * A renderer that turns text the right way up as the map turns must leave this one as it
+     * is: its neighbors are separate marks, so a letter flipped on its own leaves the run
+     * reading backward. Past a quarter turn the run reads upside down instead, in order. And
+     * the letters were spaced in map units at this view's resolution, so a renderer that does
+     * not repaint as the view zooms has to size them with the map, or they drift apart.
+     */
+    glyph?: boolean;
 }
 
 /** A dot mark — handles, the draw marker, the inert center. Radius is screen pixels. */
