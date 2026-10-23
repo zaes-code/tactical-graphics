@@ -29,6 +29,7 @@ import {alignAlong, offsetAbove, uprightRotation} from './decorations';
 import {areaDateLabel} from './areaLabelPaints';
 import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {strokeParts} from './dashFit';
+import {distanceAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -130,6 +131,21 @@ function nameAndDate(feature: PaintFeature): string {
     const date = areaDateLabel(feature);
     if (date) parts.push(date);
     return parts.join('     ');
+}
+
+/**
+ * A label that stays on its arrow: `straight` as painted, or the same text bent along the
+ * center line the generator publishes from `coords[pathFrom]` on, when it runs past the
+ * segment it was anchored on. @see textAlongPath, MovementGraphicBase.labelPath
+ *
+ * `align` is where the run sits against its anchor *along the arrow*: `end` for a label set
+ * back from the arrowhead, `start` for one reading on from the tail.
+ */
+function onArrow(context: PaintContext, coords: ProjectedPosition[], pathFrom: number, straight: Paint, align: PathTextAlign): Paint[] {
+    const path = coords.slice(pathFrom);
+    if (path.length < 2 || !straight.text || straight.geometry.type !== 'Point') return [straight];
+    const at = distanceAlongPath(path, straight.geometry.coordinates);
+    return textAlongPath(path, at, align, straight.text, context) ?? [straight];
 }
 
 /**
@@ -238,7 +254,7 @@ export function counterattackLabelPaint(): MovementPaint {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
         const label = feature.properties.designation?.trim();
-        return behindArrowhead(feature, context, coords[0], coords[1], label ? `CATK ${label}` : 'CATK');
+        return behindArrowhead(feature, context, coords, 2, label ? `CATK ${label}` : 'CATK');
     };
 }
 
@@ -261,10 +277,11 @@ const ARROWHEAD_LABEL_CLEARANCE_PX = 10;
 function behindArrowhead(
     feature: PaintFeature,
     context: PaintContext,
-    c0: ProjectedPosition,
-    c1: ProjectedPosition,
+    coords: ProjectedPosition[],
+    pathFrom: number,
     value: string,
 ): Paint[] {
+    const [c0, c1] = coords;
     const dx = c1[0] - c0[0];
     const dy = c1[1] - c0[1];
     const span = Math.hypot(dx, dy);
@@ -272,10 +289,11 @@ function behindArrowhead(
 
     const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
     const at: ProjectedPosition = [c1[0] - (dx / span) * clearance, c1[1] - (dy / span) * clearance];
-    return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+    const straight = text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
         rotation: uprightRotation(c0, c1),
         align: alignAlong('right', c0, c1),
-    })];
+    });
+    return onArrow(context, coords, pathFrom, straight, 'end');
 }
 
 /**
@@ -296,10 +314,11 @@ export function aviationAxisLabelPaint(): MovementPaint {
          * date ended up off the tail entirely and reading in the wrong order against the
          * arrow. The helper flips the alignment exactly when the rotation flipped.
          */
-        return [text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+        const straight = text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(coords[0], coords[1]),
             align: alignAlong('left', coords[0], coords[1]),
-        })];
+        });
+        return onArrow(context, coords, 2, straight, 'start');
     };
 }
 
@@ -368,7 +387,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         // no `W`/`W1`. An imported bag can still hold a `startDate` for a symbol with nowhere
         // to put one, and painting it anyway is how a field nobody offered ends up on the map.
         const label = feature.properties.designation?.trim();
-        const paints = behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
+        const paints = behindArrowhead(feature, context, coords, 4, ['AA', label].filter(Boolean).join(' '));
 
         /*
          * **Field H sits outside the arrow, level with `AA`.** The plate boxes it clear of the
@@ -380,9 +399,14 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
          */
         const additional = feature.properties.additionalInfo?.trim();
         if (additional && paints.length) {
-            const halfWidthPx = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) / context.resolution;
+            const span = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]);
+            const halfWidthPx = span / context.resolution;
+            // Level with where `AA` starts behind the head, which is not the first paint once
+            // a long name bends along the arrow. @see behindArrowhead
+            const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
+            const behind: ProjectedPosition = [c1[0] - ((c1[0] - c0[0]) / span) * clearance, c1[1] - ((c1[1] - c0[1]) / span) * clearance];
             const at = offsetAbove(
-                paints[0].geometry.coordinates as ProjectedPosition,
+                behind,
                 c0,
                 c1,
                 context.resolution,
@@ -429,10 +453,11 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
 
         const align: 'left' | 'center' | 'right' = centered ? 'center' : alignAlong('right', c0, c1);
 
-        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        const straight = text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
             align,
-        })];
+        });
+        return onArrow(context, coords, 2, straight, centered ? 'center' : 'end');
     };
 }
 
@@ -468,10 +493,11 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         const tdy = y1 - y0;
         const value = nameAndDate(feature);
         if (value) {
-            paints.push(text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+            const straight = text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
                 rotation: uprightRotation(coords[0], coords[1]),
                 align: alignAlong('left', coords[0], coords[1]),
-            }));
+            });
+            paints.push(...onArrow(context, coords, 4, straight, 'start'));
         }
 
         const heading = Math.atan2(cy - dy3, cx - dx3);
@@ -555,7 +581,7 @@ export function advanceToContactLabelPaint(): MovementPaint {
         // it was the first to outgrow the symbol it names, and for a while the only one
         // capped. @see spanProportionalScale
         const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
-        return [text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
+        return onArrow(context, coords, 2, text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'}), 'center');
     };
 }
 

@@ -15,6 +15,28 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Labels stay on their graphic.** A movement label longer than the straight stretch behind
+  its arrowhead (a name and two date-time groups, say) now bends along the arrow instead of
+  running out through a wall, on smooth and hard lines alike. Axis of advance and its feint,
+  supporting axis, counterattack, aviation and attack helicopter axes, avenue of approach and
+  advance to contact.
+- **Labels too small to read are not drawn.** Text that shrinks with its graphic is dropped
+  below 6 px instead of smearing into a dot when zoomed out.
+- **ACP labels fit their circle, or go.** They used to keep a minimum size that overran small
+  circles, and zoomed far out that size went negative, which MapLibre drew as one "ACP" across
+  the world.
+- **ACP labels are the same size on every engine.** MapLibre and the add-ons sized them against
+  an assumed 12 px circle, about a third of OpenLayers' size, because an air corridor files its
+  `width` and the shared builder read only `radius`.
+
+### Added
+
+- `MIN_LEGIBLE_TEXT_PX` (6) and `withLegibleText`, the floor above and the filter that applies it.
+- `TextSpec.glyph`: marks one letter of a label bent along its graphic. A renderer that flips
+  turned text upright should leave these alone, or the run reads backward.
+
 ## [4.6.1] — 2026-10-20
 
 ### Fixed

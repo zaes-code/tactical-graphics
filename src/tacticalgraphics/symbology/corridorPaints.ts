@@ -62,17 +62,19 @@ const INFO_BLOCK_GAP_PX = 14;
 const LEG_LABEL_HEIGHT_SHARE = 0.7;
 
 /**
- * Scale for an "ACP n" label — two competing sizes, and the larger wins.
+ * Scale for an "ACP n" label: as large as its circle holds, and no larger.
  *
- * - The **floor** is fitted to a fixed assumed circle and capped at the
- *   zoom-anchored scale. It is what keeps a narrow corridor labeled at all;
- *   fitting to the real circle alone collapses the text to nothing when the
- *   circle is only a few pixels across.
- * - The **grown** size is fitted to the circle's real rendered radius and capped at
- *   the size-proportional scale, so a wide corridor gets a big label.
+ * - With the circle's real rendered radius, the label is fitted inside it and capped at the
+ *   size-proportional scale, so a wide corridor gets a big label and a narrow one a small
+ *   label, down to nothing. The legibility floor then takes away one too small to read.
+ * - Without it, the label is fitted to an assumed circle, capped at the zoom-anchored scale.
  *
- * Pass `circleRadiusPx` / `proportionalScale` only when the graphic stamps a size;
- * without them the floor applies alone.
+ * There used to be a floor here too, the assumed-circle fit, kept so a narrow corridor stayed
+ * labeled at all. It let the label overrun a circle a few pixels across, and at a low zoom
+ * its fit went **negative**, which MapLibre drew as an "ACP" the size of the world. A label
+ * leaving its graphic is now the worse of the two (user, 2026-10-23). @see withLegibleText
+ *
+ * Pass `circleRadiusPx` / `proportionalScale` only when the graphic stamps a size.
  */
 export function acpLabelScale(
     context: PaintContext,
@@ -83,12 +85,12 @@ export function acpLabelScale(
     proportionalScale?: number,
 ): number {
     const textWidthAt1 = textWidth(context, text, font, 1);
-    const floor = Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - ACP_PADDING_PX) / textWidthAt1);
-
-    if (circleRadiusPx === undefined || proportionalScale === undefined) return floor;
+    if (circleRadiusPx === undefined || proportionalScale === undefined) {
+        return Math.max(0, Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - ACP_PADDING_PX) / textWidthAt1));
+    }
 
     const circleMaxWidth = Math.max(0, circleRadiusPx * 2 * ACP_TEXT_FRACTION - ACP_PADDING_PX);
-    return Math.max(floor, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
+    return Math.max(0, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
 }
 
 /**

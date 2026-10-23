@@ -142,6 +142,7 @@ export {
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
     MIN_LABEL_SIZE,
+    MIN_LEGIBLE_TEXT_PX,
     MIN_LINE_WIDTH,
     TacticalGraphicsConfig,
     configureTacticalGraphics,
@@ -565,7 +566,7 @@ export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mob
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
 
-export {amplifierText, withHiddenAmplifiers} from './symbology/paintFunctions';
+export {amplifierText, withHiddenAmplifiers, withLegibleText} from './symbology/paintFunctions';
 
 /**
  * ## Building a graphic's paint input, for any renderer

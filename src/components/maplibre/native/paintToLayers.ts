@@ -306,6 +306,8 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // map, a line or a symbol's axis, so it turns with the map. Zero is a
                     // horizontal line, not an upright label. @see turnedSymbolLayout
                     turned: text.rotation !== undefined,
+                    // A letter of a run along a curve never flips on its own. @see TextSpec.glyph
+                    glyph: text.glyph === true,
                     color: text.fill,
                     haloColor: text.halo?.color ?? 'transparent',
                     haloWidth: outwardHalo(text.halo?.widthPx),
@@ -551,9 +553,9 @@ export function turnedLabelFlips(rotate: number, bearing: number): boolean {
 export function turnedSymbolLayout(bearing: number): Record<string, unknown> {
     // The expression form of turnedLabelFlips.
     const flips = [
-        '>',
-        ['abs', ['-', ['%', ['+', ['%', ['+', ['-', ['get', 'rotate'], bearing], 180], 360], 360], 360], 180]],
-        90,
+        'all',
+        ['!', ['to-boolean', ['get', 'glyph']]],
+        ['>', ['abs', ['-', ['%', ['+', ['%', ['+', ['-', ['get', 'rotate'], bearing], 180], 360], 360], 360], 180]], 90],
     ];
     return {
         'text-rotate': ['case', flips, ['+', ['get', 'rotate'], 180], ['get', 'rotate']],
