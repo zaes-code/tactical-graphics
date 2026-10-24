@@ -14,7 +14,7 @@ import {allowedGestures, drawClickCount, dropSizePx, hasDerivedAnchors} from '..
 import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {anchorsForParallelLegs} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
 
 const context = (resolution = 400): PaintContext => ({
@@ -314,8 +314,14 @@ describe('APP-06 343300 — demonstration', () => {
                     properties: {name: TacticalGraphicName.Demonstration, designation: label},
                 };
                 const ctx = context(resolution);
-                const mark = demonstrationPaint('DEM')(feature, ctx).find(p => p.text)!;
+                const mark = demonstrationPaint('DEM')(feature, ctx).find(p => p.text);
                 const legPx = len(parts[0][0], parts[0][1]) / resolution;
+                if (!mark) {
+                    // Gone only where even 6 px text would overrun its share of the leg.
+                    const floorWidthPx = ctx.measureText(`DEM ${label}`, 'bold 6px sans-serif');
+                    expect(floorWidthPx).toBeGreaterThan(legPx * 0.55);
+                    continue;
+                }
                 const widthPx = ctx.measureText(mark.text!.text, mark.text!.font) * mark.text!.scale!;
                 expect(widthPx).toBeLessThanOrEqual(legPx * 0.56);
             }
@@ -339,5 +345,51 @@ describe('APP-06 343300 — demonstration', () => {
             p.geometry.type === 'MultiLineString' && p.geometry.coordinates.length === 2);
         expect(barbs).toBeDefined();
         expect(paints.some(p => p.fill)).toBe(false);
+    });
+});
+
+describe('letters in gaps, zoomed out', () => {
+    // Shrinking with the graphic, the text went under the legibility floor and vanished
+    // while its break stayed, so zoomed out the symbol was mostly hole (user, 2026-10-24).
+    const ctx: PaintContext = {resolution: 1, measureText: context().measureText};
+
+    it('the escort keeps its Es at 6 px, then drops them', () => {
+        const bar = (spanPx: number): PaintFeature => ({
+            geometry: {type: 'LineString', coordinates: [[0, 0], [spanPx, 0]]},
+            properties: {name: TacticalGraphicName.Escort},
+            bounds: {minX: 0, minY: 0, maxX: spanPx, maxY: 0},
+        });
+        const small = escortPaint('E')(bar(40), ctx);
+        const letters = small.filter(p => p.text);
+        expect(letters).toHaveLength(2);
+        for (const letter of letters) expect(16 * letter.text!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+        const [left, right] = lines(small);
+        expect(right[0][0] - left[1][0]).toBeGreaterThan(0);
+
+        // The break stays for the host's unit symbol, which is drawn whatever the letters do.
+        expect(escortPaint('E')(bar(10), ctx).filter(p => p.text)).toEqual([]);
+    });
+
+    it('the demonstration keeps DEM at 6 px, then drops it and draws the leg whole', () => {
+        const leg: ProjectedPosition[] = [[0, 0], [40, 0]];
+        const turn: ProjectedPosition[] = [[40, 0], [45, 5], [40, 10]];
+        const back: ProjectedPosition[] = [[40, 10], [0, 10]];
+        const at = (k: number): PaintFeature => {
+            const parts = [leg, turn, back].map(part => part.map(([x, y]) => [x * k, y * k] as ProjectedPosition));
+            return {
+                geometry: {type: 'MultiLineString', coordinates: parts},
+                properties: {name: TacticalGraphicName.Demonstration},
+                bounds: {minX: 0, minY: 0, maxX: 45 * k, maxY: 10 * k},
+            };
+        };
+
+        const small = demonstrationPaint('DEM')(at(1), ctx);
+        expect(16 * small.find(p => p.text)!.text!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+        // The leg in two runs around the text, then the turn and the second leg.
+        expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(4);
+
+        const tiny = demonstrationPaint('DEM')(at(0.4), ctx);
+        expect(tiny.find(p => p.text)).toBeUndefined();
+        expect((tiny[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
     });
 });

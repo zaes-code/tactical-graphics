@@ -210,3 +210,34 @@ describe('textAlongPath', () => {
         expect(marks[0].text!.scale).toBeCloseTo(30 / 45);
     });
 });
+
+describe('a doctrinal prefix outlasts the name it is joined to', () => {
+    // A phase line about 220 km long. Zoomed out, "PL BLUE" shrinks under the floor; the name
+    // goes and "PL" stays at 6 px until the line itself is too short to carry it.
+    const line = buildPaintedGraphic(N.PhaseLine, {type: 'LineString', coordinates: [[0, 0], [2, 0]]}, {designation: 'BLUE'}, 100)!;
+    const labels = (resolution: number) => paintGraphic(line, context(resolution)).filter(p => p.text);
+
+    it('draws the whole label while it is readable, then the prefix alone, then nothing', () => {
+        const seen = [100, 1000, 3000, 6000, 12_000, 24_000, 100_000].map(r => labels(r).map(p => `${p.text!.text}@${textPx(p).toFixed(1)}`)[0] ?? '');
+        expect(seen[0].startsWith('PL BLUE@')).toBe(true);
+        const prefixOnly = seen.filter(s => s.startsWith('PL@'));
+        expect(prefixOnly.length).toBeGreaterThan(0);
+        prefixOnly.forEach(s => expect(Number(s.split('@')[1])).toBeGreaterThanOrEqual(MIN_LEGIBLE_TEXT_PX));
+        expect(seen[seen.length - 1]).toBe('');
+        // Never a name under the floor, never a bare name.
+        seen.filter(Boolean).forEach(s => expect(s.startsWith('PL')).toBe(true));
+    });
+});
+
+describe('cover, guard and screen', () => {
+    it('never draw their letter under 6 px, and drop it once the symbol is tiny', () => {
+        const cover = buildPaintedGraphic(N.Cover, {type: 'LineString', coordinates: [[0, 0], [0.2, 0]]}, {}, 100)!;
+        const letters = (resolution: number) => paintGraphic(cover, context(resolution)).filter(p => p.text?.text === 'C');
+        const sizes = [50, 200, 400, 800, 1600, 3200].map(r => letters(r).map(textPx)[0]);
+        sizes.filter(px => px !== undefined).forEach(px => expect(px!).toBeGreaterThanOrEqual(MIN_LEGIBLE_TEXT_PX - 1e-9));
+        expect(sizes[0]).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        // Held at the floor on the way down rather than taken by it.
+        expect(sizes.some(px => px !== undefined && Math.abs(px - MIN_LEGIBLE_TEXT_PX) < 1e-9)).toBe(true);
+        expect(letters(100_000)).toEqual([]);
+    });
+});

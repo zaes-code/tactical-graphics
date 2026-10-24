@@ -14,10 +14,12 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
-import {cutGapAlongPath, offsetAbove, offsetBelow, projectedMidSegment, textWidth, uprightRotation} from './decorations';
-import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {BASE_FONT_SIZE_PX} from '../core/config';
+import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
+import {letterGapClearance, letterInGapScale} from './labelFit';
+import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -110,23 +112,17 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const {p1, p2, point} = midpointOf(coords);
         const scale = scaleOf(feature, context);
         const rotation = uprightRotation(p1, p2);
+        // `T2 ( AS )` on the plate: the designation carries its country code in
+        // brackets, as the rest of the fire-support family does.
+        // (User's call, 2026-09-01.)
+        const full = getFullLabel(name, formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode));
+        // Too small to read, the name goes and `CFL` stays. The dates keep `scale`. @see legibleDesignation
+        const shown = legibleDesignation(full, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
 
         return [
-            textMark(
-                feature,
-                offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                // `T2 ( AS )` on the plate: the designation carries its country code in
-                // brackets, as the rest of the fire-support family does.
-                // (User's call, 2026-09-01.)
-                getFullLabel(
-                    name,
-                    formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode),
-                ),
-                scale,
-                rotation,
-                'center',
-                'bottom',
-            ),
+            ...(shown.text
+                ? [textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), shown.text, shown.scale, rotation, 'center', 'bottom')]
+                : []),
             textMark(
                 feature,
                 offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
@@ -159,36 +155,42 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         if (coords.length < 2) return [];
 
         const props = feature.properties;
-        const endLabel = getFullLabel(name, '');
         const midTop = formatDesignationWithCountry(props.designation, props.countryCode);
         const midBottom = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
 
         const scale = scaleOf(feature, context);
+        // The end label is the prefix alone, so it is held at a legible size rather than
+        // shrinking away, and goes only once the line is shorter than twice it. The two
+        // designations at the middle carry no prefix and are left to the floor.
+        // @see legibleDesignation
+        const ends = legibleDesignation(getFullLabel(name, ''), getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
         const start = coords[0];
         const afterStart = coords[1];
         const end = coords[coords.length - 1];
         const beforeEnd = coords[coords.length - 2];
 
-        const paints: Paint[] = [
-            textMark(
-                feature,
-                offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
-                endLabel,
-                scale,
-                uprightRotation(start, afterStart),
-                afterStart[0] >= start[0] ? 'left' : 'right',
-                'bottom',
-            ),
-            textMark(
-                feature,
-                offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
-                endLabel,
-                scale,
-                uprightRotation(beforeEnd, end),
-                end[0] >= beforeEnd[0] ? 'right' : 'left',
-                'bottom',
-            ),
-        ];
+        const paints: Paint[] = ends.text
+            ? [
+                textMark(
+                    feature,
+                    offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
+                    ends.text,
+                    ends.scale,
+                    uprightRotation(start, afterStart),
+                    afterStart[0] >= start[0] ? 'left' : 'right',
+                    'bottom',
+                ),
+                textMark(
+                    feature,
+                    offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
+                    ends.text,
+                    ends.scale,
+                    uprightRotation(beforeEnd, end),
+                    end[0] >= beforeEnd[0] ? 'right' : 'left',
+                    'bottom',
+                ),
+            ]
+            : [];
 
         const {p1, p2, point} = midpointOf(coords);
         const rotation = uprightRotation(p1, p2);
@@ -252,15 +254,21 @@ export function munitionFlightPathPaint(): LinePaint {
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
+        // Never under the legibility floor, and no letters and no gap once the path is too
+        // short on screen to carry them. @see letterInGapScale
+        const letterScale = letterInGapScale(scale, textWidth(context, 'MFP', fontStyle, 1), BASE_FONT_SIZE_PX, pathLength(coords) / context.resolution);
+
         // The gap is cut along the path, so a smoothed line gets the same one. @see cutGapAlongPath
-        const halfGapPx = textWidth(context, 'MFP', fontStyle, scale) / 2 + MFP_GAP_PADDING_PX;
+        const halfGapPx = letterScale
+            ? textWidth(context, 'MFP', fontStyle, letterScale) / 2 + letterGapClearance(MFP_GAP_PADDING_PX, letterScale, configuredLabelScale())
+            : 0;
         const {outline, center} = cutGapAlongPath(coords, index, t, halfGapPx * context.resolution);
 
         const start = coords[0];
         const afterStart = coords[1];
 
         return [
-            textMark(feature, center, 'MFP', scale, uprightRotation(p1, p2), 'center', 'middle'),
+            ...(letterScale ? [textMark(feature, center, 'MFP', letterScale, uprightRotation(p1, p2), 'center', 'middle')] : []),
             // Left-aligned so the DTG begins exactly at the line's start, which is
             // the convention this symbol is drawn with.
             //

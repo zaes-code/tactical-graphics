@@ -133,6 +133,27 @@ describe('the nine bearing lines', () => {
         for (const [a, b] of stubs) expect(b[0] - a[0]).toBeGreaterThan(0);
     });
 
+    it('keeps its letter at 6 px, then drops it and closes the line', () => {
+        // Zoomed far out the letter shrank under the legibility floor and went, while the
+        // gap round it stayed. Now it stops at 6 px, and once the line is under twice the
+        // letter there is no letter and no gap. (User, 2026-10-24.) @see letterInGapScale
+        const name = TacticalGraphicName.BearingLine;
+        const sized = (length: number): PaintFeature => ({
+            ...lineFeature(name, [[0, 0], [length, 0]]),
+            bounds: {minX: 0, minY: 0, maxX: length, maxY: 0},
+        });
+
+        // 40 px: the graphic cap alone would draw the letter at 5 px.
+        const small = bearingLinePaint(name)(sized(400), context);
+        expect(small.find(p => p.text)!.text!.scale! * 16).toBeCloseTo(6, 9);
+        expect(small.filter(p => p.geometry.type === 'LineString')).toHaveLength(2);
+
+        // 10 px, under twice the 6 px letter: the line is drawn whole.
+        const tiny = bearingLinePaint(name)(sized(100), context);
+        expect(textsOf(tiny)).toEqual([]);
+        expect(tiny.map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates)).toEqual([[[0, 0], [100, 0]]]);
+    });
+
     it('puts H on the far side of the line from the letter', () => {
         const name = TacticalGraphicName.BearingLine;
         const paints = bearingLinePaint(name)(lineFeature(name, undefined, {additionalInfo: '12'}), context);
