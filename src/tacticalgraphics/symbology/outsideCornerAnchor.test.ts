@@ -117,11 +117,12 @@ describe('the anchor a date block hangs from', () => {
         const bare = {
             geometry: {type: 'Point', coordinates: [0, 0]},
             properties: {name: TacticalGraphicName.CallForFireZoneRectangular, ...DATES},
-            bounds: {minX: -50, minY: -20, maxX: 50, maxY: 20},
+            // Large enough to carry its name, which the dates go with.
+            bounds: {minX: -5000, minY: -2000, maxX: 5000, maxY: 2000},
         } as PaintFeature;
         const drawn = datePaintOf(zoneLabelPaint(TacticalGraphicName.CallForFireZoneRectangular, false)(bare, context));
         const at = (drawn!.geometry as {coordinates: ProjectedPosition}).coordinates;
-        expect(at).toEqual([-50, 20]);
+        expect(at).toEqual([-5000, 2000]);
     });
 
     it('gives the PsyOps block the same corner, since it is the same block', () => {

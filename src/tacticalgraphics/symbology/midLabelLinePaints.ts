@@ -121,18 +121,21 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
 
         return [
             ...(shown.text
-                ? [textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), shown.text, shown.scale, rotation, 'center', 'bottom')]
+                ? [
+                    textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), shown.text, shown.scale, rotation, 'center', 'bottom'),
+                    // The dates go with the name. @see withProportionateAmplifiers
+                    textMark(
+                        feature,
+                        offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
+                        dateRangeLabel(feature.properties),
+                        scale,
+                        rotation,
+                        'center',
+                        'top',
+                        'amplifier',
+                    ),
+                ]
                 : []),
-            textMark(
-                feature,
-                offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
-                dateRangeLabel(feature.properties),
-                scale,
-                rotation,
-                'center',
-                'top',
-                'amplifier',
-            ),
             {
                 geometry: {type: 'LineString', coordinates: coords},
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
@@ -254,8 +257,8 @@ export function munitionFlightPathPaint(): LinePaint {
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
-        // Never under the legibility floor, and no letters and no gap once the path is too
-        // short on screen to carry them. @see letterInGapScale
+        // No letters and no gap once they would be under the legibility floor, or the path is
+        // too short on screen to carry them. @see letterInGapScale
         const letterScale = letterInGapScale(scale, textWidth(context, 'MFP', fontStyle, 1), BASE_FONT_SIZE_PX, pathLength(coords) / context.resolution);
 
         // The gap is cut along the path, so a smoothed line gets the same one. @see cutGapAlongPath

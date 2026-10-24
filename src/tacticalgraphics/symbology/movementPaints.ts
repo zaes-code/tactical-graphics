@@ -676,7 +676,7 @@ const APPROACH_LABEL_POSITION = 0.25;
 export function approachLetterScale(feature: PaintFeature, context: PaintContext, letter: string, runPx: number): number {
     const bounds = feature.bounds;
     // With neither a stamped extent nor a run to measure, the size is unknown: the letter is
-    // floored but never dropped, rather than lost to a missing stamp.
+    // never dropped for size, only under the legibility floor, rather than lost to a missing stamp.
     const graphicPx = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) / context.resolution : runPx > 0 ? runPx : Infinity;
     return letterInGapScale(scaleOf(feature, context), textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, graphicPx);
 }

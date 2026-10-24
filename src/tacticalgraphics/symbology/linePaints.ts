@@ -13,7 +13,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, hostilityOf, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierDash, asAmplifier, getFullLabel, hostilityOf, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
 
@@ -148,7 +148,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
 
         if (dateText) {
             const at = offsetBelow(anchor, p1, p2, context.resolution, ARROW_DTG_OFFSET_PX * scale);
-            paints.push(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'}));
+            paints.push(asAmplifier(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'})));
         }
 
         return paints;

@@ -49,7 +49,7 @@ import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
-import {capLabelToGraphic, letterGapClearance, letterInGapScale} from './labelFit';
+import {capLabelToGraphic, heldTextScale, letterGapClearance, letterInGapScale} from './labelFit';
 // A cycle (movementPaints imports this file), safe because it is only called inside a paint.
 import {approachLetterScale} from './movementPaints';
 import {PLANNED_DASH_PX, strokeParts} from './dashFit';
@@ -97,6 +97,14 @@ export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefine
 }
 
 /**
+ * The same mark, with its text marked as an amplifier: something the operator typed or set
+ * that is not the graphic's name (dates, altitudes, field H). @see TextKind
+ */
+export function asAmplifier(paint: Paint): Paint {
+    return paint.text ? {...paint, text: {...paint.text, kind: 'amplifier'}} : paint;
+}
+
+/**
  * Takes away text too small to read, leaving the rest of its mark.
  *
  * Labels sized to their graphic shrink with it, and a label a few pixels tall is a smudge,
@@ -109,13 +117,60 @@ export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefine
  */
 export function withLegibleText(paints: Paint[]): Paint[] {
     const out: Paint[] = [];
-    for (const paint of paints) {
+    for (const paint of withProportionateAmplifiers(paints)) {
         if (!paint.text || renderedTextPx(paint.text.font, paint.text.scale ?? 1) >= MIN_LEGIBLE_TEXT_PX) {
             out.push(paint);
             continue;
         }
         const {text: _hidden, ...rest} = paint;
         if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    }
+    return out;
+}
+
+/**
+ * Holds a graphic's amplifiers (dates, altitudes, field H) to the size of its main label, and
+ * takes them away when the main label is too small to read.
+ *
+ * Main labels are fitted to their graphic and shrink with it; amplifiers hung outside the
+ * shape or below a line were not, so zoomed out a zone's dates stood twice the height of the
+ * name they belong to, and stayed after the name had gone. (User, 2026-10-24.) The main label
+ * is every text in the same set of paints that is not an amplifier, so this is asked once per
+ * half, as the legibility floor is: OpenLayers styles a graphic and its labels as two
+ * features. A half with no main label is left as it is. Applied by `withLegibleText`, so every
+ * engine gets it from the call it already makes. @see TextKind
+ */
+export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
+    let mainPx = 0;
+    let amplifiers = false;
+    let main = false;
+    for (const paint of paints) {
+        const text = paint.text;
+        if (!text || !text.text.trim()) continue;
+        if (text.kind === 'amplifier') {
+            amplifiers = true;
+            continue;
+        }
+        main = true;
+        mainPx = Math.max(mainPx, renderedTextPx(text.font, text.scale ?? 1));
+    }
+    if (!amplifiers || !main) return paints;
+    const legible = mainPx >= MIN_LEGIBLE_TEXT_PX;
+    const out: Paint[] = [];
+    for (const paint of paints) {
+        const text = paint.text;
+        if (!text || text.kind !== 'amplifier') {
+            out.push(paint);
+            continue;
+        }
+        if (!legible) {
+            const {text: _hidden, ...rest} = paint;
+            if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+            continue;
+        }
+        const scale = text.scale ?? 1;
+        const px = renderedTextPx(text.font, scale);
+        out.push(px > mainPx ? {...paint, text: {...text, scale: (scale * mainPx) / px}} : paint);
     }
     return out;
 }
@@ -207,7 +262,7 @@ export function legibleDesignation(
     const fontPx = parseFloat(font.match(/(\d*\.?\d+)px/)?.[1] ?? String(BASE_FONT_SIZE_PX));
     const trimmed = prefix.trim();
     if (!trimmed || fontPx * scale >= MIN_LEGIBLE_TEXT_PX) return {text, scale};
-    const prefixScale = letterInGapScale(scale, context.measureText(trimmed, font), fontPx, graphicPx);
+    const prefixScale = heldTextScale(scale, context.measureText(trimmed, font), fontPx, graphicPx);
     return prefixScale > 0 ? {text: trimmed, scale: prefixScale} : {text: '', scale: 0};
 }
 
@@ -610,7 +665,7 @@ function missionTaskLetterDesiredScale(feature: PaintFeature, context: PaintCont
 /**
  * The task's size on screen, from what its line-work feature and its label feature both
  * carry: the stamped radius and the drawn extent. Unknown means unbounded, so the letter is
- * floored but never dropped.
+ * dropped only under the legibility floor, never for size.
  */
 function missionTaskGraphicPx(feature: PaintFeature, context: PaintContext, gap: MissionTaskLetterGap): number {
     const size = feature.graphicSize;
@@ -1048,7 +1103,7 @@ export function defaultLinePaint(
         const scale = scaleOf(feature, context);
         // The name goes before the prefix does (`FSCL`, `NFL`), once the identifier is too small
         // to read. Field H leads only on the generic line, which has no prefix, so it is never
-        // cut here. The dates keep their own scale and are left to the legibility floor.
+        // cut here. The dates are capped at the name's size. @see withProportionateAmplifiers
         // @see legibleDesignation
         const shown = legibleDesignation(identifier, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
         const gap = DEFAULT_LINE_LABEL_GAP_PX;
@@ -1092,8 +1147,13 @@ export function defaultLinePaint(
                     label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
                 ]
                 : []),
-            label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top'),
-            label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top'),
+            // The dates go with a name the size rule took away. @see withProportionateAmplifiers
+            ...(shown.text || !identifier
+                ? [
+                    asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
+                    asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+                ]
+                : []),
             {
                 geometry: feature.geometry,
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},

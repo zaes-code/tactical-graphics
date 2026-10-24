@@ -1,14 +1,15 @@
 /**
  * # The munition flight path's "MFP", in the gap cut for it
  *
- * Zoomed far out the letters shrank under the legibility floor and went, while the gap round
- * them stayed: a hole in the middle of the line. They now stop at 6 px, and once the path is
- * under twice their width there are no letters and no gap. (User, 2026-10-24.)
- * @see letterInGapScale
+ * The letters keep the scale the graphic gives them and are never floored: once that would
+ * put them under 6 px they go, and the gap with them, so the path is drawn whole. A path
+ * under twice their width is drawn whole too. (User, 2026-10-24.) @see letterInGapScale
  */
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
+import {scaleOf} from './paintFunctions';
 
 const context: PaintContext = {
     resolution: 10,
@@ -28,18 +29,27 @@ const runsOf = (paints: Paint[]) =>
     (paints.find(p => p.geometry.type === 'MultiLineString')!.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
 
 describe('munitionFlightPathPaint', () => {
-    it('keeps MFP at 6 px, then drops it and closes the line', () => {
-        // 40 px: the graphic cap alone would draw the letters at 5 px.
-        const small = munitionFlightPathPaint()(path(400), context);
-        expect(mfpOf(small)!.text!.scale! * 16).toBeCloseTo(6, 9);
-        const [before, after] = runsOf(small);
+    it('draws MFP at its own scale, and drops it and closes the line once it would be under 6 px', () => {
+        const drawnLength = (paints: Paint[]) => runsOf(paints).reduce((sum, run) => sum + Math.abs(run[run.length - 1][0] - run[0][0]), 0);
+
+        // 100 px: the graphic cap puts the letters over 6 px, and they are drawn at exactly that.
+        const desired = scaleOf(path(1000), context);
+        expect(desired * 16).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = munitionFlightPathPaint()(path(1000), context);
+        expect(mfpOf(legible)!.text!.scale!).toBeCloseTo(desired, 9);
+        const [before, after] = runsOf(legible);
         expect(after[0][0] - before[before.length - 1][0]).toBeGreaterThan(0);
 
-        // 15 px, under twice the letters: none, and the path is drawn whole.
+        // 40 px: the graphic cap would draw the letters at 5 px, so none, and the path is whole.
+        expect(scaleOf(path(400), context) * 16).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        const small = munitionFlightPathPaint()(path(400), context);
+        expect(mfpOf(small)).toBeUndefined();
+        expect(drawnLength(small)).toBeCloseTo(400, 9);
+
+        // 15 px: none, and the path is drawn whole.
         const tiny = munitionFlightPathPaint()(path(150), context);
         expect(mfpOf(tiny)).toBeUndefined();
-        const drawn = runsOf(tiny).reduce((sum, run) => sum + Math.abs(run[run.length - 1][0] - run[0][0]), 0);
-        expect(drawn).toBeCloseTo(150, 9);
+        expect(drawnLength(tiny)).toBeCloseTo(150, 9);
     });
 });
 

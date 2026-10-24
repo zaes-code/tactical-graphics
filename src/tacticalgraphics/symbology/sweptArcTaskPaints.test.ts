@@ -14,6 +14,7 @@ import {renderTacticalGraphic} from '../core/render';
 import {TacticalGraphicName} from '../core/type';
 import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
+import {scaleOf} from './paintFunctions';
 
 const context = (resolution = 400): PaintContext => ({
     resolution,
@@ -176,23 +177,29 @@ describe('APP-06 343000 / 344500 / 344600 — the swept-arc tasks', () => {
     });
 });
 
-it('keeps its letter at 6 px, then drops it and draws the arc whole', () => {
-    // Shrinking with the graphic, the letter went under the legibility floor and vanished
-    // while its break stayed, so zoomed out the sweep was mostly hole (user, 2026-10-24).
+it('draws its letter at its own scale, and drops it and draws the arc whole once the letter would be under 6 px', () => {
+    // Held at 6 px the letter read as a speck in a hole rather than as the task. It is never
+    // floored now: under 6 px it goes, and so does its break (user, 2026-10-24).
     const ctx: PaintContext = {resolution: 1, measureText: context().measureText};
     const circle: ProjectedPosition[] = [[-5, 0], [0, 5], [5, 0]];
     const arcOf = (k: number): ProjectedPosition[] => [[0, 0], [10 * k, 10 * k], [20 * k, 0]];
-    const paintAt = (k: number) =>
-        sweptArcTaskPaint('C')({
-            geometry: {type: 'MultiLineString', coordinates: [circle, arcOf(k)]},
-            properties: {name: TacticalGraphicName.Capture},
-            bounds: {minX: 0, minY: 0, maxX: 20 * k, maxY: 10 * k},
-        } as PaintFeature, ctx);
+    const featureAt = (k: number) => ({
+        geometry: {type: 'MultiLineString', coordinates: [circle, arcOf(k)]},
+        properties: {name: TacticalGraphicName.Capture},
+        bounds: {minX: 0, minY: 0, maxX: 20 * k, maxY: 10 * k},
+    }) as PaintFeature;
+    const paintAt = (k: number) => sweptArcTaskPaint('C')(featureAt(k), ctx);
 
+    const desired = scaleOf(featureAt(5), ctx);
+    expect(16 * desired).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+    const legible = paintAt(5);
+    expect(legible.find(p => p.text)!.text!.scale!).toBeCloseTo(desired, 9);
+    expect((legible[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
+
+    expect(16 * scaleOf(featureAt(1), ctx)).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
     const small = paintAt(1);
-    const letter = small.find(p => p.text)!.text!;
-    expect(16 * letter.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
-    expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
+    expect(small.find(p => p.text)).toBeUndefined();
+    expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toEqual([circle, arcOf(1)]);
 
     const tiny = paintAt(0.3);
     expect(tiny.find(p => p.text)).toBeUndefined();
