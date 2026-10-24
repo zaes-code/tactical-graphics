@@ -189,6 +189,8 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
                 setInteractionMode('view');
                 try {
                     engine.current?.restore(JSON.parse(await file.text()));
+                    // Framed on what was imported, which is rarely where the user was looking.
+                    fitToGraphics();
                 } catch (e) {
                     // eslint-disable-next-line no-console
                     console.error('Import failed — not readable as a tactical graphics GeoJSON.', e);

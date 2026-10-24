@@ -18,6 +18,7 @@ import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {SPIKE_SAMPLES} from '../spikeSamples';
 import {drawSpikeSamples} from './spikeDriver';
 import {buildSampleGraphics} from './sampleGallery';
+import type {MapLibreTacticalGraphic} from './maplibreAdapter';
 import {readViewport, writeViewport} from '../mapViewport';
 import type {MapEngineHandle, ViewCamera} from '../mapEngine';
 import {createMapLibreOverlay} from '../overlay/mapLibreOverlay';
@@ -310,6 +311,37 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
         };
 
         const overlay = createMapLibreOverlay(map);
+        /*
+         * **Zoom to graphics just put on the map**: the sample sheet, or an import.
+         *
+         * Either lands wherever its coordinates say, which has nothing to do with where the
+         * user was looking — so without this the sweep drew 273 graphics correctly and off
+         * screen. The left padding clears the controls panel, which floats over the map.
+         *
+         * Bounds come from each graphic's own projected extent — the same `boundsOf` result
+         * the selection box is measured from — so the engines frame the same content the
+         * same way.
+         */
+        const frame = (graphics: readonly MapLibreTacticalGraphic[]) => {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const graphic of graphics) {
+                const b = graphic.graphic.bounds;
+                if (!b) continue;
+                minX = Math.min(minX, b.minX); minY = Math.min(minY, b.minY);
+                maxX = Math.max(maxX, b.maxX); maxY = Math.max(maxY, b.maxY);
+            }
+            if (!isFinite(minX) || maxX < minX) return;
+            map.fitBounds([toLonLat([minX, minY]), toLonLat([maxX, maxY])], {
+                padding: {
+                    top: SAMPLE_VIEW_PADDING_PX,
+                    right: SAMPLE_VIEW_PADDING_PX,
+                    bottom: SAMPLE_VIEW_PADDING_PX,
+                    left: SAMPLE_CONTROL_PANEL_PX,
+                },
+                duration: 0,
+            });
+        };
+
         const handle: MapEngineHandle = {
             camera,
             showOverlay: collection => overlay.show(collection),
@@ -347,36 +379,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
                 target.clear();
                 const {graphics} = buildSampleGraphics(hostility, resolutionOf(map), names);
                 graphics.forEach(g => target.add(g));
-
-                /*
-                 * **Zoom to what was just drawn**, as the OpenLayers sweep does.
-                 *
-                 * The gallery lays itself out around the origin at the resolution it was
-                 * asked for, which has nothing to do with where the user was looking — so
-                 * without this the sweep drew 273 graphics correctly and off screen. The
-                 * left padding clears the controls panel, which floats over the map.
-                 *
-                 * Bounds come from each graphic's own projected extent — the same
-                 * `boundsOf` result the selection box is measured from — so the two
-                 * engines frame the same sweep the same way.
-                 */
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                for (const graphic of graphics) {
-                    const b = graphic.graphic.bounds;
-                    if (!b) continue;
-                    minX = Math.min(minX, b.minX); minY = Math.min(minY, b.minY);
-                    maxX = Math.max(maxX, b.maxX); maxY = Math.max(maxY, b.maxY);
-                }
-                if (!isFinite(minX) || maxX <= minX) return;
-                map.fitBounds([toLonLat([minX, minY]), toLonLat([maxX, maxY])], {
-                    padding: {
-                        top: SAMPLE_VIEW_PADDING_PX,
-                        right: SAMPLE_VIEW_PADDING_PX,
-                        bottom: SAMPLE_VIEW_PADDING_PX,
-                        left: SAMPLE_CONTROL_PANEL_PX,
-                    },
-                    duration: 0,
-                });
+                frame(graphics);
             },
             refreshStyles: () => engine?.refreshStyles(),
             snapshot: () => engine?.snapshot() ?? {type: 'FeatureCollection', features: []},
@@ -384,7 +387,14 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
             setAmplifiersHidden: (id, hidden) => engine?.setAmplifiersHidden?.(id, hidden),
             amplifiersHidden: id => engine?.amplifiersHidden?.(id) ?? false,
             exportGeoJson: () => exportGraphics(renderer()?.snapshot() ?? {type: 'FeatureCollection', features: []}),
-            importGeoJson: async file => engine?.restore(JSON.parse(await file.text())),
+            importGeoJson: async file => {
+                engine?.restore(JSON.parse(await file.text()));
+                // Framed on what was imported, which is rarely where the user was looking.
+                const target = renderer();
+                if (!(target instanceof NativeLayerRenderer)) return;
+                const ids = target.snapshot().features.map(f => f.properties?.symbolId as string);
+                frame(ids.map(id => target.find(id)).filter((g): g is MapLibreTacticalGraphic => !!g));
+            },
         };
 
         // Test hook for the driving scripts, mirroring the one OpenLayers.tsx
