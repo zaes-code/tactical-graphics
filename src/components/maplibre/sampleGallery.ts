@@ -563,7 +563,7 @@ function hostilityFor(
  * on the draw path: a graphic whose every dimension is a screen constant has no size
  * without it. Omitting it built Cover, Guard and Screen from `SAMPLE_RADIUS_M` — a
  * ground distance — so each came out 34px across instead of 410, and then snapped to
- * the right size on the first zoom, when `rebuildScreenSized` re-derived it from the
+ * the right size on the first zoom, when a since-removed rebuild re-derived it from the
  * live map. @see securityOperationSize
  */
 /**

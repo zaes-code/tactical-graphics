@@ -3,8 +3,8 @@
  *
  * `buildTacticalGraphic` builds a graphic's paint features from `properties.tacticalGraphic`,
  * so **anything not in that bag is gone the moment a graphic is rebuilt** — and MapLibre
- * rebuilds on a zoom (`rebuildScreenSized`) and on an amplifier edit
- * (`featurePropertiesSource.apply`).
+ * rebuilds on an amplifier edit (`featurePropertiesSource.apply`) and on a config change
+ * that moves geometry. (It used to rebuild on every zoom as well, until 2026-10-24.)
  *
  * Two fields live on the paint features rather than in the bag, and only one of them was
  * being carried. `drawingResolution` had a helper of its own and a paragraph explaining that
