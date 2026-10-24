@@ -98,7 +98,7 @@ describe('fitLabelScale', () => {
 
     it('caps the designation and its date-time group as one block', () => {
         const ctx = context(100);
-        const withRing = {...feature(box(2000, 1000)), properties: {
+        const withRing = {...feature(box(10000, 5000)), properties: {
             name: TacticalGraphicName.AssemblyArea,
             label: 'ALPHA',
             startDate: '021200ZJUN26',

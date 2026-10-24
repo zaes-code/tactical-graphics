@@ -17,10 +17,10 @@
  */
 
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {arcMissionTaskPaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
+import {arcMissionTaskPaint, defaultLinePaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
 import {renderTacticalGraphic} from '../core/render';
 import {anchorsFromFrame} from '../core/anchors';
 import {encirclementPaint} from './areaPaints';
@@ -326,9 +326,30 @@ describe('a mission-task letter is sized by which family it is in', () => {
         }
     });
 
+    it('draws envelopment\'s "E" at the scale its line work cut the gap for', async () => {
+        const {approachLetterScale} = await import('./movementPaints');
+        const feature: PaintFeature = {
+            geometry: {type: 'Point', coordinates: [0, 0]},
+            properties: {name: TacticalGraphicName.Envelopment},
+            drawingResolution: 100,
+            bounds: {minX: 0, minY: 0, maxX: 40_000, maxY: 10_000},
+        };
+        const [paint] = missionTaskLabelPaint(TacticalGraphicName.Envelopment)(feature, context(1000));
+        expect(paint.text!.scale).toBe(approachLetterScale(feature, context(1000), 'E', 0));
+        // Under twice its letter: no "E", as the run is drawn whole.
+        expect(missionTaskLabelPaint(TacticalGraphicName.Envelopment)({...feature, bounds: {minX: 0, minY: 0, maxX: 10_000, maxY: 2_500}}, context(1000)))
+            .toEqual([]);
+    });
+
     it('carries the rotation through, for a letter that lies along its graphic', () => {
         const rotated = missionTaskLabelPaint(TacticalGraphicName.Envelopment, 0.7)(
-            {geometry: {type: 'Point', coordinates: [0, 0]}, properties: {name: TacticalGraphicName.Envelopment}},
+            // The extent the holder stamps on the label: the "E" is sized against it, and with
+            // none there is nothing to fit it to and no letter. @see approachLetterScale
+            {
+                geometry: {type: 'Point', coordinates: [0, 0]},
+                properties: {name: TacticalGraphicName.Envelopment},
+                bounds: {minX: -200_000, minY: -100_000, maxX: 200_000, maxY: 100_000},
+            },
             context(1000),
         );
         expect(rotated[0].text?.rotation).toBeCloseTo(0.7, 10);
@@ -427,7 +448,91 @@ describe('the arc mission tasks cut their gap from the rendered glyph', () => {
     });
 
     it('never opens more than the 40° cap, however small the circle', () => {
-        const tiny = gapRadians(5_000, 1000);
-        expect(tiny).toBeLessThanOrEqual((40 * Math.PI) / 180 + 1e-9);
+        for (const radius of [5_000, 6_000, 8_000, 12_000, 20_000]) {
+            expect(gapRadians(radius, 1000)).toBeLessThanOrEqual((40 * Math.PI) / 180 + 1e-9);
+        }
+    });
+
+    /** The letter a Secure's label feature draws, or undefined for none. */
+    const secureLetter = (radius: number, resolution: number) =>
+        missionTaskLabelPaint(TacticalGraphicName.Secure)(
+            {geometry: {type: 'Point', coordinates: [radius, 0]}, properties: {name: TacticalGraphicName.Secure}, graphicSize: radius},
+            context(resolution),
+        )[0]?.text;
+
+    it('keeps its letter at 6 px, then drops it and closes the arcs', () => {
+        // A 20 px circle: the ratio-locked letter would be 4.5 px, under the legibility
+        // floor, so it is held at 6 and the arcs still open round it.
+        const small = secureLetter(10_000, 1000);
+        expect(small).toBeDefined();
+        expect(24 * small!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+        expect(gapRadians(10_000, 1000)).toBeGreaterThan(0);
+
+        // A 10 px circle is under twice its 6 px letter: no letter, and no hole for one.
+        expect(secureLetter(5_000, 1000)).toBeUndefined();
+        expect(gapRadians(5_000, 1000)).toBe(0);
+    });
+
+    it('cuts area defense\'s gap for the ratio-locked letter its label draws', () => {
+        const feature = (geometry: PaintFeature['geometry']): PaintFeature => ({
+            geometry,
+            properties: {name: TacticalGraphicName.AreaDefense},
+            graphicSize: 100_000,
+            graphicCenter: [0, 0],
+            graphicLabelPoint: [100_000, 0],
+        });
+        const letter = missionTaskLabelPaint(TacticalGraphicName.AreaDefense)(feature({type: 'Point', coordinates: [100_000, 0]}), context(1000))[0]
+            .text!;
+        const paints = arcMissionTaskPaint(TacticalGraphicName.AreaDefense, false)(
+            feature({type: 'MultiLineString', coordinates: arcs(100_000)}),
+            context(1000),
+        );
+        const geometry = paints[0].geometry;
+        if (geometry.type !== 'MultiLineString') throw new Error('expected line work');
+        const [x, y] = geometry.coordinates[0][0];
+        // Due east the gap runs along the letter's height: half of it plus 5 px of clearance.
+        const halfHeightPx = (24 * letter.scale! * 0.72) / 2;
+        expect(letter.font).toBe(RATIO_LOCKED_LABEL_FONT);
+        expect(Math.abs(Math.atan2(y, x))).toBeCloseTo(((halfHeightPx + 5) * 1000) / 100_000, 6);
+    });
+});
+
+/**
+ * A default line's identifier keeps its prefix when the whole is too small to read: the name
+ * goes, `FSCL` stays at 6 px, and goes only once the line is under twice it. The dates are
+ * not a designation and keep their own scale. @see legibleDesignation
+ */
+describe("a default line's identifier keeps its prefix when too small", () => {
+    const fscl = (length: number, boundsPx: number) =>
+        defaultLinePaint(TacticalGraphicName.FireSupportCoordinationLine)(
+            {
+                geometry: {type: 'LineString', coordinates: [[0, 0], [length, 0]]},
+                properties: {name: TacticalGraphicName.FireSupportCoordinationLine, designation: 'ALPHA', startDate: 'D1', endDate: 'D2'},
+                // The stamped extent is what caps the label; the path is what the prefix must fit.
+                bounds: {minX: 0, minY: 0, maxX: boundsPx, maxY: 0},
+            },
+            context(1),
+        );
+    const identifiers = (paints: ReturnType<typeof fscl>) => paints.filter(p => p.text && p.text.baseline === 'bottom').map(p => p.text!);
+
+    it('draws the whole identifier while it is legible', () => {
+        const ids = identifiers(fscl(400, 400));
+        expect(ids.map(t => t.text)).toEqual(['FSCL ALPHA', 'FSCL ALPHA']);
+        expect(ids[0].scale).toBe(1);
+    });
+
+    it('drops the name and holds FSCL at 6 px once the whole would be under it', () => {
+        const paints = fscl(100, 10);
+        const ids = identifiers(paints);
+        expect(ids.map(t => t.text)).toEqual(['FSCL', 'FSCL']);
+        for (const t of ids) expect(16 * t.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 9);
+        // The dates are left at the scale the graphic gave them.
+        const dates = paints.filter(p => p.text?.baseline === 'top').map(p => p.text!);
+        expect(dates.map(t => t.text)).toEqual(['D1 - D2', 'D1 - D2']);
+        expect(16 * dates[0].scale!).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+    });
+
+    it('draws no identifier on a line under twice FSCL', () => {
+        expect(identifiers(fscl(20, 10))).toEqual([]);
     });
 });

@@ -1530,12 +1530,13 @@ describe('arc mission-task circles cut their label gap from the glyph', () => {
     });
 
     it('still tracks the letter below the cap', () => {
-        // 30 px and 60 px of radius, both under the 80 px where the label scale
-        // caps out. Half the radius, half the letter, half the hole — bar the
-        // fixed 5 px of clearance a side, which is why the 10 comes off first.
-        const small = gapPx(300, 10) - 10;
-        const large = gapPx(600, 10) - 10;
-        expect(large).toBeCloseTo(small * 2, 0);
+        // 30 px and 45 px of radius, both under the 80 px where the label scale caps out
+        // and both letters over the 6 px floor. The clearance round the letter shrinks with
+        // it down here (@see letterGapClearance), so letter and hole are in proportion:
+        // half again the radius, half again the hole.
+        const small = gapPx(300, 10);
+        const large = gapPx(450, 10);
+        expect(large).toBeCloseTo(small * 1.5, 0);
     });
 
     it('holds the gap in screen pixels as the map zooms', () => {
