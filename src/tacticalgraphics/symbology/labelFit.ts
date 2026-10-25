@@ -21,7 +21,7 @@
  */
 
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {pointInRing} from './symbolFit';
 import {textWidth} from './decorations';
 
@@ -265,4 +265,59 @@ export function liftedAnchor(feature: PaintFeature, metres: number, padMetres = 
     }
     if (!lift) return feature;
     return {...feature, geometry: {type: 'Point', coordinates: [x, y + lift]}};
+}
+
+/**
+ * How many times its letter a graphic must measure on screen to keep the letter. Below it the
+ * letter goes, and with it the gap cut for it. @see letterInGapScale
+ */
+export const LETTER_GRAPHIC_RATIO = 2;
+
+/**
+ * The scale to draw a symbol's **letter in a gap of its own line work** at, or `0` for none.
+ *
+ * The letter keeps the share of the symbol its family gives it, and is never floored: once
+ * that share falls under `MIN_LEGIBLE_TEXT_PX` the letter goes and the caller cuts no gap, so
+ * the line work closes into the bare shape. Holding the letter at the floor instead put a
+ * 6 px letter in a circle a few times its size, which read as a copyright mark rather than as
+ * the task. The graphic must also measure `LETTER_GRAPHIC_RATIO` times its letter, for the
+ * families whose letter follows the zoom rather than the symbol. (User, 2026-10-24.)
+ *
+ * The label half and the line-work half of a symbol must both ask this, with the same inputs:
+ * OpenLayers styles them as two features, and neither can see what the other drew.
+ *
+ * `desiredScale` is the scale the family would draw at; `letterPxAt1` the letter's larger
+ * dimension at scale 1; `fontPx` the font's own size; `graphicPx` the graphic's size on screen.
+ * @see heldTextScale for text that is floored rather than dropped
+ */
+export function letterInGapScale(desiredScale: number, letterPxAt1: number, fontPx: number, graphicPx: number): number {
+    if (!(desiredScale > 0) || !(fontPx > 0) || desiredScale * fontPx < MIN_LEGIBLE_TEXT_PX) return 0;
+    return fitsGraphic(desiredScale, letterPxAt1, fontPx, graphicPx) ? desiredScale : 0;
+}
+
+/**
+ * {@link letterInGapScale} for text that is held at `MIN_LEGIBLE_TEXT_PX` rather than dropped
+ * when its share runs out: a designation's prefix (`PL`, `AA`), the abbreviation an area
+ * writes into its own outline (`AMA`, `ARA`), and the letter in a gap the generator cuts and
+ * no paint can close (cover, guard, screen). It still goes, gap and all, once the graphic is
+ * under `LETTER_GRAPHIC_RATIO` times the held text.
+ */
+export function heldTextScale(desiredScale: number, letterPxAt1: number, fontPx: number, graphicPx: number): number {
+    if (!(desiredScale > 0) || !(fontPx > 0)) return 0;
+    const scale = Math.max(desiredScale, MIN_LEGIBLE_TEXT_PX / fontPx);
+    return fitsGraphic(scale, letterPxAt1, fontPx, graphicPx) ? scale : 0;
+}
+
+function fitsGraphic(scale: number, letterPxAt1: number, fontPx: number, graphicPx: number): boolean {
+    if (!(graphicPx > 0)) return false;
+    return graphicPx >= LETTER_GRAPHIC_RATIO * Math.max(letterPxAt1, fontPx) * scale;
+}
+
+/**
+ * The clear space between a letter and the line work cut back from it, shrinking with the
+ * letter below the size the family designed the clearance for, so the gap and its letter
+ * stay in proportion all the way down. @see letterInGapScale
+ */
+export function letterGapClearance(clearancePx: number, scale: number, designScale: number): number {
+    return designScale > 0 ? clearancePx * Math.min(1, scale / designScale) : clearancePx;
 }

@@ -60,6 +60,10 @@ export class RetrogradeTask implements LineGraphic {
         this.size = size;
         if (drawingResolution !== undefined) {
             this.graphic.set('drawingResolution', drawingResolution);
+            // On the label too: pursuit's letter and the gap its line work cuts for it are sized
+            // by one rule from the same inputs, and the label half was sizing from a default zoom
+            // scale for want of this. @see missionTaskLetterScale
+            this.labels.set('drawingResolution', drawingResolution);
         }
         this.setSymbolId('');
         this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name)));

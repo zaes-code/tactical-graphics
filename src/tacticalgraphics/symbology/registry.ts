@@ -151,9 +151,10 @@ export interface GraphicPainters {
  * from the rendered glyph, and all are ratio-locked, so the label scale tracks the
  * circle's radius.
  *
- * `AreaDefense` belongs to the family and is **not** listed here: it is not
- * ratio-locked, and it is registered separately below so that difference stays
- * visible rather than being smuggled into a loop.
+ * `AreaDefense` belongs to the family and is **not** listed here: it is registered
+ * separately below for its solid teeth. Its letter is ratio-locked like the rest
+ * (`RATIO_LOCKED_MISSION_TASKS`), and its gap is cut for that letter.
+ * @see missionTaskLetterScale
  */
 const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Contain,
@@ -779,8 +780,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
                 showDates: false,
             }),
         },
-        // Same arc geometry as the ratio-locked seven, but its own label scale and a
-        // set of solid polygon teeth that `arcMissionTaskPaint` fills.
+        // Same arc geometry and letter rule as the rest of the family, plus a set of solid
+        // polygon teeth that `arcMissionTaskPaint` fills.
         [TacticalGraphicName.AreaDefense]: {
             graphic: arcMissionTaskPaint(TacticalGraphicName.AreaDefense, false),
             label: missionTaskLabelPaint(TacticalGraphicName.AreaDefense),

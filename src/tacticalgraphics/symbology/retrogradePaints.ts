@@ -15,15 +15,35 @@ import {
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
+    configuredLabelScale,
     getLabelHaloColor,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 
 /** Clearance either side of the letter within its gap, in screen pixels. */
 const GAP_PADDING_PX = 4;
 /** Where along the first segment the gap is centered. */
 const GAP_POSITION = 0.5;
+
+/**
+ * The scale a retrograde task's letter is drawn at, or `0` for no letter and no gap, once
+ * the graphic is too small on screen to carry one. @see letterInGapScale
+ *
+ * Measured against the **whole graphic** (its stamped extent, or `segmentPx` when there is
+ * none), not the first segment the letters sit in: measured by the segment, disengage's three
+ * letters went at a size that has always carried them.
+ */
+function retrogradeLetterScale(feature: PaintFeature, context: PaintContext, label: string, segmentPx: number): number {
+    if (!label) return 0;
+    // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
+    // 16 it would otherwise assume. @see capLabelToGraphic
+    const desired = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
+    const b = feature.bounds;
+    const graphicPx = b ? Math.max(b.maxX - b.minX, b.maxY - b.minY) / context.resolution : segmentPx;
+    return letterInGapScale(desired, textWidth(context, label, RATIO_LOCKED_LABEL_FONT, 1), RATIO_LOCKED_LABEL_FONT_PX, graphicPx);
+}
 
 /**
  * A retrograde task: the route, with the designation set in a gap cut from the
@@ -57,11 +77,9 @@ export function retrogradeTaskPaint(label: string): (f: PaintFeature, c: PaintCo
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
-        // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
-        // 16 it would otherwise assume. @see capLabelToGraphic
-        const scale = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
-        const halfGapPx = label
-            ? textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GAP_PADDING_PX
+        const scale = retrogradeLetterScale(feature, context, label, segLen / context.resolution);
+        const halfGapPx = scale > 0
+            ? textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + letterGapClearance(GAP_PADDING_PX, scale, configuredLabelScale())
             : 0;
         const gapRatio = (halfGapPx * context.resolution) / segLen;
 
@@ -77,7 +95,7 @@ export function retrogradeTaskPaint(label: string): (f: PaintFeature, c: PaintCo
 
         const paints: Paint[] = [];
 
-        if (label) {
+        if (scale > 0) {
             paints.push({
                 geometry: {type: 'Point', coordinates: [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2]},
                 text: {

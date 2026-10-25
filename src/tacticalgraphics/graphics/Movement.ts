@@ -44,6 +44,18 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
     }
 
     /**
+     * The line a label follows along the arrow: the center line, rounded as the walls are when
+     * smooth lines is on. Published after a layout's own label anchors, so a label longer than
+     * the straight stretch it is anchored on bends with the arrow instead of running out through
+     * a wall. @see textAlongPath
+     */
+    protected labelPath(centerline: Position[]): Position[] {
+        const kind = smoothingKindOf(this.name);
+        if (!getSmoothLines() || (kind !== 'corridor' && kind !== 'corridorFixedTail')) return centerline;
+        return chaikinKeepingEnds(centerline, kind === 'corridorFixedTail', true);
+    }
+
+    /**
      * `[p0, tip, width]` — and the width grip sits on **the corner of the arrowhead's back
      * that the plate letters `PT N`.**
      *
@@ -88,7 +100,10 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
         const centerline = this.arrowCenterline(base, radius);
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(centerline[0], centerline[1], 0.5, radius));
+        return this.asMultiPointFeature([
+            ...geometryService.labelCoordsAtFraction(centerline[0], centerline[1], 0.5, radius),
+            ...this.labelPath(centerline),
+        ]);
     }
 }
 
@@ -176,7 +191,7 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
         const secondToLast = baseCoords[baseCoords.length - 2];
         const twistCenter: Position = [(secondToLast[0] + last[0]) / 2, (secondToLast[1] + last[1]) / 2];
         // coords[3]: direction point (for computing arrow heading)
-        return this.asMultiPointFeature([...textCoords, twistCenter, secondToLast]);
+        return this.asMultiPointFeature([...textCoords, twistCenter, secondToLast, ...this.labelPath(baseCoords)]);
     }
 }
 
@@ -215,7 +230,10 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
         const baseCoords = this.arrowCenterline(base, radius);
-        return this.asMultiPointFeature(geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius));
+        return this.asMultiPointFeature([
+            ...geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius),
+            ...this.labelPath(baseCoords),
+        ]);
     }
 }
 
@@ -258,7 +276,8 @@ export class MainAttack extends MovementGraphicBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
     }
 }
 
@@ -295,7 +314,7 @@ export class AvenueOfApproach extends MainAttack {
         const centerline = this.arrowCenterline(base, radius);
         const left = this.parallel(centerline, radius);
         const right = this.parallel(centerline, -radius);
-        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0]]);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0], ...this.labelPath(centerline)]);
     }
 }
 
@@ -362,7 +381,8 @@ export class MainAttackFeint extends MovementGraphicBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
     }
 }
 
@@ -402,7 +422,8 @@ export class SupportingAttack extends MovementGraphicBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
     }
 }
 
@@ -454,7 +475,8 @@ export class Counterattack extends MovementGraphicBase {
      */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
-        return this.asMultiPointFeature(labelSpanNearArrowhead(this.arrowCenterline(base, radius), radius));
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
     }
 }
 

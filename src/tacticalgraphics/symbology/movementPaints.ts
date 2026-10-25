@@ -23,12 +23,14 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {alignAlong, offsetAbove, uprightRotation} from './decorations';
+import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {strokeParts} from './dashFit';
+import {distanceAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -133,6 +135,21 @@ function nameAndDate(feature: PaintFeature): string {
 }
 
 /**
+ * A label that stays on its arrow: `straight` as painted, or the same text bent along the
+ * center line the generator publishes from `coords[pathFrom]` on, when it runs past the
+ * segment it was anchored on. @see textAlongPath, MovementGraphicBase.labelPath
+ *
+ * `align` is where the run sits against its anchor *along the arrow*: `end` for a label set
+ * back from the arrowhead, `start` for one reading on from the tail.
+ */
+function onArrow(context: PaintContext, coords: ProjectedPosition[], pathFrom: number, straight: Paint, align: PathTextAlign): Paint[] {
+    const path = coords.slice(pathFrom);
+    if (path.length < 2 || !straight.text || straight.geometry.type !== 'Point') return [straight];
+    const at = distanceAlongPath(path, straight.geometry.coordinates);
+    return textAlongPath(path, at, align, straight.text, context) ?? [straight];
+}
+
+/**
  * A fixed one- or two-letter amplifier at the first anchor, laid along the first
  * span.
  *
@@ -153,6 +170,8 @@ function fixedLetterPaint(
         keepFlip?: boolean;
         /** Where between the two anchors the letter sits. Defaults to the midpoint. */
         atFraction?: number;
+        /** The letter sits in a gap the line work cuts for it. @see approachLetterScale */
+        inGap?: boolean;
     } = {},
 ): MovementPaint {
     return (feature, context) => {
@@ -177,6 +196,12 @@ function fixedLetterPaint(
         }
 
         const [x1, y1] = coords[1];
+        // A letter in a gap of the run asks the same question the line work does, and draws
+        // nothing when the run is drawn whole. @see approachLetterScale
+        const letterScale = options.inGap
+            ? approachLetterScale(feature, context, letter, Math.hypot(x1 - x0, y1 - y0) / context.resolution)
+            : scale;
+        if (!letterScale) return [];
         // Envelopment keeps the raw angle rather than the upright flip, so its "E"
         // follows the half-circle's tail even when that reads upside down. That is
         // what the graphic did before the port; changing it is a design decision,
@@ -187,12 +212,12 @@ function fixedLetterPaint(
         // Interpolated **in projected meters**, on the segment the renderer draws, so a
         // letter placed a quarter along lands in the hole cut a quarter along.
         const t = options.atFraction ?? 0.5;
-        return [text(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
+        return [text(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, letterScale, {rotation, align: options.align ?? 'center'})];
     };
 }
 
 /** Infiltration: "IN" between the first two anchors, upright-flipped. */
-export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN', {atMidpoint: true});
+export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN', {atMidpoint: true, inGap: true});
 
 /**
  * Envelopment: "E" a quarter of the way along the approach, following the raw angle.
@@ -202,7 +227,7 @@ export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN'
  * @see APPROACH_LABEL_POSITION, Envelopment.generateLabels
  */
 export const envelopmentLabelPaint = (): MovementPaint =>
-    fixedLetterPaint('E', {atMidpoint: true, keepFlip: true, atFraction: APPROACH_LABEL_POSITION});
+    fixedLetterPaint('E', {atMidpoint: true, keepFlip: true, atFraction: APPROACH_LABEL_POSITION, inGap: true});
 
 /**
  * Mobile defense: "MD" at the tail of the ellipse, horizontal whatever the
@@ -238,7 +263,7 @@ export function counterattackLabelPaint(): MovementPaint {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
         const label = feature.properties.designation?.trim();
-        return behindArrowhead(feature, context, coords[0], coords[1], label ? `CATK ${label}` : 'CATK');
+        return behindArrowhead(feature, context, coords, 2, label ? `CATK ${label}` : 'CATK');
     };
 }
 
@@ -261,10 +286,11 @@ const ARROWHEAD_LABEL_CLEARANCE_PX = 10;
 function behindArrowhead(
     feature: PaintFeature,
     context: PaintContext,
-    c0: ProjectedPosition,
-    c1: ProjectedPosition,
+    coords: ProjectedPosition[],
+    pathFrom: number,
     value: string,
 ): Paint[] {
+    const [c0, c1] = coords;
     const dx = c1[0] - c0[0];
     const dy = c1[1] - c0[1];
     const span = Math.hypot(dx, dy);
@@ -272,10 +298,11 @@ function behindArrowhead(
 
     const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
     const at: ProjectedPosition = [c1[0] - (dx / span) * clearance, c1[1] - (dy / span) * clearance];
-    return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+    const straight = text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
         rotation: uprightRotation(c0, c1),
         align: alignAlong('right', c0, c1),
-    })];
+    });
+    return onArrow(context, coords, pathFrom, straight, 'end');
 }
 
 /**
@@ -296,10 +323,11 @@ export function aviationAxisLabelPaint(): MovementPaint {
          * date ended up off the tail entirely and reading in the wrong order against the
          * arrow. The helper flips the alignment exactly when the rotation flipped.
          */
-        return [text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+        const straight = text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(coords[0], coords[1]),
             align: alignAlong('left', coords[0], coords[1]),
-        })];
+        });
+        return onArrow(context, coords, 2, straight, 'start');
     };
 }
 
@@ -368,7 +396,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         // no `W`/`W1`. An imported bag can still hold a `startDate` for a symbol with nowhere
         // to put one, and painting it anyway is how a field nobody offered ends up on the map.
         const label = feature.properties.designation?.trim();
-        const paints = behindArrowhead(feature, context, c0, c1, ['AA', label].filter(Boolean).join(' '));
+        const paints = behindArrowhead(feature, context, coords, 4, ['AA', label].filter(Boolean).join(' '));
 
         /*
          * **Field H sits outside the arrow, level with `AA`.** The plate boxes it clear of the
@@ -380,9 +408,14 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
          */
         const additional = feature.properties.additionalInfo?.trim();
         if (additional && paints.length) {
-            const halfWidthPx = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) / context.resolution;
+            const span = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]);
+            const halfWidthPx = span / context.resolution;
+            // Level with where `AA` starts behind the head, which is not the first paint once
+            // a long name bends along the arrow. @see behindArrowhead
+            const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
+            const behind: ProjectedPosition = [c1[0] - ((c1[0] - c0[0]) / span) * clearance, c1[1] - ((c1[1] - c0[1]) / span) * clearance];
             const at = offsetAbove(
-                paints[0].geometry.coordinates as ProjectedPosition,
+                behind,
                 c0,
                 c1,
                 context.resolution,
@@ -429,10 +462,11 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
 
         const align: 'left' | 'center' | 'right' = centered ? 'center' : alignAlong('right', c0, c1);
 
-        return [text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+        const straight = text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
             rotation: uprightRotation(c0, c1),
             align,
-        })];
+        });
+        return onArrow(context, coords, 2, straight, centered ? 'center' : 'end');
     };
 }
 
@@ -468,10 +502,11 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         const tdy = y1 - y0;
         const value = nameAndDate(feature);
         if (value) {
-            paints.push(text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
+            const straight = text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
                 rotation: uprightRotation(coords[0], coords[1]),
                 align: alignAlong('left', coords[0], coords[1]),
-            }));
+            });
+            paints.push(...onArrow(context, coords, 4, straight, 'start'));
         }
 
         const heading = Math.atan2(cy - dy3, cx - dx3);
@@ -555,7 +590,7 @@ export function advanceToContactLabelPaint(): MovementPaint {
         // it was the first to outgrow the symbol it names, and for a while the only one
         // capped. @see spanProportionalScale
         const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
-        return [text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'})];
+        return onArrow(context, coords, 2, text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'}), 'center');
     };
 }
 
@@ -630,6 +665,23 @@ const APPROACH_GAP_PX = 10;
 const APPROACH_LABEL_POSITION = 0.25;
 
 /**
+ * The scale an approach's letter (envelopment's `E`, infiltration's `IN`) is drawn at, or
+ * `0` once the graphic is too small to carry one, when the run is drawn whole. Asked by the
+ * line work and by the label alike, so the gap is always the letter's. @see letterInGapScale
+ *
+ * The graphic's size is the longer side of its extent, which the line-work feature and the
+ * label feature both carry, so the two halves measure the same thing on either engine; the
+ * run's own length stands in when no extent is stamped.
+ */
+export function approachLetterScale(feature: PaintFeature, context: PaintContext, letter: string, runPx: number): number {
+    const bounds = feature.bounds;
+    // With neither a stamped extent nor a run to measure, the size is unknown: the letter is
+    // never dropped for size, only under the legibility floor, rather than lost to a missing stamp.
+    const graphicPx = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) / context.resolution : runPx > 0 ? runPx : Infinity;
+    return letterInGapScale(scaleOf(feature, context), textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, graphicPx);
+}
+
+/**
  * The line work of an approach with a letter set in it — infiltration and
  * envelopment.
  *
@@ -637,7 +689,7 @@ const APPROACH_LABEL_POSITION = 0.25;
  * drawn whole. Envelopment adds an arc between the two, which needs no special
  * handling — `rest` covers it.
  */
-function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+function approachPaint(letter: string): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
@@ -659,9 +711,13 @@ function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
         // being made.
         if (length === 0) return rest.map(asLine);
 
+        // No letter, no gap: the run closes into the bare shape. @see approachLetterScale
+        const scale = approachLetterScale(feature, context, letter, length / context.resolution);
+        if (!scale) return [asLine(line), ...rest.map(asLine)];
+
         const cx = x0 + dx * APPROACH_LABEL_POSITION;
         const cy = y0 + dy * APPROACH_LABEL_POSITION;
-        const gap = APPROACH_GAP_PX * context.resolution;
+        const gap = letterGapClearance(APPROACH_GAP_PX, scale, configuredLabelScale()) * context.resolution;
         const ux = dx / length;
         const uy = dy / length;
 
@@ -675,12 +731,12 @@ function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
 
 /** Infiltration: base line with a gap for "IN", then the arrowhead. */
 export function infiltrationGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
-    return approachPaint();
+    return approachPaint('IN');
 }
 
 /** Envelopment: straight run with a gap for "E", then the arc and the arrowhead. */
 export function envelopmentGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
-    return approachPaint();
+    return approachPaint('E');
 }
 
 /** Points in a closed triangle ring: three corners plus the repeated first. */

@@ -19,11 +19,13 @@ import {
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
+    configuredLabelScale,
     fontStyle,
     getLabelHaloColor,
 } from '../core/symbology';
 import {screenSizedArrowHead, textWidth, uprightRotation} from './decorations';
-import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {letterGapClearance, letterInGapScale} from './labelFit';
+import {lineColorOf, scaleOf, labelColorOf, missionTaskLetterClearance, missionTaskLetterInGapScale} from './paintFunctions';
 
 type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -31,6 +33,32 @@ type TaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 const GAP_PADDING_PX = 4;
 /** Turn's is wider — its letter sits in a curve, which crowds the glyph. */
 const TURN_LABEL_PAD_PX = 5;
+
+/**
+ * The scale relief in place's "RIP" and exfiltrate's "EX" / infiltration's "IN" are drawn at,
+ * or `0` when the graphic is too small to carry the letters and is drawn whole. One paint
+ * draws both the letters and the gap, so the two cannot disagree. @see letterInGapScale
+ *
+ * Measured against the **whole graphic** (its stamped extent, or `segmentLength` map units when
+ * there is none), not the segment the letters interrupt: a smoothed or bent route is a run of
+ * short chords, and measured by one of them, exfiltrate lost its "EX" at a size that has always
+ * carried it. Whether the gap fits its segment is each paint's own question, as before.
+ */
+function routedLetterScale(feature: PaintFeature, context: PaintContext, label: string, segmentLength: number): number {
+    if (!label) return 0;
+    // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
+    // 16 it would otherwise assume. @see capLabelToGraphic
+    const desired = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
+    const letterPxAt1 = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, 1);
+    const b = feature.bounds;
+    const graphicPx = (b ? Math.max(b.maxX - b.minX, b.maxY - b.minY) : segmentLength) / context.resolution;
+    return letterInGapScale(desired, letterPxAt1, RATIO_LOCKED_LABEL_FONT_PX, graphicPx);
+}
+
+/** {@link GAP_PADDING_PX}, shrinking with the letters below the host's configured label size. */
+function routedLetterClearance(scale: number): number {
+    return letterGapClearance(GAP_PADDING_PX, scale, configuredLabelScale());
+}
 
 /** A text amplifier with the usual halo. */
 function amplifier(feature: PaintFeature, at: ProjectedPosition, text: string, font: string, scale: number, rotation: number): Paint {
@@ -81,6 +109,11 @@ function trimFromEnd(coords: ProjectedPosition[], distance: number): ProjectedPo
  *
  * The arrowhead is filled, never trimmed, and held at a screen size rather than
  * the meters the generator baked in at draw time.
+ *
+ * The "T" is drawn by `missionTaskLabelPaint`, so its scale is asked of the same function
+ * that paint asks, with the turns' own font and gap: neither turn is ratio-locked, and both
+ * fit the letter to the drawn extent. At `0` the curve is drawn whole.
+ * @see missionTaskLetterScale
  */
 export function turnPaint(label: string): TaskPaint {
     return (feature, context) => {
@@ -89,9 +122,9 @@ export function turnPaint(label: string): TaskPaint {
         const members = paintGeometryMembers(feature.geometry);
 
         // `fontStyle`, not the ratio-locked font — so the cap keeps its 16 px default here.
-        const scale = scaleOf(feature, context);
-        const halfGap = label
-            ? (textWidth(context, label, fontStyle, scale) / 2 + TURN_LABEL_PAD_PX) * context.resolution
+        const scale = label ? missionTaskLetterInGapScale(feature, context, label, false, 'extent') : 0;
+        const halfGap = scale > 0
+            ? (textWidth(context, label, fontStyle, scale) / 2 + missionTaskLetterClearance(TURN_LABEL_PAD_PX, scale)) * context.resolution
             : 0;
 
         // The curve, for capping the head against the graphic's own on-screen size.
@@ -151,17 +184,16 @@ export function reliefInPlacePaint(label: string): TaskPaint {
         const segLen = Math.hypot(dx, dy);
         if (segLen === 0) return [];
 
-        // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
-        // 16 it would otherwise assume. @see capLabelToGraphic
-        const scale = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
-        const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GAP_PADDING_PX;
+        const scale = routedLetterScale(feature, context, label, segLen);
+        const line = (c: ProjectedPosition[]): Paint => ({geometry: {type: 'LineString', coordinates: c}, stroke});
+        if (scale === 0) return [line(top), ...coords.slice(1, 5).map(line)];
+
+        const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + routedLetterClearance(scale);
         const gapRatio = (halfGapPx * context.resolution) / segLen;
         const t = RELIEF_IN_PLACE_GAP_POSITION;
 
         const gapA: ProjectedPosition = [p1[0] + dx * (t - gapRatio), p1[1] + dy * (t - gapRatio)];
         const gapB: ProjectedPosition = [p1[0] + dx * (t + gapRatio), p1[1] + dy * (t + gapRatio)];
-
-        const line = (c: ProjectedPosition[]): Paint => ({geometry: {type: 'LineString', coordinates: c}, stroke});
 
         return [
             line([p1, gapA]),
@@ -208,11 +240,9 @@ export function exfiltratePaint(label: string): TaskPaint {
         const dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);
 
-        // Rendered with `RATIO_LOCKED_LABEL_FONT`, so the cap is told 24 rather than the
-        // 16 it would otherwise assume. @see capLabelToGraphic
-        const scale = scaleOf(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
-        const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GAP_PADDING_PX;
-        const gapRatio = segLen > 0 ? (halfGapPx * context.resolution) / segLen : 0;
+        const scale = routedLetterScale(feature, context, label, segLen);
+        const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + routedLetterClearance(scale);
+        const gapRatio = scale > 0 && segLen > 0 ? (halfGapPx * context.resolution) / segLen : 0;
 
         if (gapRatio > 0 && gapRatio < 0.5) {
             const at = (t: number): ProjectedPosition => [p1[0] + dx * t, p1[1] + dy * t];
@@ -224,15 +254,21 @@ export function exfiltratePaint(label: string): TaskPaint {
             outline.push(route);
         }
 
+        const outlinePaint: Paint = {
+            geometry: {type: 'MultiLineString', coordinates: outline},
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+        };
+        if (scale === 0) return [outlinePaint];
+
         return [
-            amplifier(feature, 
+            amplifier(feature,
                 [p1[0] + dx * 0.5, p1[1] + dy * 0.5],
                 label,
                 RATIO_LOCKED_LABEL_FONT,
                 scale,
                 uprightRotation(p1, p2),
             ),
-            {geometry: {type: 'MultiLineString', coordinates: outline}, stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()}},
+            outlinePaint,
         ];
     };
 }

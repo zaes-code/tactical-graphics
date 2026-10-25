@@ -704,11 +704,12 @@ describe('obstacle line', () => {
     });
 
     it('brings the standoff in with the label once the line is small on screen', () => {
-        // At resolution 40 the kilometre is 25 px of screen, and a full-size designation
+        // At resolution 20 the kilometre is 50 px of screen, and a full-size designation
         // on it would be most of what the reader sees. The label is capped to a quarter of
         // the graphic and the standoff, which is measured from the label, comes with it.
+        // (Much further out the capped label is under the legibility floor and is not drawn.)
         const roomy = Math.abs(labelPointFor(WEST_TO_EAST, 4)[1]) / 4;
-        const cramped = Math.abs(labelPointFor(WEST_TO_EAST, 40)[1]) / 40;
+        const cramped = Math.abs(labelPointFor(WEST_TO_EAST, 20)[1]) / 20;
         expect(cramped).toBeLessThan(roomy);
         expect(cramped).toBeGreaterThan(0);
     });
@@ -1529,12 +1530,13 @@ describe('arc mission-task circles cut their label gap from the glyph', () => {
     });
 
     it('still tracks the letter below the cap', () => {
-        // 30 px and 60 px of radius, both under the 80 px where the label scale
-        // caps out. Half the radius, half the letter, half the hole — bar the
-        // fixed 5 px of clearance a side, which is why the 10 comes off first.
-        const small = gapPx(300, 10) - 10;
-        const large = gapPx(600, 10) - 10;
-        expect(large).toBeCloseTo(small * 2, 0);
+        // 30 px and 45 px of radius, both under the 80 px where the label scale caps out
+        // and both letters over the 6 px floor. The clearance round the letter shrinks with
+        // it down here (@see letterGapClearance), so letter and hole are in proportion:
+        // half again the radius, half again the hole.
+        const small = gapPx(300, 10);
+        const large = gapPx(450, 10);
+        expect(large).toBeCloseTo(small * 1.5, 0);
     });
 
     it('holds the gap in screen pixels as the map zooms', () => {

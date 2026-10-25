@@ -26,7 +26,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {paintFilledRings, paintLineWork} from '../core/paint';
+import {NAME_TEXT_Z_INDEX, paintFilledRings, paintLineWork} from '../core/paint';
 import {
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
@@ -45,11 +45,13 @@ import {
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
-import {capLabelToGraphic} from './labelFit';
+import {capLabelToGraphic, heldTextScale, letterGapClearance, letterInGapScale} from './labelFit';
+// A cycle (movementPaints imports this file), safe because it is only called inside a paint.
+import {approachLetterScale} from './movementPaints';
 import {PLANNED_DASH_PX, strokeParts} from './dashFit';
 import {
     centerSegmentIndex,
@@ -58,6 +60,7 @@ import {
     obstacleToothSize,
     offsetAbove,
     offsetBelow,
+    pathLength,
     textWidth,
     uprightRotation,
 } from './decorations';
@@ -91,6 +94,203 @@ export function amplifierText(feature: PaintFeature, value: string): string {
 export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
     if (!hidden) return paints;
     return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * The same mark, with its text marked as an amplifier: something the operator typed or set
+ * that is not the graphic's name (dates, altitudes, field H). @see TextKind
+ */
+export function asAmplifier(paint: Paint): Paint {
+    return paint.text ? {...paint, text: {...paint.text, kind: 'amplifier'}} : paint;
+}
+
+/**
+ * Takes away text too small to read, leaving the rest of its mark.
+ *
+ * Labels sized to their graphic shrink with it, and a label a few pixels tall is a smudge,
+ * not an amplifier: zoomed out, every name on the map became a grey dot, and an "ACP"
+ * fitted to a circle under a pixel across came out with a negative size, which MapLibre drew
+ * across the whole world. Under `MIN_LEGIBLE_TEXT_PX` the text goes. (User, 2026-10-23.)
+ *
+ * Applied where `withHiddenAmplifiers` is, so every engine drops the same text. The size is
+ * the font's own pixel size times the mark's scale, as both renderers draw it.
+ */
+export function withLegibleText(paints: Paint[]): Paint[] {
+    const out: Paint[] = [];
+    for (const paint of withProportionateAmplifiers(paints)) {
+        if (!paint.text || renderedTextPx(paint.text.font, paint.text.scale ?? 1) >= MIN_LEGIBLE_TEXT_PX) {
+            out.push(paint);
+            continue;
+        }
+        const {text: _hidden, ...rest} = paint;
+        if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    }
+    return out;
+}
+
+/**
+ * Holds a graphic's amplifiers (dates, altitudes, field H) to the size of its main label, and
+ * takes them away when the main label is too small to read.
+ *
+ * Main labels are fitted to their graphic and shrink with it; amplifiers hung outside the
+ * shape or below a line were not, so zoomed out a zone's dates stood twice the height of the
+ * name they belong to, and stayed after the name had gone. (User, 2026-10-24.) The main label
+ * is every text in the same set of paints that is not an amplifier, so this is asked once per
+ * half, as the legibility floor is: OpenLayers styles a graphic and its labels as two
+ * features. A half with no main label is left as it is. Applied by `withLegibleText`, so every
+ * engine gets it from the call it already makes. @see TextKind
+ */
+export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
+    let mainPx = 0;
+    let amplifiers = false;
+    let main = false;
+    for (const paint of paints) {
+        const text = paint.text;
+        if (!text || !text.text.trim()) continue;
+        if (text.kind === 'amplifier') {
+            amplifiers = true;
+            continue;
+        }
+        main = true;
+        mainPx = Math.max(mainPx, renderedTextPx(text.font, text.scale ?? 1));
+    }
+    if (!amplifiers || !main) return paints;
+    const legible = mainPx >= MIN_LEGIBLE_TEXT_PX;
+    const out: Paint[] = [];
+    for (const paint of paints) {
+        const text = paint.text;
+        if (!text || text.kind !== 'amplifier') {
+            out.push(paint);
+            continue;
+        }
+        if (!legible) {
+            const {text: _hidden, ...rest} = paint;
+            if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+            continue;
+        }
+        const scale = text.scale ?? 1;
+        const px = renderedTextPx(text.font, scale);
+        out.push(px > mainPx ? {...paint, text: {...text, scale: (scale * mainPx) / px}} : paint);
+    }
+    return out;
+}
+
+/**
+ * Lets a graphic's name win over amplifier text: it takes away an amplifier whose text would
+ * lie over the main label, and draws every other text above amplifiers (`NAME_TEXT_Z_INDEX`),
+ * so where two graphics overlap, one's dates go under the other's name.
+ *
+ * No engine resolves overlapping text here (OpenLayers is not decluttered, MapLibre allows
+ * overlap), so text overlaps as laid out, and a mark painted later covers an earlier one with
+ * its halo. A zone's dates hang from its upper-left corner, which on a small or pointed shape
+ * is inside it, over the name; the dates' halo then hid the name. (User, 2026-10-24.) The
+ * boxes are measured in screen pixels from the same measurements the engines draw with, and
+ * compared within one half, as the other text rules are. @see withProportionateAmplifiers
+ */
+export function withUnobscuredNames(paints: Paint[], context: PaintContext): Paint[] {
+    return namesOnTop(withoutCoveringAmplifiers(paints, context));
+}
+
+/** Names and doctrinal text above amplifiers. A mark that sets its own order keeps it. */
+function namesOnTop(paints: Paint[]): Paint[] {
+    let changed = false;
+    const out = paints.map(paint => {
+        if (!paint.text || paint.text.kind === 'amplifier' || paint.zIndex !== undefined) return paint;
+        changed = true;
+        return {...paint, zIndex: NAME_TEXT_Z_INDEX};
+    });
+    return changed ? out : paints;
+}
+
+function withoutCoveringAmplifiers(paints: Paint[], context: PaintContext): Paint[] {
+    // Nothing to measure with, nothing to compare: a hand-built context may leave it out.
+    if (typeof context.measureText !== 'function') return paints;
+    const boxes = paints.map(paint => textBox(paint, context));
+    const names = boxes.filter((box, i) => box && paints[i].text!.kind !== 'amplifier') as TextBox[];
+    if (!names.length) return paints;
+    let changed = false;
+    const out: Paint[] = [];
+    paints.forEach((paint, i) => {
+        const box = boxes[i];
+        if (!box || paint.text!.kind !== 'amplifier' || !names.some(name => overlaps(box, name))) {
+            out.push(paint);
+            return;
+        }
+        changed = true;
+        const {text: _hidden, ...rest} = paint;
+        if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    });
+    return changed ? out : paints;
+}
+
+interface TextBox {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
+/** How far into each other two boxes must reach to count as overlapping, in pixels. */
+const OVERLAP_TOLERANCE_PX = 1;
+
+function overlaps(a: TextBox, b: TextBox): boolean {
+    return (
+        Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX) > OVERLAP_TOLERANCE_PX &&
+        Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY) > OVERLAP_TOLERANCE_PX
+    );
+}
+
+/** Line spacing of a multi-line label, as a share of the font size. */
+const TEXT_LINE_HEIGHT = 1.32;
+
+/**
+ * The screen box a point label's glyphs cover, in pixels with y down. Undefined for a
+ * mark that is not a drawn point label: line-placed text, and the letters of a curved run.
+ */
+function textBox(paint: Paint, context: PaintContext): TextBox | undefined {
+    const text = paint.text;
+    if (!text || !text.text.trim() || text.placement === 'line' || text.glyph || paint.geometry.type !== 'Point') return undefined;
+    const scale = text.scale ?? 1;
+    const lines = text.text.split('\n');
+    const width = Math.max(...lines.map(line => context.measureText(line, text.font))) * scale;
+    // The glyphs, not the line box or the halo: text stacked a line apart touches at its halos
+    // by design, and is not covering anything.
+    const fontPx = renderedTextPx(text.font, scale);
+    const height = fontPx + (lines.length - 1) * fontPx * TEXT_LINE_HEIGHT;
+    if (!(width > 0) || !(height > 0)) return undefined;
+
+    const align = text.align ?? 'center';
+    const x0 = align === 'left' ? 0 : align === 'right' ? -width : -width / 2;
+    const baseline = text.baseline ?? 'middle';
+    const y0 = baseline === 'top' || baseline === 'hanging' ? 0 : baseline === 'middle' ? -height / 2 : -height;
+
+    const rotation = text.rotation ?? 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const [ax, ay] = paint.geometry.coordinates;
+    const cx = ax / context.resolution + (text.offsetXPx ?? 0);
+    const cy = -ay / context.resolution + (text.offsetYPx ?? 0);
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of [[x0, y0], [x0 + width, y0], [x0, y0 + height], [x0 + width, y0 + height]]) {
+        const rx = cx + x * cos - y * sin;
+        const ry = cy + x * sin + y * cos;
+        minX = Math.min(minX, rx);
+        minY = Math.min(minY, ry);
+        maxX = Math.max(maxX, rx);
+        maxY = Math.max(maxY, ry);
+    }
+    return {minX, minY, maxX, maxY};
+}
+
+/** The pixel size text is drawn at: the font shorthand's size times the mark's scale. */
+function renderedTextPx(font: string, scale: number): number {
+    const match = font.match(/(\d*\.?\d+)px/);
+    const px = (match ? parseFloat(match[1]) : BASE_FONT_SIZE_PX) * scale;
+    return Number.isFinite(px) ? px : 0;
 }
 
 /**
@@ -145,6 +345,36 @@ export function formatFullLabel(prefix: string, name: string): string {
 
 export function getFullLabel(graphicName: TacticalGraphicName, customName: string): string {
     return formatFullLabel(getLabel(graphicName), customName);
+}
+
+/**
+ * What a designation is drawn as at this size: the whole of it (`PL BLUE`), or, once that would
+ * be too small to read, its doctrinal prefix alone (`PL`).
+ *
+ * The prefix is part of the symbol, the name is the operator's, so when there is no longer room
+ * for both the name goes and the prefix stays (user, 2026-10-24): never under
+ * `MIN_LEGIBLE_TEXT_PX`, and gone only once the graphic is smaller than twice it, by the same
+ * rule as a letter in a gap. @see letterInGapScale
+ *
+ * `prefix` is the doctrinal part of `text`, which must start with it (`getLabel(name)`, or
+ * `ENY PL` on a hostile line); `scale` is what the whole would be drawn at; `graphicPx` is the
+ * graphic's own size on screen. Text with no prefix comes back as given, for the legibility
+ * floor to keep or drop. A caller lays out what comes back, so offsets measured from the text
+ * fit the text actually drawn.
+ */
+export function legibleDesignation(
+    text: string,
+    prefix: string,
+    scale: number,
+    font: string,
+    context: PaintContext,
+    graphicPx: number,
+): {text: string; scale: number} {
+    const fontPx = parseFloat(font.match(/(\d*\.?\d+)px/)?.[1] ?? String(BASE_FONT_SIZE_PX));
+    const trimmed = prefix.trim();
+    if (!trimmed || fontPx * scale >= MIN_LEGIBLE_TEXT_PX) return {text, scale};
+    const prefixScale = heldTextScale(scale, context.measureText(trimmed, font), fontPx, graphicPx);
+    return prefixScale > 0 ? {text: trimmed, scale: prefixScale} : {text: '', scale: 0};
 }
 
 /**
@@ -358,15 +588,22 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        let text = getFullLabel(name, feature.properties.designation ?? '');
-        if (hostilityOf(feature) === TacticalGraphicHostility.hostileFaker) text = `ENY ${text}`;
+        const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const prefix = [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' ');
+        const full = (hostile ? 'ENY ' : '') + getFullLabel(name, feature.properties.designation ?? '');
 
         const start = coords[0];
         const startNext = coords[1];
         const end = coords[coords.length - 1];
         const endPrev = coords[coords.length - 2];
 
-        const scale = scaleOf(feature, context);
+        // The name goes before `PL` does, once the label is too small to read. @see legibleDesignation
+        const {text, scale} = legibleDesignation(full, prefix, scaleOf(feature, context), fontStyle, context, pathLength(coords) / context.resolution);
+        const lineWork: Paint = {
+            geometry: feature.geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), cap: 'butt', join: 'round'},
+        };
+        if (!text) return [lineWork];
         const width = textWidth(context, text, fontStyle, scale);
 
         // Which screen-x side is "outside" each endpoint. `offsetXPx` is in screen
@@ -392,10 +629,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         });
 
         return [
-            {
-                geometry: feature.geometry,
-                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), cap: 'butt', join: 'round'},
-            },
+            lineWork,
             endLabel(start, uprightRotation(start, startNext), 'left',
                 startOutsideRight ? PHASE_LINE_GAP_PX : -PHASE_LINE_GAP_PX - width),
             endLabel(end, uprightRotation(endPrev, end), 'right',
@@ -501,6 +735,99 @@ const ARC_LABEL_CLEARANCE_PX = 5;
 const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
 
 /**
+ * Which dimension of a point-anchored mission task its letter has to fit in, for the tasks
+ * that cut a gap in their own line work for it: a circle's diameter for the rim letter, the
+ * drawn extent for the letter on pursuit's run and in turn's curve. Absent, the task's letter
+ * cuts no gap and takes no part in the gap rule. @see missionTaskLetterInGapScale
+ */
+export type MissionTaskLetterGap = 'ring' | 'extent';
+
+const MISSION_TASK_LETTER_GAPS: Partial<Record<TacticalGraphicName, MissionTaskLetterGap>> = {
+    [TacticalGraphicName.AreaDefense]: 'ring',
+    [TacticalGraphicName.Contain]: 'ring',
+    [TacticalGraphicName.Control]: 'ring',
+    [TacticalGraphicName.CordonAndKnock]: 'ring',
+    [TacticalGraphicName.CordonAndSearch]: 'ring',
+    [TacticalGraphicName.Deny]: 'ring',
+    [TacticalGraphicName.Locate]: 'ring',
+    [TacticalGraphicName.Isolate]: 'ring',
+    [TacticalGraphicName.Occupy]: 'ring',
+    [TacticalGraphicName.Retain]: 'ring',
+    [TacticalGraphicName.Secure]: 'ring',
+    [TacticalGraphicName.Pursuit]: 'extent',
+    [TacticalGraphicName.Turn]: 'extent',
+    [TacticalGraphicName.TacticalTurn]: 'extent',
+};
+
+/** The font a mission task's letter is drawn in, and that font's pixel size. */
+function missionTaskLetterFont(ratioLocked: boolean): {font: string; fontPx: number} {
+    return ratioLocked
+        ? {font: RATIO_LOCKED_LABEL_FONT, fontPx: RATIO_LOCKED_LABEL_FONT_PX}
+        : {font: fontStyle, fontPx: BASE_FONT_SIZE_PX};
+}
+
+/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or zoom-anchored. */
+function missionTaskLetterDesiredScale(feature: PaintFeature, context: PaintContext, ratioLocked: boolean): number {
+    return ratioLocked
+        ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
+        : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
+}
+
+/**
+ * The task's size on screen, from what its line-work feature and its label feature both
+ * carry: the stamped radius and the drawn extent. Unknown means unbounded, so the letter is
+ * dropped only under the legibility floor, never for size.
+ */
+function missionTaskGraphicPx(feature: PaintFeature, context: PaintContext, gap: MissionTaskLetterGap): number {
+    const size = feature.graphicSize;
+    const diameterPx = size && size > 0 ? 2 * groundPixels(size, feature, context) : 0;
+    const b = feature.bounds;
+    const extentPx = b ? Math.max(b.maxX - b.minX, b.maxY - b.minY) / context.resolution : 0;
+    const px = gap === 'ring' ? diameterPx || extentPx : extentPx || diameterPx;
+    return px > 0 ? px : Infinity;
+}
+
+/**
+ * The scale a mission task's letter is drawn at when it sits in a gap of the task's own line
+ * work, or `0` once the task is too small to carry it, when no gap is cut either.
+ *
+ * Asked by the line work and by the label alike, from the same feature fields, because
+ * OpenLayers styles them as two features and neither sees what the other drew.
+ * @see letterInGapScale
+ */
+export function missionTaskLetterInGapScale(
+    feature: PaintFeature,
+    context: PaintContext,
+    label: string,
+    ratioLocked: boolean,
+    gap: MissionTaskLetterGap,
+): number {
+    const {font, fontPx} = missionTaskLetterFont(ratioLocked);
+    const desired = missionTaskLetterDesiredScale(feature, context, ratioLocked);
+    return letterInGapScale(desired, textWidth(context, label, font, 1), fontPx, missionTaskGraphicPx(feature, context, gap));
+}
+
+/**
+ * {@link missionTaskLetterInGapScale} for a named task, with its family's font and its own
+ * gap. For a task that cuts no gap, the letter's ordinary scale.
+ */
+export function missionTaskLetterScale(name: TacticalGraphicName, feature: PaintFeature, context: PaintContext): number {
+    const ratioLocked = RATIO_LOCKED_MISSION_TASKS.has(name);
+    const gap = MISSION_TASK_LETTER_GAPS[name];
+    return gap
+        ? missionTaskLetterInGapScale(feature, context, getLabel(name), ratioLocked, gap)
+        : missionTaskLetterDesiredScale(feature, context, ratioLocked);
+}
+
+/**
+ * The clear space round a mission task's letter, in pixels, shrinking with the letter below
+ * the host's configured label size. @see letterGapClearance
+ */
+export function missionTaskLetterClearance(clearancePx: number, scale: number): number {
+    return letterGapClearance(clearancePx, scale, configuredLabelScale());
+}
+
+/**
  * The arc-and-arrowhead mission tasks — Secure, Isolate, Retain, Occupy, Control,
  * Contain, Cordon and Search — with the gap for their one-letter label **cut from
  * the rendered glyph** rather than left as a fixed slice of the circle.
@@ -523,9 +850,16 @@ const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
  *
  * Sub-lines `[0]` and `[1]` are the two arcs; everything after them — arrowheads,
  * teeth, radials — is drawn untouched.
+ *
+ * **The letter's size is asked of {@link missionTaskLetterScale}, the same as the label
+ * paint asks it.** So the font comes from the name, and `_ratioLocked` is no longer read:
+ * area defense was passed `false` here while its letter was drawn ratio-locked, so its gap
+ * was cut for a 16 px letter round a 24 px one. When that scale is `0` the task is too small
+ * to carry its letter and the arcs are drawn whole.
  */
-export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: boolean): (f: PaintFeature, c: PaintContext) => Paint[] {
+export function arcMissionTaskPaint(name: TacticalGraphicName, _ratioLocked?: boolean): (f: PaintFeature, c: PaintContext) => Paint[] {
     const label = getLabel(name);
+    const {font, fontPx} = missionTaskLetterFont(RATIO_LOCKED_MISSION_TASKS.has(name));
     return (feature, context) => {
         const lines = paintLineWork(feature.geometry);
         if (!lines.length) return [];
@@ -533,19 +867,17 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
         const center = feature.graphicCenter;
         const labelPoint = feature.graphicLabelPoint;
         const radius = center && labelPoint ? Math.hypot(labelPoint[0] - center[0], labelPoint[1] - center[1]) : 0;
+        const scale = label ? missionTaskLetterScale(name, feature, context) : 0;
 
-        if (center && labelPoint && radius > 0 && label) {
+        if (center && labelPoint && radius > 0 && scale > 0) {
             const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
-            const scale = ratioLocked
-                ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
-                : scaleOf(feature, context);
-            const font = ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle;
-            const fontPx = ratioLocked ? RATIO_LOCKED_LABEL_FONT_PX : BASE_FONT_SIZE_PX;
 
             const halfWidthPx = textWidth(context, label, font, scale) / 2;
             const halfHeightPx = (fontPx * scale * CAP_HEIGHT_FRACTION) / 2;
             const tangentHalfPx =
-                halfWidthPx * Math.abs(Math.sin(axis)) + halfHeightPx * Math.abs(Math.cos(axis)) + ARC_LABEL_CLEARANCE_PX;
+                halfWidthPx * Math.abs(Math.sin(axis)) +
+                halfHeightPx * Math.abs(Math.cos(axis)) +
+                missionTaskLetterClearance(ARC_LABEL_CLEARANCE_PX, scale);
             const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * context.resolution) / radius);
 
             for (const i of [0, 1]) {
@@ -591,25 +923,34 @@ export function arcMissionTaskPaint(name: TacticalGraphicName, ratioLocked: bool
  * `rotation` is for the tasks whose letter lies along the graphic rather than
  * standing upright on screen: Envelopment's "E" follows its approach. It has to be
  * passed per render, not baked in, because it changes on every handle drag.
+ *
+ * A task whose line work cuts a gap for its letter (the arc tasks, pursuit, turn) keeps the
+ * letter at 6 px at least, and draws none once the task is too small for it, exactly when
+ * its line work stops cutting the gap. @see missionTaskLetterScale
  */
 export function missionTaskLabelPaint(
     name: TacticalGraphicName,
     rotation: number | ((f: PaintFeature) => number) = 0,
 ): (f: PaintFeature, c: PaintContext) => Paint[] {
     const label = getLabel(name);
-    const ratioLocked = RATIO_LOCKED_MISSION_TASKS.has(name);
+    const {font} = missionTaskLetterFont(RATIO_LOCKED_MISSION_TASKS.has(name));
     return (feature, context) => {
         if (!label || feature.geometry.type !== 'Point') return [];
+        // Envelopment's "E" sits in a gap `approachPaint` cuts, so on OpenLayers, where this
+        // paint draws it, it asks the same function that paint does. @see approachLetterScale
+        const scale =
+            name === TacticalGraphicName.Envelopment
+                ? approachLetterScale(feature, context, 'E', 0)
+                : missionTaskLetterScale(name, feature, context);
+        if (!(scale > 0)) return [];
         return [{
             geometry: feature.geometry,
             text: {
                 text: label,
-                font: ratioLocked ? RATIO_LOCKED_LABEL_FONT : fontStyle,
+                font,
                 fill: labelColorOf(feature),
                 halo: halo(),
-                scale: ratioLocked
-                    ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
-                    : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context),
+                scale,
                 rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
                 align: 'center',
                 baseline: 'middle',
@@ -871,6 +1212,11 @@ export function defaultLinePaint(
         const beforeEnd = coords[coords.length - 2];
 
         const scale = scaleOf(feature, context);
+        // The name goes before the prefix does (`FSCL`, `NFL`), once the identifier is too small
+        // to read. Field H leads only on the generic line, which has no prefix, so it is never
+        // cut here. The dates are capped at the name's size. @see withProportionateAmplifiers
+        // @see legibleDesignation
+        const shown = legibleDesignation(identifier, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
         const gap = DEFAULT_LINE_LABEL_GAP_PX;
         const res = context.resolution;
 
@@ -885,6 +1231,7 @@ export function defaultLinePaint(
             rotation: number,
             align: 'left' | 'right',
             baseline: 'top' | 'bottom',
+            textScale = scale,
         ): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
@@ -895,7 +1242,7 @@ export function defaultLinePaint(
                 rotation,
                 align,
                 baseline,
-                scale,
+                scale: textScale,
             },
         });
 
@@ -904,10 +1251,20 @@ export function defaultLinePaint(
             : undefined;
 
         return [
-            label(offsetAbove(start, start, afterStart, res, gap), identifier, startRotation, startAlign, 'bottom'),
-            label(offsetAbove(end, beforeEnd, end, res, gap), identifier, endRotation, endAlign, 'bottom'),
-            label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top'),
-            label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top'),
+            // Only a designation the size rule took away is left out; an empty one stays as it was.
+            ...(shown.text || !identifier
+                ? [
+                    label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
+                    label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
+                ]
+                : []),
+            // The dates go with a name the size rule took away. @see withProportionateAmplifiers
+            ...(shown.text || !identifier
+                ? [
+                    asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
+                    asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+                ]
+                : []),
             {
                 geometry: feature.geometry,
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
