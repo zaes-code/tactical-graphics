@@ -40,6 +40,12 @@ function routePoints(graphic: PaintedGraphic): number {
     return g.coordinates.length - (carriesWidthPointInBase(graphic.name) ? 1 : 0);
 }
 
+/** A movement label's span: the two anchors every layout starts with. */
+function leadingAnchors(graphic: PaintedGraphic): unknown {
+    const g = graphic.labels?.geometry;
+    return g?.type === 'MultiPoint' ? g.coordinates.slice(0, 2) : g;
+}
+
 /** Fewest route points with a corner to round: an arrow keeping both end segments needs a third. */
 function pointsToSmooth(graphic: PaintedGraphic): number {
     const kind = smoothingKindOf(graphic.name);
@@ -75,7 +81,11 @@ describe('smooth lines', () => {
         for (const graphic of hard) {
             const smooth = rebuildPaintedGraphic(graphic);
             // Group or series of targets anchors its name on the outline it draws, which is the point.
-            const labelsKept = graphic.name === 'GroupOrSeriesOfTargets' || same(smooth.labels?.geometry, graphic.labels?.geometry);
+            // The corridor arrows publish the rounded center line after their label span, for a long
+            // label to bend along; the span itself stays put. @see MovementGraphicBase.labelPath
+            const corridor = /^corridor/.test(smoothingKindOf(graphic.name) ?? '');
+            const labelsKept = graphic.name === 'GroupOrSeriesOfTargets'
+                || (corridor ? same(leadingAnchors(smooth), leadingAnchors(graphic)) : same(smooth.labels?.geometry, graphic.labels?.geometry));
             if (!same(smooth.base.geometry, graphic.base.geometry) || !same(smooth.handles, graphic.handles) || !labelsKept) {
                 touchedOther.push(graphic.name);
             }

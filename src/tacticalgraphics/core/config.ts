@@ -58,6 +58,16 @@ export const MIN_LABEL_SIZE = 8;
 export const MAX_LABEL_SIZE = 26;
 
 /**
+ * The smallest a label is drawn, in screen pixels. Text sized to its graphic shrinks with it,
+ * and below this it is not drawn at all. @see withLegibleText
+ *
+ * Lower than `MIN_LABEL_SIZE`, which bounds the label-size *setting*: a host asks for labels of
+ * at least 8 px, while a label that shrank with its graphic stays readable a little smaller.
+ * Started at 8 and was hiding labels too soon (user, 2026-10-23).
+ */
+export const MIN_LEGIBLE_TEXT_PX = 6;
+
+/**
  * The unit an altitude is entered and displayed in.
  *
  * **A host-level choice, not a per-symbol one.** A picture where one zone is in feet and
