@@ -18,7 +18,7 @@
 
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
-import {RATIO_LOCKED_LABEL_FONT, fontStyle} from '../core/symbology';
+import {RATIO_LOCKED_LABEL_FONT, fontStyle, ratioLockedLabelScale} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {arcMissionTaskPaint, defaultLinePaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
 import {renderTacticalGraphic} from '../core/render';
@@ -326,19 +326,29 @@ describe('a mission-task letter is sized by which family it is in', () => {
         }
     });
 
-    it('draws envelopment\'s "E" at the scale its line work cut the gap for', async () => {
+    it('draws envelopment\'s "E" at the scale its line work cut the gap for, and none once it would be under 6 px', async () => {
         const {approachLetterScale} = await import('./movementPaints');
-        const feature: PaintFeature = {
+        const sized = (maxX: number, maxY: number): PaintFeature => ({
             geometry: {type: 'Point', coordinates: [0, 0]},
             properties: {name: TacticalGraphicName.Envelopment},
             drawingResolution: 100,
-            bounds: {minX: 0, minY: 0, maxX: 40_000, maxY: 10_000},
-        };
-        const [paint] = missionTaskLabelPaint(TacticalGraphicName.Envelopment)(feature, context(1000));
-        expect(paint.text!.scale).toBe(approachLetterScale(feature, context(1000), 'E', 0));
+            bounds: {minX: 0, minY: 0, maxX, maxY},
+        });
+
+        // 100 px across: the letter is legible, and drawn at the scale the line work cut for.
+        const legible = sized(100_000, 25_000);
+        const [paint] = missionTaskLabelPaint(TacticalGraphicName.Envelopment)(legible, context(1000));
+        const scale = approachLetterScale(legible, context(1000), 'E', 0);
+        expect(16 * scale).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        expect(paint.text!.scale).toBe(scale);
+
+        // 40 px across: the letter would be under 6 px, so the line work cuts no gap and there is no "E".
+        const small = sized(40_000, 10_000);
+        expect(approachLetterScale(small, context(1000), 'E', 0)).toBe(0);
+        expect(missionTaskLabelPaint(TacticalGraphicName.Envelopment)(small, context(1000))).toEqual([]);
+
         // Under twice its letter: no "E", as the run is drawn whole.
-        expect(missionTaskLabelPaint(TacticalGraphicName.Envelopment)({...feature, bounds: {minX: 0, minY: 0, maxX: 10_000, maxY: 2_500}}, context(1000)))
-            .toEqual([]);
+        expect(missionTaskLabelPaint(TacticalGraphicName.Envelopment)(sized(10_000, 2_500), context(1000))).toEqual([]);
     });
 
     it('carries the rotation through, for a letter that lies along its graphic', () => {
@@ -460,15 +470,23 @@ describe('the arc mission tasks cut their gap from the rendered glyph', () => {
             context(resolution),
         )[0]?.text;
 
-    it('keeps its letter at 6 px, then drops it and closes the arcs', () => {
-        // A 20 px circle: the ratio-locked letter would be 4.5 px, under the legibility
-        // floor, so it is held at 6 and the arcs still open round it.
-        const small = secureLetter(10_000, 1000);
-        expect(small).toBeDefined();
-        expect(24 * small!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
-        expect(gapRadians(10_000, 1000)).toBeGreaterThan(0);
+    it('draws its letter at its own scale, and drops it and closes the arcs once the letter would be under 6 px', () => {
+        // A 40 px circle: the ratio-locked letter is 9 px, drawn at exactly that, with the arcs
+        // opened round it.
+        const desired = ratioLockedLabelScale(20_000, undefined, 1000);
+        expect(24 * desired).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = secureLetter(20_000, 1000);
+        expect(legible).toBeDefined();
+        expect(legible!.scale!).toBeCloseTo(desired, 9);
+        expect(gapRadians(20_000, 1000)).toBeGreaterThan(0);
 
-        // A 10 px circle is under twice its 6 px letter: no letter, and no hole for one.
+        // A 20 px circle: the ratio-locked letter would be 4.5 px, under the legibility floor,
+        // so there is no letter and no hole for one.
+        expect(24 * ratioLockedLabelScale(10_000, undefined, 1000)).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        expect(secureLetter(10_000, 1000)).toBeUndefined();
+        expect(gapRadians(10_000, 1000)).toBe(0);
+
+        // A 10 px circle: no letter, and no hole for one.
         expect(secureLetter(5_000, 1000)).toBeUndefined();
         expect(gapRadians(5_000, 1000)).toBe(0);
     });

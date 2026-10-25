@@ -16,6 +16,7 @@ import {anchorsForParallelLegs} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
 import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
+import {scaleOf} from './paintFunctions';
 
 const context = (resolution = 400): PaintContext => ({
     resolution,
@@ -349,28 +350,43 @@ describe('APP-06 343300 — demonstration', () => {
 });
 
 describe('letters in gaps, zoomed out', () => {
-    // Shrinking with the graphic, the text went under the legibility floor and vanished
-    // while its break stayed, so zoomed out the symbol was mostly hole (user, 2026-10-24).
+    // The text keeps the scale its family gives it and is never floored: once that would be
+    // under 6 px it goes, and so does the room cut for it (user, 2026-10-24).
     const ctx: PaintContext = {resolution: 1, measureText: context().measureText};
 
-    it('the escort keeps its Es at 6 px, then drops them', () => {
+    it('the escort draws its Es at their own scale, and drops them and their room once they would be under 6 px', () => {
         const bar = (spanPx: number): PaintFeature => ({
             geometry: {type: 'LineString', coordinates: [[0, 0], [spanPx, 0]]},
             properties: {name: TacticalGraphicName.Escort},
             bounds: {minX: 0, minY: 0, maxX: spanPx, maxY: 0},
         });
-        const small = escortPaint('E')(bar(40), ctx);
-        const letters = small.filter(p => p.text);
-        expect(letters).toHaveLength(2);
-        for (const letter of letters) expect(16 * letter.text!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
-        const [left, right] = lines(small);
-        expect(right[0][0] - left[1][0]).toBeGreaterThan(0);
+        const breakPx = (paints: Paint[]): number => {
+            const [left, right] = lines(paints);
+            return right[0][0] - left[1][0];
+        };
 
-        // The break stays for the host's unit symbol, which is drawn whatever the letters do.
-        expect(escortPaint('E')(bar(10), ctx).filter(p => p.text)).toEqual([]);
+        const desired = scaleOf(bar(100), ctx);
+        expect(16 * desired).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = escortPaint('E')(bar(100), ctx);
+        const letters = legible.filter(p => p.text);
+        expect(letters).toHaveLength(2);
+        for (const letter of letters) expect(letter.text!.scale!).toBeCloseTo(desired, 9);
+        // The break is wider than the host's unit symbol alone needs: it holds the Es too.
+        expect(breakPx(legible)).toBeGreaterThan(breakPx(escortPaint('')(bar(100), ctx)));
+
+        // Under the floor, no Es, and the bar is exactly the letterless one. The break stays
+        // for the host's unit symbol, which is drawn whatever the letters do.
+        expect(16 * scaleOf(bar(40), ctx)).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        const small = escortPaint('E')(bar(40), ctx);
+        expect(small.filter(p => p.text)).toEqual([]);
+        expect(lines(small)).toEqual(lines(escortPaint('')(bar(40), ctx)));
+
+        const tiny = escortPaint('E')(bar(10), ctx);
+        expect(tiny.filter(p => p.text)).toEqual([]);
+        expect(lines(tiny)).toEqual(lines(escortPaint('')(bar(10), ctx)));
     });
 
-    it('the demonstration keeps DEM at 6 px, then drops it and draws the leg whole', () => {
+    it('the demonstration draws DEM at its own scale, and drops it and draws the leg whole once it would be under 6 px', () => {
         const leg: ProjectedPosition[] = [[0, 0], [40, 0]];
         const turn: ProjectedPosition[] = [[40, 0], [45, 5], [40, 10]];
         const back: ProjectedPosition[] = [[40, 10], [0, 10]];
@@ -383,10 +399,17 @@ describe('letters in gaps, zoomed out', () => {
             };
         };
 
-        const small = demonstrationPaint('DEM')(at(1), ctx);
-        expect(16 * small.find(p => p.text)!.text!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+        const desired = scaleOf(at(2), ctx);
+        expect(16 * desired).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = demonstrationPaint('DEM')(at(2), ctx);
+        expect(legible.find(p => p.text)!.text!.scale!).toBeCloseTo(desired, 9);
         // The leg in two runs around the text, then the turn and the second leg.
-        expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(4);
+        expect((legible[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(4);
+
+        expect(16 * scaleOf(at(1), ctx)).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        const small = demonstrationPaint('DEM')(at(1), ctx);
+        expect(small.find(p => p.text)).toBeUndefined();
+        expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
 
         const tiny = demonstrationPaint('DEM')(at(0.4), ctx);
         expect(tiny.find(p => p.text)).toBeUndefined();
