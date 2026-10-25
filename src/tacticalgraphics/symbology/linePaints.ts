@@ -12,8 +12,8 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {offsetBelow, textWidth, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
+import {amplifierDash, asAmplifier, getFullLabel, hostilityOf, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
 
@@ -124,9 +124,23 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             name === TacticalGraphicName.DirectionOfSupportingAttack
             && hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
 
-        if (nameText) paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
+        /*
+         * `ENY` is the only prefix these arrows carry, and it is set apart from the name rather
+         * than joined to it. Too small to read, the name goes and `ENY` takes its place at the
+         * anchor, legible, while the arrow is at least twice it. @see legibleDesignation
+         */
+        const enyFull = ['ENY', nameText].filter(Boolean).join(' ');
+        const shown = showEny
+            ? legibleDesignation(enyFull, 'ENY', scale, fontStyle, context, pathLength(baseCoords) / context.resolution)
+            : {text: enyFull, scale};
+        const prefixOnly = shown.text !== enyFull;
+        if (prefixOnly) {
+            if (shown.text) paints.push(label(feature, anchor, shown.text, shown.scale, {rotation, align}));
+        } else if (nameText) {
+            paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
+        }
 
-        if (showEny) {
+        if (showEny && !prefixOnly) {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
             const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
             paints.push(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
@@ -134,7 +148,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
 
         if (dateText) {
             const at = offsetBelow(anchor, p1, p2, context.resolution, ARROW_DTG_OFFSET_PX * scale);
-            paints.push(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'}));
+            paints.push(asAmplifier(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'})));
         }
 
         return paints;

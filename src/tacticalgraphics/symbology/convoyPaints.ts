@@ -291,8 +291,10 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
          * north there, which is the only definition that holds. @see offsetAbove
          */
         const under = offsetBelow(at(neck / 2, 0), from, to, res, bodyHalfPx + DATE_GAP_PX * scale);
-        // The date-time group has the whole body to run under, and nothing beside it.
-        if (dates) paints.push(text(under, dates, 'top', capLabelToSpan(context, dates, fontStyle, scale, neck / res)));
+        // The date-time group has the whole body to run under, and nothing beside it, but it is
+        // never drawn larger than the fields inside the body. @see withProportionateAmplifiers
+        const dateScale = Math.min(capLabelToSpan(context, dates, fontStyle, scale, neck / res), weapon || info ? pairScale : Infinity);
+        if (dates) paints.push(text(under, dates, 'top', dateScale));
 
         return paints;
     };

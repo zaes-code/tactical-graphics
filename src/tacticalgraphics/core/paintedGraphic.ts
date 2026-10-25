@@ -2,8 +2,8 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
-import {withHiddenAmplifiers} from '../symbology/paintFunctions';
-import {getPaintFunction} from '../symbology/registry';
+import {withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from '../symbology/paintFunctions';
+import {CORRIDOR_GRAPHICS, getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
 import {arrowheadMeters, axisAndWidth, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration} from './decorationSizes';
 import {drawnAnchorFrame, drawnAnchors} from './drawnAnchors';
@@ -992,7 +992,13 @@ export function buildPaintedGraphic(
 
     const shared = {
         properties: props,
-        graphicSize: props.radius,
+        /*
+         * **A corridor's size is its half-width**, which it files as `width` and never as
+         * `radius`. OpenLayers' holder stamps that half-width; this read only `radius`, so an
+         * imported corridor carried no size here and its ACP labels fell back to a fixed
+         * 12 px circle, a third of the size OpenLayers drew them. @see acpLabelScale
+         */
+        graphicSize: CORRIDOR_GRAPHICS.includes(name) && props.width ? props.width / 2 : props.radius,
         drawingResolution,
         graphicCenter,
         graphicLabelPoint,
@@ -1051,13 +1057,14 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
     if (!painters) return [];
 
     // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
-    // function in `asStyleFunction`. @see withHiddenAmplifiers
+    // function in `asStyleFunction`, and the legibility floor and the name-over-amplifier rule beside it.
+    // @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames
     //
     // The dash fit runs once per half, as OpenLayers' does, because OpenLayers styles the
     // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
-    const paints = withFittedDashes(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers), context);
+    const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withFittedDashes(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers), context));
+        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers)), context), context));
     }
     return paints;
 }

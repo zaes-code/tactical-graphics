@@ -14,8 +14,9 @@ import {allowedGestures, drawClickCount, dropSizePx, hasDerivedAnchors} from '..
 import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {anchorsForParallelLegs} from '../core/anchors';
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
+import {scaleOf} from './paintFunctions';
 
 const context = (resolution = 400): PaintContext => ({
     resolution,
@@ -314,8 +315,14 @@ describe('APP-06 343300 — demonstration', () => {
                     properties: {name: TacticalGraphicName.Demonstration, designation: label},
                 };
                 const ctx = context(resolution);
-                const mark = demonstrationPaint('DEM')(feature, ctx).find(p => p.text)!;
+                const mark = demonstrationPaint('DEM')(feature, ctx).find(p => p.text);
                 const legPx = len(parts[0][0], parts[0][1]) / resolution;
+                if (!mark) {
+                    // Gone only where even 6 px text would overrun its share of the leg.
+                    const floorWidthPx = ctx.measureText(`DEM ${label}`, 'bold 6px sans-serif');
+                    expect(floorWidthPx).toBeGreaterThan(legPx * 0.55);
+                    continue;
+                }
                 const widthPx = ctx.measureText(mark.text!.text, mark.text!.font) * mark.text!.scale!;
                 expect(widthPx).toBeLessThanOrEqual(legPx * 0.56);
             }
@@ -339,5 +346,73 @@ describe('APP-06 343300 — demonstration', () => {
             p.geometry.type === 'MultiLineString' && p.geometry.coordinates.length === 2);
         expect(barbs).toBeDefined();
         expect(paints.some(p => p.fill)).toBe(false);
+    });
+});
+
+describe('letters in gaps, zoomed out', () => {
+    // The text keeps the scale its family gives it and is never floored: once that would be
+    // under 6 px it goes, and so does the room cut for it (user, 2026-10-24).
+    const ctx: PaintContext = {resolution: 1, measureText: context().measureText};
+
+    it('the escort draws its Es at their own scale, and drops them and their room once they would be under 6 px', () => {
+        const bar = (spanPx: number): PaintFeature => ({
+            geometry: {type: 'LineString', coordinates: [[0, 0], [spanPx, 0]]},
+            properties: {name: TacticalGraphicName.Escort},
+            bounds: {minX: 0, minY: 0, maxX: spanPx, maxY: 0},
+        });
+        const breakPx = (paints: Paint[]): number => {
+            const [left, right] = lines(paints);
+            return right[0][0] - left[1][0];
+        };
+
+        const desired = scaleOf(bar(100), ctx);
+        expect(16 * desired).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = escortPaint('E')(bar(100), ctx);
+        const letters = legible.filter(p => p.text);
+        expect(letters).toHaveLength(2);
+        for (const letter of letters) expect(letter.text!.scale!).toBeCloseTo(desired, 9);
+        // The break is wider than the host's unit symbol alone needs: it holds the Es too.
+        expect(breakPx(legible)).toBeGreaterThan(breakPx(escortPaint('')(bar(100), ctx)));
+
+        // Under the floor, no Es, and the bar is exactly the letterless one. The break stays
+        // for the host's unit symbol, which is drawn whatever the letters do.
+        expect(16 * scaleOf(bar(40), ctx)).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        const small = escortPaint('E')(bar(40), ctx);
+        expect(small.filter(p => p.text)).toEqual([]);
+        expect(lines(small)).toEqual(lines(escortPaint('')(bar(40), ctx)));
+
+        const tiny = escortPaint('E')(bar(10), ctx);
+        expect(tiny.filter(p => p.text)).toEqual([]);
+        expect(lines(tiny)).toEqual(lines(escortPaint('')(bar(10), ctx)));
+    });
+
+    it('the demonstration draws DEM at its own scale, and drops it and draws the leg whole once it would be under 6 px', () => {
+        const leg: ProjectedPosition[] = [[0, 0], [40, 0]];
+        const turn: ProjectedPosition[] = [[40, 0], [45, 5], [40, 10]];
+        const back: ProjectedPosition[] = [[40, 10], [0, 10]];
+        const at = (k: number): PaintFeature => {
+            const parts = [leg, turn, back].map(part => part.map(([x, y]) => [x * k, y * k] as ProjectedPosition));
+            return {
+                geometry: {type: 'MultiLineString', coordinates: parts},
+                properties: {name: TacticalGraphicName.Demonstration},
+                bounds: {minX: 0, minY: 0, maxX: 45 * k, maxY: 10 * k},
+            };
+        };
+
+        const desired = scaleOf(at(2), ctx);
+        expect(16 * desired).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = demonstrationPaint('DEM')(at(2), ctx);
+        expect(legible.find(p => p.text)!.text!.scale!).toBeCloseTo(desired, 9);
+        // The leg in two runs around the text, then the turn and the second leg.
+        expect((legible[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(4);
+
+        expect(16 * scaleOf(at(1), ctx)).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        const small = demonstrationPaint('DEM')(at(1), ctx);
+        expect(small.find(p => p.text)).toBeUndefined();
+        expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
+
+        const tiny = demonstrationPaint('DEM')(at(0.4), ctx);
+        expect(tiny.find(p => p.text)).toBeUndefined();
+        expect((tiny[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
     });
 });

@@ -26,10 +26,10 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {amplifierText, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf} from './paintFunctions';
+import {amplifierText, asAmplifier, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf, legibleDesignation} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -126,6 +126,66 @@ function stack(
             scale: fitInside ? fitLabelScale(feature, context, at, lines, fontStyle, scale) : scale,
         },
     };
+}
+
+/**
+ * The area's smaller extent on screen, in pixels: the room its centred label is fitted to.
+ * From its stamped bounds, else its ring, else `Infinity` when neither has been stamped and
+ * nothing caps the label either.
+ */
+function areaPx(feature: PaintFeature, context: PaintContext): number {
+    const ring = feature.ring;
+    const box = feature.bounds ?? (ring?.length
+        ? {
+            minX: Math.min(...ring.map(([x]) => x)),
+            maxX: Math.max(...ring.map(([x]) => x)),
+            minY: Math.min(...ring.map(([, y]) => y)),
+            maxY: Math.max(...ring.map(([, y]) => y)),
+        }
+        : undefined);
+    if (!box) return Infinity;
+    return Math.min(box.maxX - box.minX, box.maxY - box.minY) / context.resolution;
+}
+
+/**
+ * What a fitted designation is drawn as, or `undefined` while the whole of it is still
+ * legible at `fitted` and nothing changes.
+ *
+ * Below that, the name goes and the doctrinal prefix stays, at a size that can be read, until
+ * the area is smaller than about twice it. @see legibleDesignation
+ */
+function shrunkDesignation(
+    feature: PaintFeature,
+    context: PaintContext,
+    designation: string,
+    prefix: string,
+    fitted: number,
+): {text: string; scale: number} | undefined {
+    if (!prefix.trim() || !designation || BASE_FONT_SIZE_PX * fitted >= MIN_LEGIBLE_TEXT_PX) return undefined;
+    return legibleDesignation(designation, prefix, fitted, fontStyle, context, areaPx(feature, context));
+}
+
+/**
+ * A centred stack whose `designation` line carries the doctrinal `prefix`.
+ *
+ * Drawn exactly as {@link stack} draws it while the block can be read. Once the fit takes it
+ * under the legibility floor every line of it would go, so the prefix is drawn alone instead,
+ * at its own legible size and outside the fit, which would only shrink it back under the floor.
+ */
+function designationStack(
+    feature: PaintFeature,
+    context: PaintContext,
+    at: ProjectedPosition,
+    lines: string[],
+    scale: number,
+    designation: string,
+    prefix: string,
+): Paint[] {
+    if (!lines.length) return [];
+    const block = stack(feature, context, at, lines, scale);
+    const kept = shrunkDesignation(feature, context, designation, prefix, block.text?.scale ?? scale);
+    if (!kept) return [block];
+    return kept.text ? [stack(feature, context, at, [kept.text], kept.scale, 0, false)] : [];
 }
 
 /**
@@ -278,7 +338,9 @@ export function areaLabelStackPaint(
             areaDateLabel(feature),
         ].filter(line => line.length > 0);
 
-        return lines.length ? [stack(feature, context, at, lines, scaleOf(feature, context))] : [];
+        // A stacked literal is not a prefix of the designation line, so that line has none.
+        const prefix = options.literalLines ? '' : getLabel(name);
+        return designationStack(feature, context, at, lines, scaleOf(feature, context), designation, prefix);
     };
 }
 
@@ -316,7 +378,10 @@ export function actionAreaLabelPaint(
         const first = [info, titled].filter(Boolean).join('  ');
 
         const lines = [first, areaDateLabel(feature)].filter(line => line.length > 0);
-        const paints = lines.length ? [stack(feature, context, at, lines, scaleOf(feature, context))] : [];
+        // Field H leads the line on the generic area, so only a line that starts with the
+        // literal can shrink to it.
+        const prefix = first.startsWith(literal) ? literal : '';
+        const paints = designationStack(feature, context, at, lines, scaleOf(feature, context), first, prefix);
         return paints.concat(hostileFlankMarks(feature, context));
     };
 }
@@ -424,8 +489,14 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
         const scale = scaleOf(feature, context);
         const paints: Paint[] = [];
 
-        const nameLines = [getLabel(name), (feature.properties.designation ?? '').trim()].filter(s => s.length > 0);
-        if (at && nameLines.length) paints.push(stack(feature, context, at, nameLines, scale));
+        // The prefix is a line of its own here, so it is also the line that stays once the
+        // name is too small to read.
+        const prefix = getLabel(name);
+        const nameLines = [prefix, (feature.properties.designation ?? '').trim()].filter(s => s.length > 0);
+        if (at) paints.push(...designationStack(feature, context, at, nameLines, scale, prefix, prefix));
+        // The dates belong to the name: once the zone is too small for even its prefix, they
+        // go with it. @see withProportionateAmplifiers
+        if (at && nameLines.length && !paints.length) return paints;
 
         const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
         const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
@@ -445,6 +516,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
                  * also why the anchor below is now shared. (User's call, 2026-09-04.)
                  */
                 text: [dtg1, dtg2].filter(s => s.length > 0).join(' - '),
+                kind: 'amplifier',
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
@@ -588,11 +660,9 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
         ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
 
         const at = anchorOf(feature);
-        const lines = [
-            getFullLabel(name, feature.properties.designation ?? '').trim(),
-            areaDateLabel(feature),
-        ].filter(line => line.length > 0);
-        if (at && lines.length) paints.push(stack(feature, context, at, lines, scale));
+        const designation = getFullLabel(name, feature.properties.designation ?? '').trim();
+        const lines = [designation, areaDateLabel(feature)].filter(line => line.length > 0);
+        if (at) paints.push(...designationStack(feature, context, at, lines, scale, designation, getLabel(name)));
 
         return paints;
     };
@@ -669,8 +739,11 @@ export function areaDefaultLabelPaint(
         const fitted = fitLabelScale(
             feature, context, at, [text, date], fontStyle, scale, DEFAULT_DATE_OFFSET_PX / 2,
         );
+        // Under the legibility floor the name goes and the prefix stays, at its own size; the
+        // date shares the fitted scale and the floor takes it. @see shrunkDesignation
+        const kept = withLiteral ? shrunkDesignation(feature, context, text, getLabel(name), fitted) : undefined;
 
-        const mark = (label: string, offsetYPx: number): Paint => ({
+        const mark = (label: string, offsetYPx: number, markScale = fitted): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: label,
@@ -678,7 +751,7 @@ export function areaDefaultLabelPaint(
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 offsetYPx,
-                scale: fitted,
+                scale: markScale,
             },
         });
 
@@ -686,6 +759,7 @@ export function areaDefaultLabelPaint(
         // `text` renders nothing, and keeping the shape identical keeps the mark
         // count comparable between the two renderers.
         const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
-        return [mark(text, 0), mark(date, DEFAULT_DATE_OFFSET_PX), ...flanks];
+        const designationMark = kept ? mark(kept.text, 0, kept.scale) : mark(text, 0);
+        return [designationMark, asAmplifier(mark(date, DEFAULT_DATE_OFFSET_PX)), ...flanks];
     };
 }
