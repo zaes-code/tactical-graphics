@@ -14,6 +14,7 @@ import {ITacticalGraphic} from "../core/type";
 import {featureInGeneratorOrder} from "../core/drawOrder";
 import {axisFeature, optionsFromWidthPoint} from "../core/axisWidth";
 import {smoothedForGenerator} from "../core/smoothing";
+import {unwrappedLongitudes} from "../core/antimeridian";
 
 
 export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBaseGraphicOptions> implements IGraphicGenerator {
@@ -116,9 +117,14 @@ export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBase
          * what makes the coordinate the only stored statement of the width. A legacy base
          * carrying no such point leaves the caller's own radius alone. @see axisWidth.ts
          */
-        const axis = axisFeature(this.name, base);
+        /*
+         * **A base across the antimeridian is unwrapped first**, since the generators and
+         * the width point all do their arithmetic in degrees. @see antimeridian.ts
+         */
+        const continuous = unwrappedLongitudes(base);
+        const axis = axisFeature(this.name, continuous);
         const drawn = featureInGeneratorOrder(this.name, axis);
-        const options = optionsFromWidthPoint(this.name, base, opts);
+        const options = optionsFromWidthPoint(this.name, continuous, opts);
         /*
          * **Smooth lines shape the line work and nothing else.** The handles and labels are
          * built from the drawn points, so editing still moves what the user placed, and an
