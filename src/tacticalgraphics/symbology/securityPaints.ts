@@ -13,7 +13,7 @@ import {labelColorOf, lineColorOf} from './paintFunctions';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {capLabelToGraphic, letterInGapScale} from './labelFit';
+import {capLabelToGraphic, heldTextScale} from './labelFit';
 import {textWidth} from './decorations';
 import {MAX_SYMBOL_SIZE_PX, resolveSecuritySymbol, securitySymbolSidc, symbolGraphicId} from '../core/securitySymbol';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
@@ -208,10 +208,10 @@ export function securityOperationPaint(label: string): SecurityPaint {
 
         // Never under the legibility floor, where the letter went and left the arms' space
         // empty; gone once the whole symbol is too small to carry it. The space itself is the
-        // generator's, so it stays. @see letterInGapScale
+        // generator's, so it stays. @see heldTextScale
         const bounds = feature.bounds;
         const symbolPx = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) / context.resolution : Infinity;
-        const scale = letterInGapScale(
+        const scale = heldTextScale(
             capLabelToGraphic(getDefaultLabelSize() / BASE_FONT_SIZE_PX, feature, context),
             textWidth(context, label, fontStyle, 1),
             BASE_FONT_SIZE_PX,

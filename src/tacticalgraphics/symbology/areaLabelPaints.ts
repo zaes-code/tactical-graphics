@@ -26,7 +26,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {amplifierText, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf, legibleDesignation} from './paintFunctions';
+import {amplifierText, asAmplifier, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf, legibleDesignation} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
@@ -494,6 +494,9 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
         const prefix = getLabel(name);
         const nameLines = [prefix, (feature.properties.designation ?? '').trim()].filter(s => s.length > 0);
         if (at) paints.push(...designationStack(feature, context, at, nameLines, scale, prefix, prefix));
+        // The dates belong to the name: once the zone is too small for even its prefix, they
+        // go with it. @see withProportionateAmplifiers
+        if (at && nameLines.length && !paints.length) return paints;
 
         const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
         const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
@@ -513,6 +516,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
                  * also why the anchor below is now shared. (User's call, 2026-09-04.)
                  */
                 text: [dtg1, dtg2].filter(s => s.length > 0).join(' - '),
+                kind: 'amplifier',
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
@@ -756,6 +760,6 @@ export function areaDefaultLabelPaint(
         // count comparable between the two renderers.
         const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
         const designationMark = kept ? mark(kept.text, 0, kept.scale) : mark(text, 0);
-        return [designationMark, mark(date, DEFAULT_DATE_OFFSET_PX), ...flanks];
+        return [designationMark, asAmplifier(mark(date, DEFAULT_DATE_OFFSET_PX)), ...flanks];
     };
 }

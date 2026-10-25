@@ -179,7 +179,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
          * the symbol, and hiding it would turn nine distinct graphics into one anonymous
          * line. @see withHiddenAmplifiers, which defaults to keeping a mark for that reason.
          */
-        // Never under the legibility floor, and gone with its gap once the line is too short
+        // Gone with its gap once it would be under the legibility floor, or the line is too short
         // to carry it. @see letterInGapScale
         if (letterScale) paints.push(text([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], letter, 'center', undefined, letterScale));
 
