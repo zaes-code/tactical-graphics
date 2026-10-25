@@ -1,6 +1,6 @@
 {
   "name": "@zaes/tactical-graphics",
-  "version": "4.6.1",
+  "version": "4.6.2",
   "description": "MIL-STD-2525E, FM 1-02.2 and APP-06 tactical graphics as plain GeoJSON, with their entity codes. Renders axis-of-advance arrows, phase lines, mission tasks and range fans for OpenLayers, MapLibre or any GeoJSON consumer.",
   "keywords": [
     "mil-std-2525",
