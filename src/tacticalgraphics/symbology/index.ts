@@ -151,4 +151,4 @@ export {securityOperationCentre, securityOperationLabelPaint, securityOperationP
 export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './movementPaints';
 export {getPaintFunction, isPaintable, PAINTABLE_GRAPHICS} from './registry';
 
-export {amplifierText, withHiddenAmplifiers, withLegibleText} from './paintFunctions';
+export {amplifierText, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from './paintFunctions';

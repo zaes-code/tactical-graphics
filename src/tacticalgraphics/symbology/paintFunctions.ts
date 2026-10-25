@@ -26,7 +26,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {paintFilledRings, paintLineWork} from '../core/paint';
+import {NAME_TEXT_Z_INDEX, paintFilledRings, paintLineWork} from '../core/paint';
 import {
     CAP_HEIGHT_FRACTION,
     HALO_WIDTH,
@@ -173,6 +173,117 @@ export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
         out.push(px > mainPx ? {...paint, text: {...text, scale: (scale * mainPx) / px}} : paint);
     }
     return out;
+}
+
+/**
+ * Lets a graphic's name win over amplifier text: it takes away an amplifier whose text would
+ * lie over the main label, and draws every other text above amplifiers (`NAME_TEXT_Z_INDEX`),
+ * so where two graphics overlap, one's dates go under the other's name.
+ *
+ * No engine resolves overlapping text here (OpenLayers is not decluttered, MapLibre allows
+ * overlap), so text overlaps as laid out, and a mark painted later covers an earlier one with
+ * its halo. A zone's dates hang from its upper-left corner, which on a small or pointed shape
+ * is inside it, over the name; the dates' halo then hid the name. (User, 2026-10-24.) The
+ * boxes are measured in screen pixels from the same measurements the engines draw with, and
+ * compared within one half, as the other text rules are. @see withProportionateAmplifiers
+ */
+export function withUnobscuredNames(paints: Paint[], context: PaintContext): Paint[] {
+    return namesOnTop(withoutCoveringAmplifiers(paints, context));
+}
+
+/** Names and doctrinal text above amplifiers. A mark that sets its own order keeps it. */
+function namesOnTop(paints: Paint[]): Paint[] {
+    let changed = false;
+    const out = paints.map(paint => {
+        if (!paint.text || paint.text.kind === 'amplifier' || paint.zIndex !== undefined) return paint;
+        changed = true;
+        return {...paint, zIndex: NAME_TEXT_Z_INDEX};
+    });
+    return changed ? out : paints;
+}
+
+function withoutCoveringAmplifiers(paints: Paint[], context: PaintContext): Paint[] {
+    // Nothing to measure with, nothing to compare: a hand-built context may leave it out.
+    if (typeof context.measureText !== 'function') return paints;
+    const boxes = paints.map(paint => textBox(paint, context));
+    const names = boxes.filter((box, i) => box && paints[i].text!.kind !== 'amplifier') as TextBox[];
+    if (!names.length) return paints;
+    let changed = false;
+    const out: Paint[] = [];
+    paints.forEach((paint, i) => {
+        const box = boxes[i];
+        if (!box || paint.text!.kind !== 'amplifier' || !names.some(name => overlaps(box, name))) {
+            out.push(paint);
+            return;
+        }
+        changed = true;
+        const {text: _hidden, ...rest} = paint;
+        if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    });
+    return changed ? out : paints;
+}
+
+interface TextBox {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
+/** How far into each other two boxes must reach to count as overlapping, in pixels. */
+const OVERLAP_TOLERANCE_PX = 1;
+
+function overlaps(a: TextBox, b: TextBox): boolean {
+    return (
+        Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX) > OVERLAP_TOLERANCE_PX &&
+        Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY) > OVERLAP_TOLERANCE_PX
+    );
+}
+
+/** Line spacing of a multi-line label, as a share of the font size. */
+const TEXT_LINE_HEIGHT = 1.32;
+
+/**
+ * The screen box a point label's glyphs cover, in pixels with y down. Undefined for a
+ * mark that is not a drawn point label: line-placed text, and the letters of a curved run.
+ */
+function textBox(paint: Paint, context: PaintContext): TextBox | undefined {
+    const text = paint.text;
+    if (!text || !text.text.trim() || text.placement === 'line' || text.glyph || paint.geometry.type !== 'Point') return undefined;
+    const scale = text.scale ?? 1;
+    const lines = text.text.split('\n');
+    const width = Math.max(...lines.map(line => context.measureText(line, text.font))) * scale;
+    // The glyphs, not the line box or the halo: text stacked a line apart touches at its halos
+    // by design, and is not covering anything.
+    const fontPx = renderedTextPx(text.font, scale);
+    const height = fontPx + (lines.length - 1) * fontPx * TEXT_LINE_HEIGHT;
+    if (!(width > 0) || !(height > 0)) return undefined;
+
+    const align = text.align ?? 'center';
+    const x0 = align === 'left' ? 0 : align === 'right' ? -width : -width / 2;
+    const baseline = text.baseline ?? 'middle';
+    const y0 = baseline === 'top' || baseline === 'hanging' ? 0 : baseline === 'middle' ? -height / 2 : -height;
+
+    const rotation = text.rotation ?? 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const [ax, ay] = paint.geometry.coordinates;
+    const cx = ax / context.resolution + (text.offsetXPx ?? 0);
+    const cy = -ay / context.resolution + (text.offsetYPx ?? 0);
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of [[x0, y0], [x0 + width, y0], [x0, y0 + height], [x0 + width, y0 + height]]) {
+        const rx = cx + x * cos - y * sin;
+        const ry = cy + x * sin + y * cos;
+        minX = Math.min(minX, rx);
+        minY = Math.min(minY, ry);
+        maxX = Math.max(maxX, rx);
+        maxY = Math.max(maxY, ry);
+    }
+    return {minX, minY, maxX, maxY};
 }
 
 /** The pixel size text is drawn at: the font shorthand's size times the mark's scale. */
