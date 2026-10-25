@@ -20,6 +20,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {DECORATION_MIN_PX, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+import {letterInGapScale} from './labelFit';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -136,9 +137,10 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
          * come out with negative length and draw as nothing. A symbol that vanishes when
          * you draw it small is worse than one whose letter crowds its line.
          */
-        const halfGap = letter
+        const letterScale = letter ? letterInGapScale(scale, textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, length / context.resolution) : 0;
+        const halfGap = letterScale
             ? Math.min(
-                  (textWidth(context, letter, fontStyle, scale) / 2 + LETTER_PADDING_PX * scale) * context.resolution,
+                  (textWidth(context, letter, fontStyle, letterScale) / 2 + LETTER_PADDING_PX * letterScale) * context.resolution,
                   (length * MAX_GAP_SHARE) / 2,
               )
             : 0;
@@ -155,7 +157,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
             paints.push({geometry: {type: 'LineString', coordinates: [from, to]}, stroke});
         }
 
-        const text = (at: ProjectedPosition, value: string, align: 'center' | 'right', kind?: 'amplifier'): Paint => ({
+        const text = (at: ProjectedPosition, value: string, align: 'center' | 'right', kind?: 'amplifier', markScale = scale): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: value,
@@ -165,7 +167,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
                 rotation,
                 align,
                 baseline: 'middle',
-                scale,
+                scale: markScale,
                 kind,
             },
         });
@@ -177,7 +179,9 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
          * the symbol, and hiding it would turn nine distinct graphics into one anonymous
          * line. @see withHiddenAmplifiers, which defaults to keeping a mark for that reason.
          */
-        if (letter) paints.push(text([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], letter, 'center'));
+        // Never under the legibility floor, and gone with its gap once the line is too short
+        // to carry it. @see letterInGapScale
+        if (letterScale) paints.push(text([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], letter, 'center', undefined, letterScale));
 
         /*
          * `H` is **right-justified against point 2**, so it ends where the line ends and

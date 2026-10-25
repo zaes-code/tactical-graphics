@@ -25,9 +25,9 @@ import {
     graphicLabelScale,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {TacticalGraphicName} from '../core/type';
+import {TacticalGraphicName, getLabel} from '../core/type';
 import {pathLength, textWidth} from './decorations';
-import {getFullLabel, groundPixels, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {getFullLabel, groundPixels, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
 
 /** Assumed circle radius when the real one is unknown, in screen pixels. */
@@ -226,9 +226,11 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * cannot carry the label at any size, which is what a zero says.
          */
         const legClearCaps: number[] = [];
+        const legClearPx: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
             const clearPx = legPx - legWidthPx;
+            legClearPx.push(clearPx);
             legClearCaps.push(clearPx > 0 ? capLabelToSpan(context, text, fontStyle, baseScale, clearPx) : 0);
         }
         const designationScale = legClearCaps.length ? Math.min(heightCap, Math.max(...legClearCaps)) : baseScale;
@@ -350,7 +352,13 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             // One size for the whole corridor, and only on the legs that can hold it
             // clear of their own ACP circles. @see designationScale
             if (designationScale > 0 && legClearCaps[i] >= designationScale) {
-                paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, designationScale, {rotation}));
+                // Too small to read, the name goes and `AC` stays, legible, on each leg whose
+                // clear run is at least twice it. The prefix's scale does not depend on the
+                // leg, so the corridor still reads at one size. @see legibleDesignation
+                // Held to the rails as the whole label is (`heightCap`): a prefix taller than the
+                // space between them would sit outside the corridor, so it goes instead.
+                const shown = legibleDesignation(text, getLabel(name), designationScale, fontStyle, context, legClearPx[i]);
+                if (shown.text && shown.scale <= heightCap) paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], shown.text, shown.scale, {rotation}));
             }
             paints.push(acpAt(i));
         }

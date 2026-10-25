@@ -21,7 +21,7 @@
  */
 
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {pointInRing} from './symbolFit';
 import {textWidth} from './decorations';
 
@@ -265,4 +265,43 @@ export function liftedAnchor(feature: PaintFeature, metres: number, padMetres = 
     }
     if (!lift) return feature;
     return {...feature, geometry: {type: 'Point', coordinates: [x, y + lift]}};
+}
+
+/**
+ * How many times its letter a graphic must measure on screen to keep the letter. Below it the
+ * letter goes, and with it the gap cut for it. @see letterInGapScale
+ */
+export const LETTER_GRAPHIC_RATIO = 2;
+
+/**
+ * The scale to draw a symbol's **letter in a gap of its own line work** at, or `0` for none.
+ *
+ * The letter is the symbol (destroy and suppress are the same crossed lines with a different
+ * letter), so it never shrinks below `MIN_LEGIBLE_TEXT_PX`, where the legibility floor would
+ * take it away and leave the gap empty. Zoomed far out that empty gap was most of what showed:
+ * the letter shrank with the graphic and went, while the clearance round it stayed a fixed
+ * number of pixels. Once the graphic is smaller than `LETTER_GRAPHIC_RATIO` times its letter,
+ * the letter goes and the caller cuts no gap, so the line work closes into the bare shape.
+ * (User, 2026-10-24.)
+ *
+ * The label half and the line-work half of a symbol must both ask this, with the same inputs:
+ * OpenLayers styles them as two features, and neither can see what the other drew.
+ *
+ * `desiredScale` is the scale the family would draw at; `letterPxAt1` the letter's larger
+ * dimension at scale 1; `fontPx` the font's own size; `graphicPx` the graphic's size on screen.
+ */
+export function letterInGapScale(desiredScale: number, letterPxAt1: number, fontPx: number, graphicPx: number): number {
+    if (!(desiredScale > 0) || !(graphicPx > 0) || !(fontPx > 0)) return 0;
+    const scale = Math.max(desiredScale, MIN_LEGIBLE_TEXT_PX / fontPx);
+    const letterPx = Math.max(letterPxAt1, fontPx) * scale;
+    return graphicPx >= LETTER_GRAPHIC_RATIO * letterPx ? scale : 0;
+}
+
+/**
+ * The clear space between a letter and the line work cut back from it, shrinking with the
+ * letter below the size the family designed the clearance for, so the gap and its letter
+ * stay in proportion all the way down. @see letterInGapScale
+ */
+export function letterGapClearance(clearancePx: number, scale: number, designScale: number): number {
+    return designScale > 0 ? clearancePx * Math.min(1, scale / designScale) : clearancePx;
 }

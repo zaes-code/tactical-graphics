@@ -16,7 +16,9 @@
  *
  * **A graphic with no letter gets no gap.** The table 5-19 obstacle effects carry
  * no designation, and because these gaps are flat constants rather than measured
- * widths, an empty label would still break the line around nothing.
+ * widths, an empty label would still break the line around nothing. The same goes
+ * for a line too short on screen to carry its letter: the letter holds at the
+ * legibility floor, then goes, and the line closes. @see blockLetterScale
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -25,12 +27,13 @@ import {
     LINE_WIDTH,
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
+    configuredLabelScale,
     getLabelHaloColor,
     graphicLabelScale,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
 import {lineColorOf, labelColorOf} from './paintFunctions';
-import {capLabelToGraphic} from './labelFit';
+import {capLabelToGraphic, letterGapClearance, letterInGapScale} from './labelFit';
 
 type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -51,6 +54,23 @@ const OPTICAL_CENTER_PX_PER_SCALE = 2.2;
 const FLAT_GAP_PX = 10;
 /** Padding either side of a measured glyph, in screen pixels. */
 const GLYPH_GAP_PADDING_PX = 4;
+
+/**
+ * The scale the family's letter is drawn at, or `0` for no letter and no gap, once the line
+ * it interrupts is too short on screen to carry one. Asked once per paint and used for both
+ * the letter and the gap, so the two always agree. @see letterInGapScale
+ */
+function blockLetterScale(feature: PaintFeature, context: PaintContext, label: string, p1: ProjectedPosition, p2: ProjectedPosition): number {
+    if (!label) return 0;
+    const desired = capLabelToGraphic(
+        graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution),
+        feature,
+        context,
+        RATIO_LOCKED_LABEL_FONT_PX,
+    );
+    const linePx = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / context.resolution;
+    return letterInGapScale(desired, textWidth(context, label, RATIO_LOCKED_LABEL_FONT, 1), RATIO_LOCKED_LABEL_FONT_PX, linePx);
+}
 
 /** Every sub-line of the graphic's geometry. */
 function subLines(feature: PaintFeature): ProjectedPosition[][] {
@@ -119,12 +139,16 @@ export function breachPaint(label: string): BlockPaint {
 
         const outline = lines.slice(0, -1);
         const paints: Paint[] = [];
-        const scale = capLabelToGraphic(graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX);
+        const scale = blockLetterScale(feature, context, label, opening[0], opening[1]);
 
-        const {before, after, middle} = cutGap(opening[0], opening[1], 0.5, FLAT_GAP_PX * context.resolution);
-        outline.push(before, after);
-
-        if (label) paints.push(gapLabel(feature, middle, label, scale, 0, false));
+        if (scale === 0) {
+            outline.push([opening[0], opening[1]]);
+        } else {
+            const halfGapPx = letterGapClearance(FLAT_GAP_PX, scale, configuredLabelScale());
+            const {before, after, middle} = cutGap(opening[0], opening[1], 0.5, halfGapPx * context.resolution);
+            outline.push(before, after);
+            paints.push(gapLabel(feature, middle, label, scale, 0, false));
+        }
 
         paints.push({
             geometry: {type: 'MultiLineString', coordinates: outline},
@@ -151,11 +175,12 @@ export function clearPaint(label: string, t = 0.6): BlockPaint {
         const outline = lines.filter((_, i) => i !== 4);
         const paints: Paint[] = [];
 
-        if (!label) {
+        const scale = blockLetterScale(feature, context, label, mid[0], mid[1]);
+        if (scale === 0) {
             outline.push([mid[0], mid[1]]);
         } else {
-            const scale = capLabelToGraphic(graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX);
-            const {before, after, middle} = cutGap(mid[0], mid[1], t, FLAT_GAP_PX * context.resolution);
+            const halfGapPx = letterGapClearance(FLAT_GAP_PX, scale, configuredLabelScale());
+            const {before, after, middle} = cutGap(mid[0], mid[1], t, halfGapPx * context.resolution);
             outline.push(before, after);
             paints.push(gapLabel(feature, middle, label, scale, uprightRotation(mid[0], mid[1]), true));
         }
@@ -233,12 +258,13 @@ export function blockPaint(label: string): BlockPaint {
 
         const paints: Paint[] = [];
 
-        if (!label) {
+        const scale = blockLetterScale(feature, context, label, p1, p2);
+        if (scale === 0) {
             outline.push([p1, p2]);
         } else {
-            const scale = capLabelToGraphic(graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX);
             const halfGapMap =
-                (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + GLYPH_GAP_PADDING_PX)
+                (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2
+                    + letterGapClearance(GLYPH_GAP_PADDING_PX, scale, configuredLabelScale()))
                 * context.resolution;
             const {before, after, middle} = cutGap(p1, p2, t, halfGapMap);
             outline.push(before, after);

@@ -23,9 +23,10 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {alignAlong, offsetAbove, uprightRotation} from './decorations';
+import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {strokeParts} from './dashFit';
@@ -169,6 +170,8 @@ function fixedLetterPaint(
         keepFlip?: boolean;
         /** Where between the two anchors the letter sits. Defaults to the midpoint. */
         atFraction?: number;
+        /** The letter sits in a gap the line work cuts for it. @see approachLetterScale */
+        inGap?: boolean;
     } = {},
 ): MovementPaint {
     return (feature, context) => {
@@ -193,6 +196,12 @@ function fixedLetterPaint(
         }
 
         const [x1, y1] = coords[1];
+        // A letter in a gap of the run asks the same question the line work does, and draws
+        // nothing when the run is drawn whole. @see approachLetterScale
+        const letterScale = options.inGap
+            ? approachLetterScale(feature, context, letter, Math.hypot(x1 - x0, y1 - y0) / context.resolution)
+            : scale;
+        if (!letterScale) return [];
         // Envelopment keeps the raw angle rather than the upright flip, so its "E"
         // follows the half-circle's tail even when that reads upside down. That is
         // what the graphic did before the port; changing it is a design decision,
@@ -203,12 +212,12 @@ function fixedLetterPaint(
         // Interpolated **in projected meters**, on the segment the renderer draws, so a
         // letter placed a quarter along lands in the hole cut a quarter along.
         const t = options.atFraction ?? 0.5;
-        return [text(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, scale, {rotation, align: options.align ?? 'center'})];
+        return [text(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], letter, letterScale, {rotation, align: options.align ?? 'center'})];
     };
 }
 
 /** Infiltration: "IN" between the first two anchors, upright-flipped. */
-export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN', {atMidpoint: true});
+export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN', {atMidpoint: true, inGap: true});
 
 /**
  * Envelopment: "E" a quarter of the way along the approach, following the raw angle.
@@ -218,7 +227,7 @@ export const infiltrationLabelPaint = (): MovementPaint => fixedLetterPaint('IN'
  * @see APPROACH_LABEL_POSITION, Envelopment.generateLabels
  */
 export const envelopmentLabelPaint = (): MovementPaint =>
-    fixedLetterPaint('E', {atMidpoint: true, keepFlip: true, atFraction: APPROACH_LABEL_POSITION});
+    fixedLetterPaint('E', {atMidpoint: true, keepFlip: true, atFraction: APPROACH_LABEL_POSITION, inGap: true});
 
 /**
  * Mobile defense: "MD" at the tail of the ellipse, horizontal whatever the
@@ -656,6 +665,23 @@ const APPROACH_GAP_PX = 10;
 const APPROACH_LABEL_POSITION = 0.25;
 
 /**
+ * The scale an approach's letter (envelopment's `E`, infiltration's `IN`) is drawn at, or
+ * `0` once the graphic is too small to carry one, when the run is drawn whole. Asked by the
+ * line work and by the label alike, so the gap is always the letter's. @see letterInGapScale
+ *
+ * The graphic's size is the longer side of its extent, which the line-work feature and the
+ * label feature both carry, so the two halves measure the same thing on either engine; the
+ * run's own length stands in when no extent is stamped.
+ */
+export function approachLetterScale(feature: PaintFeature, context: PaintContext, letter: string, runPx: number): number {
+    const bounds = feature.bounds;
+    // With neither a stamped extent nor a run to measure, the size is unknown: the letter is
+    // floored but never dropped, rather than lost to a missing stamp.
+    const graphicPx = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) / context.resolution : runPx > 0 ? runPx : Infinity;
+    return letterInGapScale(scaleOf(feature, context), textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, graphicPx);
+}
+
+/**
  * The line work of an approach with a letter set in it — infiltration and
  * envelopment.
  *
@@ -663,7 +689,7 @@ const APPROACH_LABEL_POSITION = 0.25;
  * drawn whole. Envelopment adds an arc between the two, which needs no special
  * handling — `rest` covers it.
  */
-function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+function approachPaint(letter: string): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
@@ -685,9 +711,13 @@ function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
         // being made.
         if (length === 0) return rest.map(asLine);
 
+        // No letter, no gap: the run closes into the bare shape. @see approachLetterScale
+        const scale = approachLetterScale(feature, context, letter, length / context.resolution);
+        if (!scale) return [asLine(line), ...rest.map(asLine)];
+
         const cx = x0 + dx * APPROACH_LABEL_POSITION;
         const cy = y0 + dy * APPROACH_LABEL_POSITION;
-        const gap = APPROACH_GAP_PX * context.resolution;
+        const gap = letterGapClearance(APPROACH_GAP_PX, scale, configuredLabelScale()) * context.resolution;
         const ux = dx / length;
         const uy = dy / length;
 
@@ -701,12 +731,12 @@ function approachPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
 
 /** Infiltration: base line with a gap for "IN", then the arrowhead. */
 export function infiltrationGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
-    return approachPaint();
+    return approachPaint('IN');
 }
 
 /** Envelopment: straight run with a gap for "E", then the arc and the arrowhead. */
 export function envelopmentGraphicPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
-    return approachPaint();
+    return approachPaint('E');
 }
 
 /** Points in a closed triangle ring: three corners plus the repeated first. */

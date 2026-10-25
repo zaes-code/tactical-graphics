@@ -25,8 +25,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
-import {CROSSED_HALF_WIDTH_PX, crossedMissionTaskLabelPaint, crossedMissionTaskPaint} from './missionTaskPaints';
+import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
+import {CROSSED_HALF_WIDTH_PX, crossedMissionTaskLabelPaint, crossedMissionTaskPaint, pursuitPaint} from './missionTaskPaints';
+import {missionTaskLabelPaint} from './paintFunctions';
 
 const context = (resolution: number): PaintContext => ({
     resolution,
@@ -90,11 +91,24 @@ describe('the crossed mission tasks', () => {
 
     it.each(CROSSED)('%s shrinks its label with the symbol below the drop size', name => {
         // The complaint this fixes: zoom out far enough and the symbol becomes a few pixels
-        // of line work with a full-size letter sitting in it. A quarter of the size on
-        // screen is a quarter of the label.
+        // of line work with a full-size letter sitting in it. Half the size on screen is half
+        // the label, down to the legibility floor. @see the minimum below
         const atCap = labelScale(name, CROSSED_HALF_WIDTH_PX * 100, 100);
-        const quarter = labelScale(name, CROSSED_HALF_WIDTH_PX * 25, 100);
-        expect(quarter / atCap).toBeCloseTo(0.25, 6);
+        const half = labelScale(name, CROSSED_HALF_WIDTH_PX * 50, 100);
+        expect(half / atCap).toBeCloseTo(0.5, 6);
+    });
+
+    it.each(CROSSED)('%s keeps its letter at 6 px, then drops it and closes the arms', name => {
+        // Shrinking with the symbol, the letter went under the legibility floor and vanished
+        // while its gap stayed, so zoomed out the symbol was mostly hole (user, 2026-10-24).
+        const fontPx = 24;
+        const smallest = labelScale(name, CROSSED_HALF_WIDTH_PX * 25, 100);
+        expect(fontPx * smallest).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+        expect(gapPx(name, CROSSED_HALF_WIDTH_PX * 25, 100)).toBeGreaterThan(0);
+        // A symbol a few pixels across: no letter, and the arms drawn whole.
+        const tiny = CROSSED_HALF_WIDTH_PX * 4;
+        expect(crossedMissionTaskLabelPaint(name)({geometry: {type: 'Point', coordinates: [0, 0]}, properties: {name}, graphicSize: tiny} as PaintFeature, context(100))).toEqual([]);
+        expect(gapPx(name, tiny, 100)).toBe(0);
     });
 
     it.each(CROSSED)('%s measures the arms\' gap from the same label it draws', name => {
@@ -123,5 +137,38 @@ describe('the crossed mission tasks', () => {
             return g.type === 'LineString' ? g.coordinates.map(c => c[0]) : [];
         });
         expect(Math.max(...xs)).toBeCloseTo(size, 6);
+    });
+});
+
+describe('pursuit keeps its letter at 6 px, then drops it and closes the run', () => {
+    /** A pursuit `lengthPx` long at 1000 m/px: the run, then the hook, with both halves' extent. */
+    const pursuit = (lengthPx: number, geometry: 'graphic' | 'label'): PaintFeature => {
+        const L = lengthPx * 1000;
+        return {
+            geometry: geometry === 'graphic'
+                ? {type: 'MultiLineString', coordinates: [[[0, 0], [L, 0]], [[L, 0], [L, L / 4]]]}
+                : {type: 'Point', coordinates: [L / 2, 0]},
+            properties: {name: TacticalGraphicName.Pursuit},
+            // Drawn zoomed in, so the zoom-anchored letter is at its 0.3 floor here.
+            drawingResolution: 100,
+            bounds: {minX: 0, minY: 0, maxX: L, maxY: L / 4},
+        };
+    };
+    const runPieces = (lengthPx: number): number =>
+        pursuitPaint(TacticalGraphicName.Pursuit)(pursuit(lengthPx, 'graphic'), context(1000))
+            .filter(p => p.geometry.type === 'LineString' && p.geometry.coordinates.every(c => c[1] === 0)).length;
+    const letter = (lengthPx: number) =>
+        missionTaskLabelPaint(TacticalGraphicName.Pursuit)(pursuit(lengthPx, 'label'), context(1000))[0]?.text;
+
+    it('holds the letter at the legibility floor and still splits the run round it', () => {
+        const small = letter(40);
+        expect(small).toBeDefined();
+        expect(16 * small!.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+        expect(runPieces(40)).toBe(2);
+    });
+
+    it('draws no letter and the run whole once the pursuit is under twice the letter', () => {
+        expect(letter(10)).toBeUndefined();
+        expect(runPieces(10)).toBe(1);
     });
 });
