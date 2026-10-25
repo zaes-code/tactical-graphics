@@ -15,6 +15,49 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.6.2] — 2026-10-24
+
+### Fixed
+
+- **Labels stay on their graphic.** A movement label longer than the straight stretch behind
+  its arrowhead (a name and two date-time groups, say) now bends along the arrow instead of
+  running out through a wall, on smooth and hard lines alike. Axis of advance and its feint,
+  supporting axis, counterattack, aviation and attack helicopter axes, avenue of approach and
+  advance to contact.
+- **Labels too small to read are not drawn.** Text that shrinks with its graphic is dropped
+  below 6 px instead of smearing into a dot when zoomed out.
+- **ACP labels fit their circle, or go.** They used to keep a minimum size that overran small
+  circles, and zoomed far out that size went negative, which MapLibre drew as one "ACP" across
+  the world.
+- **ACP labels are the same size on every engine.** MapLibre and the add-ons sized them against
+  an assumed 12 px circle, about a third of OpenLayers' size, because an air corridor files its
+  `width` and the shared builder read only `radius`.
+- **A letter in a gap of a symbol never leaves an empty gap.** Destroy's D, block's B, contain's
+  C, the retrograde letters and the rest keep their share of the symbol. Once that would be under
+  6 px, the letter goes and the line work closes into the bare shape, instead of the letter going
+  and a hole staying where it was. Gaps the generator builds into the geometry (mobile defense,
+  defeat, cover, guard, screen) cannot close; cover, guard and screen hold their letter at 6 px.
+- **A designation's prefix outlasts its name.** Too small to read, `PL BLUE` becomes `PL` at
+  6 px and `AA HAWK` becomes `AA`, gone only once the graphic is under twice its size.
+- **Outside text follows the main label.** Dates, altitudes and field H are never drawn larger
+  than the name beside them, and go when it goes. A zone's dates were up to 2.4 times the
+  height of its name zoomed out.
+- **No empty breaks in an outline.** Artillery maneuver and reserved areas, the radiation dose
+  rate contour line and the minimum safe distance zones close their outline when the text in its
+  breaks is not drawn. AMA and ARA are drawn in the label color, not the line color.
+- **A graphic's name draws over other graphics' dates.** Names and doctrinal text now paint above
+  every amplifier (OpenLayers by zIndex, MapLibre by `symbol-sort-key`), and an amplifier that
+  would lie on its own graphic's name is left out. Text from two graphics can still overlap.
+- **MapLibre no longer rebuilds graphics on zoom.** A graphic's geometry stays where it was drawn
+  and saved at every zoom, as on OpenLayers.
+
+### Added
+
+- `MIN_LEGIBLE_TEXT_PX` (6) and `withLegibleText`, the floor above and the filter that applies it.
+- `withUnobscuredNames` and `NAME_TEXT_Z_INDEX`, the rule above and the draw order it sets.
+- `TextSpec.glyph`: marks one letter of a label bent along its graphic. A renderer that flips
+  turned text upright should leave these alone, or the run reads backward.
+
 ## [4.6.1] — 2026-10-20
 
 ### Fixed
@@ -1800,7 +1843,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...develop
+[4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
 [4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
 [4.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...v4.5.1

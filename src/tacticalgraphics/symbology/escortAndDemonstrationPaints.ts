@@ -5,7 +5,9 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {BASE_FONT_SIZE_PX} from '../core/config';
+import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {LETTER_GRAPHIC_RATIO, letterGapClearance, letterInGapScale} from './labelFit';
 import {
     centerSegmentIndex,
     endFrame,
@@ -50,6 +52,34 @@ const DEM_LABEL_PADDING_PX = 6;
  * which is the letter being the graphic. @see decorationScale
  */
 const DEM_LABEL_LEG_SHARE = 0.55;
+
+/**
+ * The scale an escort's `E`s are drawn at, or `0` for none, once the bar is too short on
+ * screen to carry them. @see letterInGapScale
+ */
+function escortLetterScale(feature: PaintFeature, context: PaintContext, letter: string, spanPx: number): number {
+    if (!letter) return 0;
+    return letterInGapScale(scaleOf(feature, context), textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, spanPx);
+}
+
+/**
+ * The scale `DEM` and its designation are drawn at, capped against the leg they sit in, or
+ * `0` for no text and no break once the leg is too short on screen to carry them.
+ * @see DEM_LABEL_LEG_SHARE, letterInGapScale
+ */
+function demonstrationTextScale(feature: PaintFeature, context: PaintContext, text: string, legPx: number): number {
+    const widthAtUnitScale = textWidth(context, text, fontStyle, 1);
+    const desired = widthAtUnitScale > 0
+        ? Math.min(scaleOf(feature, context), (legPx * DEM_LABEL_LEG_SHARE) / widthAtUnitScale)
+        : scaleOf(feature, context);
+    // **Measured against the share of the leg the text may take, not the whole leg.** The text
+    // is already held to `DEM_LABEL_LEG_SHARE` of it, which is a little over half, so against
+    // the whole leg every capped `DEM` would count as too big and go. This keeps what was drawn
+    // before wherever it was legible, and drops the text only once the 6 px floor would push it
+    // past its share. The 0.1% is rounding: a text capped to exactly its share must not be
+    // dropped for a last-digit difference in the product.
+    return letterInGapScale(desired, widthAtUnitScale, BASE_FONT_SIZE_PX, legPx * DEM_LABEL_LEG_SHARE * LETTER_GRAPHIC_RATIO * 1.001);
+}
 
 /** Straight-line interpolation between two projected points. */
 const lerp = (a: ProjectedPosition, b: ProjectedPosition, t: number): ProjectedPosition =>
@@ -98,8 +128,6 @@ export function escortPaint(letter: string): TaskPaint {
 
         const path = geometry.coordinates;
         const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
-        const scale = scaleOf(feature, context);
-
         const start = path[0];
         const end = path[path.length - 1];
         const dx = end[0] - start[0];
@@ -107,10 +135,16 @@ export function escortPaint(letter: string): TaskPaint {
         const span = Math.hypot(dx, dy);
         if (span === 0) return [{geometry, stroke}];
 
+        /*
+         * **No `E`s on a bar too short to carry them, and no room cut for them.** The break
+         * still holds the host's unit symbol, which has a floor of its own and is drawn
+         * whatever the letters do, so only the letters' share of it closes.
+         */
+        const scale = escortLetterScale(feature, context, letter, span / context.resolution);
         const halfGapPx =
-            textWidth(context, letter, fontStyle, scale)
+            (scale > 0 ? textWidth(context, letter, fontStyle, scale) : 0)
             + escortSymbolPx(span / context.resolution) / 2
-            + ESCORT_GAP_PADDING_PX;
+            + (scale > 0 ? letterGapClearance(ESCORT_GAP_PADDING_PX, scale, configuredLabelScale()) : ESCORT_GAP_PADDING_PX);
         const gap = Math.min((halfGapPx * context.resolution) / span, 0.45);
 
         const bar: ProjectedPosition[][] = [
@@ -136,6 +170,7 @@ export function escortPaint(letter: string): TaskPaint {
 
         const paints: Paint[] = [{geometry: {type: 'MultiLineString', coordinates: bar}, stroke}];
 
+        if (scale === 0) return paints;
         const rotation = uprightRotation(start, end);
         // One `E` against each side of the reserved space, growing outward from it.
         paints.push(amplifier(feature, bar[0][1], letter, scale, rotation, 'right', 'middle'));
@@ -203,16 +238,16 @@ export function demonstrationPaint(label: string): TaskPaint {
         // Capped against the leg it is set in, never merely against the zoom. A longer
         // designation is held to the same width, so it opens a wider break rather than
         // one that swallows the line. @see DEM_LABEL_LEG_SHARE
-        const legPx = pathLength(leg) / context.resolution;
-        const widthAtUnitScale = textWidth(context, text, fontStyle, 1);
-        const scale = widthAtUnitScale > 0
-            ? Math.min(scaleOf(feature, context), (legPx * DEM_LABEL_LEG_SHARE) / widthAtUnitScale)
-            : scaleOf(feature, context);
+        const scale = demonstrationTextScale(feature, context, text, pathLength(leg) / context.resolution);
+        // A leg too short to carry `DEM` keeps neither the text nor the break: the U is
+        // drawn whole. @see letterInGapScale
+        if (scale === 0) return paints;
 
         // Set in the leg, not above it. The break is cut from the *rendered* text, so a
         // longer designation opens a wider hole rather than overrunning the line.
         const halfGap =
-            (textWidth(context, text, fontStyle, scale) / 2 + DEM_LABEL_PADDING_PX) * context.resolution;
+            (textWidth(context, text, fontStyle, scale) / 2 + letterGapClearance(DEM_LABEL_PADDING_PX, scale, configuredLabelScale()))
+            * context.resolution;
         const runs = splitPathAround(leg, pathLength(leg) / 2, halfGap);
         if (runs.length) {
             const rest = parts.slice(1);

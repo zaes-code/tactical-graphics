@@ -25,9 +25,9 @@ import {
     graphicLabelScale,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
-import {TacticalGraphicName} from '../core/type';
+import {TacticalGraphicName, getLabel} from '../core/type';
 import {pathLength, textWidth} from './decorations';
-import {getFullLabel, groundPixels, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {getFullLabel, groundPixels, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
 
 /** Assumed circle radius when the real one is unknown, in screen pixels. */
@@ -62,17 +62,19 @@ const INFO_BLOCK_GAP_PX = 14;
 const LEG_LABEL_HEIGHT_SHARE = 0.7;
 
 /**
- * Scale for an "ACP n" label — two competing sizes, and the larger wins.
+ * Scale for an "ACP n" label: as large as its circle holds, and no larger.
  *
- * - The **floor** is fitted to a fixed assumed circle and capped at the
- *   zoom-anchored scale. It is what keeps a narrow corridor labeled at all;
- *   fitting to the real circle alone collapses the text to nothing when the
- *   circle is only a few pixels across.
- * - The **grown** size is fitted to the circle's real rendered radius and capped at
- *   the size-proportional scale, so a wide corridor gets a big label.
+ * - With the circle's real rendered radius, the label is fitted inside it and capped at the
+ *   size-proportional scale, so a wide corridor gets a big label and a narrow one a small
+ *   label, down to nothing. The legibility floor then takes away one too small to read.
+ * - Without it, the label is fitted to an assumed circle, capped at the zoom-anchored scale.
  *
- * Pass `circleRadiusPx` / `proportionalScale` only when the graphic stamps a size;
- * without them the floor applies alone.
+ * There used to be a floor here too, the assumed-circle fit, kept so a narrow corridor stayed
+ * labeled at all. It let the label overrun a circle a few pixels across, and at a low zoom
+ * its fit went **negative**, which MapLibre drew as an "ACP" the size of the world. A label
+ * leaving its graphic is now the worse of the two (user, 2026-10-23). @see withLegibleText
+ *
+ * Pass `circleRadiusPx` / `proportionalScale` only when the graphic stamps a size.
  */
 export function acpLabelScale(
     context: PaintContext,
@@ -83,12 +85,12 @@ export function acpLabelScale(
     proportionalScale?: number,
 ): number {
     const textWidthAt1 = textWidth(context, text, font, 1);
-    const floor = Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - ACP_PADDING_PX) / textWidthAt1);
-
-    if (circleRadiusPx === undefined || proportionalScale === undefined) return floor;
+    if (circleRadiusPx === undefined || proportionalScale === undefined) {
+        return Math.max(0, Math.min(zoomScale, (ACP_FALLBACK_RADIUS_PX * zoomScale * 2.5 - ACP_PADDING_PX) / textWidthAt1));
+    }
 
     const circleMaxWidth = Math.max(0, circleRadiusPx * 2 * ACP_TEXT_FRACTION - ACP_PADDING_PX);
-    return Math.max(floor, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
+    return Math.max(0, Math.min(proportionalScale, circleMaxWidth / textWidthAt1));
 }
 
 /**
@@ -224,9 +226,11 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * cannot carry the label at any size, which is what a zero says.
          */
         const legClearCaps: number[] = [];
+        const legClearPx: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
             const clearPx = legPx - legWidthPx;
+            legClearPx.push(clearPx);
             legClearCaps.push(clearPx > 0 ? capLabelToSpan(context, text, fontStyle, baseScale, clearPx) : 0);
         }
         const designationScale = legClearCaps.length ? Math.min(heightCap, Math.max(...legClearCaps)) : baseScale;
@@ -348,7 +352,13 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             // One size for the whole corridor, and only on the legs that can hold it
             // clear of their own ACP circles. @see designationScale
             if (designationScale > 0 && legClearCaps[i] >= designationScale) {
-                paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], text, designationScale, {rotation}));
+                // Too small to read, the name goes and `AC` stays, legible, on each leg whose
+                // clear run is at least twice it. The prefix's scale does not depend on the
+                // leg, so the corridor still reads at one size. @see legibleDesignation
+                // Held to the rails as the whole label is (`heightCap`): a prefix taller than the
+                // space between them would sit outside the corridor, so it goes instead.
+                const shown = legibleDesignation(text, getLabel(name), designationScale, fontStyle, context, legClearPx[i]);
+                if (shown.text && shown.scale <= heightCap) paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], shown.text, shown.scale, {rotation}));
             }
             paints.push(acpAt(i));
         }

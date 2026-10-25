@@ -20,9 +20,11 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {amplifierText, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {textWidth} from './decorations';
+import {heldTextScale, letterInGapScale} from './labelFit';
 
 type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -149,6 +151,33 @@ function outerRing(feature: PaintFeature): ProjectedPosition[] | undefined {
     return ring && ring.length >= 4 ? ring : undefined;
 }
 
+/** A ring's larger side on screen. */
+function ringPx(ring: readonly ProjectedPosition[], context: PaintContext): number {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of ring) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+    }
+    return Math.max(maxX - minX, maxY - minY) / context.resolution;
+}
+
+/**
+ * The scale text set in a break of an outline is drawn at, or `0`, when the outline is drawn
+ * whole. The outline and its text are separate features on OpenLayers, so both halves ask this
+ * from the same ring; the break used to be cut at whatever size the zoom gave while the
+ * legibility floor took the text, leaving empty breaks in the outline.
+ *
+ * `held` text is floored at the legibility minimum and goes only once the ring is too small to
+ * carry it (the abbreviation, the dose); otherwise it keeps its own size and goes, break and
+ * all, below the floor (the zone numbers, like the letters in a ring task). @see heldTextScale
+ */
+function breakTextScale(feature: PaintFeature, context: PaintContext, text: string, ring: readonly ProjectedPosition[], held: boolean): number {
+    const rule = held ? heldTextScale : letterInGapScale;
+    return rule(scaleOf(feature, context), textWidth(context, text, fontStyle, 1), BASE_FONT_SIZE_PX, ringPx(ring, context));
+}
+
 /** Half the break each label needs, in projected meters. */
 function halfBreak(context: PaintContext, label: string, scale: number): number {
     return ((textWidth(context, label, fontStyle, scale) + GAP_PADDING_PX * 2) / 2) * context.resolution;
@@ -215,7 +244,8 @@ export function contourLineBoundaryPaint(): CardinalPaint {
         const text = contourDose(feature);
         if (!text) return [{geometry: {type: 'LineString', coordinates: ring}, stroke}];
 
-        const scale = scaleOf(feature, context);
+        const scale = breakTextScale(feature, context, text, ring, true);
+        if (scale === 0) return [{geometry: {type: 'LineString', coordinates: ring}, stroke}];
         const {runs} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
         return [{geometry: {type: 'MultiLineString', coordinates: runs}, stroke}];
     };
@@ -244,7 +274,8 @@ export function contourLineLabelPaint(base: CardinalPaint): CardinalPaint {
         const text = contourDose(feature);
         if (!ring || ring.length < 4 || !text) return paints;
 
-        const scale = scaleOf(feature, context);
+        const scale = breakTextScale(feature, context, text, ring, true);
+        if (scale === 0) return paints;
         const {spots} = breakRingAt(ring, ringCenter(ring), NORTH, halfBreak(context, text, scale));
         // The dose is what the operator typed, so it is an amplifier and follows the
         // host's "label text uses hostility" choice. It was taking the line colour, which
@@ -273,11 +304,18 @@ export function nestedZonePaint(): CardinalPaint {
 
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
-        const scale = scaleOf(feature, context);
         const paints: Paint[] = [];
+        // Both numbers are asked against the inner ring, so they go together and the zone
+        // closes into two plain rings rather than keeping one number.
+        const inner = geometry.coordinates[0];
 
         geometry.coordinates.slice(0, 2).forEach((ring, index) => {
             const text = String(index + 1);
+            const scale = breakTextScale(feature, context, '2', inner, false);
+            if (scale === 0) {
+                paints.push({geometry: {type: 'LineString', coordinates: ring}, stroke});
+                return;
+            }
             // Both rings are shot from the *inner* ring's centre, so the two gaps line up
             // radially and the numbers read outward as a pair rather than drifting apart
             // on an off-centre outer ring.
@@ -301,8 +339,9 @@ export function cardinalBoundaryPaint(label: string): CardinalPaint {
         const color = lineColorOf(feature);
         if (!ring) return [];
 
+        const scale = breakTextScale(feature, context, label, ring, true);
+        if (scale === 0) return [{geometry: {type: 'LineString', coordinates: ring}, stroke: {color, widthPx: LINE_WIDTH()}}];
         const center = ringCenter(ring);
-        const scale = scaleOf(feature, context);
         const half = halfBreak(context, label, scale);
 
         const breaks = CARDINALS
@@ -349,9 +388,12 @@ export function cardinalLabelPaint(label: string, base: CardinalPaint): Cardinal
         const ring = feature.ring;
         if (!ring || ring.length < 4) return paints;
 
+        const scale = breakTextScale(feature, context, label, ring, true);
+        if (scale === 0) return paints;
         const center = ringCenter(ring);
-        const scale = scaleOf(feature, context);
-        const color = lineColorOf(feature);
+        // The label colour, not the line colour: the abbreviation is text, and follows the
+        // host's label-colour setting as the zone numbers and the dose do. @see labelColorOf
+        const color = labelColorOf(feature);
 
         for (const angle of CARDINALS) {
             const at = crossingAt(ring, center, angle);

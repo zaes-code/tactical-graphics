@@ -73,6 +73,8 @@ function legLabelScale(designation: string, width: number): number {
 
 /** Rails about 100 px apart at the resolution above — room for an upright label. */
 const WIDE = 20_000;
+/** Rails about 10 px apart: the label shrinks to fit them, and is still legible. */
+const NARROW = WIDE / 10;
 
 beforeEach(() => resetTacticalGraphicsConfig());
 
@@ -86,16 +88,18 @@ describe("a corridor's leg designation", () => {
 
     it('still shrinks when the corridor itself is too narrow to hold the text upright', () => {
         // The height bound is real — it just measures the height. A corridor a fraction as
-        // wide leaves less room between its rails, and the label gives way.
+        // wide leaves less room between its rails, and the label gives way. A tenth, not a
+        // twentieth: rails 10 px apart still hold a 7 px label, where 5 px apart would put it
+        // under 6 px and draw `AC` alone. @see legibleDesignation
         const wide = legLabelScale('BLUE', WIDE);
-        const narrow = legLabelScale('BLUE', WIDE / 20);
+        const narrow = legLabelScale('BLUE', NARROW);
         expect(narrow).toBeLessThan(wide);
     });
 
     it('holds the same cap for a long name on that narrow corridor', () => {
         // The bound is the corridor's, so both names hit it at the same value — which is
         // the whole point: what limits the label is the shape, not the typing.
-        expect(legLabelScale('CORRIDOR ONE', WIDE / 20)).toBeCloseTo(legLabelScale('BLUE', WIDE / 20), 5);
+        expect(legLabelScale('CORRIDOR ONE', NARROW)).toBeCloseTo(legLabelScale('BLUE', NARROW), 5);
     });
 });
 

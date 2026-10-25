@@ -10,6 +10,8 @@ import {
     hatchTileSegments,
     withFittedDashes,
     withHiddenAmplifiers,
+    withLegibleText,
+    withUnobscuredNames,
 } from '@zaes/tactical-graphics';
 import type {
     FillSpec,
@@ -400,12 +402,12 @@ export function asStyleFunction(
     return (feature: FeatureLike, resolution: number): Style[] => {
         const paintFeature = toPaintFeature(feature, name);
         if (!paintFeature) return [];
-        // Every OpenLayers paint passes through here, so the hide-amplifiers toggle and
-        // the dash fit are applied once rather than per family.
-        // @see withHiddenAmplifiers, withFittedDashes
+        // Every OpenLayers paint passes through here, so the hide-amplifiers toggle, the
+        // legibility floor and the dash fit are applied once rather than per family.
+        // @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames, withFittedDashes
         const context = paintContext(resolution);
         return paintToOlStyles(
-            withFittedDashes(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers), context),
+            withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers)), context), context),
         );
     };
 }
