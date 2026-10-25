@@ -6,11 +6,12 @@
  * the legibility floor took the text. (User, 2026-10-24.)
  */
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {HANDLE_Z_INDEX, NAME_TEXT_Z_INDEX} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {fontStyle} from '../core/symbology';
 import {cardinalBoundaryPaint, cardinalLabelPaint, nestedZonePaint} from './boundaryBreakPaints';
-import {defaultLinePaint, labelColorOf, lineColorOf, withLegibleText, withProportionateAmplifiers} from './paintFunctions';
+import {defaultLinePaint, labelColorOf, lineColorOf, withLegibleText, withProportionateAmplifiers, withUnobscuredNames} from './paintFunctions';
 import {zoneLabelPaint} from './areaLabelPaints';
 
 const context = (resolution: number): PaintContext => ({
@@ -157,5 +158,53 @@ describe('AMA and ARA take the label colour', () => {
         expect(marks).toHaveLength(4);
         for (const mark of marks) expect(mark.text!.fill).toBe(labelColorOf(label));
         expect(labelColorOf(label)).not.toBe(lineColorOf(label));
+    });
+});
+
+describe('withUnobscuredNames', () => {
+    const at = (x: number, y: number, text: string, kind?: 'amplifier', extra: Partial<Paint['text']> = {}): Paint => ({
+        geometry: {type: 'Point', coordinates: [x, y]},
+        text: {text, font: fontStyle, fill: '#000', ...(kind ? {kind} : {}), ...extra},
+    });
+
+    it('takes away an amplifier lying over the name', () => {
+        const out = withUnobscuredNames([at(0, 0, 'ALPHA'), at(5, 2, '031813ZOCT26', 'amplifier')], context(1));
+        expect(out.map(p => p.text?.text)).toEqual(['ALPHA']);
+    });
+
+    it('keeps an amplifier set clear of the name', () => {
+        const out = withUnobscuredNames([at(0, 0, 'ALPHA'), at(0, -40, '031813ZOCT26', 'amplifier')], context(1));
+        expect(out.map(p => p.text?.text)).toEqual(['ALPHA', '031813ZOCT26']);
+    });
+
+    it('keeps a date stacked a line under its name, halos touching', () => {
+        // The area stack: name at the anchor, date 18 px below it.
+        const out = withUnobscuredNames([at(0, 0, 'ALPHA', undefined, {halo: {color: '#fff', widthPx: 3}}), at(0, 0, '031813ZOCT26', 'amplifier', {offsetYPx: 18, halo: {color: '#fff', widthPx: 3}})], context(1));
+        expect(out.map(p => p.text?.text)).toEqual(['ALPHA', '031813ZOCT26']);
+    });
+
+    it('reads a screen offset as the engines do, y down', () => {
+        // Same anchor, pushed 30 px down the screen: clear of a one-line name.
+        const out = withUnobscuredNames([at(0, 0, 'ALPHA'), at(0, 0, '031813ZOCT26', 'amplifier', {offsetYPx: 30})], context(1));
+        expect(out.map(p => p.text?.text)).toEqual(['ALPHA', '031813ZOCT26']);
+    });
+
+    it('never takes the name away', () => {
+        const out = withUnobscuredNames([at(0, 0, '031813ZOCT26', 'amplifier'), at(0, 0, 'ALPHA')], context(1));
+        expect(out.map(p => p.text?.text)).toEqual(['ALPHA']);
+    });
+});
+
+describe('names draw over the amplifiers of other graphics', () => {
+    it('puts names and doctrinal text above amplifiers, and leaves a set order alone', () => {
+        const name: Paint = {geometry: {type: 'Point', coordinates: [0, 0]}, text: {text: 'TVAR', font: fontStyle, fill: '#000'}};
+        const date: Paint = {geometry: {type: 'Point', coordinates: [0, 500]}, text: {text: '031813ZOCT26', font: fontStyle, fill: '#000', kind: 'amplifier'}};
+        const handle: Paint = {geometry: {type: 'Point', coordinates: [0, 900]}, text: {text: 'X', font: fontStyle, fill: '#000'}, zIndex: HANDLE_Z_INDEX};
+        const line: Paint = {geometry: {type: 'LineString', coordinates: [[0, 0], [1, 1]]}, stroke: {color: '#000', widthPx: 2}};
+        const [n, d, h, l] = withUnobscuredNames([name, date, handle, line], context(1));
+        expect(n.zIndex).toBe(NAME_TEXT_Z_INDEX);
+        expect(d.zIndex).toBeUndefined();
+        expect(h.zIndex).toBe(HANDLE_Z_INDEX);
+        expect(l.zIndex).toBeUndefined();
     });
 });

@@ -243,7 +243,7 @@ export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets 
  */
 export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphicId?: string): LayerBuckets {
     for (const paint of paints) {
-        const {geometry, stroke, fill, text, circle} = paint;
+        const {geometry, stroke, fill, text, circle, zIndex} = paint;
         const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
 
         if (stroke) {
@@ -298,6 +298,8 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     ...owner,
                     label: text.text,
                     size,
+                    // Draw order among labels: names over amplifiers. @see NAME_TEXT_Z_INDEX
+                    sortKey: zIndex ?? 0,
                     // Radians counter-clockwise → degrees clockwise. MapLibre's
                     // `text-rotate` turns the glyph about its anchor, which is what the
                     // paint list means, so only the units and sign differ.
@@ -512,6 +514,10 @@ export function symbolLayer(id: string, source: string, fontStack: FontStack): L
             // main advantage of GPU labeling, which is worth saying out loud.
             'text-allow-overlap': true,
             'text-ignore-placement': true,
+            // With overlap allowed, MapLibre otherwise stacks labels by their height on the
+            // screen, so a lower graphic's dates could cover a higher one's name. The paint
+            // list says which goes on top. @see NAME_TEXT_Z_INDEX
+            'symbol-sort-key': ['get', 'sortKey'],
             'text-rotation-alignment': 'viewport',
             // **No automatic wrapping.** MapLibre breaks a label at 10 ems by default;
             // OpenLayers never breaks one. A designation joined to its date-time group

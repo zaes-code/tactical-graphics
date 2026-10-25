@@ -495,6 +495,13 @@ export type PaintFunction = (feature: PaintFeature, context: PaintContext) => Pa
  */
 export const HANDLE_Z_INDEX = 1000;
 
+/**
+ * Draw order for a graphic's names and doctrinal text: above every graphic's line work and
+ * amplifiers, so where two graphics' labels overlap, the name is what reads and the other's
+ * dates go under it. @see withUnobscuredNames
+ */
+export const NAME_TEXT_Z_INDEX = 1;
+
 /** The member geometries of an input geometry — itself, if it is not a collection. */
 export function paintGeometryMembers(geometry: ProjectedInputGeometry): ProjectedGeometry[] {
     return geometry.type === 'GeometryCollection' ? geometry.geometries : [geometry];
