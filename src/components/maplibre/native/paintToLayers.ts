@@ -243,7 +243,7 @@ export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets 
  */
 export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphicId?: string): LayerBuckets {
     for (const paint of paints) {
-        const {geometry, stroke, fill, text, circle} = paint;
+        const {geometry, stroke, fill, text, circle, zIndex} = paint;
         const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
 
         if (stroke) {
@@ -298,6 +298,8 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     ...owner,
                     label: text.text,
                     size,
+                    // Draw order among labels: names over amplifiers. @see NAME_TEXT_Z_INDEX
+                    sortKey: zIndex ?? 0,
                     // Radians counter-clockwise → degrees clockwise. MapLibre's
                     // `text-rotate` turns the glyph about its anchor, which is what the
                     // paint list means, so only the units and sign differ.
@@ -306,6 +308,8 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     // map, a line or a symbol's axis, so it turns with the map. Zero is a
                     // horizontal line, not an upright label. @see turnedSymbolLayout
                     turned: text.rotation !== undefined,
+                    // A letter of a run along a curve never flips on its own. @see TextSpec.glyph
+                    glyph: text.glyph === true,
                     color: text.fill,
                     haloColor: text.halo?.color ?? 'transparent',
                     haloWidth: outwardHalo(text.halo?.widthPx),
@@ -510,6 +514,10 @@ export function symbolLayer(id: string, source: string, fontStack: FontStack): L
             // main advantage of GPU labeling, which is worth saying out loud.
             'text-allow-overlap': true,
             'text-ignore-placement': true,
+            // With overlap allowed, MapLibre otherwise stacks labels by their height on the
+            // screen, so a lower graphic's dates could cover a higher one's name. The paint
+            // list says which goes on top. @see NAME_TEXT_Z_INDEX
+            'symbol-sort-key': ['get', 'sortKey'],
             'text-rotation-alignment': 'viewport',
             // **No automatic wrapping.** MapLibre breaks a label at 10 ems by default;
             // OpenLayers never breaks one. A designation joined to its date-time group
@@ -551,9 +559,9 @@ export function turnedLabelFlips(rotate: number, bearing: number): boolean {
 export function turnedSymbolLayout(bearing: number): Record<string, unknown> {
     // The expression form of turnedLabelFlips.
     const flips = [
-        '>',
-        ['abs', ['-', ['%', ['+', ['%', ['+', ['-', ['get', 'rotate'], bearing], 180], 360], 360], 360], 180]],
-        90,
+        'all',
+        ['!', ['to-boolean', ['get', 'glyph']]],
+        ['>', ['abs', ['-', ['%', ['+', ['%', ['+', ['-', ['get', 'rotate'], bearing], 180], 360], 360], 360], 180]], 90],
     ];
     return {
         'text-rotate': ['case', flips, ['+', ['get', 'rotate'], 180], ['get', 'rotate']],

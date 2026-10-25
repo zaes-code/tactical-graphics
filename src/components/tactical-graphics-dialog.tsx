@@ -24,7 +24,7 @@ import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
 import {rememberAmplifiersHidden, rememberedAmplifiersHidden} from './amplifierVisibility';
-import {dateTimeLocalToDtg, dtgToDateTimeLocal, nowDtg} from './dtg';
+import {dateTimeLocalToDtg, dtgToDateTimeLocal} from './dtg';
 import {
     getDisplayName,
     RangeFanBand,
@@ -116,8 +116,10 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.hostility) labels.confidence = stored.confidence;
     if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
     if (fields.direction) labels.direction = stored.direction;
-    if (fields.dtg1) labels.startDate = stored.startDate ?? nowDtg();
-    if (fields.dtg2) labels.endDate = stored.endDate ?? nowDtg();
+    // No date stays no date. Defaulting to now put a time on every graphic whose dialog was
+    // merely opened and closed with OK.
+    if (fields.dtg1) labels.startDate = stored.startDate;
+    if (fields.dtg2) labels.endDate = stored.endDate;
     if (fields.altitude1) labels.minAltitude = stored.minAltitude;
     if (fields.altitude2) labels.maxAltitude = stored.maxAltitude;
     // One datum for both, since a floor and a ceiling measured from different things
@@ -428,6 +430,11 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
              * of the edit affordances, which is how this surfaced. A non-modal dialog
              * that deliberately leaves its host usable has to say so; the paper opts
              * back in so the form itself still works.
+             *
+             * **The root too.** `.MuiDialog-root` is itself a full-viewport layer at z-index
+             * 1300 with `pointer-events: auto`, so with only the container let through, a
+             * click on a second graphic still never reached the map: the dialog stayed on
+             * the first one, and its "Name only" switch read as if carried to the second.
              */}
             <Dialog
                 open
@@ -436,6 +443,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                 PaperComponent={DraggablePaper}
                 disableEnforceFocus
                 sx={{
+                    pointerEvents: 'none',
                     '& .MuiDialog-container': {pointerEvents: 'none'},
                     '& .MuiDialog-paper': {pointerEvents: 'auto'},
                 }}

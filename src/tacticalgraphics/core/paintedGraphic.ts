@@ -2,8 +2,8 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
-import {withHiddenAmplifiers} from '../symbology/paintFunctions';
-import {getPaintFunction} from '../symbology/registry';
+import {withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from '../symbology/paintFunctions';
+import {CORRIDOR_GRAPHICS, getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
 import {arrowheadMeters, axisAndWidth, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration} from './decorationSizes';
 import {drawnAnchorFrame, drawnAnchors} from './drawnAnchors';
@@ -125,7 +125,7 @@ export interface PaintedGraphic {
  * Measured on a passage lane: OpenLayers' date-time group reached its 1.5x clamp two
  * zooms in and MapLibre's stayed at 1.0, which read as ink 0.58 against 1.00.
  *
- * @see NativeLayerRenderer.rebuildScreenSized, carryPaintFlags
+ * @see carryPaintFlags
  */
 export function withDrawingResolution(
     graphic: PaintedGraphic,
@@ -144,7 +144,7 @@ export function withDrawingResolution(
  *
  * `buildPaintedGraphic` builds `graphic` and `labels` from `properties.tacticalGraphic`, so
  * anything not in that bag is gone the moment a graphic is rebuilt — and MapLibre rebuilds
- * on a zoom (`rebuildScreenSized`) and on an amplifier edit (`featurePropertiesSource.apply`).
+ * on an amplifier edit (`featurePropertiesSource.apply`) and on a config change that moves geometry.
  *
  * There were two such fields and only one was being carried. `drawingResolution` had its own
  * helper and a paragraph explaining why forgetting it is silent; `hideAmplifiers` had
@@ -378,8 +378,8 @@ function sizeDefaults(
      * chevron *shrank* 26 -> 20 — each of them drifting away from OpenLayers, which
      * derives `decorationMeters` on every render and never stores it.
      *
-     * A rebuild is not rare: every zoom change re-derives the screen-sized graphics.
-     * @see NativeLayerRenderer.rebuildScreenSized, decorationMeters
+     * A rebuild is not rare: an amplifier edit and a geometry config change both make one.
+     * @see decorationMeters
      */
     // The block family states a size of its own — a bar across the line, three times the
     // generic offset — and it is a library fact both engines read. @see drawnSizeMeters
@@ -992,7 +992,13 @@ export function buildPaintedGraphic(
 
     const shared = {
         properties: props,
-        graphicSize: props.radius,
+        /*
+         * **A corridor's size is its half-width**, which it files as `width` and never as
+         * `radius`. OpenLayers' holder stamps that half-width; this read only `radius`, so an
+         * imported corridor carried no size here and its ACP labels fell back to a fixed
+         * 12 px circle, a third of the size OpenLayers drew them. @see acpLabelScale
+         */
+        graphicSize: CORRIDOR_GRAPHICS.includes(name) && props.width ? props.width / 2 : props.radius,
         drawingResolution,
         graphicCenter,
         graphicLabelPoint,
@@ -1051,13 +1057,14 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
     if (!painters) return [];
 
     // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
-    // function in `asStyleFunction`. @see withHiddenAmplifiers
+    // function in `asStyleFunction`, and the legibility floor and the name-over-amplifier rule beside it.
+    // @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames
     //
     // The dash fit runs once per half, as OpenLayers' does, because OpenLayers styles the
     // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
-    const paints = withFittedDashes(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers), context);
+    const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withFittedDashes(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers), context));
+        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers)), context), context));
     }
     return paints;
 }

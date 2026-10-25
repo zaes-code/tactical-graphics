@@ -23,8 +23,9 @@ import type {Paint, PaintContext, PaintFeature} from '../core/paint';
 import {fontStyle, formatAltitude} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {textWidth} from './decorations';
-import {getFullLabel, halo, scaleOf, labelColorOf} from './paintFunctions';
+import {getFullLabel, halo, scaleOf, labelColorOf, legibleDesignation} from './paintFunctions';
 import {fitLabelScale} from './labelFit';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 
 /** A paint function, in the shape the registry stores. */
 type AirPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -62,6 +63,11 @@ function labelBlock(
     feature: PaintFeature,
     context: PaintContext,
     fitToPolygon: boolean,
+    /**
+     * The doctrinal prefix the first name line starts with (`ROZ`, `ACA`). Once the block is
+     * too small to read, it is drawn alone in the block's place. @see legibleDesignation
+     */
+    prefix = '',
 ): Paint[] {
     const lines = names.length && values.length ? [...names, '', ...values] : [...names, ...values];
     if (lines.length === 0 || feature.geometry.type !== 'Point') return [];
@@ -79,6 +85,29 @@ function labelBlock(
         )
         : scaleOf(feature, context);
 
+    /*
+     * **Under the legibility floor the name goes and the prefix stays.** The block is one
+     * string at one scale, so below the floor all of it would go; the prefix is drawn alone
+     * instead, centred, at its own legible size, until the zone is smaller than about twice
+     * it. Measured against the shorter side, the dimension `fitScale` holds the block to.
+     */
+    if (prefix && names.length && BASE_FONT_SIZE_PX * scale < MIN_LEGIBLE_TEXT_PX) {
+        const kept = legibleDesignation(names[0], prefix, scale, fontStyle, context, shorterSidePx(feature, context));
+        if (!kept.text) return [];
+        return [{
+            geometry: feature.geometry,
+            text: {
+                text: kept.text,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: halo(),
+                align: 'center',
+                baseline: 'middle',
+                scale: kept.scale,
+            },
+        }];
+    }
+
     return [{
         geometry: feature.geometry,
         text: {
@@ -93,6 +122,24 @@ function labelBlock(
             scale,
         },
     }];
+}
+
+/**
+ * The zone's shorter side on screen, in pixels: from its stamped bounds, else its ring, else
+ * `Infinity` when neither has been stamped and nothing caps the label either.
+ */
+function shorterSidePx(feature: PaintFeature, context: PaintContext): number {
+    const ring = feature.ring;
+    const box = feature.bounds ?? (ring?.length
+        ? {
+            minX: Math.min(...ring.map(([x]) => x)),
+            maxX: Math.max(...ring.map(([x]) => x)),
+            minY: Math.min(...ring.map(([, y]) => y)),
+            maxY: Math.max(...ring.map(([, y]) => y)),
+        }
+        : undefined);
+    if (!box) return Infinity;
+    return Math.min(box.maxX - box.minX, box.maxY - box.minY) / context.resolution;
 }
 
 /**
@@ -150,7 +197,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
          * `fitLabelScale` returns the desired scale untouched when there is no ring to
          * measure against, so this costs a point-anchored member nothing.
          */
-        return labelBlock(names, values, feature, context, true);
+        return labelBlock(names, values, feature, context, true, identifier);
     };
 }
 
@@ -191,7 +238,8 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         const effective = dateRange(props.startDate, props.endDate);
         if (detail && effective) values.push(column('EFF', effective));
 
-        return labelBlock(names, values, feature, context, true);
+        // With a prefix, `identifier` is never empty, so the first name line is the one carrying it.
+        return labelBlock(names, values, feature, context, true, getLabel(name).trim());
     };
 }
 

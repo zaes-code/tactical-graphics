@@ -13,6 +13,8 @@
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {isPaintable} from './registry';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {scaleOf} from './paintFunctions';
 import {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, navigationalLinePaint, rhumbBearing, rhumbLinePaint} from './maritimeLinePaints';
 
 const RESOLUTION = 10;
@@ -131,6 +133,35 @@ describe('the nine bearing lines', () => {
             .filter(p => p.geometry.type === 'LineString')
             .map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates);
         for (const [a, b] of stubs) expect(b[0] - a[0]).toBeGreaterThan(0);
+    });
+
+    it('draws its letter at its own scale, and drops it and closes the line once the letter would be under 6 px', () => {
+        // The letter is never floored: held at 6 px it read as a speck in a hole rather than
+        // as the symbol. It keeps the graphic-capped scale while that is legible, and below
+        // that there is no letter and no gap. (User, 2026-10-24.) @see letterInGapScale
+        const name = TacticalGraphicName.BearingLine;
+        const sized = (length: number): PaintFeature => ({
+            ...lineFeature(name, [[0, 0], [length, 0]]),
+            bounds: {minX: 0, minY: 0, maxX: length, maxY: 0},
+        });
+
+        // 100 px: the graphic cap puts the letter over 6 px, and it is drawn at exactly that.
+        const desired = scaleOf(sized(1000), context);
+        expect(desired * 16).toBeGreaterThan(MIN_LEGIBLE_TEXT_PX);
+        const legible = bearingLinePaint(name)(sized(1000), context);
+        expect(legible.find(p => p.text)!.text!.scale!).toBeCloseTo(desired, 9);
+        expect(legible.filter(p => p.geometry.type === 'LineString')).toHaveLength(2);
+
+        // 40 px: the graphic cap would draw the letter at 5 px, so it goes and the line is whole.
+        expect(scaleOf(sized(400), context) * 16).toBeLessThan(MIN_LEGIBLE_TEXT_PX);
+        const small = bearingLinePaint(name)(sized(400), context);
+        expect(textsOf(small)).toEqual([]);
+        expect(small.map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates)).toEqual([[[0, 0], [400, 0]]]);
+
+        // 10 px: the line is drawn whole.
+        const tiny = bearingLinePaint(name)(sized(100), context);
+        expect(textsOf(tiny)).toEqual([]);
+        expect(tiny.map(p => (p.geometry as {coordinates: ProjectedPosition[]}).coordinates)).toEqual([[[0, 0], [100, 0]]]);
     });
 
     it('puts H on the far side of the line from the letter', () => {
