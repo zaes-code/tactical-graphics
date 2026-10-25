@@ -15,6 +15,18 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.6.3] — 2026-10-25
+
+### Fixed
+
+- **Graphics across the antimeridian draw where they were placed.** A base whose points straddle
+  longitude 180 arrives folded (179.99 and -179.99), and nine generators did their arithmetic on
+  those raw degrees: Capture, Seize, Evacuate and Recover swung their arc out to longitude 225, and
+  ford difficult, turning movement, the attack helicopter axis of advance, mobile defense and the
+  aviation direction of attack put marks 540 to 17,800 km away. Every base is now unwrapped before
+  it is drawn, so a crossing graphic draws as one continuous shape on every engine. Its drawn
+  longitudes can run past 180; a consumer writing them to a format limited to [-180, 180] folds them.
+
 ## [4.6.2] — 2026-10-24
 
 ### Fixed
@@ -1843,7 +1855,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...develop
+[4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
 [4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
