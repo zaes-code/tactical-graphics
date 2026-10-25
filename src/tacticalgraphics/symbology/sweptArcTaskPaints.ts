@@ -21,9 +21,11 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {BASE_FONT_SIZE_PX} from '../core/config';
+import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {endMarkScale, pathLength, splitPathAround, textWidth} from './decorations';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 
 type SweptArcPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -33,6 +35,15 @@ const ARROWHEAD_PX = 26;
 const ARROWHEAD_HALF_ANGLE_DEG = 22;
 /** Clear space either side of the letter inside its break, in screen pixels. */
 const LETTER_PADDING_PX = 5;
+
+/**
+ * The scale the task's letter is drawn at, or `0` for no letter and no break, once the arc
+ * is too short on screen to carry one. @see letterInGapScale
+ */
+function sweptArcLetterScale(feature: PaintFeature, context: PaintContext, letter: string, arcPx: number): number {
+    if (!letter) return 0;
+    return letterInGapScale(scaleOf(feature, context), textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, arcPx);
+}
 
 /**
  * The letter set in the arc's break, plus the arrowhead at its end.
@@ -51,14 +62,20 @@ export function sweptArcTaskPaint(letter: string): SweptArcPaint {
         const arc = parts[1];
         if (!arc || arc.length < 3) return [{geometry, stroke}];
 
-        const scale = scaleOf(feature, context);
+        const scale = sweptArcLetterScale(feature, context, letter, pathLength(arc) / context.resolution);
         // The arc's own middle, which is where `arcThrough` put point 3 — the anchor the
         // plate annotates and the letter belongs on.
         const midIndex = Math.floor(arc.length / 2);
         const mid = arc[midIndex];
-        const halfGap =
-            (textWidth(context, letter, fontStyle, scale) / 2 + LETTER_PADDING_PX) * context.resolution;
-        const runs = splitPathAround(arc, pathLength(arc.slice(0, midIndex + 1)), halfGap);
+        // No letter, no break: the arc is drawn whole. @see sweptArcLetterScale
+        const runs = scale > 0
+            ? splitPathAround(
+                arc,
+                pathLength(arc.slice(0, midIndex + 1)),
+                (textWidth(context, letter, fontStyle, scale) / 2 + letterGapClearance(LETTER_PADDING_PX, scale, configuredLabelScale()))
+                    * context.resolution,
+            )
+            : [];
 
         // A gap wider than the arc leaves nothing to draw; keep the arc whole rather than
         // losing the sweep entirely, and let the halo carry the letter.
@@ -87,6 +104,7 @@ export function sweptArcTaskPaint(letter: string): SweptArcPaint {
             }
         }
 
+        if (scale === 0) return paints;
         paints.push({
             geometry: {type: 'Point', coordinates: mid},
             text: {

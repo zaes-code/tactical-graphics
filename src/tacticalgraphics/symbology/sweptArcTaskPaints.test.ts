@@ -12,7 +12,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {sweptArcTaskPaint} from './sweptArcTaskPaints';
 
 const context = (resolution = 400): PaintContext => ({
@@ -174,4 +174,27 @@ describe('APP-06 343000 / 344500 / 344600 — the swept-arc tasks', () => {
         expect(painted('C', geometry).find(p => p.text)!.text!.text).toBe('C');
         expect(painted('R', geometry).find(p => p.text)!.text!.text).toBe('R');
     });
+});
+
+it('keeps its letter at 6 px, then drops it and draws the arc whole', () => {
+    // Shrinking with the graphic, the letter went under the legibility floor and vanished
+    // while its break stayed, so zoomed out the sweep was mostly hole (user, 2026-10-24).
+    const ctx: PaintContext = {resolution: 1, measureText: context().measureText};
+    const circle: ProjectedPosition[] = [[-5, 0], [0, 5], [5, 0]];
+    const arcOf = (k: number): ProjectedPosition[] => [[0, 0], [10 * k, 10 * k], [20 * k, 0]];
+    const paintAt = (k: number) =>
+        sweptArcTaskPaint('C')({
+            geometry: {type: 'MultiLineString', coordinates: [circle, arcOf(k)]},
+            properties: {name: TacticalGraphicName.Capture},
+            bounds: {minX: 0, minY: 0, maxX: 20 * k, maxY: 10 * k},
+        } as PaintFeature, ctx);
+
+    const small = paintAt(1);
+    const letter = small.find(p => p.text)!.text!;
+    expect(16 * letter.scale!).toBeCloseTo(MIN_LEGIBLE_TEXT_PX, 6);
+    expect((small[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
+
+    const tiny = paintAt(0.3);
+    expect(tiny.find(p => p.text)).toBeUndefined();
+    expect((tiny[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toEqual([circle, arcOf(0.3)]);
 });

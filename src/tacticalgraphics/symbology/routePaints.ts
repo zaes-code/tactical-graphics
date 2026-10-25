@@ -14,9 +14,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {RouteDirection, TacticalGraphicName} from '../core/type';
+import {RouteDirection, TacticalGraphicName, getLabel} from '../core/type';
 import {offsetAbove, offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
-import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierDash, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
 
 /** Stroke weight of the traffic arrows — half the line weight, never under 1 px. */
@@ -65,6 +65,10 @@ function amplifier(
  * inward has to be taken from the segment: the text-reading direction points
  * inward at one end of a line and outward at the other, so a fixed sign would push
  * one of the two blocks off into open space.
+ *
+ * `textScale` is the identifier's own scale, which parts from the figure's `scale` once the
+ * name has gone and the prefix is held at a legible size. Empty `text` draws the figure alone.
+ * @see legibleDesignation
  */
 function routeEndPaints(
     feature: PaintFeature, context: PaintContext,
@@ -75,6 +79,7 @@ function routeEndPaints(
     a: ProjectedPosition,
     b: ProjectedPosition,
     scale: number,
+    textScale: number = scale,
 ): Paint[] {
     const paints: Paint[] = [];
     const color = labelColorOf(feature);
@@ -115,7 +120,7 @@ function routeEndPaints(
     const row = (i: number) => (ROUTE_ARROW_BASE_PX + i * ROUTE_ARROW_ROW_PITCH_PX) * scale;
 
     if (rows > 0) {
-        const labelWidthPx = textWidth(context, text, fontStyle, scale);
+        const labelWidthPx = text ? textWidth(context, text, fontStyle, textScale) : 0;
         const altWidthPx = direction === RouteDirection.alternating ? textWidth(context, 'ALT', fontStyle, scale) : 0;
         // An alternating row has to hold ALT plus a full arrow either side, so its
         // floor is that content, never the label, which may be shorter.
@@ -149,7 +154,8 @@ function routeEndPaints(
     const goesRight = b[0] >= a[0];
     const endAlign: 'left' | 'right' = atStart ? (goesRight ? 'left' : 'right') : (goesRight ? 'right' : 'left');
 
-    paints.push(amplifier(feature, at(labelOffsetPx, 0), text, scale, {
+    if (!text) return paints;
+    paints.push(amplifier(feature, at(labelOffsetPx, 0), text, textScale, {
         rotation,
         // Center the identifier over the arrow figure it caps; with no arrows there
         // is nothing to center on, so run it inward off the endpoint.
@@ -171,7 +177,7 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         const coords = geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const text = getFullLabel(name, feature.properties.designation ?? '');
+        const full = getFullLabel(name, feature.properties.designation ?? '');
         const direction = feature.properties.direction ?? RouteDirection.general;
         /*
          * **Capped against the route's own length.**
@@ -181,13 +187,11 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
          * sweep shows once it is zoomed out. The zoom-anchored scale floors at 0.3 and the
          * route does not, so the text overruns a shape that keeps shrinking.
          */
-        const scale = capLabelToSpan(
-            context,
-            text,
-            fontStyle,
-            scaleOf(feature, context),
-            pathLength(coords) / context.resolution,
-        );
+        const routePx = pathLength(coords) / context.resolution;
+        const scale = capLabelToSpan(context, full, fontStyle, scaleOf(feature, context), routePx);
+        // Too small to read, the name goes and `MSR` stays, legible, while the route is at
+        // least twice it. The arrow figure keeps `scale`. @see legibleDesignation
+        const {text, scale: textScale} = legibleDesignation(full, getLabel(name), scale, fontStyle, context, routePx);
 
         const start = coords[0];
         const afterStart = coords[1];
@@ -195,8 +199,8 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         const beforeEnd = coords[coords.length - 2];
 
         return [
-            ...routeEndPaints(feature, context, text, direction, true, start, start, afterStart, scale),
-            ...routeEndPaints(feature, context, text, direction, false, end, beforeEnd, end, scale),
+            ...routeEndPaints(feature, context, text, direction, true, start, start, afterStart, scale, textScale),
+            ...routeEndPaints(feature, context, text, direction, false, end, beforeEnd, end, scale, textScale),
             {
                 geometry,
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},

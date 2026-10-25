@@ -26,7 +26,8 @@ import {
 import {TacticalGraphicName, getLabel} from '../core/type';
 import {BAR_SYMBOL_DASHES} from '../graphics/ExplosivesReadiness';
 import {textWidth} from './decorations';
-import {groundPixels, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {groundPixels, lineColorOf, labelColorOf, missionTaskLetterClearance, missionTaskLetterScale} from './paintFunctions';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 
 type MissionTaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -95,6 +96,18 @@ export function crossedMissionTaskLabelScale(halfWidthPx: number = CROSSED_HALF_
 }
 
 /**
+ * The scale a crossed task's letter is drawn at, or `0` once the symbol is too small to carry
+ * one, when the arms are drawn whole. Asked by the arms and by the label alike, so the gap is
+ * always the letter's. @see letterInGapScale
+ */
+function crossedLetterScale(feature: PaintFeature, context: PaintContext, label: string): number {
+    const size = feature.graphicSize;
+    const symbolPx = size && size > 0 ? 2 * groundPixels(size, feature, context) : 2 * CROSSED_HALF_WIDTH_PX;
+    const desired = crossedMissionTaskLabelScale(crossedLabelHalfWidthPx(feature, context));
+    return letterInGapScale(desired, textWidth(context, label, RATIO_LOCKED_LABEL_FONT, 1), RATIO_LOCKED_LABEL_FONT_PX, symbolPx);
+}
+
+/**
  * The crossed mission tasks: two arms meeting at a one-letter label, with the arms
  * stopping clear of the glyph.
  *
@@ -142,10 +155,10 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         // **Nothing is divided out any more.** All four crossed tasks carry a real size as
         // of 2026-08-17, so the arms are drawn where the generator put them and the symbol
         // scales with the map like the ground it covers.
-        const scale = crossedMissionTaskLabelScale(crossedLabelHalfWidthPx(feature, context));
+        const scale = crossedLetterScale(feature, context, label);
         const halfW = (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * context.resolution;
         const halfH = ((RATIO_LOCKED_LABEL_FONT_PX * scale * CAP_HEIGHT_FRACTION) / 2) * context.resolution;
-        const clearance = CROSSED_LABEL_CLEARANCE_PX * context.resolution;
+        const clearance = letterGapClearance(CROSSED_LABEL_CLEARANCE_PX, scale, crossedMissionTaskLabelScale()) * context.resolution;
 
         const paints: Paint[] = [];
 
@@ -166,7 +179,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
             );
             const gap = boxExit + clearance;
 
-            if (!isFinite(gap) || gap * 2 >= len) {
+            if (scale === 0 || !isFinite(gap) || gap * 2 >= len) {
                 paints.push({geometry: {type: 'LineString', coordinates: [start, end]}, stroke});
                 continue;
             }
@@ -227,6 +240,8 @@ export function crossedMissionTaskLabelPaint(name: TacticalGraphicName): Mission
     const label = getLabel(name);
     return (feature, context) => {
         if (!label || feature.geometry.type !== 'Point') return [];
+        const scale = crossedLetterScale(feature, context, label);
+        if (scale === 0) return [];
         return [{
             geometry: feature.geometry,
             text: {
@@ -236,7 +251,7 @@ export function crossedMissionTaskLabelPaint(name: TacticalGraphicName): Mission
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
-                scale: crossedMissionTaskLabelScale(crossedLabelHalfWidthPx(feature, context)),
+                scale,
             },
         }];
     };
@@ -283,6 +298,9 @@ const PURSUIT_GAP_PADDING_PX = 4;
  * it matches the letter at every zoom. A line shorter than the label is not split
  * at all — two stubs either side of a letter that overflows them both is worse
  * than a line running behind it.
+ *
+ * The letter's scale is {@link missionTaskLetterScale}'s, the one its label paint draws at;
+ * at `0` the pursuit is too small to carry a letter and the run is drawn whole.
  */
 export function pursuitPaint(name: TacticalGraphicName): MissionTaskPaint {
     const label = getLabel(name);
@@ -301,11 +319,12 @@ export function pursuitPaint(name: TacticalGraphicName): MissionTaskPaint {
             const dx = b[0] - a[0];
             const dy = b[1] - a[1];
             const len = Math.hypot(dx, dy);
-            const scale = scaleOf(feature, context);
+            const scale = label ? missionTaskLetterScale(name, feature, context) : 0;
             const halfGap =
-                (textWidth(context, label, fontStyle, scale) / 2 + PURSUIT_GAP_PADDING_PX) * context.resolution;
+                (textWidth(context, label, fontStyle, scale) / 2 + missionTaskLetterClearance(PURSUIT_GAP_PADDING_PX, scale)) *
+                context.resolution;
 
-            if (len > 2 * halfGap) {
+            if (scale > 0 && len > 2 * halfGap) {
                 const ux = dx / len;
                 const uy = dy / len;
                 paints.push({
