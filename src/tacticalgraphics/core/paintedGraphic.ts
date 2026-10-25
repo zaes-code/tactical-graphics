@@ -125,7 +125,7 @@ export interface PaintedGraphic {
  * Measured on a passage lane: OpenLayers' date-time group reached its 1.5x clamp two
  * zooms in and MapLibre's stayed at 1.0, which read as ink 0.58 against 1.00.
  *
- * @see NativeLayerRenderer.rebuildScreenSized, carryPaintFlags
+ * @see carryPaintFlags
  */
 export function withDrawingResolution(
     graphic: PaintedGraphic,
@@ -144,7 +144,7 @@ export function withDrawingResolution(
  *
  * `buildPaintedGraphic` builds `graphic` and `labels` from `properties.tacticalGraphic`, so
  * anything not in that bag is gone the moment a graphic is rebuilt — and MapLibre rebuilds
- * on a zoom (`rebuildScreenSized`) and on an amplifier edit (`featurePropertiesSource.apply`).
+ * on an amplifier edit (`featurePropertiesSource.apply`) and on a config change that moves geometry.
  *
  * There were two such fields and only one was being carried. `drawingResolution` had its own
  * helper and a paragraph explaining why forgetting it is silent; `hideAmplifiers` had
@@ -378,8 +378,8 @@ function sizeDefaults(
      * chevron *shrank* 26 -> 20 — each of them drifting away from OpenLayers, which
      * derives `decorationMeters` on every render and never stores it.
      *
-     * A rebuild is not rare: every zoom change re-derives the screen-sized graphics.
-     * @see NativeLayerRenderer.rebuildScreenSized, decorationMeters
+     * A rebuild is not rare: an amplifier edit and a geometry config change both make one.
+     * @see decorationMeters
      */
     // The block family states a size of its own — a bar across the line, three times the
     // generic offset — and it is a library fact both engines read. @see drawnSizeMeters
