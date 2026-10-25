@@ -2,7 +2,7 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
-import {withHiddenAmplifiers, withLegibleText} from '../symbology/paintFunctions';
+import {withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from '../symbology/paintFunctions';
 import {CORRIDOR_GRAPHICS, getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
 import {arrowheadMeters, axisAndWidth, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration} from './decorationSizes';
@@ -1057,13 +1057,14 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
     if (!painters) return [];
 
     // The MapLibre half of the hide-amplifiers toggle; OpenLayers applies the same
-    // function in `asStyleFunction`, and the legibility floor beside it. @see withHiddenAmplifiers, withLegibleText
+    // function in `asStyleFunction`, and the legibility floor and the name-over-amplifier rule beside it.
+    // @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames
     //
     // The dash fit runs once per half, as OpenLayers' does, because OpenLayers styles the
     // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
-    const paints = withFittedDashes(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context);
+    const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withFittedDashes(withLegibleText(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers)), context));
+        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers)), context), context));
     }
     return paints;
 }
