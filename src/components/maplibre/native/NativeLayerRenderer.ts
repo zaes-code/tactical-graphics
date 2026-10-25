@@ -3,7 +3,6 @@ import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import {
     ANCHOR_CONNECTOR_DASH_PX,
     TacticalGraphicHostility,
-    TacticalGraphicName,
     anchorConnectorRuns,
     getDrawMarkerColor,
     getHandleColor,
@@ -21,7 +20,6 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
     getSecuritySymbolSize,
-    hasBakedDecoration,
     CENTER_SYMBOL_GRAPHICS,
     resolveSecuritySymbol,
     securitySymbolRevision,
@@ -34,7 +32,7 @@ import {
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {buildTacticalGraphic, paintTacticalGraphic, carryPaintFlags, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {centerSymbolPlacement} from '../centerSymbol';
 
 // Moved out so a renderer that is not MapLibre can place the symbol too; re-exported for the tests.
@@ -331,8 +329,6 @@ export class NativeLayerRenderer {
     private readonly iconSizes = new globalThis.Map<string, number>();
     /** The provider/size revision those icons were built at. */
     private symbolRevision = -1;
-    /** The resolution the screen-sized graphics were last rebuilt at. */
-    private lastRebuildResolution = Number.NaN;
     /** The geometry-moving config the graphics were last built under. @see rebuildForConfig */
     private lastGeometryKey = geometryConfigKey();
     /**
@@ -551,7 +547,6 @@ export class NativeLayerRenderer {
         // with the graphic it came from — which is what makes a rendered mark
         // hit-testable back to its symbol. @see GRAPHIC_ID_PROPERTY
         this.rebuildForConfig();
-        this.rebuildScreenSized(resolution);
         const visible = this.visibleGraphics();
         const paintedAt = performance.now();
         const perGraphic = visible.map(graphic => paintTacticalGraphic(graphic, context));
@@ -653,42 +648,6 @@ export class NativeLayerRenderer {
         this.lastGeometryKey = key;
         for (let i = 0; i < this.graphics.length; i++) {
             if (smoothingKindOf(this.graphics[i].name)) this.graphics[i] = rebuildPaintedGraphic(this.graphics[i]);
-        }
-    }
-
-    /**
-     * Rebuilds the graphics whose **geometry** is a screen size, at the new zoom.
-     *
-     * Almost every graphic here is drawn in meters and simply scales with the map, so
-     * a realization only re-runs the paint functions. The security operations are the
-     * exception: every dimension of one is a pixel constant, so the generator has to
-     * run again with the new resolution or the symbol grows and shrinks with the map
-     * instead of holding its size.
-     *
-     * This is the MapLibre half of `manager.watchResolution(handler)` — the rule that
-     * a graphic sized in screen pixels only holds its size because something
-     * re-derives it. @see ai/conventions.md
-     */
-    private rebuildScreenSized(resolution: number): void {
-        if (resolution === this.lastRebuildResolution) return;
-        this.lastRebuildResolution = resolution;
-
-        for (let i = 0; i < this.graphics.length; i++) {
-            const graphic = this.graphics[i];
-            if (!isScreenSized(graphic.name)) continue;
-
-            const rebuilt = buildTacticalGraphic(graphic.name, graphic.base.geometry, graphic.properties, resolution);
-            // A generator that refuses leaves the previous geometry up, which is the
-            // right failure: a symbol at the wrong size beats no symbol.
-            //
-            // **The label scale keeps its original anchor.** The rebuild needs the
-            // *current* resolution to re-derive the decoration, and stamping that as
-            // `drawingResolution` would move the zoom the label is measured against to
-            // "now" — so the scale computes as 1.0 forever and the label never grows.
-            // @see withDrawingResolution
-            if (rebuilt) {
-                this.graphics[i] = carryPaintFlags(graphic, {...rebuilt, id: graphic.id});
-            }
         }
     }
 
@@ -1255,41 +1214,6 @@ function centerHandleIndex(graphic: MapLibreTacticalGraphic): number {
 
 /** The source and layer id for a dash pattern. One derivation, used by both passes. */
 const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/gi, '_')}`;
-
-/**
- * Whether a graphic's **geometry** is a screen size rather than a ground distance,
- * and so has to be regenerated when the zoom changes.
- *
- * Two kinds:
- *
- * - the **security operations**, badges whose every dimension — arm length, center
- *   padding, arrowheads — is a pixel constant times the resolution;
- * - everything with a **baked decoration**, whose `size` is "how big is the
- *   chevron" in screen pixels. Bridge, gap, the fords, the wire obstacles, the
- *   direction arrows.
- *
- * OpenLayers re-derives both on every zoom through `watchResolution`, so they hold
- * their size. Baking them once looks right at the zoom they were built at and
- * wrong everywhere else — and for the second kind it is not only the decoration:
- * the label anchors are spaced by the same number, and the movement label's scale
- * is proportional to that span, so a bridge's designation came out several times
- * too large. That is invisible to a comparison run at one zoom, which is why this
- * was missed until the harness grew a zoom axis.
- */
-function isScreenSized(name: TacticalGraphicName): boolean {
-    /*
-     * Cover, guard and screen were in here until 2026-08-30, and had stopped belonging on
-     * 2026-08-29: APP-06 gives them four anchor points, so they are drawn from two and
-     * their geometry is a ground distance like everything else. The rebuild they were
-     * getting on every zoom re-derived byte-identical geometry -- wasted work rather than
-     * a wrong picture, and a standing claim in this file that these three are screen-sized
-     * when OpenLayers draws them as plain two-point lines.
-     *
-     * Nothing in the library is screen-sized *geometry* any more; what remains here is a
-     * baked decoration, which is a decoration size and not the shape itself.
-     */
-    return hasBakedDecoration(name);
-}
 
 /**
  * The radius read-out, as the dashed line and **a separate point for its label**.
