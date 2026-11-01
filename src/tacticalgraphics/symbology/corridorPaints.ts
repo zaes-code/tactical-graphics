@@ -227,7 +227,9 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const legClearPx: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
-            const clearPx = legPx - legWidthPx;
+            // Only a turn takes the half-widths: a corridor of one leg has none, and since the
+            // ACP circles went (2026-10-31) nothing else stands at its ends.
+            const clearPx = coords.length === 2 ? legPx : legPx - legWidthPx;
             legClearPx.push(clearPx);
             legClearCaps.push(clearPx > 0 ? capLabelToSpan(context, text, fontStyle, baseScale, clearPx) : 0);
         }
