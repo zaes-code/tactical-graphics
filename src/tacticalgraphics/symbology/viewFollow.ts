@@ -1,4 +1,4 @@
-import type {PaintContext, ProjectedBounds, ProjectedPosition} from '../core/paint';
+import type {PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 
 /**
  * How far, in screen pixels, a label moved onto the view keeps clear of its edge.
@@ -135,4 +135,91 @@ export function pointAlong(path: ProjectedPosition[], s: number): {at: Projected
         walked += len;
     }
     return {at: path[0], from: path[0], to: path[path.length - 1]};
+}
+
+/** Whether `p` lies inside the polygon `ring` (even-odd rule). */
+export function inRing(p: ProjectedPosition, ring: ProjectedPosition[]): boolean {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [a, b] = [ring[i], ring[j]];
+        if (a[1] > p[1] !== b[1] > p[1] && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) inside = !inside;
+    }
+    return inside;
+}
+
+/** The part of the polygon `ring` inside `view` (Sutherland–Hodgman), empty when none of it is. */
+export function clipRing(ring: ProjectedPosition[], view: ProjectedBounds): ProjectedPosition[] {
+    const edges: [(p: ProjectedPosition) => boolean, (a: ProjectedPosition, b: ProjectedPosition) => ProjectedPosition][] = [
+        [p => p[0] >= view.minX, (a, b) => [view.minX, a[1] + ((b[1] - a[1]) * (view.minX - a[0])) / (b[0] - a[0])]],
+        [p => p[0] <= view.maxX, (a, b) => [view.maxX, a[1] + ((b[1] - a[1]) * (view.maxX - a[0])) / (b[0] - a[0])]],
+        [p => p[1] >= view.minY, (a, b) => [a[0] + ((b[0] - a[0]) * (view.minY - a[1])) / (b[1] - a[1]), view.minY]],
+        [p => p[1] <= view.maxY, (a, b) => [a[0] + ((b[0] - a[0]) * (view.maxY - a[1])) / (b[1] - a[1]), view.maxY]],
+    ];
+    let out = ring;
+    for (const [keeps, cross] of edges) {
+        const input = out;
+        out = [];
+        for (let i = 0; i < input.length; i++) {
+            const [a, b] = [input[(i + input.length - 1) % input.length], input[i]];
+            if (keeps(b)) {
+                if (!keeps(a)) out.push(cross(a, b));
+                out.push(b);
+            } else if (keeps(a)) {
+                out.push(cross(a, b));
+            }
+        }
+        if (!out.length) return [];
+    }
+    return out;
+}
+
+/**
+ * A point well inside `ring`: the middle of the widest span across it at the height of its
+ * centroid, which stays inside a concave ring where the centroid itself may not.
+ */
+function interiorPoint(ring: ProjectedPosition[]): ProjectedPosition | undefined {
+    let area = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+        area += cross;
+        cx += (ring[j][0] + ring[i][0]) * cross;
+        cy += (ring[j][1] + ring[i][1]) * cross;
+    }
+    if (area === 0) return undefined;
+    const y = cy / (3 * area);
+    const xs: number[] = [];
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [a, b] = [ring[j], ring[i]];
+        if (a[1] > y !== b[1] > y) xs.push(a[0] + ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]));
+    }
+    xs.sort((p, q) => p - q);
+    let best: ProjectedPosition | undefined;
+    let widest = 0;
+    for (let i = 0; i + 1 < xs.length; i += 2) {
+        if (xs[i + 1] - xs[i] > widest) {
+            widest = xs[i + 1] - xs[i];
+            best = [(xs[i] + xs[i + 1]) / 2, y];
+        }
+    }
+    return best ?? [cx / (3 * area), y];
+}
+
+/**
+ * An area's label feature with its anchor moved into the visible part of the area, when the
+ * anchor is off screen and some of the area is on it.
+ *
+ * Only a label that sits inside its area moves: one hung outside the outline is placed against
+ * the shape on purpose. Returned unchanged when the context carries no view.
+ */
+export function areaLabelInView(feature: PaintFeature, context: PaintContext): PaintFeature {
+    const view = insetView(context);
+    const ring = feature.ring;
+    if (!view || !ring || ring.length < 3 || feature.geometry.type !== 'Point') return feature;
+    const at = feature.geometry.coordinates;
+    if (inView(at, view) || !inRing(at, ring)) return feature;
+    const visible = clipRing(ring, view);
+    const moved = visible.length >= 3 ? interiorPoint(visible) : undefined;
+    return moved ? {...feature, geometry: {type: 'Point', coordinates: moved}} : feature;
 }

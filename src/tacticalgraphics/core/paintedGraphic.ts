@@ -2,6 +2,7 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
+import {areaLabelInView} from '../symbology/viewFollow';
 import {withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from '../symbology/paintFunctions';
 import {CORRIDOR_GRAPHICS, getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
@@ -1063,7 +1064,7 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
     // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
     const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(graphic.labels, context), graphic.labels.hideAmplifiers)), context), context));
+        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(areaLabelInView(graphic.labels, context), context), graphic.labels.hideAmplifiers)), context), context));
     }
     return paints;
 }

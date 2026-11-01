@@ -9,7 +9,7 @@ import {resetTacticalGraphicsConfig} from '../core/config';
 import type {Paint, PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {phaseLinePaint} from './paintFunctions';
 import {axisOfAdvanceLabelPaint} from './movementPaints';
-import { inView, pathUpTo, visibleStretch} from './viewFollow';
+import {areaLabelInView, clipRing, inRing, inView, pathUpTo, visibleStretch} from './viewFollow';
 
 const RESOLUTION = 100;
 
@@ -255,5 +255,90 @@ describe('an axis of advance', () => {
         const scaleOf = (paints: Paint[]) => paints.find(p => p.text)?.text?.scale;
         const wide = {minX: -100_000, minY: -50_000, maxX: 300_000, maxY: 50_000};
         expect(scaleOf(paint(feature(), context(VIEW)))).toBe(scaleOf(paint(feature(), context(wide))));
+    });
+});
+
+describe('an area label', () => {
+    // A square 200 km across, centred on (50 km, 0): its label anchor sits at the middle.
+    const ring: ProjectedPosition[] = [
+        [-50_000, -100_000],
+        [150_000, -100_000],
+        [150_000, 100_000],
+        [-50_000, 100_000],
+        [-50_000, -100_000],
+    ];
+    const label = (at: ProjectedPosition): PaintFeature => ({
+        geometry: {type: 'Point', coordinates: at},
+        properties: {name: TacticalGraphicName.ObjectiveArea, designation: 'IRON'},
+        ring,
+    });
+    const anchor = (f: PaintFeature) => (f.geometry as {coordinates: ProjectedPosition}).coordinates;
+
+    it('stays where it is when the context carries no view', () => {
+        const f = label([50_000, 0]);
+        expect(areaLabelInView(f, context())).toBe(f);
+    });
+
+    it('stays where it is when its anchor is on screen', () => {
+        const f = label([50_000, 0]);
+        expect(areaLabelInView(f, context(VIEW))).toBe(f);
+    });
+
+    it('moves into the visible part of the area when its anchor is off screen', () => {
+        const view = {minX: 100_000, minY: 50_000, maxX: 300_000, maxY: 250_000};
+        const at = anchor(areaLabelInView(label([50_000, 0]), context(view)));
+        expect(inView(at, view)).toBe(true);
+        expect(inRing(at, ring)).toBe(true);
+    });
+
+    it('sits in the middle of the view when the area fills it', () => {
+        const view = {minX: 0, minY: 10_000, maxX: 20_000, maxY: 30_000};
+        const at = anchor(areaLabelInView(label([50_000, 0]), context(view)));
+        expect(at[0]).toBeCloseTo(10_000);
+        expect(at[1]).toBeCloseTo(20_000);
+    });
+
+    it('stays put when none of the area is on screen', () => {
+        const f = label([50_000, 0]);
+        expect(areaLabelInView(f, context({minX: 400_000, minY: 0, maxX: 500_000, maxY: 100_000}))).toBe(f);
+    });
+
+    it('leaves a label hung outside its outline where it was placed', () => {
+        const f = label([50_000, 120_000]);
+        expect(areaLabelInView(f, context({minX: 100_000, minY: 50_000, maxX: 300_000, maxY: 250_000}))).toBe(f);
+    });
+
+    it('keeps the label inside a concave area', () => {
+        // A U open to the north: its centroid falls in the empty middle.
+        const u: ProjectedPosition[] = [
+            [0, 0],
+            [90_000, 0],
+            [90_000, 90_000],
+            [60_000, 90_000],
+            [60_000, 30_000],
+            [30_000, 30_000],
+            [30_000, 90_000],
+            [0, 90_000],
+        ];
+        const f: PaintFeature = {...label([45_000, 15_000]), ring: u};
+        const view = {minX: 10_000, minY: 20_000, maxX: 80_000, maxY: 200_000};
+        const at = anchor(areaLabelInView(f, context(view)));
+        expect(inRing(at, u)).toBe(true);
+    });
+});
+
+describe('clipRing', () => {
+    it('cuts a ring at the edges of the view', () => {
+        const clipped = clipRing(
+            [
+                [-50_000, -10_000],
+                [50_000, -10_000],
+                [50_000, 10_000],
+                [-50_000, 10_000],
+            ],
+            VIEW,
+        );
+        expect(Math.min(...clipped.map(p => p[0]))).toBe(0);
+        expect(Math.max(...clipped.map(p => p[0]))).toBe(50_000);
     });
 });
