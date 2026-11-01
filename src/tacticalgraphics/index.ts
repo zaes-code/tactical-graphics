@@ -475,7 +475,7 @@ export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEd
 // Where an arc mission task's second click lands: on its start point, so the draw files the
 // rotation that puts it there. @see START_POINT_GRAPHICS
 export {rotationFromDrawnPoint} from './core/symbology';
-export {describedProperties, editableBaseGeometry, filedBaseGeometry, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
+export {declaredSnapshotVersion, describedProperties, editableBaseGeometry, filedBaseGeometry, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
 export type {TacticalGraphicsSnapshot} from './core/snapshot';
 export type {DragFrame} from './core/symbology';
 // The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
@@ -532,7 +532,9 @@ export {
 export type {DrawnAnchorFrame} from './core/drawnAnchors';
 // Which end of a drawn line APP-06 numbers first. A draw tool, a sample sheet or a
 // panel hint needs the answer, and only one table may hold it. @see core/drawOrder
-export {TIP_FIRST_GRAPHICS, drawsTipFirst, featureInGeneratorOrder, generatorOrder, storedOrder} from './core/drawOrder';
+export {endsInWidthPoint, upgradeSavedLine} from './core/savedBase';
+export type {UpgradedLine} from './core/savedBase';
+export {TIP_FIRST_GRAPHICS, TIP_FIRST_SINCE_SNAPSHOT_3, drawsTipFirst, featureInGeneratorOrder, generatorOrder, storedOrder} from './core/drawOrder';
 // The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
 export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
 export {ARC_ARROW_MIN_REACH, RAIL_PREVIEW_GAP_PX, SUPPORT_BY_FIRE_PREVIEW_REACH, supportByFireAnchors, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
