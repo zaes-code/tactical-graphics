@@ -19,7 +19,7 @@ import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloCol
 import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
-import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, isHostile, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -98,6 +98,29 @@ function midpointOf(coords: ProjectedPosition[]) {
 }
 
 /**
+ * `ENY` above each end of a hostile line whose designation sits at its middle.
+ *
+ * FM 1-02.2 Figure 5-9 puts field N at the far left and the far right of every line control
+ * measure, wherever the line's other text goes. Each mark runs inward from its end. Held at a
+ * legible size like any prefix, and gone once the line is under twice it. @see legibleDesignation
+ */
+function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition[], scale: number, context: PaintContext): Paint[] {
+    if (!isHostile(feature)) return [];
+    const eny = legibleDesignation('ENY', 'ENY', scale, fontStyle, context, pathLength(coords) / context.resolution);
+    if (!eny.text) return [];
+    const start = coords[0];
+    const afterStart = coords[1];
+    const end = coords[coords.length - 1];
+    const beforeEnd = coords[coords.length - 2];
+    return [
+        textMark(feature, offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
+            uprightRotation(start, afterStart), afterStart[0] >= start[0] ? 'left' : 'right', 'bottom'),
+        textMark(feature, offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
+            uprightRotation(beforeEnd, end), end[0] >= beforeEnd[0] ? 'right' : 'left', 'bottom'),
+    ];
+}
+
+/**
  * The coordinated fire line: designation above the midpoint, dates below.
  *
  * The two labels straddle the line, `LABEL_OFFSET_PX` either side of it, and both
@@ -120,6 +143,7 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const shown = legibleDesignation(full, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
 
         return [
+            ...hostileEndMarks(feature, coords, scale, context),
             ...(shown.text
                 ? [
                     textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), shown.text, shown.scale, rotation, 'center', 'bottom'),
