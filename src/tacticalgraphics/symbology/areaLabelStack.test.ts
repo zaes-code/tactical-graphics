@@ -89,3 +89,15 @@ describe('the plates that stack their literal over T (MIL-STD-2525E, QA pass 202
         expect(linesOf(areaLabelStackPaint(name)(feature(name, props), context))).toEqual(expected);
     });
 });
+
+describe('the artillery manoeuvre and reserved areas break W - W1 after the hyphen', () => {
+    // APP-06 242400 / 242500: "W -" over "W1" on the Template, and every Example the same.
+    it.each([TacticalGraphicName.ArtilleryManeuverArea, TacticalGraphicName.ArtilleryReservedArea])('%s', name => {
+        const feature = {
+            geometry: {type: 'Point', coordinates: at},
+            properties: {name, designation: 'B', startDate: '011200Z', endDate: '021800Z'},
+        } as PaintFeature;
+        const lines = textOf(areaDefaultLabelPaint(name, false)(feature, context)).join('\n').split('\n');
+        expect(lines).toEqual(['B', '011200Z -', '021800Z']);
+    });
+});
