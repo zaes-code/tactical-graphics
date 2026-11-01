@@ -220,6 +220,16 @@ describe('APP-06 270707 / 270800 / 270801 — the three mine areas', () => {
         expect(fenced.some(p => p.geometry.type === 'MultiLineString')).toBe(true);
     });
 
+    it('draws the M marks in the line colour, as part of the outline', () => {
+        // 2525E 270800 / 270801 draw the Ms green with the ring; they were in the label colour.
+        for (const paints of [minedAreaPaint()(areaFeature(), context()), minedAreaFencedPaint()(areaFeature(), context())]) {
+            const line = paints.find(p => p.stroke)!.stroke!.color;
+            const ms = paints.filter(p => p.text?.text === 'M');
+            expect(ms).toHaveLength(4);
+            for (const m of ms) expect(m.text!.fill).toBe(line);
+        }
+    });
+
     /*
      * **The three must not be the same picture.** APP-06 270800 is 270801's parent and
      * differs from it in the wire alone, which is exactly the shape of defect that let the

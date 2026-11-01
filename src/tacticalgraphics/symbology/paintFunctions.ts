@@ -1202,6 +1202,18 @@ const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parenthes
 const DEFAULT_LINE_ADDITIONAL_INFO: ReadonlySet<TacticalGraphicName> = new Set([TacticalGraphicName.LineGeneric]);
 
 /**
+ * The default lines that carry their literal and nothing else.
+ *
+ * IFF off and IFF on: FM 1-02.2 says symbols without amplifier fields "must be used as
+ * depicted", and the plate prints `IFF OFF` / `IFF ON` at each end alone. The dialog offers
+ * no field, but a designation or a date arriving on an imported graphic used to draw.
+ */
+const DEFAULT_LINE_LITERAL_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.IdentificationFriendOrFoeOff,
+    TacticalGraphicName.IdentificationFriendOrFoeOn,
+]);
+
+/**
  * How a line sets its country code, if it takes one at all.
  *
  * Exported so a renderer that assembles its own options can start from the same answer
@@ -1215,13 +1227,15 @@ export function defaultLinePaint(
     name: TacticalGraphicName,
     options: DefaultLineOptions = {},
 ): (f: PaintFeature, c: PaintContext) => Paint[] {
-    const {alwaysDashed = false, showDates = true, countryCode = defaultLineCountryCodeStyle(name)} = options;
+    const literalOnly = DEFAULT_LINE_LITERAL_ONLY.has(name);
+    const {alwaysDashed = false, countryCode = defaultLineCountryCodeStyle(name)} = options;
+    const showDates = !literalOnly && (options.showDates ?? true);
     return (feature, context) => {
         if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiPoint') return [];
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const designation = feature.properties.designation ?? '';
+        const designation = literalOnly ? '' : feature.properties.designation ?? '';
         const country = (feature.properties.countryCode ?? '').trim();
         const named =
             countryCode === undefined || !country

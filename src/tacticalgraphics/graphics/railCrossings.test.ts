@@ -342,3 +342,23 @@ describe('the two-rail crossings place their separation', () => {
         },
     );
 });
+
+describe('the crossings hang W - W1 beyond the point 2 end', () => {
+    // MIL-STD-2525E / APP-06 271100 and 271300 box W - W1 below the PT 2 / PT 4 end of the
+    // rails; FM 1-02.2 table 5-16 puts the gap's below one end. It used to sit past point 1.
+    it.each([TacticalGraphicName.Bridge, TacticalGraphicName.Gap, TacticalGraphicName.AssaultCrossing].map(n => [String(n), n] as const))(
+        '%s',
+        (_label, name) => {
+            const out = renderTacticalGraphic({
+                type: 'Feature',
+                geometry: {type: 'LineString', coordinates: anchors(name, CLICKS)},
+                properties: {tacticalGraphic: {name}},
+            } as never);
+            const labels = out.labels as Feature<MultiPoint>;
+            const date = labels.geometry.coordinates[1];
+            // Point 1 is at lon -1 and point 2 at lon +1: the date sits at the point 2 end
+            // (the centreline's end is a hair west of it once shifted between the rails).
+            expect(date[0]).toBeGreaterThan(0.99);
+        },
+    );
+});

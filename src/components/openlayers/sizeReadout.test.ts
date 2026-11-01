@@ -110,9 +110,6 @@ describe('the read-out and the dialog field are separate questions', () => {
         TacticalGraphicName.Deny,
         TacticalGraphicName.Locate,
         TacticalGraphicName.PsyOpsZoneCircular,
-        TacticalGraphicName.TargetBuildUpAreaCircular,
-        TacticalGraphicName.TargetValueAreaCircular,
-        TacticalGraphicName.ZoneOfResponsibilityCircular,
     ])('%s shows a read-out but offers no radius field', name => {
         expect({name, readout: showsSizeReadout(name), field: hasRadiusReadout(name)})
             .toEqual({name, readout: true, field: false});

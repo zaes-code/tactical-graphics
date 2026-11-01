@@ -554,3 +554,17 @@ describe("a default line's identifier keeps its prefix when too small", () => {
         expect(identifiers(fscl(20, 10))).toEqual([]);
     });
 });
+
+describe('the IFF lines carry their literal and nothing else (QA pass 2026-10-31)', () => {
+    // 190100 / 190200: no amplifier fields, "used as depicted". An imported designation or
+    // date range used to print "IFF OFF T" and a "W - W1" line at each end.
+    it.each([TacticalGraphicName.IdentificationFriendOrFoeOff, TacticalGraphicName.IdentificationFriendOrFoeOn])('%s', name => {
+        const paints = defaultLinePaint(name)(
+            lineFeature(LONG_LINE, {properties: {name, designation: 'ALPHA', startDate: 'D1', endDate: 'D2'}}),
+            context(1000),
+        );
+        const texts = paints.filter(p => p.text?.text).map(p => p.text!.text);
+        expect(texts.length).toBeGreaterThan(0);
+        expect(new Set(texts)).toEqual(new Set([name === TacticalGraphicName.IdentificationFriendOrFoeOff ? 'IFF OFF' : 'IFF ON']));
+    });
+});
