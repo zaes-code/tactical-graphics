@@ -101,8 +101,8 @@ export function sidePoint(coords: Position[], opts?: MovementGraphicOptions, hal
  * 2026-09-21. @see RoadblockComplete
  *
  * The dashing is a stroke property and a MultiLineString cannot say "this part dashed,
- * that one not", so the geometry is emitted here in a fixed order — **left rail first**
- * — and `BAR_SYMBOL_DASHES` tells the painter how to stroke each one.
+ * that one not", so the geometry is emitted here in a fixed order — **point 3's rail
+ * first** — and `BAR_SYMBOL_DASHES` tells the painter how to stroke each one.
  */
 export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOptions> {
     name: string;
@@ -114,7 +114,7 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOpt
     }
 
     /**
-     * The two rails, left first, offset either side of the drawn centerline.
+     * The two rails, point 3's first, offset either side of the drawn centerline.
      *
      * `radius` is the half-width — the generators' name for it, filled from the public
      * `width` property — so the pair spans `2 × radius` across the route, exactly as
@@ -124,9 +124,13 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOpt
         const coords = base.geometry.coordinates;
         const ends = [coords[0], coords[1]];
         const half = halfWidthFromSide(coords, opts);
-        const left = geometryService.computeParallelLineString(ends, half) as Position[];
-        const right = geometryService.computeParallelLineString(ends, -half) as Position[];
-        return [left, right];
+        // A positive offset is the right of point 1 -> point 2.
+        const right = geometryService.computeParallelLineString(ends, half) as Position[];
+        const left = geometryService.computeParallelLineString(ends, -half) as Position[];
+        // Point 3's rail first: 271202's plate points PT 3 at its dashed rail, and
+        // `BAR_SYMBOL_DASHES` dashes the first bar. (2026-10-31; it was always the right.)
+        // `across` is positive when point 3 is on the right.
+        return (sideOffset(coords)?.across ?? 1) > 0 ? [right, left] : [left, right];
     }
 
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
@@ -163,9 +167,9 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOpt
 }
 
 /**
- * Which bars a bar symbol hashes, indexed in the order the generator emits them — **left
- * rail first**. A name absent from the table draws every bar solid, which is what
- * roadblock complete relies on.
+ * Which bars a bar symbol hashes, indexed in the order the generator emits them — **point
+ * 3's rail first**, so 271202's dashed bar is the one PT 3 marks. A name absent from the
+ * table draws every bar solid, which is what roadblock complete relies on.
  */
 export const BAR_SYMBOL_DASHES: Partial<Record<TacticalGraphicName, boolean[]>> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: [true, true],
