@@ -2,7 +2,7 @@
  * # Route control measures
  *
  * Route, main supply route and alternate supply route: a line with a
- * traffic-direction figure and identifier at each end.
+ * traffic-direction figure and identifier centered over its middle.
  *
  * **Everything in the end block is an amplifier, so it takes the label color and
  * stays black on a hostile route.** Only the route line itself answers to the
@@ -15,7 +15,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {RouteDirection, TacticalGraphicName, getLabel} from '../core/type';
-import {offsetAbove, offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
+import {offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
 
@@ -58,23 +58,20 @@ function amplifier(
 }
 
 /**
- * The traffic-direction figure and identifier at one end of a route.
+ * The traffic-direction figure and identifier, centered over the middle of a route.
  *
- * The figure is built symmetrically about zero and then slid **inward** by half its
- * width, so it sits over the route rather than straddling its end. Which way is
- * inward has to be taken from the segment: the text-reading direction points
- * inward at one end of a line and outward at the other, so a fixed sign would push
- * one of the two blocks off into open space.
+ * APP-06 330300, 330400 and 330500 and FM 1-02.2 Table 5-17 draw one `MSR T` block centered
+ * above the line, the traffic figure under it. This used to draw the block at both ends.
+ * The figure is built symmetrically about `anchor`, which is the route's projected midpoint.
  *
  * `textScale` is the identifier's own scale, which parts from the figure's `scale` once the
  * name has gone and the prefix is held at a legible size. Empty `text` draws the figure alone.
  * @see legibleDesignation
  */
-function routeEndPaints(
+function routeBlockPaints(
     feature: PaintFeature, context: PaintContext,
     text: string,
     direction: RouteDirection,
-    atStart: boolean,
     anchor: ProjectedPosition,
     a: ProjectedPosition,
     b: ProjectedPosition,
@@ -91,11 +88,10 @@ function routeEndPaints(
     const ux = Math.cos(-rotation);
     const uy = Math.sin(-rotation);
 
-    let shiftPx = 0;
     /** A point `alongPx` screen px along the line, from the row centered `upPx` above it. */
     const at = (upPx: number, alongPx: number): ProjectedPosition => {
         const [cx, cy] = offsetAbove(anchor, a, b, resolution, upPx);
-        const d = (alongPx + shiftPx) * resolution;
+        const d = alongPx * resolution;
         return [cx + ux * d, cy + uy * d];
     };
 
@@ -129,8 +125,6 @@ function routeEndPaints(
             : ROUTE_ARROW_MIN_SPAN_PX * scale;
         const halfPx = Math.max(labelWidthPx, minSpanPx) / 2;
 
-        const inward: ProjectedPosition = atStart ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
-        shiftPx = (inward[0] * ux + inward[1] * uy >= 0 ? 1 : -1) * halfPx;
 
         if (direction === RouteDirection.oneWay) {
             arrow(row(0), -halfPx, halfPx);
@@ -149,19 +143,8 @@ function routeEndPaints(
     // The identifier clears the top arrow row; with no arrows it falls back to the
     // plain 8 px every other line graphic uses.
     const labelOffsetPx = rows > 0 ? row(rows - 1) + headHalfPx + 11 * scale : 8;
-    // Each endpoint is judged on its own segment: a route can start left-to-right
-    // and have its last leg turn back, so one shared flag would flip the wrong one.
-    const goesRight = b[0] >= a[0];
-    const endAlign: 'left' | 'right' = atStart ? (goesRight ? 'left' : 'right') : (goesRight ? 'right' : 'left');
-
     if (!text) return paints;
-    paints.push(amplifier(feature, at(labelOffsetPx, 0), text, textScale, {
-        rotation,
-        // Center the identifier over the arrow figure it caps; with no arrows there
-        // is nothing to center on, so run it inward off the endpoint.
-        align: rows > 0 ? 'center' : endAlign,
-        baseline: 'bottom',
-    }));
+    paints.push(amplifier(feature, at(labelOffsetPx, 0), text, textScale, {rotation, align: 'center', baseline: 'bottom'}));
 
     return paints;
 }
@@ -182,10 +165,8 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         /*
          * **Capped against the route's own length.**
          *
-         * The designation is drawn at *both* ends, so a route shorter than two labels
-         * reads as one blob with no line between them — `MSR 1MSR 1` — which is what the
-         * sweep shows once it is zoomed out. The zoom-anchored scale floors at 0.3 and the
-         * route does not, so the text overruns a shape that keeps shrinking.
+         * The zoom-anchored scale floors at 0.3 and the route does not, so uncapped the
+         * designation overruns a route that keeps shrinking as it is zoomed out.
          */
         const routePx = pathLength(coords) / context.resolution;
         const scale = capLabelToSpan(context, full, fontStyle, scaleOf(feature, context), routePx);
@@ -193,14 +174,13 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         // least twice it. The arrow figure keeps `scale`. @see legibleDesignation
         const {text, scale: textScale} = legibleDesignation(full, getLabel(name), scale, fontStyle, context, routePx);
 
-        const start = coords[0];
-        const afterStart = coords[1];
-        const end = coords[coords.length - 1];
-        const beforeEnd = coords[coords.length - 2];
+        const {index, t} = projectedMidSegment(coords);
+        const a = coords[index];
+        const b = coords[index + 1];
+        const middle: ProjectedPosition = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
         return [
-            ...routeEndPaints(feature, context, text, direction, true, start, start, afterStart, scale, textScale),
-            ...routeEndPaints(feature, context, text, direction, false, end, beforeEnd, end, scale, textScale),
+            ...routeBlockPaints(feature, context, text, direction, middle, a, b, scale, textScale),
             {
                 geometry,
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
