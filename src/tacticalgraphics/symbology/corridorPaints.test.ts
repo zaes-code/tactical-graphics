@@ -28,11 +28,11 @@ const context: PaintContext = {
     measureText: (text, font) => text.length * parseFloat(font.match(/(\d*\.?\d+)px/)?.[1] ?? '16') * 0.6,
 };
 
-/** One leg `length` px long, circles of 20 px radius, labels capped by a `boundsPx` extent. */
-const corridor = (length: number, boundsPx: number): Paint[] =>
+/** One leg `length` px long (two, turning, when `turn`), 20 px half-width, labels capped by a `boundsPx` extent. */
+const corridor = (length: number, boundsPx: number, turn = false): Paint[] =>
     airCorridorLabelPaint(TacticalGraphicName.AirCorridor)(
         {
-            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [length, 0]] as ProjectedPosition[]},
+            geometry: {type: 'MultiPoint', coordinates: (turn ? [[0, 0], [length, 0], [length, length]] : [[0, 0], [length, 0]]) as ProjectedPosition[]},
             properties: {name: TacticalGraphicName.AirCorridor, designation: 'ALPHA'},
             graphicSize: 20,
             bounds: {minX: 0, minY: 0, maxX: boundsPx, maxY: 0},
@@ -59,8 +59,8 @@ describe('airCorridorLabelPaint', () => {
     });
 
     it('draws no designation on a leg whose clear run is under twice AC', () => {
-        // 50 px between centers, 40 px of it inside the two circles: 10 px clear.
-        expect(legs(corridor(50, 6))).toEqual([]);
+        // 50 px legs meeting at a turn, 40 px of each inside the half-widths: 10 px clear.
+        expect(legs(corridor(50, 6, true))).toEqual([]);
     });
 });
 
