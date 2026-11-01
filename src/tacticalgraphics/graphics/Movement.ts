@@ -281,43 +281,6 @@ export class MainAttack extends MovementGraphicBase {
     }
 }
 
-/**
- * Avenue of approach (APP-06 152300) — the axis of advance's solid hollow arrow, carrying
- * `AA` instead of a bare designation.
- *
- * > Points 1 through N-1 and 2 determine the symbol's centreline and Point N determines
- * > the width.
- *
- * Which is `MainAttack`'s construction exactly, so it is that class under another name
- * rather than a second copy of the same arrow. What the plate adds and this does not is a
- * free-text amplifier at **each** intermediate anchor point — the Example reads "ENY"
- * twice down the tail — and the schema carries one label per graphic, not one per vertex.
- */
-export class AvenueOfApproach extends MainAttack {
-    name: string = TacticalGraphicName.AvenueOfApproach;
-
-    /**
-     * Four anchors, not two: the head span the family publishes, then the **rear end of
-     * each rail**.
-     *
-     * 152300's Template boxes an `N` on both rails at the back of the symbol, and an `H`
-     * outside it. Neither can be placed from the head span alone, and a paint cannot go
-     * looking for the rails -- it is handed one feature. The generator already computes
-     * both parallels to draw the arrow, so publishing where they start costs nothing and
-     * keeps the placement a fact of the geometry rather than a guess in a renderer.
-     *
-     * `anchors()` in the paint layer reads the first two for rotation and scale exactly as
-     * before, so the axis-of-advance placement is unchanged.
-     */
-    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
-        const radius = opts?.radius || 20;
-        const centerline = this.arrowCenterline(base, radius);
-        const left = this.parallel(centerline, radius);
-        const right = this.parallel(centerline, -radius);
-        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0], ...this.labelPath(centerline)]);
-    }
-}
-
 export class MainAttackFeint extends MovementGraphicBase {
     name: string = TacticalGraphicName.MainAxisOfAdvanceFeint;
 
@@ -424,6 +387,47 @@ export class SupportingAttack extends MovementGraphicBase {
         const radius = opts?.radius || 20;
         const centerline = this.arrowCenterline(base, radius);
         return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
+    }
+}
+
+/**
+ * Avenue of approach (APP-06 152300) — the supporting axis of advance's hollow arrow, with
+ * its single-outline head, carrying `AA` instead of a bare designation.
+ *
+ * > Points 1 through N-1 and 2 determine the symbol's centreline and Point N determines
+ * > the width.
+ *
+ * Which is `SupportingAttack`'s construction exactly, so it is that class under another name
+ * rather than a second copy of the same arrow. It extended `MainAttack` until 2026-10-31 and
+ * so wore the main attack's double-outlined head, which the plate does not draw: neither FM
+ * 1-02.2 nor MIL-STD-2525E defines the symbol, so 152300 is the only authority. Both heads
+ * overhang the body by the same `DEFAULT_TIP_OVERHANG`, so a saved width point still lands
+ * where it did. What the plate adds and this does not is a
+ * free-text amplifier at **each** intermediate anchor point — the Example reads "ENY"
+ * twice down the tail — and the schema carries one label per graphic, not one per vertex.
+ */
+export class AvenueOfApproach extends SupportingAttack {
+    name: string = TacticalGraphicName.AvenueOfApproach;
+
+    /**
+     * Four anchors, not two: the head span the family publishes, then the **rear end of
+     * each rail**.
+     *
+     * 152300's Template boxes an `N` on both rails at the back of the symbol, and an `H`
+     * outside it. Neither can be placed from the head span alone, and a paint cannot go
+     * looking for the rails -- it is handed one feature. The generator already computes
+     * both parallels to draw the arrow, so publishing where they start costs nothing and
+     * keeps the placement a fact of the geometry rather than a guess in a renderer.
+     *
+     * `anchors()` in the paint layer reads the first two for rotation and scale exactly as
+     * before, so the axis-of-advance placement is unchanged.
+     */
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        const left = this.parallel(centerline, radius);
+        const right = this.parallel(centerline, -radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0], ...this.labelPath(centerline)]);
     }
 }
 
