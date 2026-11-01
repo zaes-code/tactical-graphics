@@ -2,7 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
 import geometryService from "../core/GeometryService";
-import {frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
+import {END_TICK_SHARE, frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
 
 /**
  * Breach — APP-06 340200.
@@ -34,8 +34,8 @@ export class Breach extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         const {axis, half} = frontEdgeFrame(base, opts.size);
-        let topArrow = geometryService.getBreachArrow(axis, -half, 45, -135);
-        let bottomArrow = geometryService.getBreachArrow(axis, half, 135, -45);
+        let topArrow = geometryService.getBreachArrow(axis, -half, 45, -135, END_TICK_SHARE);
+        let bottomArrow = geometryService.getBreachArrow(axis, half, 135, -45, END_TICK_SHARE);
         return this.asMultiLineStringFeature([
             ...bottomArrow.geometry.coordinates,
             ...topArrow.geometry.coordinates,
