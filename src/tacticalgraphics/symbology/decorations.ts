@@ -330,11 +330,22 @@ export function obstacleToothSize(path: ProjectedPosition[], closed: boolean, re
 }
 
 /**
- * Encirclement's tooth is the obstacle tooth with a narrower base — the 0.75 : 1
- * base-to-height ratio the generator used to bake, and the proportion the symbol
- * is read at.
+ * How many teeth an encirclement wears round its ring, at the size the plate draws them.
+ *
+ * APP-06 151800, FM 1-02.2 Table 5-5 and MIL-STD-2525E Table L-VII all draw about ten large,
+ * separate open triangles. It used to wear the obstacle belt's 10 px tooth with a 10 px gap,
+ * which on any real ring is forty-odd small teeth fused into a sawtooth.
  */
-export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.75;
+export const ENCIRCLEMENT_TOOTH_COUNT = 10;
+/** A tooth's base, as a share of its period round the ring; the rest is the gap. */
+export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.4;
+/** A tooth's height against its base: near-equilateral, as drawn. */
+const ENCIRCLEMENT_TOOTH_HEIGHT_SHARE = 0.9;
+/**
+ * The widest base a tooth takes on screen. A ring zoomed to fill the screen keeps teeth
+ * this size and wears more of them, rather than ten triangles the size of a hand.
+ */
+export const ENCIRCLEMENT_TOOTH_MAX_BASE_PX = 60;
 
 /**
  * An encirclement's tooth size, in projected meters, at the current resolution.
@@ -344,13 +355,19 @@ export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.75;
  * amplifiers, and sizing each segment against its own length would give one ring
  * several different tooth sizes and make the hostile symbol disagree with the
  * friendly one drawn over the same area.
+ *
+ * Sized so the ring carries `ENCIRCLEMENT_TOOTH_COUNT` of them, capped at
+ * `ENCIRCLEMENT_TOOTH_MAX_BASE_PX`, and dropped below `DECORATION_MIN_PX`.
  */
 export function encirclementToothSize(ring: ProjectedPosition[], resolution: number) {
-    const scale = decorationScale(ring, true, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
+    const perimeterPx = pathLength(ring) / resolution;
+    const basePx = Math.min(ENCIRCLEMENT_TOOTH_MAX_BASE_PX, (perimeterPx / ENCIRCLEMENT_TOOTH_COUNT) * ENCIRCLEMENT_TOOTH_BASE_SHARE);
+    const shown = basePx >= DECORATION_MIN_PX ? basePx : 0;
+    const gapPx = (shown * (1 - ENCIRCLEMENT_TOOTH_BASE_SHARE)) / ENCIRCLEMENT_TOOTH_BASE_SHARE;
     return {
-        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
-        baseMap: OBSTACLE_TOOTH_BASE_PX * ENCIRCLEMENT_TOOTH_BASE_SHARE * scale * resolution,
-        gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
+        heightMap: shown * ENCIRCLEMENT_TOOTH_HEIGHT_SHARE * resolution,
+        baseMap: shown * resolution,
+        gapMap: gapPx * resolution,
     };
 }
 
