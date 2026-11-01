@@ -529,7 +529,8 @@ export function railCrossingBase(center: Position, half: number, points = 3): Po
     const across = half * 0.55;
     const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
     if (points >= 4) {
-        return [...edge, [cx + half, cy + across], [cx - half, cy + across]];
+        // Point 3 across from point 1, point 4 across from point 2. @see parallelRailAnchors
+        return [...edge, [cx - half, cy + across], [cx + half, cy + across]];
     }
     // Beside point 2, which is where the reader squares it to anyway — so the synthesised base
     // and the settled one are the same points, and the sheet is idempotent.

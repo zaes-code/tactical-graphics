@@ -42,6 +42,11 @@ const CLICKS: Position[] = [[-1, 20], [1, 20], [1, 20.6]];
 const meters = (a: Position, b: Position) => turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
 const gap = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 const anchors = (name: TacticalGraphicName, clicks: Position[]) => normalizeDrawnBase(name, clicks);
+/**
+ * The far rail's point beside point 2: point 3 on a ford, point 4 on the two that number four,
+ * which 271100 and 271300 letter across from point 2 (point 3 is across from point 1).
+ */
+const besideTwo = (base: Position[]) => (base.length >= 4 ? base[3] : base[2]);
 
 describe('the two-rail crossings place their separation', () => {
     it.each(FAMILY.map(n => [String(n), n] as const))('%s is drawn in three clicks', (_label, name) => {
@@ -56,14 +61,15 @@ describe('the two-rail crossings place their separation', () => {
     it.each(FAMILY.map(n => [String(n), n] as const))(
         '%s keeps the bar it was given, and squares the click across it',
         (_label, name) => {
-            const [one, two, three] = anchors(name, CLICKS);
+            const settled = anchors(name, CLICKS);
+            const [one, two] = settled;
             // Points 1 and 2 are the bar, end to end, exactly as placed.
             expect(meters(one, CLICKS[0])).toBeLessThan(1);
             expect(meters(two, CLICKS[1])).toBeLessThan(1);
-            // Point 3 sits square across from point 2 — the plate's own PT 3 leader lands on
-            // the far bar, and an along-bar offset is a thing two parallel bars cannot draw.
+            // The click sits square across from point 2, and an along-bar offset is a thing two
+            // parallel bars cannot draw.
             const along = turf.bearing(turf.point(one), turf.point(two));
-            const across = turf.bearing(turf.point(two), turf.point(three));
+            const across = turf.bearing(turf.point(two), turf.point(besideTwo(settled)));
             expect(Math.abs(gap(along, across) - 90)).toBeLessThan(0.5);
         },
     );
@@ -76,8 +82,12 @@ describe('the two-rail crossings place their separation', () => {
             // Same direction, not opposed — this is the hairpin's mirror image, whose legs
             // run the other way. @see hairpinFourthPoint
             const first = turf.bearing(turf.point(one), turf.point(two));
-            const second = turf.bearing(turf.point(four), turf.point(three));
+            const second = turf.bearing(turf.point(three), turf.point(four));
             expect(gap(first, second)).toBeLessThan(1);
+            // And numbered as the plates number them: point 3 across from point 1, point 4
+            // across from point 2. (APP-06 and 2525E 271100, 271300.)
+            expect(meters(one, three)).toBeLessThan(meters(one, four));
+            expect(meters(two, four)).toBeLessThan(meters(two, three));
         },
     );
 
@@ -105,7 +115,7 @@ describe('the two-rail crossings place their separation', () => {
         const settled = anchors(name, CLICKS);
         const frame = parallelRailFrame(settled)!;
         // The half-separation the generator draws with is half the gap the operator stated.
-        expect(frame.half * 2).toBeCloseTo(meters(settled[1], settled[2]), -1);
+        expect(frame.half * 2).toBeCloseTo(meters(settled[1], besideTwo(settled)), -1);
 
         const drawn = renderTacticalGraphic({
             type: 'Feature',
@@ -182,7 +192,7 @@ describe('the two-rail crossings place their separation', () => {
              */
             const stated = 30_000;
             const gapOf = (bar: Position[]) =>
-                meters(bar[1], parallelRailAnchors(bar, baseVertexCount(name)!, stated)![2]);
+                meters(bar[1], besideTwo(parallelRailAnchors(bar, baseVertexCount(name)!, stated)!));
 
             const short: Position[] = [[-0.2, 20], [0.2, 20]];
             const long: Position[] = [[-4, 20], [4, 20]];
@@ -194,7 +204,7 @@ describe('the two-rail crossings place their separation', () => {
 
             // Silence still falls back to a share of the bar, because a raw-GeoJSON reader has
             // no resolution to offer and a preview still has to be drawn.
-            const silent = meters(long[1], parallelRailAnchors(long, baseVertexCount(name)!)![2]);
+            const silent = meters(long[1], besideTwo(parallelRailAnchors(long, baseVertexCount(name)!)!));
             expect(silent).toBeGreaterThan(stated * 2);
         },
     );
@@ -293,11 +303,11 @@ describe('the two-rail crossings place their separation', () => {
             const resolution = 120;
             const bar: Position[] = [[-1, 20], [1, 20]];
             const previewed = normalizeDrawnBase(name, bar, resolution);
-            expect(meters(previewed[1], previewed[2])).toBeCloseTo(RAIL_PREVIEW_GAP_PX * resolution, -1);
+            expect(meters(previewed[1], besideTwo(previewed))).toBeCloseTo(RAIL_PREVIEW_GAP_PX * resolution, -1);
 
             // Eight times the metres per pixel is eight times the gap and the same picture.
             const zoomedOut = normalizeDrawnBase(name, bar, resolution * 8);
-            expect(meters(zoomedOut[1], zoomedOut[2]) / meters(previewed[1], previewed[2])).toBeCloseTo(8, 3);
+            expect(meters(zoomedOut[1], besideTwo(zoomedOut)) / meters(previewed[1], besideTwo(previewed))).toBeCloseTo(8, 3);
 
             // And a settled base is untouched by it — the third click states the gap, and a
             // resolution must never move a point the operator placed.
@@ -339,6 +349,17 @@ describe('the two-rail crossings place their separation', () => {
             expect(frame.centre[0][1]).toBeGreaterThan(20);
             expect(frame.centre[1][1]).toBeGreaterThan(20);
             void drawn;
+        },
+    );
+});
+
+describe('a crossing stored before 2026-10-31, with points 3 and 4 the other way round', () => {
+    it.each([TacticalGraphicName.Bridge, TacticalGraphicName.AssaultCrossing, TacticalGraphicName.Gap].map(n => [String(n), n] as const))(
+        '%s settles into the plate order without moving its rails',
+        (_label, name) => {
+            const settled = normalizeDrawnBase(name, CLICKS);
+            const legacy = [settled[0], settled[1], settled[3], settled[2]];
+            normalizeDrawnBase(name, legacy).forEach((p, i) => expect(meters(p, settled[i])).toBeLessThan(1));
         },
     );
 });
