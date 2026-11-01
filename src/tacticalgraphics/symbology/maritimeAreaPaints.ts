@@ -47,6 +47,7 @@ import {paintGeometryMembers, paintLineWork} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
 import {formatDistance} from '../core/symbology';
+import {targetAttitudeMils} from '../graphics/RectangularTarget';
 // No `lineColorOf` here any more: with 200600's border white, every graphic this
 // module paints takes its colour from its own plate rather than from an affiliation.
 // @see COLOUR_NAMED_AREAS
@@ -214,8 +215,9 @@ const AXIS_BLOCK_GAP_PX = 10;
  * - **The rectangular target (240802)** says *"the target length (AM1) in metres and target
  *   width (AM) in metres"* — **full figures, not halves** — and *"as determined by the
  *   Target Attitude (AN) in mils"*. Its Example prints `AM = 60 Metres`, `AM1 = 112 Metres`,
- *   `AN = 1200 mils`, and 1200 mils is 67.5 degrees, so the angle is a **compass bearing**
- *   like the rest of that family's `AN` rather than the ellipses' east-based one.
+ *   `AN = 1200 mils`, and 1200 mils is 67.5 degrees, which the Example draws as the 60 m side
+ *   on a bearing of 67.5: a clockwise turn of the Template, whose length runs east-west.
+ *   @see targetAttitudeDegrees
  *
  * Halving a full width would have printed a plausible number half the size, and reading mils
  * as degrees a plausible number three and a half times too small — neither shows up as
@@ -234,7 +236,7 @@ const AXIS_BLOCK_GAP_PX = 10;
 interface AxisAmplifierReading {
     /** True where the plate calls them radii, so the schema's full figure is halved. */
     halved: boolean;
-    /** `east` is the stored trigonometric angle; `compassMils` is `90 - rotation`, in mils. */
+    /** `east` is the stored trigonometric angle; `compassMils` is 240802's clockwise turn, in mils. */
     angle: 'east' | 'compassMils';
 }
 
@@ -245,9 +247,6 @@ const AXIS_AMPLIFIER_READING: Partial<Record<TacticalGraphicName, AxisAmplifierR
     [TacticalGraphicName.DefendedAreaEllipse]: ELLIPSE_READING,
     [TacticalGraphicName.TargetAreaRectangular]: {halved: false, angle: 'compassMils'},
 };
-
-/** 6400 mils to the full turn — NATO's mil, which is what 240802's `AN` is stated in. */
-const MILS_PER_TURN = 6400;
 
 export function axisAmplifierPaint(): AreaPaint {
     return (feature, context) => {
@@ -262,10 +261,8 @@ export function axisAmplifierPaint(): AreaPaint {
         if (typeof length === 'number' && length > 0) lines.push(`AM1 = ${formatDistance(half(length))}`);
         if (typeof rotation === 'number' && Number.isFinite(rotation)) {
             if (reading.angle === 'compassMils') {
-                // `90 - rotation` is the same conversion `RectangularTarget.frame` makes to
-                // hand turf a bearing, so the caption and the shape agree by construction.
-                const bearing = ((90 - rotation) % 360 + 360) % 360;
-                lines.push(`AN = ${Math.round((bearing * MILS_PER_TURN) / 360)} mils`);
+                // The Template's clockwise turn, not the length axis's bearing. @see targetAttitudeMils
+                lines.push(`AN = ${targetAttitudeMils(rotation)} mils`);
             } else {
                 const turned = Math.round(rotation);
                 lines.push(`AN = ${turned > 0 ? '+' : ''}${turned}°`);
