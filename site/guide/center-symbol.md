@@ -132,7 +132,7 @@ two graphics of the **same** kind need different symbols.
 
 ```ts
 import ms from 'milsymbol';
-import {TacticalGraphicHostility, TacticalGraphicName, setSecuritySymbolProvider} from '@zaes/tactical-graphics';
+import {SNAPSHOT_VERSION, TacticalGraphicHostility, TacticalGraphicName, setSecuritySymbolProvider} from '@zaes/tactical-graphics';
 
 // Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard identity
 // the library derived from `hostility` survives the swap, and a hostile graphic stays
@@ -170,6 +170,7 @@ const at = (name, [lon, lat], arm, hostility = TacticalGraphicHostility.friend) 
 // snapshot first if you are adding to something already drawn.
 graphics.restore({
     type: 'FeatureCollection',
+    tacticalGraphicsVersion: SNAPSHOT_VERSION,   // say which shape these bases are in
     features: [
         at(TacticalGraphicName.Screen, [-77.10, 38.89], 0.04),
         at(TacticalGraphicName.Guard, [-77.04, 38.89], 0.04, TacticalGraphicHostility.hostileFaker),

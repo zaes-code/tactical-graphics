@@ -5,7 +5,7 @@ import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGrap
 import {ObjectEvent} from "ol/Object";
 import {Coordinate} from "ol/coordinate";
 import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
-import {rotationAnchor} from '@zaes/tactical-graphics';
+import {maxAreaVertices, rotationAnchor} from '@zaes/tactical-graphics';
 import {fromLonLat, toLonLat} from 'ol/proj';
 
 
@@ -22,9 +22,12 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
     geomHandleType: TacticalGraphicShape = 'Polygon';
     symbolId: string = '';
     graphic: PolygonGraphic;
+    /** The outline's vertex cap, which `Draw` closes the ring on. @see maxAreaVertices */
+    maxPoints: number | undefined;
 
-    constructor(graphic: PolygonGraphic) {
+    constructor(graphic: PolygonGraphic, name?: string) {
         this.graphic = graphic;
+        this.maxPoints = name === undefined ? undefined : maxAreaVertices(name);
         const features = this.graphic?.getFeatures?.();
         if (!Array.isArray(features)) return;
 

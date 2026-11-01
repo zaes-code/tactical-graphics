@@ -1034,6 +1034,17 @@ export const RAIL_PREVIEW_GAP_PX = 50;
 const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
 
 /**
+ * The far rail's point that sits beside point 2: the third click, or a stored base's point
+ * across from point 2. That is point 4 for a four-point base in plate order and point 3 in the
+ * order stored before 2026-10-31, so the nearer of the two to point 2 is taken.
+ */
+function farPointBesideTwo(coords: Position[]): Position {
+    if (coords.length < 4) return coords[2];
+    const two = coords[1];
+    return meters(two, coords[3]) <= meters(two, coords[2]) ? coords[3] : coords[2];
+}
+
+/**
  * The anchor points of a **two-rail crossing**, from the clicks that place them.
  *
  * APP-06 271500 ford easy and 271600 ford difficult letter `PT 1` and `PT 2` at the ends of
@@ -1086,7 +1097,7 @@ export function parallelRailAnchors(
      */
     const across = clicks.length >= 3
         ? (() => {
-              const click = clicks[2];
+              const click = farPointBesideTwo(clicks);
               const reach = meters(two, click);
               if (!isFinite(reach) || reach <= 0) return 0;
               const toClick = turf.bearing(turf.point(two), turf.point(click));
@@ -1104,16 +1115,23 @@ export function parallelRailAnchors(
               : bar * RAIL_PREVIEW_GAP_SHARE);
     if (!isFinite(across) || across === 0) return undefined;
 
-    // Square across from point 2, which is where the plate's own PT 3 leader lands.
-    const three = turf.destination(turf.point(two), Math.abs(across), along + Math.sign(across) * 90, {
+    // Square across from point 2: the click lands there, and a ford's PT 3 is on that end.
+    const acrossTwo = turf.destination(turf.point(two), Math.abs(across), along + Math.sign(across) * 90, {
         units: 'meters',
     }).geometry.coordinates as Position;
-    if (stored < 4) return [one, two, three];
+    if (stored < 4) return [one, two, acrossTwo];
 
     const rail = meters(one, two);
-    const four = turf.destination(turf.point(three), rail, along + 180, {units: 'meters'}).geometry
+    const acrossOne = turf.destination(turf.point(acrossTwo), rail, along + 180, {units: 'meters'}).geometry
         .coordinates as Position;
-    return [one, two, three, four];
+    /*
+     * **Point 3 across from point 1, point 4 across from point 2**, as 271100 and 271300 number
+     * them on APP-06 and 2525E alike (PT 3 at the top of the far rail, PT 4 at its bottom). The
+     * third click still squares across from point 2, which is where an operator puts it, and is
+     * stored as point 4. Until 2026-10-31 the two were swapped. A base stored that way reads
+     * the same rails, since only the far rail's offset is read, and settles into this order.
+     */
+    return [one, two, acrossOne, acrossTwo];
 }
 
 /**
@@ -1128,7 +1146,8 @@ export function parallelRailFrame(
     coords: Position[] | undefined,
 ): {centre: Position[]; half: number} | undefined {
     if (!coords || coords.length < 3) return undefined;
-    const [one, two, three] = coords;
+    const [one, two] = coords;
+    const three = farPointBesideTwo(coords);
 
     const along = turf.bearing(turf.point(one), turf.point(two));
     const reach = meters(two, three);

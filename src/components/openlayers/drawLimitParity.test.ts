@@ -17,7 +17,7 @@
  * the catalog renders them from a generic line. This test is the guard that was missing.
  */
 
-import {baseVertexCount, drawClickCount, dropSizePx, listTacticalGraphicNames, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {baseVertexCount, drawClickCount, dropSizePx, listTacticalGraphicNames, maxAreaVertices, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {getController} from './controllerRegistry';
 
 /** The `maxPoints` a graphic's OpenLayers controller enforces, if it enforces one. */
@@ -60,7 +60,14 @@ describe('the two draw limits agree', () => {
             expect(openLayersLimit(name)).toBeUndefined();
             return;
         }
-        expect(openLayersLimit(name)).toBe(drawClickCount(name) ?? baseVertexCount(name));
+        expect(openLayersLimit(name)).toBe(drawClickCount(name) ?? baseVertexCount(name) ?? maxAreaVertices(name));
+    });
+
+    it('caps the twelve six-point irregular areas at six (2525E draw rule Area10)', () => {
+        const capped = names.filter(n => maxAreaVertices(n) !== undefined);
+        expect(capped).toHaveLength(12);
+        for (const name of capped) expect(openLayersLimit(name)).toBe(6);
+        expect(maxAreaVertices(TacticalGraphicName.FreeFireAreaIrregular)).toBeUndefined();
     });
 
     it('really does cap the fixed-anchor graphics, rather than agreeing on nothing', () => {
