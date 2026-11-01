@@ -9,6 +9,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {offsetAbove, offsetBelow, uprightRotation} from './decorations';
@@ -73,7 +74,11 @@ function linearTargetPaints(
     const endTop: ProjectedPosition = [end[0] + px * barHalfMap, end[1] + py * barHalfMap];
     const endBottom: ProjectedPosition = [end[0] - px * barHalfMap, end[1] - py * barHalfMap];
     // The middle of what is on screen when the line's own middle is not. @see midSegmentInView
-    const {t: along} = midSegmentInView([start, end], {index: 0, t: 0.5}, context);
+    const scale = scaleOf(feature, context);
+    const {t: along} = midSegmentInView([start, end], {index: 0, t: 0.5}, context, {
+        alongPx: (context.measureText(nameLabel, fontStyle) * scale) / 2,
+        acrossPx: LABEL_GAP_PX + (BASE_FONT_SIZE_PX + belowLines.length * LINE_HEIGHT_PX) * scale,
+    });
     const center: ProjectedPosition = [start[0] + dx * along, start[1] + dy * along];
 
     const paints: Paint[] = [{
@@ -85,7 +90,6 @@ function linearTargetPaints(
     }];
 
     const rotation = uprightRotation(start, end);
-    const scale = scaleOf(feature, context);
 
     const text = (at: ProjectedPosition, value: string, baseline: 'top' | 'bottom'): Paint => ({
         geometry: {type: 'Point', coordinates: at},

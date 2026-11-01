@@ -21,7 +21,7 @@ import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
-import {midSegmentInView} from './viewFollow';
+import {type LabelFootprint, midSegmentInView} from './viewFollow';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, showsEny, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -93,8 +93,8 @@ function vertices(feature: PaintFeature): ProjectedPosition[] {
 }
 
 /** The midpoint of a path, plus the segment it lies on. */
-function midpointOf(coords: ProjectedPosition[], context: PaintContext) {
-    const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context);
+function midpointOf(coords: ProjectedPosition[], context: PaintContext, footprint?: LabelFootprint) {
+    const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context, footprint);
     const p1 = coords[index];
     const p2 = coords[index + 1];
     return {index, t, p1, p2, point: [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t] as ProjectedPosition};
@@ -136,12 +136,15 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const coords = vertices(feature);
         if (coords.length < 2) return [];
 
-        const {p1, p2, point} = midpointOf(coords, context);
         const scale = scaleOf(feature, context);
-        const rotation = uprightRotation(p1, p2);
         // `T2 ( AS )` on the plate: the designation carries its country code in
         // brackets, as the rest of the fire-support family does.
         const full = getFullLabel(name, formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode));
+        const {p1, p2, point} = midpointOf(coords, context, {
+            alongPx: textWidth(context, full, fontStyle, scale) / 2,
+            acrossPx: LABEL_OFFSET_PX + BASE_FONT_SIZE_PX * scale,
+        });
+        const rotation = uprightRotation(p1, p2);
         // Too small to read, the name goes and `CFL` stays. The dates keep `scale`. @see legibleDesignation
         const shown = legibleDesignation(full, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
 

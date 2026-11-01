@@ -94,7 +94,12 @@ export function boundaryPaint(): LinePaint {
         const bottomLabel = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
-        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context);
+        // Both names and the gap between them, so the pair slides clear of other labels together.
+        const footprintScale = scaleOf(feature, context);
+        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context, {
+            alongPx: Math.max(textWidth(context, topLabel, fontStyle, footprintScale), textWidth(context, bottomLabel, fontStyle, footprintScale)) / 2,
+            acrossPx: (BASE_FONT_SIZE_PX + echelonPerpExtentPx(echelon) + BOUNDARY_GAP_PX) * footprintScale,
+        });
         // As long as the run the middle sits on, so the glyph's cap is measured against the
         // line it marks and not against one chord of a smoothed curve. @see runVector
         const [dx, dy] = runVector(coords, index, t);

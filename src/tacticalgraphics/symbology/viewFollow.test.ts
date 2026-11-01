@@ -378,3 +378,63 @@ describe('a line labelled at its middle', () => {
         });
     }
 });
+
+describe('a label whose place another label holds', () => {
+    const taken = (x: number, y: number, half = 6_000): ProjectedBounds => ({minX: x - half, minY: y - half, maxX: x + half, maxY: y + half});
+    const withAvoid = (avoid: ProjectedBounds[]): PaintContext => ({...context(VIEW), avoid});
+    const line = (name: TacticalGraphicName): PaintFeature => ({
+        geometry: {
+            type: 'LineString',
+            coordinates: [
+                [10_000, 0],
+                [90_000, 0],
+            ],
+        },
+        properties: {name, designation: '1AD', secondDesignation: '2AD'},
+    });
+
+    it('slides a coordinated fire line label along its line, clear of it', () => {
+        const paint = coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine);
+        const free = labels(paint(line(TacticalGraphicName.CoordinatedFireLine), context(VIEW)));
+        const moved = labels(paint(line(TacticalGraphicName.CoordinatedFireLine), withAvoid([taken(50_000, 0)])));
+        expect(free[0][0]).toBeCloseTo(50_000);
+        expect(Math.abs(moved[0][0] - 50_000)).toBeGreaterThan(6_000);
+        for (const p of moved) expect(inView(p, VIEW)).toBe(true);
+    });
+
+    it("moves a boundary's names and echelon together", () => {
+        const paint = boundaryPaint();
+        const moved = paint(line(TacticalGraphicName.Boundary), withAvoid([taken(50_000, 0)]));
+        const xs = labels(moved).map(p => p[0]);
+        expect(Math.abs(xs[0] - 50_000)).toBeGreaterThan(6_000);
+        expect(xs[0]).toBeCloseTo(xs[1]);
+    });
+
+    it('stays where it was when nothing is in the way', () => {
+        const paint = boundaryPaint();
+        const f = line(TacticalGraphicName.Boundary);
+        expect(paint(f, withAvoid([taken(0, 40_000, 1_000)]))).toEqual(paint(f, context(VIEW)));
+    });
+
+    it('stays put when every place along the line is held', () => {
+        const paint = coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine);
+        const f = line(TacticalGraphicName.CoordinatedFireLine);
+        expect(paint(f, withAvoid([{minX: -1e6, minY: -1e6, maxX: 1e6, maxY: 1e6}]))).toEqual(paint(f, context(VIEW)));
+    });
+
+    it('moves an area label to a clear part of its area', () => {
+        const ring: ProjectedPosition[] = [
+            [10_000, -40_000],
+            [90_000, -40_000],
+            [90_000, 40_000],
+            [10_000, 40_000],
+            [10_000, -40_000],
+        ];
+        const f: PaintFeature = {geometry: {type: 'Point', coordinates: [50_000, 0]}, properties: {name: TacticalGraphicName.ObjectiveArea}, ring};
+        const footprint = {alongPx: 30, acrossPx: 8};
+        expect(areaLabelInView(f, withAvoid([]), footprint)).toBe(f);
+        const at = (areaLabelInView(f, withAvoid([taken(50_000, 0)]), footprint).geometry as {coordinates: ProjectedPosition}).coordinates;
+        expect(Math.abs(at[1])).toBeGreaterThan(6_000);
+        expect(inRing(at, ring)).toBe(true);
+    });
+});

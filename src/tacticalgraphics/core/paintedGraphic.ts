@@ -2,8 +2,8 @@ import type {Feature as GeoJSONFeature, Position} from 'geojson';
 import {RSD_DEFAULT_START_SHARE} from '../graphics/MaritimeArea';
 import {resolveRangeFanBands} from '../graphics/RangeFan';
 import {withFittedDashes} from '../symbology/dashFit';
-import {areaLabelInView} from '../symbology/viewFollow';
-import {withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from '../symbology/paintFunctions';
+import {areaLabelInView, type LabelFootprint} from '../symbology/viewFollow';
+import {getFullLabel, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from '../symbology/paintFunctions';
 import {CORRIDOR_GRAPHICS, getPaintFunction} from '../symbology/registry';
 import {axisFromRectangleRing, RECTANGLE_DEFAULT_HALF_WIDTH_PX, rectangleDefaultHalfWidth} from './anchors';
 import {arrowheadMeters, axisAndWidth, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration} from './decorationSizes';
@@ -14,7 +14,8 @@ import {groundLength} from './mercator';
 import {boundsOf, outerRingOf, type Paint, type PaintContext, type PaintFeature, paintGeometryMembers, paintGeometryPositions, type ProjectedGeometry, type ProjectedInputGeometry, type ProjectedPosition} from './paint';
 import {renderTacticalGraphic, TACTICAL_GRAPHIC_KEY, type TacticalGraphicProperties, toGraphicOptions} from './render';
 import {describedProperties} from './snapshot';
-import {areaLabelRing, GLYPH_CUT_GAP_GRAPHICS, topEdgeLabel, usesStandoffWidth} from './symbology';
+import {areaLabelRing, configuredLabelScale, fontStyle, GLYPH_CUT_GAP_GRAPHICS, topEdgeLabel, usesStandoffWidth} from './symbology';
+import {BASE_FONT_SIZE_PX} from './config';
 import {TacticalGraphicName} from './type';
 import {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from './mercator';
 
@@ -1064,9 +1065,20 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
     // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
     const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(areaLabelInView(graphic.labels, context), context), graphic.labels.hideAmplifiers)), context), context));
+        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(areaLabelInView(graphic.labels, context, areaLabelFootprint(graphic, context)), context), graphic.labels.hideAmplifiers)), context), context));
     }
     return paints;
+}
+
+/**
+ * How far an area's centred name reaches, for sliding it clear of other labels; only worked out
+ * when the context names places to avoid. @see PaintContext.avoid
+ */
+function areaLabelFootprint(graphic: PaintedGraphic, context: PaintContext): LabelFootprint | undefined {
+    if (!context.avoid?.length) return undefined;
+    const scale = configuredLabelScale();
+    const text = getFullLabel(graphic.name, graphic.properties.designation ?? '');
+    return {alongPx: (context.measureText(text, fontStyle) * scale) / 2, acrossPx: BASE_FONT_SIZE_PX * scale};
 }
 
 /** Re-exported so callers do not need a second import for the lon/lat form. */

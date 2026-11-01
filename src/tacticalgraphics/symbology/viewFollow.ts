@@ -214,15 +214,42 @@ function interiorPoint(ring: ProjectedPosition[]): ProjectedPosition | undefined
  * Only a label that sits inside its area moves: one hung outside the outline is placed against
  * the shape on purpose. Returned unchanged when the context carries no view.
  */
-export function areaLabelInView(feature: PaintFeature, context: PaintContext): PaintFeature {
+export function areaLabelInView(feature: PaintFeature, context: PaintContext, footprint?: LabelFootprint): PaintFeature {
     const view = insetView(context);
     const ring = feature.ring;
     if (!view || !ring || ring.length < 3 || feature.geometry.type !== 'Point') return feature;
     const at = feature.geometry.coordinates;
-    if (inView(at, view) || !inRing(at, ring)) return feature;
+    if (!inRing(at, ring)) return feature;
+    const taken = (p: ProjectedPosition) => !!footprint && isTaken(p, footprint, 1, 0, context);
+    if (inView(at, view) && !taken(at)) return feature;
     const visible = clipRing(ring, view);
-    const moved = visible.length >= 3 ? interiorPoint(visible) : undefined;
+    if (visible.length < 3) return feature;
+    const middle = interiorPoint(visible);
+    // The visible part's middle, then the widest spans above and below it, nearest first.
+    const ys = visible.map(([, y]) => y);
+    const [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
+    const candidates = [middle, ...(footprint ? SLIDE_SHARES.slice(1).map(share => spanMiddle(visible, minY + (maxY - minY) * share)) : [])];
+    const moved = candidates.find((p): p is ProjectedPosition => !!p && !taken(p)) ?? (inView(at, view) ? undefined : middle);
     return moved ? {...feature, geometry: {type: 'Point', coordinates: moved}} : feature;
+}
+
+/** The middle of the widest span across `ring` at height `y`. */
+function spanMiddle(ring: ProjectedPosition[], y: number): ProjectedPosition | undefined {
+    const xs: number[] = [];
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [a, b] = [ring[j], ring[i]];
+        if (a[1] > y !== b[1] > y) xs.push(a[0] + ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]));
+    }
+    xs.sort((p, q) => p - q);
+    let best: ProjectedPosition | undefined;
+    let widest = 0;
+    for (let i = 0; i + 1 < xs.length; i += 2) {
+        if (xs[i + 1] - xs[i] > widest) {
+            widest = xs[i + 1] - xs[i];
+            best = [(xs[i] + xs[i + 1]) / 2, y];
+        }
+    }
+    return best;
 }
 
 /**
@@ -230,18 +257,67 @@ export function areaLabelInView(feature: PaintFeature, context: PaintContext): P
  * when the line's own middle is off screen. Unchanged when the context carries no view, when the
  * middle is on screen, or when none of the line is.
  */
-export function midSegmentInView(coords: ProjectedPosition[], mid: {index: number; t: number}, context: PaintContext): {index: number; t: number} {
+export function midSegmentInView(
+    coords: ProjectedPosition[],
+    mid: {index: number; t: number},
+    context: PaintContext,
+    /** The label's size around its anchor; with it, a place other labels hold is passed over. @see PaintContext.avoid */
+    footprint?: LabelFootprint,
+): {index: number; t: number} {
     const view = insetView(context);
     if (!view) return mid;
     const [a, b] = [coords[mid.index], coords[mid.index + 1] ?? coords[mid.index]];
-    if (inView([a[0] + (b[0] - a[0]) * mid.t, a[1] + (b[1] - a[1]) * mid.t], view)) return mid;
+    const at: ProjectedPosition = [a[0] + (b[0] - a[0]) * mid.t, a[1] + (b[1] - a[1]) * mid.t];
+    const onScreen = inView(at, view);
+    if (onScreen && !(footprint && isTaken(at, footprint, b[0] - a[0], b[1] - a[1], context))) return mid;
     const stretch = visibleStretch(coords, view);
     if (!stretch) return mid;
-    let s = distanceAlongPath(coords, stretch[0]) + length(stretch) / 2;
+    const start = distanceAlongPath(coords, stretch[0]);
+    const span = length(stretch);
+    // The middle of the visible stretch, then places either side of it, nearest first.
+    for (const share of footprint ? SLIDE_SHARES : [0.5]) {
+        const placed = segmentAt(coords, start + span * share);
+        const [p, q] = [coords[placed.index], coords[placed.index + 1]];
+        const there: ProjectedPosition = [p[0] + (q[0] - p[0]) * placed.t, p[1] + (q[1] - p[1]) * placed.t];
+        if (!footprint || !isTaken(there, footprint, q[0] - p[0], q[1] - p[1], context)) return placed;
+    }
+    // Nowhere clear: where it would have gone.
+    return onScreen ? mid : segmentAt(coords, start + span / 2);
+}
+
+/** Shares of a visible stretch a sliding label tries, middle first. */
+const SLIDE_SHARES = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
+
+/** `{index, t}` of the point `s` along `coords`, clamped to its ends. */
+function segmentAt(coords: ProjectedPosition[], s: number): {index: number; t: number} {
     for (let i = 0; i < coords.length - 1; i++) {
         const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
         if (s <= len || i === coords.length - 2) return {index: i, t: len === 0 ? 0 : Math.max(0, Math.min(1, s / len))};
         s -= len;
     }
-    return mid;
+    return {index: 0, t: 0};
+}
+
+/**
+ * How far a label reaches from its anchor, in screen pixels: along the direction it reads and
+ * across it. A label set beside its line reaches across by its offset plus its own height.
+ */
+export interface LabelFootprint {
+    alongPx: number;
+    acrossPx: number;
+}
+
+/**
+ * Whether a label of `footprint`, anchored at `at` and reading along `(dx, dy)`, would cover a
+ * place another label holds. Measured on its axis-aligned extent, so a slanted label is never
+ * judged clear of something it touches.
+ */
+export function isTaken(at: ProjectedPosition, footprint: LabelFootprint, dx: number, dy: number, context: PaintContext): boolean {
+    const avoid = context.avoid;
+    if (!avoid?.length) return false;
+    const len = Math.hypot(dx, dy) || 1;
+    const [c, s] = [Math.abs(dx / len), Math.abs(dy / len)];
+    const halfX = (c * footprint.alongPx + s * footprint.acrossPx) * context.resolution;
+    const halfY = (s * footprint.alongPx + c * footprint.acrossPx) * context.resolution;
+    return avoid.some(box => at[0] - halfX < box.maxX && at[0] + halfX > box.minX && at[1] - halfY < box.maxY && at[1] + halfY > box.minY);
 }

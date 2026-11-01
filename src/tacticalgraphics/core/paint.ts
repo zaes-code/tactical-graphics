@@ -333,6 +333,16 @@ export interface PaintContext {
      * moved label stays where the previous view left it.
      */
     view?: ProjectedBounds;
+
+    /**
+     * Screen areas other labels already hold, in projected meters.
+     *
+     * With it, a label that would land on one of them slides along the visible part of its line,
+     * or across its area, to the first clear place, and the line is cut where the label is. A host
+     * painting several graphics supplies the labels of those it has already painted. Read only
+     * together with `view`; without either, every label sits where the symbol puts it.
+     */
+    avoid?: ProjectedBounds[];
 }
 
 /** An axis-aligned box in projected meters. */
