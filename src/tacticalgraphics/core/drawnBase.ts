@@ -166,6 +166,19 @@ export function normalizeDrawnBase(
     if (placed) return placed;
 
     /*
+     * **343600 escort: point 1 is the centre of the bar.** "Point 1 defines the centre of the
+     * graphic. Point 2 and Point 3 defines the length", and the Template puts PT 1 under the
+     * A box in the middle of the bar. The bar is drawn on points 2 and 3, so point 1 is put
+     * on their midpoint, the same one the unit symbol and the E A E break use. Until
+     * 2026-10-31 it was wherever it was clicked, a grip floating off the symbol.
+     */
+    if (name === TacticalGraphicName.Escort && deduped.length >= 3) {
+        const [, a, b, ...rest] = deduped;
+        const middle: Position = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        return samePosition(middle, deduped[0]) ? deduped : [middle, a, b, ...rest];
+    }
+
+    /*
      * **The eleven axis arrows: the last coordinate is a width, and it is put back square.**
      *
      * Its distance across the axis is the whole of what it says, so the along-axis component of
