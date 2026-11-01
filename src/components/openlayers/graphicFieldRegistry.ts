@@ -160,6 +160,12 @@ export type GraphicFieldSet = {
      * them survives. @see RadarSearchDoctrine.frame, setRadarHalfAngle
      */
     stopRelativeBearing?: boolean;
+
+    /**
+     * A switch that hides the boundary, leaving the label and T — zone of fire (242600)
+     * alone, whose Note 2 asks for it. @see TacticalGraphicProperties.hideBoundary
+     */
+    boundarySwitch?: boolean;
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -190,6 +196,7 @@ function f(
             | 'grids'
             | 'weapon'
             | 'rangeFan'
+            | 'boundarySwitch'
         >
     > = {},
 ): GraphicFieldSet {
@@ -912,7 +919,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // the dashes are the symbol, not a reading of `planned` — so the control changed
     // nothing on the map, which is the same trap "Label Plate" was. (User's call,
     // 2026-08-27.) @see dashedOutlinePaint
-    [TacticalGraphicName.ZoneOfFire]: f(true, false, false, false, false),
+    [TacticalGraphicName.ZoneOfFire]: f(true, false, false, false, false, {boundarySwitch: true}),
     [TacticalGraphicName.RestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     [TacticalGraphicName.SeverelyRestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     // The four contaminated areas carry no amplifier either: 271700, 271800, 271900 and
