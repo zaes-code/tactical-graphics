@@ -9,6 +9,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {dateRangeLabel} from './midLabelLinePaints';
+import {textWidth} from './decorations';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {FIELD_OF_FIRE_BLADE} from '../core/fieldOfFire';
@@ -32,22 +33,11 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
  * cannot: the hooks are `size × 20` meters, so their screen reach changes with
  * zoom while a pixel offset does not.
  *
- * ## The label's own upright pass
+ * ## Upright, not across the lane
  *
- * The DTG reads across the lane, so it needs a second normalization — adding a
- * quarter turn to an already-upright angle pushes it straight back out of range,
- * and a lane drawn north-to-south landed on π, upside down.
- *
- * **Wrap before comparing.** The first pass corrects by *adding* π, so a
- * south-west lane leaves the angle at 7π/4 — the same direction as −π/4 and drawn
- * identically, but numerically far outside any range test. A bare `θ > π/2` reads
- * that as needing a flip and turns an upright label over, which is the fault this
- * is fixing. `atan2(sin, cos)` folds any angle back into (−π, π] first.
- *
- * Correcting by ±π keeps the label perpendicular to the lane, so it only ever
- * flips end-for-end about its own center. That matters twice: the anchor does not
- * move, and the clearance above stays valid, because it is still the glyph's
- * *height* that overhangs toward the symbol.
+ * The DTG used to read across the lane, with its own upright pass to keep it from
+ * turning over. FM 1-02.2 Table 5-16 sets it level, so it is drawn upright on screen
+ * and its clearance is measured along the lane instead (2026-10-31).
  */
 export function passageLanePaint(showDates = true): LinePaint {
     return (feature, context) => {
@@ -61,14 +51,12 @@ export function passageLanePaint(showDates = true): LinePaint {
         const dx = x2 - x1;
         const dy = y2 - y1;
 
-        let rotation = -Math.atan2(dy, dx);
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-
         // Zoom-anchored and clamped, exactly as Bridge sizes its DTG. The
         // span-proportional formula this replaced tied the glyph to the width of the
         // lane, so a lane drawn a few hundred meters wider rendered text several times
         // the height of every other mobility label.
         const scale = scaleOf(feature, context);
+        const dates = dateRangeLabel(feature.properties);
 
         const len = Math.hypot(dx, dy) || 1;
         const ux = dx / len;
@@ -80,18 +68,20 @@ export function passageLanePaint(showDates = true): LinePaint {
             const alongPx = ((p[0] - x1) * ux + (p[1] - y1) * uy) / context.resolution;
             tailReachPx = Math.max(tailReachPx, -alongPx); // negative = behind the start
         }
-        // The text is turned 90°, so half its *height* is what overhangs toward the
-        // symbol; `BASE_FONT_SIZE_PX` is the height `fontStyle` declares.
-        const clearancePx = tailReachPx + PASSAGE_LANE_LABEL_GAP_PX + (BASE_FONT_SIZE_PX / 2) * scale;
+        /*
+         * **Upright, past the entry end.** FM 1-02.2 Table 5-16 sets W W1 level below the
+         * lane, which is to say upright on the page and clear of the symbol. It used to be
+         * turned across the lane, which stood it on end on a lane drawn east to west. Upright
+         * text overhangs toward the symbol by half its width along a horizontal lane and half
+         * its height along a vertical one, so the clearance is measured along the lane.
+         */
+        const halfWidthPx = (dates ? textWidth(context, dates, fontStyle, scale) : 0) / 2;
+        const halfHeightPx = (BASE_FONT_SIZE_PX / 2) * scale;
+        const clearancePx = tailReachPx + PASSAGE_LANE_LABEL_GAP_PX + Math.abs(ux) * halfWidthPx + Math.abs(uy) * halfHeightPx;
         const at: ProjectedPosition = [
             x1 - ux * clearancePx * context.resolution,
             y1 - uy * clearancePx * context.resolution,
         ];
-
-        const acrossLane = rotation + Math.PI / 2;
-        let labelRotation = Math.atan2(Math.sin(acrossLane), Math.cos(acrossLane));
-        if (labelRotation > Math.PI / 2) labelRotation -= Math.PI;
-        else if (labelRotation <= -Math.PI / 2) labelRotation += Math.PI;
 
         /*
          * **The safe lane borrows the line work and not the label.** APP-06 290600 draws
@@ -110,12 +100,11 @@ export function passageLanePaint(showDates = true): LinePaint {
             {
                 geometry: {type: 'Point', coordinates: at},
                 text: {
-                    text: dateRangeLabel(feature.properties),
+                    text: dates,
                     kind: 'amplifier',
                     font: fontStyle,
                     fill: labelColorOf(feature),
                     halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
-                    rotation: labelRotation,
                     align: 'center',
                     baseline: 'middle',
                     scale,
