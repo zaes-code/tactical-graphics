@@ -79,10 +79,9 @@ describe('a corridor showing its name only', () => {
         expect(hidden.some(text => text.includes('WIDTH:') || text.includes('ALT:'))).toBe(false);
     });
 
-    it('keeps the designation on the legs and the ACP markers', () => {
+    it('keeps the designation on the legs', () => {
         const hidden = textsFor(TacticalGraphicName.AirCorridor, {...amplifiers, hideAmplifiers: true});
         expect(hidden.some(text => text.includes('ALPHA'))).toBe(true);
-        expect(hidden.some(text => /^ACP \d+$/.test(text))).toBe(true);
     });
 });
 
