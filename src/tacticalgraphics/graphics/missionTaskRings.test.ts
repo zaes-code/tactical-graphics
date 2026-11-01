@@ -53,3 +53,23 @@ describe('Retain', () => {
         near(Math.max(...lower), 340);
     });
 });
+
+/** APP-06 343400, the only plate that defines Deny: a solid head, and the D low on the right. */
+describe('Deny', () => {
+    const rendered = () =>
+        renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: CENTER},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.Deny, radius: RADIUS, rotation: 0}},
+        } as never);
+
+    it('fills its arrowhead', () => {
+        const members = (rendered().graphic.geometry as {geometries: {type: string}[]}).geometries;
+        expect(members.filter(m => m.type === 'Polygon')).toHaveLength(1);
+    });
+
+    it('sets its D at about half past four', () => {
+        const label = (rendered().labels!.geometry as {coordinates: number[]}).coordinates;
+        expect(angleOf(label)).toBeCloseTo(360 - 35, 0);
+    });
+});

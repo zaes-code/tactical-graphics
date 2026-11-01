@@ -168,37 +168,63 @@ export class CordonAndSearch extends MissionTask {
 }
 
 /**
- * Deny (APP-06 343400) — the family's arc and arrowhead with **outward** spikes, and a
- * letter in the opening.
+ * Deny (APP-06 343400): the family's arc with **outward** spikes, a solid arrowhead, and
+ * its letter in a break low on the right of the rim.
  *
  * > The radius will be long enough for the graphic to encompass the area being denied.
- * > The opening will be a 30 degree arc of the circle. […] The opening will be on the
+ * > The opening will be a 30 degree arc of the circle. [...] The opening will be on the
  * > friendly side of the graphic.
  *
- * Thirty degrees is exactly what `DEFAULT_LABEL_GAP_DEGREES` already produces, so a
- * static GeoJSON consumer gets the opening the rule names; a live renderer passes 0 and
- * cuts the gap from the rendered glyph instead, which is how the whole family works.
- *
- * The spikes point **out**, unlike cordon and search's, which is the only thing in the
- * construction that differs — `computeIsoscelesApexPoint` reads the sign of the height as
- * "toward the centroid" or away from it.
+ * Neither FM 1-02.2 nor MIL-STD-2525E defines Deny, so the APP-06 plate decides. It drew an
+ * open head with the `D` at three o'clock until 2026-10-31. @see DENY_LABEL_DEGREES
  */
+/**
+ * Where Deny's `D` sits, in degrees from the rotation axis: in a break low on the rim at
+ * about half past four, not at three o'clock where the rest of the family puts its letter.
+ * APP-06 343400 (the only plate that defines it) draws it there in both Template and Example.
+ */
+export const DENY_LABEL_DEGREES = -35;
+
+/** Deny's outward spikes, `[from, to, count, gap]` in degrees: seven on the long arc, two on the short. */
+const DENY_UPPER_SPIKES = [-20, 168, 7, 8] as const;
+const DENY_LOWER_SPIKES = [245, 305, 2, 20] as const;
+
 export class Deny extends MissionTask {
     name: string = TacticalGraphicName.Deny;
+
+    /**
+     * The long arc from beside the `D` over the top to the start point, the short one from
+     * the arrowhead round to the other side of the `D`. Sub-lines `[0]` and `[1]` are these
+     * two, with their label-side ends meeting at the letter, as the family's paint expects.
+     */
+    private arcs(center: Position, opts: PointGraphicOptions): {upperArch: Position[]; lowerArch: Position[]} {
+        const gap = labelGapDegrees(opts);
+        return {
+            upperArch: geometryService.createCircularArc(center, opts.rotation, opts.size, DENY_LABEL_DEGREES + gap, 175, 100),
+            lowerArch: geometryService.createCircularArc(center, opts.rotation, opts.size, 205, 360 + DENY_LABEL_DEGREES - gap, 100),
+        };
+    }
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
-        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
-        const arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
+        const {upperArch, lowerArch} = this.arcs(center, opts);
+        // A solid head, as 343400 draws it.
+        const [left, tip, right] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 30);
 
-        const upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 20, 170, -size / 3, 5, 8);
-        const lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 215, 340, -size / 3, 4, 8);
+        const spikes = ([from, to, count, gap]: readonly [number, number, number, number]) =>
+            geometryService.generateArcTrianglesWithGap(center, size, rotation, from, to, -size / 3, count, gap);
         return this.asGeometryCollectionFeature([
-            this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
-            this.asMultiLineStringFeature(upperTriangles).geometry,
-            this.asMultiLineStringFeature(lowerTriangles).geometry,
+            this.asMultiLineStringFeature([upperArch, lowerArch]).geometry,
+            this.asMultiLineStringFeature(spikes(DENY_UPPER_SPIKES)).geometry,
+            this.asMultiLineStringFeature(spikes(DENY_LOWER_SPIKES)).geometry,
+            this.asPolygonFeature([[tip, left, right, tip]]).geometry,
         ]);
+    }
+
+    generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {
+        const center = base.geometry.coordinates;
+        return this.asPointFeature(geometryService.translateCoordinates(center, opts.size, toRadians(opts.rotation + DENY_LABEL_DEGREES)));
     }
 }
 
