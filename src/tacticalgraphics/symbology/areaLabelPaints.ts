@@ -316,6 +316,12 @@ export const STACKED_AREA_LITERALS: Partial<Record<TacticalGraphicName, {lines: 
     [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: {lines: [], withDesignation: false},
 };
 
+/** The areas whose plate breaks `W - W1` after the hyphen. @see areaDefaultLabelPaint */
+const STACKED_DATE_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
+]);
+
 /**
  * The default: designation over date-time group, centered on the anchor.
  *
@@ -780,6 +786,13 @@ export function areaDefaultLabelPaint(
         const designation = feature.properties.designation ?? '';
         const text = withLiteral ? getFullLabel(name, designation) : designation.trim();
         const date = areaDateLabel(feature);
+        // APP-06 242400 / 242500 stack the pair, `W -` over `W1`, and every Example prints it
+        // on two lines: one centred block, so the lines space with the font.
+        if (STACKED_DATE_AREAS.has(name)) {
+            const lines = [text, ...date.replace(' - ', ' -\n').split('\n')].filter(line => line.length > 0);
+            const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
+            return designationStack(feature, context, at, lines, scale, text, withLiteral ? getLabel(name) : '').concat(flanks);
+        }
 
         // The two marks are separately anchored, so they are capped as **one block**: the
         // date hangs `DEFAULT_DATE_OFFSET_PX` below the designation, and fitting each alone
