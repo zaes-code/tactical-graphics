@@ -1955,15 +1955,19 @@ export function takesInsertedVertices(name: TacticalGraphicName, width: number |
     return name !== TacticalGraphicName.MinimumSafeDistanceMultipleStrike || hasClosingEdge(name, width);
 }
 
+/** The vertex cap on `CAPPED_AREAS`. */
+const MAX_AREA_VERTICES = 100;
+
 /**
- * The irregular areas whose rule caps their outline at six anchor points.
+ * The irregular areas whose rule caps their outline.
  *
- * MIL-STD-2525E's draw rule Area10: *"a minimum of three and a maximum of six anchor points
- * to define the boundary of the area"*, and APP-06 states the same for these codes; 242701
- * is APP-06 only. Every other irregular area takes as many points as its outline needs.
- * (2026-10-31; until then nothing capped them.)
+ * MIL-STD-2525E's draw rule Area10 allows *"a minimum of three and a maximum of six anchor
+ * points to define the boundary of the area"*, and APP-06 states the same for these codes;
+ * 242701 is APP-06 only. The library does not hold them to six: the cap is
+ * `MAX_AREA_VERTICES`, high enough not to get in the way (user's call, 2026-11-01), and may
+ * become configurable. Every other irregular area takes as many points as its outline needs.
  */
-const SIX_POINT_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
+const CAPPED_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular, // 241101
     TacticalGraphicName.CallForFireZoneIrregular,                 // 241201
     TacticalGraphicName.CensorZoneIrregular,                      // 241301
@@ -1982,10 +1986,10 @@ const SIX_POINT_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
  * The most outline vertices an area may have, or `undefined` for no cap.
  *
  * A **cap**, not a count: the draw closes on that click, a shorter outline finishes the
- * usual way, and an edit refuses a vertex past it. @see SIX_POINT_AREAS
+ * usual way, and an edit refuses a vertex past it. @see CAPPED_AREAS
  */
 export function maxAreaVertices(name: TacticalGraphicName | string): number | undefined {
-    return SIX_POINT_AREAS.has(name as TacticalGraphicName) ? 6 : undefined;
+    return CAPPED_AREAS.has(name as TacticalGraphicName) ? MAX_AREA_VERTICES : undefined;
 }
 
 /**
