@@ -421,7 +421,7 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.FinalCoordinationLine:
             return 'FCL';
         case TacticalGraphicName.LineOfDepartureOrLineOfContact:
-            return 'LD/DC';
+            return 'LD/LC';
         case TacticalGraphicName.ProbableLineOfDeployment:
             return 'PLD';
         case TacticalGraphicName.Route:
