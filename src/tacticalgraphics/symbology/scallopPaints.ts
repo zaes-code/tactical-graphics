@@ -84,6 +84,11 @@ const LC_LABEL_PAD_PX = 10;
  * Which side is which is a property of the map, not of the drawing gesture. The
  * enemy-side wave takes the upper side of the line however the user drew it.
  *
+ * **The scallops bulge toward each other**, which is why the amplitude goes in negated:
+ * each wave sits on its own side and bows back across the gap, so its open side faces
+ * its own unit. FM 1-02.2 Table 5-8 and MIL-STD-2525E Table L-VII ("the open side of the
+ * arc reflects the reported unit") both draw it so. Until 2026-10-31 both bowed away.
+ *
  * One scale drives the waves *and* their separation, so the symbol keeps its
  * proportions and simply gets smaller. This was exempt from `decorationScale`
  * until 2026-08-04, on the grounds that the separation is what the graphic says.
@@ -132,11 +137,11 @@ export function lineOfContactPaint(): LinePaint {
 
         return [
             {
-                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, amplitudeMap, enemySign, offsetMap)},
+                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, -amplitudeMap, enemySign, offsetMap)},
                 stroke: {color: getColorByHostility(TacticalGraphicHostility.hostileFaker), widthPx: LINE_WIDTH()},
             },
             {
-                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)},
+                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, -amplitudeMap, -enemySign, offsetMap)},
                 // **The friendly identity's colour, not the unaffiliated default.** This
                 // wave *is* the friendly side of the symbol — the graphic draws both
                 // identities at once — so painting it in the fallback line colour said

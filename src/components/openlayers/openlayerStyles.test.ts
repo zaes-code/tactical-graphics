@@ -953,8 +953,21 @@ describe('fortified and wave graphics in screen space', () => {
             // be a distance on the ground. Baked into geometry it was exactly that.
             // Resolution 40 is absent for the usual reason — it puts the 4 km line at
             // 100 px, inside the shape-relative cap; see the test below.
+            // Each wave sits 16 px off the line and bows 8 px back toward it, so their crests
+            // are 2 × (16 − 8) px apart.
             const gaps = [10, 2, 0.5].map(res => separationPx(res));
-            gaps.forEach(g => expect(g).toBeCloseTo(2 * 16, 6));
+            gaps.forEach(g => expect(g).toBeCloseTo(2 * (16 - 8), 6));
+        });
+
+        it('bows each wave toward the other, open side to its own unit (FM 1-02.2 Table 5-8, 2525E Table L-VII)', () => {
+            const [enemy, friendly] = styles(10);
+            const ys = (s: Style) => (s.getGeometry() as LineString).getCoordinates().map(c => c[1] / 10);
+            // The enemy wave's baseline is its farthest point from the line, 16 px up; its
+            // crests dip to 8 px. The friendly wave mirrors it below.
+            expect(Math.max(...ys(enemy))).toBeCloseTo(16, 6);
+            expect(Math.min(...ys(enemy))).toBeCloseTo(8, 6);
+            expect(Math.min(...ys(friendly))).toBeCloseTo(-16, 6);
+            expect(Math.max(...ys(friendly))).toBeCloseTo(-8, 6);
         });
 
         it('scales the gap with the waves once the line is small on screen', () => {
@@ -964,8 +977,8 @@ describe('fortified and wave graphics in screen space', () => {
             // symbol. Scaled together the proportions survive, which is what makes the
             // pair read as a line of contact.
             const gap = separationPx(40); // 4 km at res 40 = 100 px
-            expect(gap).toBeLessThan(2 * 16);
-            expect(gap).toBeCloseTo(2 * 16 * ((100 * 0.05) / 8), 6);
+            expect(gap).toBeLessThan(2 * (16 - 8));
+            expect(gap).toBeCloseTo(2 * (16 - 8) * ((100 * 0.05) / 8), 6);
         });
 
         it('keeps the two lines apart even where the waves are dropped', () => {
