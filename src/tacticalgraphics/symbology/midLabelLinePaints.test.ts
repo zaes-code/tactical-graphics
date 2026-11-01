@@ -92,3 +92,17 @@ describe('the coordinated fire line and engineer work line keep their prefix', (
         expect(ends(ewl(line(TacticalGraphicName.EngineerWorkLine, 20, 10), at1))).toEqual([]);
     });
 });
+
+/** APP-06 260200, FM 1-02.2 Table 5-8 and MIL-STD-2525E Table L-XIII: the CFL is dashed in every status. */
+describe('the coordinated fire line is always dashed', () => {
+    it('dashes a present line, not only a planned one', () => {
+        const cfl = coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine);
+        const feature = {
+            geometry: {type: 'LineString', coordinates: [[0, 0], [4000, 0]]},
+            properties: {name: TacticalGraphicName.CoordinatedFireLine, status: 'present'},
+            bounds: {minX: 0, minY: 0, maxX: 4000, maxY: 0},
+        } as unknown as PaintFeature;
+        const line = cfl(feature, context).find(p => p.geometry.type === 'LineString')!;
+        expect(line.stroke?.dashPx?.length).toBeGreaterThan(0);
+    });
+});
