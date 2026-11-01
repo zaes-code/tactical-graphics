@@ -166,6 +166,19 @@ export function normalizeDrawnBase(
     if (placed) return placed;
 
     /*
+     * **343600 escort: point 1 is the centre of the bar.** "Point 1 defines the centre of the
+     * graphic. Point 2 and Point 3 defines the length", and the Template puts PT 1 under the
+     * A box in the middle of the bar. The bar is drawn on points 2 and 3, so point 1 is put
+     * on their midpoint, the same one the unit symbol and the E A E break use. Until
+     * 2026-10-31 it was wherever it was clicked, a grip floating off the symbol.
+     */
+    if (name === TacticalGraphicName.Escort && deduped.length >= 3) {
+        const [, a, b, ...rest] = deduped;
+        const middle: Position = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        return samePosition(middle, deduped[0]) ? deduped : [middle, a, b, ...rest];
+    }
+
+    /*
      * **The eleven axis arrows: the last coordinate is a width, and it is put back square.**
      *
      * Its distance across the axis is the whole of what it says, so the along-axis component of
@@ -516,7 +529,8 @@ export function railCrossingBase(center: Position, half: number, points = 3): Po
     const across = half * 0.55;
     const edge: Position[] = [[cx - half, cy], [cx + half, cy]];
     if (points >= 4) {
-        return [...edge, [cx + half, cy + across], [cx - half, cy + across]];
+        // Point 3 across from point 1, point 4 across from point 2. @see parallelRailAnchors
+        return [...edge, [cx - half, cy + across], [cx + half, cy + across]];
     }
     // Beside point 2, which is where the reader squares it to anyway — so the synthesised base
     // and the settled one are the same points, and the sheet is idempotent.

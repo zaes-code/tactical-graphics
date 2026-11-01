@@ -1956,6 +1956,39 @@ export function takesInsertedVertices(name: TacticalGraphicName, width: number |
 }
 
 /**
+ * The irregular areas whose rule caps their outline at six anchor points.
+ *
+ * MIL-STD-2525E's draw rule Area10: *"a minimum of three and a maximum of six anchor points
+ * to define the boundary of the area"*, and APP-06 states the same for these codes; 242701
+ * is APP-06 only. Every other irregular area takes as many points as its outline needs.
+ * (2026-10-31; until then nothing capped them.)
+ */
+const SIX_POINT_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular, // 241101
+    TacticalGraphicName.CallForFireZoneIrregular,                 // 241201
+    TacticalGraphicName.CensorZoneIrregular,                      // 241301
+    TacticalGraphicName.CriticalFriendlyZoneIrregular,            // 241401
+    TacticalGraphicName.DeadSpaceAreaIrregular,                   // 241501
+    TacticalGraphicName.TargetBuildUpAreaIrregular,               // 241701
+    TacticalGraphicName.TargetValueAreaIrregular,                 // 241801
+    TacticalGraphicName.ZoneOfResponsibilityIrregular,            // 241901
+    TacticalGraphicName.TerminallyGuidedMunitionFootprint,        // 242000
+    TacticalGraphicName.BlueKillBoxIrregular,                     // 242301
+    TacticalGraphicName.PurpleKillBoxIrregular,                   // 242304
+    TacticalGraphicName.PsyOpsZoneIrregular,                      // 242701
+]);
+
+/**
+ * The most outline vertices an area may have, or `undefined` for no cap.
+ *
+ * A **cap**, not a count: the draw closes on that click, a shorter outline finishes the
+ * usual way, and an edit refuses a vertex past it. @see SIX_POINT_AREAS
+ */
+export function maxAreaVertices(name: TacticalGraphicName | string): number | undefined {
+    return SIX_POINT_AREAS.has(name as TacticalGraphicName) ? 6 : undefined;
+}
+
+/**
  * Whether a new base vertex may be inserted where the cursor is.
  *
  * **Reported as "abatis should not accept vertices within the triangle opening"** (user,
@@ -1989,6 +2022,14 @@ export function acceptsInsertedVertex(
     basePixels: readonly (readonly [number, number])[],
     at: readonly [number, number],
 ): boolean {
+    // **An outline already at its cap takes no more.** A ring may repeat its first vertex
+    // at the end, which is not a second one. @see maxAreaVertices
+    const cap = maxAreaVertices(name);
+    if (cap !== undefined) {
+        const [first, last] = [basePixels[0], basePixels[basePixels.length - 1]];
+        const closed = basePixels.length > 1 && first[0] === last[0] && first[1] === last[1];
+        if (basePixels.length - (closed ? 1 : 0) >= cap) return false;
+    }
     /*
      * **The eleven axis arrows refuse their last segment**, because it is not a segment: it is
      * the run from the rear to the point that states the width, drawn only because a base is one

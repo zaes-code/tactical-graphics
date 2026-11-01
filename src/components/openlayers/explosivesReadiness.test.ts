@@ -44,7 +44,7 @@ const render = (name: TacticalGraphicName, width = 1200, coords = [[0, 0], [0.4,
         properties: {tacticalGraphic: {name, width}},
     } as any) as any;
 
-/** Which bars the style function dashes, left rail first. */
+/** Which bars the style function dashes, point 3's rail first. */
 const dashes = (name: TacticalGraphicName) => {
     const bars = render(name).graphic.geometry.coordinates;
     const styles = barSymbolStyleFunc(name)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
@@ -57,8 +57,21 @@ describe('explosives states of readiness', () => {
     // and APP-06's templates draw them identically.
     it('dashes each state the way the plate does', () => {
         expect(dashes(PLANNED)).toEqual([true, true]);
-        expect(dashes(SAFE)).toEqual([true, false]); // left hashed, right solid
+        expect(dashes(SAFE)).toEqual([true, false]); // point 3's rail hashed, the other solid
         expect(dashes(ARMED)).toEqual([false, false]);
+    });
+
+    // APP-06 271202: "point 3 defines the location of one side of the symbol", and its
+    // Template points PT 3 at the dashed rail. So the dashed one follows point 3.
+    it.each([['left', 1], ['right', -1]] as const)('dashes the rail on point 3’s side when point 3 is %s', (_side, sign) => {
+        // Drawn east, so left of travel is north.
+        const coords = [[0, 0], [0.4, 0], [0.2, 0.01 * sign]];
+        const bars = render(SAFE, 1200, coords).graphic.geometry.coordinates as number[][][];
+        const styles = barSymbolStyleFunc(SAFE)(new Feature({geometry: new MultiLineString(bars)}) as any, 20) as any[];
+        const dashedBar = bars[styles.findIndex(s => !!s.getStroke().getLineDash())];
+        const solidBar = bars[styles.findIndex(s => !s.getStroke().getLineDash())];
+        expect(Math.sign(dashedBar[0][1])).toBe(sign);
+        expect(Math.sign(solidBar[0][1])).toBe(-sign);
     });
 
     it.each(NAMES.map(n => [String(n), n] as const))('%s draws two parallel rails', (_l, name) => {
@@ -196,7 +209,10 @@ describe('roadblock complete (executed)', () => {
         const bars = rendered().graphic.geometry.coordinates;
         const rails = armed().graphic.geometry.coordinates;
         expect(bars).toHaveLength(4);
-        expect(bars.slice(0, 2)).toEqual(rails);
+        // The same two bars; the readiness states order theirs by point 3's side, which
+        // matters only for 271202's dash, and every roadblock bar is solid.
+        const key = (b: number[][]) => JSON.stringify(b);
+        expect(bars.slice(0, 2).map(key).sort()).toEqual(rails.map(key).sort());
     });
 
     it('draws the second pair as the first turned a quarter-turn about the midpoint', () => {

@@ -15,7 +15,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
-import {ANTI_TANK_HEIGHT_RATIO, ANTI_TANK_TOOTH_PX} from '../graphics/AntiTankDitch';
+import {ANTI_TANK_TOOTH_PX} from '../graphics/AntiTankDitch';
 import {antiTankDitchPaint} from './obstaclePaints';
 
 const context = (resolution: number): PaintContext => ({
@@ -60,46 +60,51 @@ describe('APP-06 290203 — anti-tank ditch reinforced with mines', () => {
         expect(mined).not.toEqual(completed);
     });
 
-    it('puts a mine in every notch between two teeth, and none at the ends', () => {
-        const mined = discs(painted(TacticalGraphicName.AntiTankDitchReinforcedWithMines));
-        const completed = discs(painted(TacticalGraphicName.AntiTankDitchCompleted));
+    it('alternates tooth and mine from PT 1, the teeth apart (2525E 290203)', () => {
+        const paints = painted(TacticalGraphicName.AntiTankDitchReinforcedWithMines);
+        const mined = discs(paints);
+        const teeth = paints.filter(p => p.geometry.type === 'Polygon' && (p.geometry.coordinates[0] as unknown[]).length === 4);
+        expect(teeth.length).toBeGreaterThan(3);
+        expect(mined).toHaveLength(teeth.length);
 
-        expect(completed).toHaveLength(0);
-        expect(mined.length).toBeGreaterThan(3);
-
-        // A ditch of N teeth has N-1 notches: a mine goes *between* two teeth, so the run
-        // can neither begin nor end with one.
-        const toothWidth = ANTI_TANK_TOOTH_PX * RESOLUTION;
-        const teeth = Math.floor(900_000 / toothWidth);
-        expect(mined).toHaveLength(teeth - 1);
+        const minX = (p: Paint) => Math.min(...(p.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0].map(q => q[0]));
+        const maxX = (p: Paint) => Math.max(...(p.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0].map(q => q[0]));
+        // The run starts with a tooth, and each mine sits between the tooth before it and the next.
+        expect(minX(teeth[0])).toBeLessThan(minX(mined[0]));
+        for (let i = 0; i < mined.length; i++) {
+            expect(minX(mined[i])).toBeGreaterThan(maxX(teeth[i]));
+            if (teeth[i + 1]) expect(maxX(mined[i])).toBeLessThan(minX(teeth[i + 1]));
+        }
     });
 
-    it('draws each mine big enough to see beside the tooth it sits between', () => {
+    it('draws each mine big enough to see beside the tooth it follows', () => {
         const [first] = discs(painted(TacticalGraphicName.AntiTankDitchReinforcedWithMines));
         const ring = (first.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
         const xs = ring.map(p => p[0]);
         const diameterPx = (Math.max(...xs) - Math.min(...xs)) / RESOLUTION;
+        expect(diameterPx).toBeGreaterThan(ANTI_TANK_TOOTH_PX * 0.4);
+    });
+});
 
-        // At least a fifth of the tooth's width. It was a twelfth, which is the bug.
-        expect(diameterPx).toBeGreaterThan(ANTI_TANK_TOOTH_PX * 0.2);
+/** The y of every tooth apex, relative to an eastward line: positive is left of travel. */
+const apexSide = (name: TacticalGraphicName): number[] =>
+    painted(name).flatMap(p => {
+        const ring = (p.geometry.type === 'Polygon' ? p.geometry.coordinates[0] : p.geometry.type === 'LineString' ? p.geometry.coordinates : []) as ProjectedPosition[];
+        return ring.length === 4 ? [ring[2][1]] : [];
     });
 
-    it('keeps the mine inside its notch rather than merging with the teeth', () => {
-        // The other half of the constraint: a disc drawn to the notch's limit meets the
-        // filled teeth either side and the three read as one black mass.
-        const [first] = discs(painted(TacticalGraphicName.AntiTankDitchReinforcedWithMines));
-        const ring = (first.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
-        const ys = ring.map(p => p[1]);
-        const centerY = (Math.max(...ys) + Math.min(...ys)) / 2;
-        const radius = (Math.max(...ys) - Math.min(...ys)) / 2;
+describe('which side of PT 1 -> PT 2 the teeth hang on', () => {
+    it('puts 290201 and 290202 on the left, as 2525E Table L-XVI and APP-06 draw them', () => {
+        for (const name of [TacticalGraphicName.AntiTankDitchUnderConstruction, TacticalGraphicName.AntiTankDitchCompleted]) {
+            const sides = apexSide(name);
+            expect(sides.length).toBeGreaterThan(3);
+            expect(sides.every(y => y > 0)).toBe(true);
+        }
+    });
 
-        const depth = ANTI_TANK_TOOTH_PX * ANTI_TANK_HEIGHT_RATIO * RESOLUTION;
-        const halfAngleSin = (ANTI_TANK_TOOTH_PX / 2) / Math.hypot(ANTI_TANK_TOOTH_PX / 2, ANTI_TANK_TOOTH_PX * ANTI_TANK_HEIGHT_RATIO);
-        // The notch is an upward triangle: at `d` below the line it is `d·sin(halfAngle)`
-        // wide either side of the middle.
-        const room = Math.abs(centerY) * halfAngleSin;
-
-        expect(radius).toBeLessThan(room);
-        expect(Math.abs(centerY)).toBeLessThan(depth);
+    it('puts 290203 on the right, where 2525E draws it', () => {
+        const sides = apexSide(TacticalGraphicName.AntiTankDitchReinforcedWithMines);
+        expect(sides.length).toBeGreaterThan(3);
+        expect(sides.every(y => y < 0)).toBe(true);
     });
 });

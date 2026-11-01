@@ -230,7 +230,8 @@ export const SMOOTHED_GRAPHICS: Readonly<Partial<Record<N, SmoothingKind>>> = Ob
     [N.RegimentalSupportArea]: 'area',
     [N.DropZone]: 'area',
     [N.LandingZone]: 'area',
-    [N.KillZone]: 'area',
+    // 242800 kill zone is absent: MIL-STD-2525E, "anchor points are to be connected with
+    // straight lines". (2026-10-31)
     [N.PickupZone]: 'area',
     [N.AirfieldZone]: 'area',
     [N.RadiationDoseRateContourLine]: 'area',

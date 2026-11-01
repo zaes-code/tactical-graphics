@@ -46,20 +46,6 @@ function circleOf(center: Position, edge: Position): Position[] {
 }
 
 /**
- * Where the sweep leaves the circle: on the rim, on the side it is heading for, so the
- * arrow meets the unit's symbol rather than starting inside it.
- */
-function rimToward(center: Position, edge: Position, toward: Position): Position {
-    const radius = turf.distance(turf.point(center), turf.point(edge), {units: 'meters'});
-    return turf.destination(
-        turf.point(center),
-        radius / 1000,
-        turf.bearing(turf.point(center), turf.point(toward)),
-        {units: 'kilometers'},
-    ).geometry.coordinates;
-}
-
-/**
  * A quadratic Bézier from `start` to `end` that **passes through** `through` at its
  * middle.
  *
@@ -112,7 +98,7 @@ export class SweptArcTask extends TacticalGraphicsBase {
      * |---|---|
      * | 1 | the point |
      * | 2 | the circle — centre and radius are both settled |
-     * | 3 | the circle, and a straight run from its rim to point 3 |
+     * | 3 | the circle, and a straight run from point 2 to point 3 |
      * | 4 | the circle and the arc, curved through point 3 |
      *
      * The three-point run is deliberately **straight**. Point 3 is the arc's middle, so a
@@ -127,13 +113,19 @@ export class SweptArcTask extends TacticalGraphicsBase {
             if (c.length < 2) return this.asMultiLineStringFeature([c]);
             const ring = circleOf(c[0], c[1]);
             if (c.length < 3) return this.asMultiLineStringFeature([ring]);
-            return this.asMultiLineStringFeature([ring, [rimToward(c[0], c[1], c[2]), c[2]]]);
+            return this.asMultiLineStringFeature([ring, [c[1], c[2]]]);
         }
 
         const [center, edge, middle, tip] = points;
+        /*
+         * **The arc leaves the rim at point 2.** Point 2 is on the rim by definition (it sets
+         * the radius), and the Template's PT.2 leader marks exactly where the arc leaves the
+         * circle. It used to leave on the bearing toward point 3, so point 2 sized the circle
+         * and nothing else. (2026-10-31)
+         */
         return this.asMultiLineStringFeature([
             circleOf(center, edge),
-            arcThrough(rimToward(center, edge, middle), middle, tip),
+            arcThrough(edge, middle, tip),
         ]);
     }
 

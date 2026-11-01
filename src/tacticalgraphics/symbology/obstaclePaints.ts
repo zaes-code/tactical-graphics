@@ -65,7 +65,13 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
         const scale = decorationScale(path, false, context.resolution, WIRE_MARK_PX * style.height);
         const width = WIRE_MARK_PX * scale * context.resolution;
         const height = width * style.height;
-        const railOffset = {under: -height / 2, center: 0, over: height / 2};
+        /*
+         * "Under" is **left of PT 1 -> PT 2**, so the marks stand on its right. 2525E Table
+         * L-XVI and APP-06 draw 290305, 290307 and 290308 with PT 2 on the left and PT 1 on
+         * the right, the marks above the rail: travelling west, above is the right. It hung on
+         * the right of travel until 2026-10-31, which put the marks on the wrong side.
+         */
+        const railOffset = {under: height / 2, center: 0, over: -height / 2};
 
         if (style.rail || width <= 0) {
             for (const at of style.railsAt ?? ['center']) {
@@ -131,23 +137,6 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
     };
 }
 
-/**
- * How far inside its bounding notch a mine disc is drawn, and how deep into the notch it
- * sits as a share of the tooth's height.
- *
- * The clearance used to be 0.5 at a depth of 0.72, which is a disc of about a *sixth* of
- * the tooth's width — fine on the page and invisible on a map, because `decorationScale`
- * has usually already shrunk the whole pattern by half before this is applied to it. The
- * reinforced ditch then rendered pixel-for-pixel like the completed one, which is the
- * worst kind of wrong: a symbol that means "there are mines in here" quietly saying
- * "there are not".
- *
- * Sitting the disc a little higher in the notch buys the room to draw it larger, since the
- * notch narrows toward its apex.
- */
-const MINE_CLEARANCE = 0.85;
-const MINE_DEPTH_FRACTION = 0.62;
-
 /** `crenellatedPath`'s side sign for the right of the direction of travel. */
 const RIGHT_OF_TRAVEL = -1;
 
@@ -158,8 +147,8 @@ const RIGHT_OF_TRAVEL = -1;
  * Its plate draws PT 1 to PT 2 left to right with the teeth hanging below, and says the
  * teeth "typically point toward enemy forces". Which side they are on is the content of
  * the symbol, so it follows the drawing order, as {@link obstacleLinePaint}'s does on the
- * other side. The antitank ditches' teeth sit on the same side. In neither FM 1-02.2 nor
- * APP-06.
+ * other side. In neither FM 1-02.2 nor APP-06. The antitank ditches state their own side
+ * in `ANTI_TANK_DITCH_STYLES`.
  */
 export function antiTankWallPaint(): ObstaclePaint {
     return (feature, context) => {
@@ -172,27 +161,30 @@ export function antiTankWallPaint(): ObstaclePaint {
 }
 
 /**
+ * The mined ditch's gap between two teeth, and the mine in it, as shares of a tooth's width.
+ *
+ * 2525E 290203 draws tooth, mine, tooth, mine along the line, the teeth apart and each mine a
+ * little narrower than the gap it sits in, hanging just below the line beside the teeth.
+ */
+const MINE_GAP = 0.8;
+const MINE_RADIUS = 0.3;
+const MINE_DEPTH = 0.4;
+
+/**
  * The three anti-tank ditches: under construction, completed, and reinforced with
  * mines.
  *
- * The drawn route, plus a run of triangular teeth along it, plus — for the mined
- * variant — a disc in each notch between them.
+ * The drawn route, plus a run of triangular teeth along it on the side
+ * `ANTI_TANK_DITCH_STYLES` states, plus, for the mined variant, a disc in the gap after
+ * each tooth.
  *
- * **Every slot holds a tooth**, so consecutive teeth share a base corner and their
- * bases run edge to edge. That is what makes the mined form possible at all: a mine
- * goes in the notch *between* two teeth, so the run can neither begin nor end with
- * one, and a ditch with fewer than two teeth cannot carry any.
+ * **The plain ditches' teeth touch**, so consecutive teeth share a base corner. The mined
+ * ditch spaces them: tooth, mine, tooth, mine from PT 1, as MIL-STD-2525E 290203 draws it.
  *
  * **A filled tooth is not also stroked.** A stroke straddles the edge it draws, so
  * it inflates the shape by half a line width all round, and two teeth sharing a
  * base corner then overlap by a full stroke instead of meeting cleanly. The fill
  * states the shape exactly.
- *
- * The mine's size is **bounded, not chosen**: the notch is an upward triangle, and
- * a disc centered `mineDepth` down touches both its edges at
- * `mineDepth · sin(halfAngle)`. `MINE_CLEARANCE` holds it inside that, because a disc
- * drawn to the limit meets the filled teeth either side and the three merge into one
- * black mass. @see MINE_CLEARANCE for why it is no longer held *well* inside.
  */
 export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
     return (feature, context) => {
@@ -200,7 +192,7 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         if (path.length < 2) return [];
 
         const color = lineColorOf(feature);
-        const {filled, mines} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false};
+        const {filled, mines, side} = ANTI_TANK_DITCH_STYLES[name] ?? {filled: false, mines: false, side: 'left'};
         const stroke = {color, widthPx: LINE_WIDTH()};
         const paints: Paint[] = [{geometry: {type: 'LineString', coordinates: path}, stroke}];
 
@@ -210,50 +202,49 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
 
         const depth = width * ANTI_TANK_HEIGHT_RATIO;
         const total = pathLength(path);
+        // A tooth's slot, and for the mined ditch the gap a mine sits in after it.
+        const pitch = mines ? width * (1 + MINE_GAP) : width;
 
-        const teeth = Math.floor(total / width);
-        if (teeth < 1 || (mines && teeth < 2)) return paints;
+        const teeth = Math.floor(total / pitch);
+        if (teeth < 1) return paints;
 
         // Center the run, so the pattern sits on the route rather than flush to one end.
-        const lead = (total - teeth * width) / 2;
+        const lead = (total - teeth * pitch) / 2;
+        // The left normal is (-ty, tx), so a positive offset is left of travel.
+        const sign = side === 'left' ? 1 : -1;
 
         /** A point `along` the route, `off` meters to the tooth side of it. */
         const at = (along: number, off: number): ProjectedPosition | null => {
             const p = walkPath(path, Math.min(Math.max(along, 0), total));
             if (!p) return null;
             const [tx, ty] = p.tangent;
-            return [p.point[0] - ty * off, p.point[1] + tx * off];
+            return [p.point[0] - ty * off * sign, p.point[1] + tx * off * sign];
         };
 
         for (let i = 0; i < teeth; i++) {
-            const a = at(lead + i * width, 0);
-            const b = at(lead + (i + 1) * width, 0);
-            const apex = at(lead + (i + 0.5) * width, -depth);
+            const start = lead + i * pitch;
+            const a = at(start, 0);
+            const b = at(start + width, 0);
+            const apex = at(start + width / 2, depth);
             if (!a || !b || !apex) continue;
 
             const ring: ProjectedPosition[] = [a, b, apex, a];
             paints.push(filled
                 ? {geometry: {type: 'Polygon', coordinates: [ring]}, fill: {color}}
                 : {geometry: {type: 'LineString', coordinates: ring}, stroke});
-        }
 
-        if (!mines) return paints;
-
-        const halfAngleSin = (width / 2) / Math.hypot(width / 2, depth);
-        const mineDepth = depth * MINE_DEPTH_FRACTION;
-        const radius = mineDepth * halfAngleSin * MINE_CLEARANCE;
-
-        for (let i = 1; i < teeth; i++) {
-            const center = at(lead + i * width, -mineDepth);
+            if (!mines) continue;
+            const center = at(start + width + (width * MINE_GAP) / 2, width * MINE_DEPTH);
             if (!center) continue;
-            const ring: ProjectedPosition[] = [];
+            const radius = width * MINE_RADIUS;
+            const disc: ProjectedPosition[] = [];
             for (let d = 0; d <= 360; d += 20) {
                 const t = (d * Math.PI) / 180;
-                ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
+                disc.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
             }
             // Mines are mines, not outlines of one: always solid whatever the teeth do,
             // and unstroked for the same reason the filled teeth are.
-            paints.push({geometry: {type: 'Polygon', coordinates: [ring]}, fill: {color}});
+            paints.push({geometry: {type: 'Polygon', coordinates: [disc]}, fill: {color}});
         }
 
         return paints;

@@ -76,6 +76,14 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.TurningMovement,                  // 152900
     TacticalGraphicName.MobileDefense,                    // 152800 "Point 1 defines the tip of the arrowhead"
 
+    // -- The direction-of-attack arrows, since snapshot version 3 (2026-10-31) --
+    // Each Template letters PT 1 at the arrowhead and PT 2 at the rear. They were drawn rear
+    // first until then, so a file older than version 3 is reversed on read. @see upgradeSavedLine
+    TacticalGraphicName.AviationDirectionOfAttack,        // 140601 Aviation
+    TacticalGraphicName.DirectionOfMainAttack,            // 140602 Main Attack
+    TacticalGraphicName.DirectionOfSupportingAttack,      // 140603 Supporting Attack
+    TacticalGraphicName.DirectionOfMainAttackFeint,       // 140605 Feint
+
     // -- The cane: a straight run into an arrowhead, with a 180-degree arc at the back --
     // "Point 1 defines the tip of the arrowhead. Point 2 defines the end of the straight
     // line portion. Point 3 defines the diameter and orientation of the arc."
@@ -159,6 +167,17 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // symbol." A plain two-point reversal; there is no middle vertex to swap.
     TacticalGraphicName.MovingConvoy,                     // 330100
     TacticalGraphicName.HaltedConvoy,                     // 330200
+];
+
+/**
+ * The graphics that joined {@link TIP_FIRST_GRAPHICS} with snapshot version 3. A base saved
+ * before then holds them rear first, and the restore reverses it. @see upgradeSavedLine
+ */
+export const TIP_FIRST_SINCE_SNAPSHOT_3: readonly string[] = [
+    TacticalGraphicName.AviationDirectionOfAttack,
+    TacticalGraphicName.DirectionOfMainAttack,
+    TacticalGraphicName.DirectionOfSupportingAttack,
+    TacticalGraphicName.DirectionOfMainAttackFeint,
 ];
 
 /**
