@@ -56,6 +56,20 @@ describe.each(AXES)('%s', name => {
         expect(dateX).toBeGreaterThan(nameX);
     });
 
+    it('never sets T on top of W - W1 when the arrow is short', () => {
+        // A stubby arrow: the name centered in the room ahead of the date used to land on the date.
+        const stubby: Geometry = {type: 'LineString', coordinates: [[0.025, 0], [0, 0], [0.02, 0.01]]};
+        const properties = {designation: 'DAVID', startDate: '011200Z', endDate: '021800Z', radius: 1000, hostility: TacticalGraphicHostility.friend};
+        const near = 10;
+        const wide: PaintContext = {resolution: near, measureText: (text: string) => text.length * 11};
+        const paints = paintGraphic(buildPaintedGraphic(name, stubby, properties, near)!, wide).filter(p => p.text && p.text.fill !== 'rgba(0,0,0,0)');
+        expect(paints.length).toBeGreaterThan(5);
+        const x = (p: Paint) => (p.geometry.coordinates as Position)[0];
+        // The name is painted first, rear to head, then the date.
+        const nameEnd = Math.max(...paints.slice(0, 5).map(x));
+        expect(paints.slice(5).every(p => x(p) > nameEnd)).toBe(true);
+    });
+
     it('says ENY twice at the rear when hostile, and never when friendly', () => {
         const hostile = texts(name, TacticalGraphicHostility.hostileFaker);
         const eny = hostile.filter(p => p.text!.text === 'ENY');
