@@ -18,7 +18,7 @@ import {BASE_FONT_SIZE_PX, getSmoothLines} from '../core/config';
 import {smoothingKindOf} from '../core/smoothing';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
-import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
+import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, isHostile, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
@@ -116,9 +116,9 @@ export function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition
     const beforeEnd = coords[coords.length - 2];
     return [
         textMark(feature, offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
-            uprightRotation(start, afterStart), afterStart[0] >= start[0] ? 'left' : 'right', 'bottom'),
+            uprightRotation(start, afterStart), !uprightFlipped(start, afterStart) ? 'left' : 'right', 'bottom'),
         textMark(feature, offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
-            uprightRotation(beforeEnd, end), end[0] >= beforeEnd[0] ? 'right' : 'left', 'bottom'),
+            uprightRotation(beforeEnd, end), !uprightFlipped(beforeEnd, end) ? 'right' : 'left', 'bottom'),
     ];
 }
 
@@ -208,7 +208,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
                     ends.text,
                     ends.scale,
                     uprightRotation(start, afterStart),
-                    afterStart[0] >= start[0] ? 'left' : 'right',
+                    !uprightFlipped(start, afterStart) ? 'left' : 'right',
                     'bottom',
                 ),
                 textMark(
@@ -217,7 +217,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
                     ends.text,
                     ends.scale,
                     uprightRotation(beforeEnd, end),
-                    end[0] >= beforeEnd[0] ? 'right' : 'left',
+                    !uprightFlipped(beforeEnd, end) ? 'right' : 'left',
                     'bottom',
                 ),
             ]
