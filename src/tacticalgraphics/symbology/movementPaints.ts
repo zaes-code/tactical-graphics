@@ -31,6 +31,7 @@ import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
+import {inView, insetView, pathUpTo, visibleStretch} from './viewFollow';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -625,12 +626,37 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
     };
 }
 
+/**
+ * The axis label's anchors moved back along the arrow when the arrowhead is off screen.
+ *
+ * The head span is re-cut at the last point of the centerline that is in view, at the
+ * span's own length, so the label keeps its size and its bend along the arrow; the
+ * centerline after it is dropped. `coords` comes back unchanged when the label's own spot
+ * is visible, or when no part of the centerline is. @see PaintContext.view
+ */
+function headSpanInView(context: PaintContext, coords: ProjectedPosition[], pathFrom: number): ProjectedPosition[] {
+    const view = insetView(context);
+    const path = coords.slice(pathFrom);
+    if (!view || path.length < 2 || inView(coords[1], view)) return coords;
+
+    const stretch = visibleStretch(path, view);
+    if (!stretch) return coords;
+    const head = stretch[stretch.length - 1];
+    const back = stretch[stretch.length - 2];
+    const span = Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]);
+    const run = Math.hypot(head[0] - back[0], head[1] - back[1]);
+    if (run === 0) return coords;
+    const tail: ProjectedPosition = [head[0] - ((head[0] - back[0]) / run) * span, head[1] - ((head[1] - back[1]) / run) * span];
+    return [tail, head, ...pathUpTo(path, head)];
+}
+
 export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPaint {
     const centered = name === TacticalGraphicName.InfiltrationLane;
 
     return (feature, context) => {
-        const coords = anchors(feature);
-        if (coords.length < 2) return [];
+        const placed = anchors(feature);
+        if (placed.length < 2) return [];
+        const coords = centered ? placed : headSpanInView(context, placed, 2);
 
         const [c0, c1] = coords;
         const dx = c1[0] - c0[0];

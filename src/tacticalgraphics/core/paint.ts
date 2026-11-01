@@ -320,6 +320,27 @@ export interface PaintContext {
      * @see resolveSecuritySymbol, CENTER_SYMBOL_GRAPHICS
      */
     centerSymbolProvider?: SecuritySymbolProvider;
+
+    /**
+     * The visible part of the map, in projected meters, when the renderer knows it.
+     *
+     * With it, a label whose place on the symbol is off screen moves onto the part of its
+     * line that is visible: a phase line's name to where the line leaves the view, an
+     * axis of advance's designation back along the arrow from an arrowhead that is out of
+     * sight. Without it every label sits exactly where the symbol puts it.
+     *
+     * A renderer that supplies it must repaint after a pan as well as after a zoom, or a
+     * moved label stays where the previous view left it.
+     */
+    view?: ProjectedBounds;
+}
+
+/** An axis-aligned box in projected meters. */
+export interface ProjectedBounds {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
 }
 
 /**
@@ -400,7 +421,7 @@ export interface PaintFeature {
      * vertex; a circle has none, so the square hugging it is the sensible stand-in),
      * and the position-area-artillery symbol puts a "PAA" at each edge midpoint.
      */
-    bounds?: {minX: number; minY: number; maxX: number; maxY: number};
+    bounds?: ProjectedBounds;
 
     /**
      * The drawn polygon's outer ring, in projected meters.

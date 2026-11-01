@@ -54,6 +54,7 @@ import {capLabelToGraphic, heldTextScale, letterGapClearance, letterInGapScale} 
 import {approachLetterScale} from './movementPaints';
 import {PLANNED_DASH_PX, strokeParts} from './dashFit';
 import {
+    alignAlong,
     centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
@@ -65,6 +66,7 @@ import {
     uprightFlipped,
     uprightRotation,
 } from './decorations';
+import {inView, insetView, visibleStretch} from './viewFollow';
 
 /**
  * Blanks one amplifier line when the graphic is hiding them.
@@ -661,13 +663,33 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
             },
         });
 
-        return [
-            lineWork,
-            endLabel(start, uprightRotation(start, startNext), 'left',
-                startOutsideRight ? PHASE_LINE_GAP_PX : -PHASE_LINE_GAP_PX - width),
-            endLabel(end, uprightRotation(endPrev, end), 'right',
-                endOutsideRight ? PHASE_LINE_GAP_PX + width : -PHASE_LINE_GAP_PX),
-        ];
+        const atStart = () =>
+            endLabel(start, uprightRotation(start, startNext), 'left', startOutsideRight ? PHASE_LINE_GAP_PX : -PHASE_LINE_GAP_PX - width);
+        const atEnd = () => endLabel(end, uprightRotation(endPrev, end), 'right', endOutsideRight ? PHASE_LINE_GAP_PX + width : -PHASE_LINE_GAP_PX);
+
+        // An end that is off screen takes its label to where the line leaves the view.
+        // @see PaintContext.view
+        const view = insetView(context);
+        const startShown = !view || inView(start, view);
+        const endShown = !view || inView(end, view);
+        if (startShown && endShown) return [lineWork, atStart(), atEnd()];
+
+        // Nothing of the line inside the inset view: it is off screen or hugging an edge, and
+        // either way the labels are best left where the symbol puts them.
+        const stretch = visibleStretch(coords, view!);
+        if (!stretch) return [lineWork, atStart(), atEnd()];
+
+        // Just above the line at the view's edge, reading inward along it.
+        const atEdge = (edge: ProjectedPosition, inward: ProjectedPosition): Paint => {
+            const lifted = offsetAbove(edge, edge, inward, context.resolution, (BASE_FONT_SIZE_PX / 2) * scale + PHASE_LINE_GAP_PX / 2);
+            return endLabel(lifted, uprightRotation(edge, inward), alignAlong('left', edge, inward) as 'left' | 'right', 0);
+        };
+        const first = startShown ? atStart() : atEdge(stretch[0], stretch[1]);
+        // Two labels need room for both and the gap between them; short of it, one is enough.
+        const roomPx = pathLength(stretch) / context.resolution;
+        if (!startShown && !endShown && roomPx < 2 * width + 3 * PHASE_LINE_GAP_PX) return [lineWork, first];
+        const last = endShown ? atEnd() : atEdge(stretch[stretch.length - 1], stretch[stretch.length - 2]);
+        return [lineWork, first, last];
     };
 }
 

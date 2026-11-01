@@ -30,7 +30,7 @@ import {
     rebuildPaintedGraphic,
     smoothingKindOf,
 } from '@zaes/tactical-graphics';
-import type {PaintContext, ProjectedPosition} from '@zaes/tactical-graphics';
+import type {PaintContext, ProjectedBounds, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
 import {paintTacticalGraphic, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import {centerSymbolPlacement} from '../centerSymbol';
@@ -541,7 +541,8 @@ export class NativeLayerRenderer {
         this.realizePending = false;
         const started = performance.now();
         const resolution = resolutionOf(this.map);
-        const context: PaintContext = {resolution, measureText: this.measureText};
+        // Rebuilt on `moveend` as well as on zoom, so a label moved onto the view follows a pan.
+        const context: PaintContext = {resolution, measureText: this.measureText, view: this.viewBounds()};
 
         // Bucketed per graphic rather than in one pass, so each feature can be stamped
         // with the graphic it came from — which is what makes a rendered mark
@@ -670,16 +671,13 @@ export class NativeLayerRenderer {
      * unknown is the wrong way round.
      */
     private visibleGraphics(): MapLibreTacticalGraphic[] {
-        const bounds = this.map.getBounds();
-        const sw = toMercator([bounds.getWest(), Math.max(bounds.getSouth(), -MERCATOR_MAX_LATITUDE)]);
-        const ne = toMercator([bounds.getEast(), Math.min(bounds.getNorth(), MERCATOR_MAX_LATITUDE)]);
-
-        const padX = Math.abs(ne[0] - sw[0]);
-        const padY = Math.abs(ne[1] - sw[1]);
-        const minX = Math.min(sw[0], ne[0]) - padX;
-        const maxX = Math.max(sw[0], ne[0]) + padX;
-        const minY = Math.min(sw[1], ne[1]) - padY;
-        const maxY = Math.max(sw[1], ne[1]) + padY;
+        const view = this.viewBounds();
+        const padX = view.maxX - view.minX;
+        const padY = view.maxY - view.minY;
+        const minX = view.minX - padX;
+        const maxX = view.maxX + padX;
+        const minY = view.minY - padY;
+        const maxY = view.maxY + padY;
 
         // The draw preview rides along: it is under the cursor by construction, and it
         // is the one graphic the operator is actively looking at. @see setPreview
@@ -689,6 +687,19 @@ export class NativeLayerRenderer {
             if (!box) return true;
             return box.maxX >= minX && box.minX <= maxX && box.maxY >= minY && box.minY <= maxY;
         });
+    }
+
+    /** The map's visible area in projected meters, unpadded. @see PaintContext.view */
+    private viewBounds(): ProjectedBounds {
+        const bounds = this.map.getBounds();
+        const sw = toMercator([bounds.getWest(), Math.max(bounds.getSouth(), -MERCATOR_MAX_LATITUDE)]);
+        const ne = toMercator([bounds.getEast(), Math.min(bounds.getNorth(), MERCATOR_MAX_LATITUDE)]);
+        return {
+            minX: Math.min(sw[0], ne[0]),
+            minY: Math.min(sw[1], ne[1]),
+            maxX: Math.max(sw[0], ne[0]),
+            maxY: Math.max(sw[1], ne[1]),
+        };
     }
 
     /**
