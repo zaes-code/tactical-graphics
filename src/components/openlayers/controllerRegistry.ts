@@ -51,7 +51,7 @@ type ControllerFactory = (name: TacticalGraphicName, resolution: number, sizing:
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const polygon = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new PolygonGraphicController(new AreaGraphicBase(name, sizing, res));
+    new PolygonGraphicController(new AreaGraphicBase(name, sizing, res), name);
 
 /**
  * A rectangular zone: two anchor points and a width, so it draws like a two-point line and
