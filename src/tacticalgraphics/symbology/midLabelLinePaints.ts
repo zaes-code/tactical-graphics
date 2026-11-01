@@ -101,10 +101,11 @@ function midpointOf(coords: ProjectedPosition[]) {
  * `ENY` above each end of a hostile line whose designation sits at its middle.
  *
  * FM 1-02.2 Figure 5-9 puts field N at the far left and the far right of every line control
- * measure, wherever the line's other text goes. Each mark runs inward from its end. Held at a
+ * measure, wherever the line's other text goes, and boundary's 110100 the same. Each mark runs
+ * inward from its end. Held at a
  * legible size like any prefix, and gone once the line is under twice it. @see legibleDesignation
  */
-function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition[], scale: number, context: PaintContext): Paint[] {
+export function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition[], scale: number, context: PaintContext): Paint[] {
     if (!isHostile(feature)) return [];
     const eny = legibleDesignation('ENY', 'ENY', scale, fontStyle, context, pathLength(coords) / context.resolution);
     if (!eny.text) return [];

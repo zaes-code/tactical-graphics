@@ -96,4 +96,9 @@ describe('ENY on the outer side of each end of a hostile line', () => {
         expect(marks.filter(t => t === 'ENY')).toHaveLength(2);
         expect(texts(paint(TacticalGraphicName.CoordinatedFireLine, EAST, TacticalGraphicHostility.friend))).not.toContain('ENY');
     });
+
+    it('marks both ends of a hostile boundary (APP-06 110100)', () => {
+        expect(texts(paint(TacticalGraphicName.Boundary, EAST, TacticalGraphicHostility.hostileFaker)).filter(t => t === 'ENY')).toHaveLength(2);
+        expect(texts(paint(TacticalGraphicName.Boundary, EAST, TacticalGraphicHostility.friend))).not.toContain('ENY');
+    });
 });
