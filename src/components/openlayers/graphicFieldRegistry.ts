@@ -678,7 +678,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
-    [TacticalGraphicName.MinedArea]: MINE_AREA,
+    // 2525E 270800 boxes W below the area (the self-destruct DTG of scatterable mines);
+    // 270801 boxes no W and no H. 2525E decides over the earlier one-set-for-both call.
+    [TacticalGraphicName.MinedArea]: {...MINE_AREA, dtg1: true},
     [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
     [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
