@@ -1,4 +1,5 @@
 import type {PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
+import {distanceAlongPath} from './curvedText';
 
 /**
  * How far, in screen pixels, a label moved onto the view keeps clear of its edge.
@@ -222,4 +223,25 @@ export function areaLabelInView(feature: PaintFeature, context: PaintContext): P
     const visible = clipRing(ring, view);
     const moved = visible.length >= 3 ? interiorPoint(visible) : undefined;
     return moved ? {...feature, geometry: {type: 'Point', coordinates: moved}} : feature;
+}
+
+/**
+ * A line's mid-label position `{index, t}`, moved to the middle of the line's visible stretch
+ * when the line's own middle is off screen. Unchanged when the context carries no view, when the
+ * middle is on screen, or when none of the line is.
+ */
+export function midSegmentInView(coords: ProjectedPosition[], mid: {index: number; t: number}, context: PaintContext): {index: number; t: number} {
+    const view = insetView(context);
+    if (!view) return mid;
+    const [a, b] = [coords[mid.index], coords[mid.index + 1] ?? coords[mid.index]];
+    if (inView([a[0] + (b[0] - a[0]) * mid.t, a[1] + (b[1] - a[1]) * mid.t], view)) return mid;
+    const stretch = visibleStretch(coords, view);
+    if (!stretch) return mid;
+    let s = distanceAlongPath(coords, stretch[0]) + length(stretch) / 2;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
+        if (s <= len || i === coords.length - 2) return {index: i, t: len === 0 ? 0 : Math.max(0, Math.min(1, s / len))};
+        s -= len;
+    }
+    return mid;
 }

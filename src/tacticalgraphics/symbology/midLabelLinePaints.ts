@@ -21,6 +21,7 @@ import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
+import {midSegmentInView} from './viewFollow';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, showsEny, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -92,8 +93,8 @@ function vertices(feature: PaintFeature): ProjectedPosition[] {
 }
 
 /** The midpoint of a path, plus the segment it lies on. */
-function midpointOf(coords: ProjectedPosition[]) {
-    const {index, t} = projectedMidSegment(coords);
+function midpointOf(coords: ProjectedPosition[], context: PaintContext) {
+    const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context);
     const p1 = coords[index];
     const p2 = coords[index + 1];
     return {index, t, p1, p2, point: [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t] as ProjectedPosition};
@@ -135,7 +136,7 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const coords = vertices(feature);
         if (coords.length < 2) return [];
 
-        const {p1, p2, point} = midpointOf(coords);
+        const {p1, p2, point} = midpointOf(coords, context);
         const scale = scaleOf(feature, context);
         const rotation = uprightRotation(p1, p2);
         // `T2 ( AS )` on the plate: the designation carries its country code in
@@ -230,7 +231,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
          * curve, so it keeps one pair at its middle.
          */
         const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
-        const spans = smoothed ? [midpointOf(coords)] : coords.slice(1).map((b, i) => {
+        const spans = smoothed ? [midpointOf(coords, context)] : coords.slice(1).map((b, i) => {
             const a = coords[i];
             return {p1: a, p2: b, point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as ProjectedPosition};
         });
@@ -296,7 +297,7 @@ export function munitionFlightPathPaint(): LinePaint {
         if (coords.length < 2) return [];
 
         const scale = scaleOf(feature, context);
-        const {index, t, p1, p2} = midpointOf(coords);
+        const {index, t, p1, p2} = midpointOf(coords, context);
         const dx = p2[0] - p1[0];
         const dy = p2[1] - p1[1];
         const segLen = Math.hypot(dx, dy);

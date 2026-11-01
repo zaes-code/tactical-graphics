@@ -9,6 +9,8 @@ import {resetTacticalGraphicsConfig} from '../core/config';
 import type {Paint, PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {phaseLinePaint} from './paintFunctions';
 import {axisOfAdvanceLabelPaint} from './movementPaints';
+import {boundaryPaint} from './boundaryPaints';
+import {coordinatedFireLinePaint} from './midLabelLinePaints';
 import {areaLabelInView, clipRing, inRing, inView, pathUpTo, visibleStretch} from './viewFollow';
 
 const RESOLUTION = 100;
@@ -341,4 +343,35 @@ describe('clipRing', () => {
         expect(Math.min(...clipped.map(p => p[0]))).toBe(0);
         expect(Math.max(...clipped.map(p => p[0]))).toBe(50_000);
     });
+});
+
+describe('a line labelled at its middle', () => {
+    const line = (name: TacticalGraphicName, coords: ProjectedPosition[]): PaintFeature => ({
+        geometry: {type: 'LineString', coordinates: coords},
+        properties: {name, designation: '1-12 IN', secondDesignation: '2-8 IN'},
+    });
+    const cases = [
+        ['a boundary', TacticalGraphicName.Boundary, boundaryPaint()],
+        ['a coordinated fire line', TacticalGraphicName.CoordinatedFireLine, coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine)],
+    ] as const;
+
+    for (const [title, name, paint] of cases) {
+        it(`paints ${title} as before when its middle is on screen`, () => {
+            const f = line(name, [
+                [-50_000, 0],
+                [150_000, 0],
+            ]);
+            expect(paint(f, context(VIEW))).toEqual(paint(f, context()));
+        });
+
+        it(`brings ${title}'s labels onto the view when its middle is off it`, () => {
+            const f = line(name, [
+                [-300_000, 0],
+                [80_000, 0],
+            ]);
+            const at = labels(paint(f, context(VIEW)));
+            expect(at.length).toBeGreaterThan(0);
+            for (const p of at) expect(inView(p, VIEW)).toBe(true);
+        });
+    }
 });

@@ -13,6 +13,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, 
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {cutGapAlongPath, projectedMidSegment, runVector, textWidth} from './decorations';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
+import {midSegmentInView} from './viewFollow';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {hostileEndMarks} from './midLabelLinePaints';
 
@@ -93,7 +94,7 @@ export function boundaryPaint(): LinePaint {
         const bottomLabel = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
-        const {index, t} = projectedMidSegment(coords);
+        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context);
         // As long as the run the middle sits on, so the glyph's cap is measured against the
         // line it marks and not against one chord of a smoothed curve. @see runVector
         const [dx, dy] = runVector(coords, index, t);
