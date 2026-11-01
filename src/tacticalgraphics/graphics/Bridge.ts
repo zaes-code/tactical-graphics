@@ -9,6 +9,9 @@ import {Coordinate} from "../core/type";
 import {Position} from "geojson";
 import {parallelRailAnchors, parallelRailFrame} from "../core/anchors";
 
+/** How far past the end of the centre line a crossing's flares reach along it, in half-widths (cos 45, rounded up). */
+const FLARE_REACH = 0.75;
+
 /**
  * The preview gap in metres, from the half-width the holder sized against the screen.
  *
@@ -83,7 +86,11 @@ export class Bridge extends TacticalGraphicsBase {
 
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         let size: number = opts?.size || 20;
-        return this.asMultiPointFeature(geometryService.getBridgeLabelPoints(this.rails(base, opts).centre, size));
+        // The date starts past the flares, which run half a gap-width out at 45 degrees from the
+        // end of each rail. It used to hang `size` past that end, among the flare tips; the
+        // paint then grows it away from the end. @see bridgeLabelPaint
+        const {centre, half} = this.rails(base, opts);
+        return this.asMultiPointFeature(geometryService.getBridgeLabelPoints(centre, size + FLARE_REACH * half));
     }
 
 }

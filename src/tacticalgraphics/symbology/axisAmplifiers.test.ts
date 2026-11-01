@@ -28,9 +28,9 @@ const AXES = [
     N.AdvanceToContact,
 ];
 
-function texts(name: N, hostility: TacticalGraphicHostility): Paint[] {
+function texts(name: N, hostility: TacticalGraphicHostility, from: Geometry = base): Paint[] {
     const properties = {designation: 'DAVID', startDate: '011200Z', endDate: '021800Z', radius: 1000, hostility};
-    const graphic = buildPaintedGraphic(name, base, properties, resolution)!;
+    const graphic = buildPaintedGraphic(name, from, properties, resolution)!;
     return paintGraphic(graphic, context).filter(p => p.text && p.text.fill !== 'rgba(0,0,0,0)');
 }
 
@@ -42,7 +42,17 @@ function meanX(paints: Paint[], value: string): number {
     return marks.reduce((sum, p) => sum + (p.geometry.coordinates as Position)[0], 0) / marks.length;
 }
 
+/** The same arrow pointing west, where every label is turned upright through half a turn. */
+const westBase: Geometry = {type: 'LineString', coordinates: [[-0.2, 0], [0, 0], [-0.19, -0.01]]};
+
 describe.each(AXES)('%s', name => {
+    it('keeps T at the rear on an arrow pointing west', () => {
+        // Found turning each line graphic through four directions (2026-11-01): the feint and
+        // advance to contact set T at the head whenever the text read against the arrow.
+        const paints = texts(name, TacticalGraphicHostility.friend, westBase);
+        expect(meanX(paints, '011200Z - 021800Z')).toBeLessThan(meanX(paints, 'DAVID'));
+    });
+
     it('sets T behind W - W1, and W - W1 toward the head', () => {
         const paints = texts(name, TacticalGraphicHostility.friend);
         const all = paints.map(p => p.text!.text).join('');
@@ -68,6 +78,22 @@ describe.each(AXES)('%s', name => {
         // The name is painted first, rear to head, then the date.
         const nameEnd = Math.max(...paints.slice(0, 5).map(x));
         expect(paints.slice(5).every(p => x(p) > nameEnd)).toBe(true);
+    });
+
+    it('keeps T at the rear of a short arrow pointing west', () => {
+        // The one-run fallback read "T  W - W1" from the head back, so T sat at the head.
+        const stubby: Geometry = {type: 'LineString', coordinates: [[-0.025, 0], [0, 0], [-0.02, -0.01]]};
+        const properties = {designation: 'DAVID', startDate: '011200Z', endDate: '021800Z', radius: 1000, hostility: TacticalGraphicHostility.friend};
+        const near = 10;
+        const wide: PaintContext = {resolution: near, measureText: (text: string) => text.length * 11};
+        const paints = paintGraphic(buildPaintedGraphic(name, stubby, properties, near)!, wide).filter(p => p.text && p.text.fill !== 'rgba(0,0,0,0)');
+        const x = (p: Paint) => (p.geometry.coordinates as Position)[0];
+        const run = paints.map(p => p.text!.text).join('');
+        expect(run.indexOf('DAVID')).toBeGreaterThan(-1);
+        // The head is west: every date glyph lies west of every name glyph.
+        const nameAt = paints.filter(p => p.text!.glyph ? 'DAVI'.includes(p.text!.text) : p.text!.text === 'DAVID').map(x);
+        const dateAt = paints.filter(p => p.text!.glyph ? /[0-9Z]/.test(p.text!.text) : p.text!.text.startsWith('011200Z')).map(x);
+        expect(Math.max(...dateAt)).toBeLessThan(Math.min(...nameAt));
     });
 
     it('says ENY twice at the rear when hostile, and never when friendly', () => {
