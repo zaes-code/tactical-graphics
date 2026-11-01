@@ -16,6 +16,7 @@ import {maxGraphicLabelScale} from '../core/symbology';
 import {LABEL_GRAPHIC_SHARE} from './labelFit';
 import {TacticalGraphicName} from '../core/type';
 import {blockPaint, breachPaint, clearPaint} from './blockPaints';
+import {getPaintFunction} from './registry';
 
 /** One map unit per screen pixel, so every coordinate below reads as pixels. */
 const context: PaintContext = {
@@ -125,5 +126,44 @@ describe('the letter is the same on every engine', () => {
         const big = letterPx(breachPaint('B')(feature(lines, LEGIBLE_SIZE), context))!;
         const zoomedOut = letterPx(breachPaint('B')(feature(lines, LEGIBLE_SIZE), {...context, resolution: 2}))!;
         expect(zoomedOut).toBeCloseTo(big / 2, 6);
+    });
+});
+
+/**
+ * APP-06 270502, FM 1-02.2 Table 5-19 and MIL-STD-2525E Table L-XVI fill the obstacle
+ * disrupt's three heads; 341000, the mission task, draws them open on every plate.
+ */
+describe('the disrupts’ arrowheads', () => {
+    // The generator's sub-line order: [shaft, head] for the long, short and middle prongs, then the bar.
+    const head = (x: number, y: number): ProjectedPosition[] => [[x - 10, y + 10], [x, y], [x - 10, y - 10]];
+    const trident: ProjectedPosition[][] = [
+        [[0, 100], [200, 100]], head(200, 100),
+        [[0, 0], [100, 0]], head(100, 0),
+        [[-80, 50], [150, 50]], head(150, 50),
+        [[0, 0], [0, 100]],
+    ];
+    const drawn = (name: TacticalGraphicName): PaintFeature => ({
+        geometry: {type: 'MultiLineString', coordinates: trident},
+        properties: {name},
+        graphicSize: LEGIBLE_SIZE,
+    });
+    const fills = (paints: Paint[]) => paints.filter(p => p.fill && p.geometry.type === 'Polygon');
+
+    it('fills the obstacle effect’s three, slimmer than the open barbs', () => {
+        const solid = fills(clearPaint('', 0.75, [1, 3, 5])(drawn(TacticalGraphicName.Disrupt), context));
+        expect(solid).toHaveLength(3);
+        const [tip, left, right] = (solid[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
+        const halfAngle = (p: ProjectedPosition) => Math.atan2(Math.abs(p[1] - tip[1]), Math.abs(p[0] - tip[0])) * (180 / Math.PI);
+        expect(halfAngle(left)).toBeCloseTo(24, 6);
+        expect(halfAngle(right)).toBeCloseTo(24, 6);
+    });
+
+    it('leaves the mission task’s open', () => {
+        expect(fills(clearPaint('D', 0.75)(drawn(TacticalGraphicName.TacticalDisrupt), context))).toEqual([]);
+    });
+
+    it('is what the shared registry paints for each, so both engines agree', () => {
+        expect(fills(getPaintFunction(TacticalGraphicName.Disrupt)!.graphic(drawn(TacticalGraphicName.Disrupt), context))).toHaveLength(3);
+        expect(fills(getPaintFunction(TacticalGraphicName.TacticalDisrupt)!.graphic(drawn(TacticalGraphicName.TacticalDisrupt), context))).toEqual([]);
     });
 });
