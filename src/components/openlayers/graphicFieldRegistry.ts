@@ -737,9 +737,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: COUNTERATTACK,
     [TacticalGraphicName.CounterattackByFire]: COUNTERATTACK,
-    // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
-    // the crossing-site symbols carry no name.
-    [TacticalGraphicName.Bridge]: SHAPE_ONLY,
+    // Mobility / water crossing. FM 1-02.2 Table 5-16's bridge carries no amplifiers, but
+    // MIL-STD-2525E 271100 (bridge or gap) boxes T between the rails and W - W1 below the
+    // point 2 / point 4 end, and so does APP-06. 2525E decides.
+    [TacticalGraphicName.Bridge]: f(true, false, true, true, false),
     // `T` over `W - W1`; the second date was missing. (User's call, 2026-09-01.)
     [TacticalGraphicName.Gap]: f(true, false, true, true, false),
     // `W - W1`, not a lone `W`. (User's call, 2026-09-01.)
