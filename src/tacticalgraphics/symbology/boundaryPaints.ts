@@ -14,6 +14,7 @@ import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} f
 import {cutGapAlongPath, projectedMidSegment, runVector, textWidth} from './decorations';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {hostileEndMarks} from './midLabelLinePaints';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -127,6 +128,8 @@ export function boundaryPaint(): LinePaint {
         const ny = perpSign * (dx / segLen);
 
         return [
+            // APP-06 110100 boxes N at each end of a hostile boundary. @see hostileEndMarks
+            ...hostileEndMarks(feature, coords, scale, context),
             amplifier(feature, [midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
             amplifier(feature, [midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
             ...echelonMarks(
