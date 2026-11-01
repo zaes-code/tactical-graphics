@@ -65,7 +65,13 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
         const scale = decorationScale(path, false, context.resolution, WIRE_MARK_PX * style.height);
         const width = WIRE_MARK_PX * scale * context.resolution;
         const height = width * style.height;
-        const railOffset = {under: -height / 2, center: 0, over: height / 2};
+        /*
+         * "Under" is **left of PT 1 -> PT 2**, so the marks stand on its right. 2525E Table
+         * L-XVI and APP-06 draw 290305, 290307 and 290308 with PT 2 on the left and PT 1 on
+         * the right, the marks above the rail: travelling west, above is the right. It hung on
+         * the right of travel until 2026-10-31, which put the marks on the wrong side.
+         */
+        const railOffset = {under: height / 2, center: 0, over: -height / 2};
 
         if (style.rail || width <= 0) {
             for (const at of style.railsAt ?? ['center']) {
