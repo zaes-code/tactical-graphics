@@ -478,3 +478,14 @@ describe('the navigational line — APP-06 218400', () => {
         expect(segments([[0, 0], [60, 0]])).toEqual([[[0, 0], [60, 0]]]);
     });
 });
+
+// 220100-220108: every Template and Example sets the letter and H level, whichever way the
+// bearing points.
+describe('bearing-line text stays upright', () => {
+    it.each(BEARING_LINES)('%s sets its letter and H level on a north-east bearing', name => {
+        const paints = bearingLinePaint(name)(lineFeature(name, [[0, 0], [5000, 5000]], {additionalInfo: 'CONTACT'}), context);
+        const marks = paints.filter(p => p.text);
+        expect(marks).toHaveLength(2);
+        for (const mark of marks) expect(mark.text!.rotation ?? 0).toBe(0);
+    });
+});
