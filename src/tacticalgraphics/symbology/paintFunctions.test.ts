@@ -208,6 +208,21 @@ describe('encirclement teeth are sized against the shape, like the obstacle belt
         expect(toothHeightPx(400_000, 1000, ringFeature(clockwise))).toBeGreaterThan(1);
     });
 
+    it('wears about ten large, separate teeth, as APP-06 151800 and 2525E Table L-VII draw it', () => {
+        // A traced circle 300 px across at one meter per pixel.
+        const circle: ProjectedPosition[] = Array.from({length: 121}, (_, i) => {
+            const a = (i / 120) * 2 * Math.PI;
+            return [150 * Math.cos(a), 150 * Math.sin(a)];
+        });
+        const geometry = paintEncirclement(ringFeature(circle), context(1))[0].geometry;
+        const points = geometry.type === 'MultiLineString' ? geometry.coordinates.flat() : [];
+        const apexes = points.filter(([x, y]) => Math.hypot(x, y) > 160);
+        expect(apexes.length).toBeGreaterThanOrEqual(9);
+        expect(apexes.length).toBeLessThanOrEqual(11);
+        // Separate: each tooth's apex stands well clear of the next.
+        expect(Math.min(...apexes.map(([x, y]) => Math.hypot(x, y)))).toBeGreaterThan(175);
+    });
+
     it('teeth a hostile outline too, and keeps the ENY amplifiers', () => {
         // Hostile arrives as a collection: the outline already cut into segments to
         // clear the amplifiers, plus the anchors they sit on.
