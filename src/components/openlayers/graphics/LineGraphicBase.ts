@@ -45,7 +45,7 @@ import {
     sweptArcTaskStyleFunc,
     wireObstacleStyleFunc,
 } from '../openlayerStyles';
-import {handlesAreInert,defaultStandoffMetres, getLabel, getPaintFunction, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert,defaultStandoffMetres, getPaintFunction, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
