@@ -11,6 +11,7 @@ import {phaseLinePaint} from './paintFunctions';
 import {axisOfAdvanceLabelPaint} from './movementPaints';
 import {boundaryPaint} from './boundaryPaints';
 import {coordinatedFireLinePaint} from './midLabelLinePaints';
+import {finalProtectiveFirePaint, linearTargetPaint} from './linearTargetPaints';
 import {areaLabelInView, clipRing, inRing, inView, pathUpTo, visibleStretch} from './viewFollow';
 
 const RESOLUTION = 100;
@@ -353,6 +354,8 @@ describe('a line labelled at its middle', () => {
     const cases = [
         ['a boundary', TacticalGraphicName.Boundary, boundaryPaint()],
         ['a coordinated fire line', TacticalGraphicName.CoordinatedFireLine, coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine)],
+        ['a linear target', TacticalGraphicName.LinearTarget, linearTargetPaint(TacticalGraphicName.LinearTarget)],
+        ['a final protective fire', TacticalGraphicName.FinalProtectiveFire, finalProtectiveFirePaint()],
     ] as const;
 
     for (const [title, name, paint] of cases) {
