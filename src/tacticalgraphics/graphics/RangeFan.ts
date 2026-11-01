@@ -13,7 +13,6 @@ const ARC_STEPS = 60;
 const ARROW_TIP_OFFSET_FRACTION = 0.20;
 const ARROW_HEAD_LENGTH_FRACTION = 0.06;
 const ARROW_HEAD_HALF_DEG = 25;
-const TICK_FRACTION = 0.04;
 
 /**
  * Convert math-convention rotation (degrees CCW from east) to
@@ -109,8 +108,7 @@ export function resolveBandAzimuths(
 
 /**
  * Multi-band weapon/sensor range fan (full 360°). Renders one full circle
- * per band plus a radial reference tick along the controller's rotation
- * direction. Per-band labels are anchored at the mid-radius along that
+ * per band and nothing else. Per-band labels are anchored at the mid-radius along that
  * same reference bearing — the OL style function reads the MultiPoint
  * vertex for each band and stamps "RG <range>" / "ALT <altitude>".
  */
@@ -121,7 +119,6 @@ export class WeaponRangeFanCircular extends TacticalGraphicsBase<RangeFanOptions
     generateGraphics(base: Feature<Point>, opts?: RangeFanOptions): Feature<MultiLineString> {
         const center = base.geometry.coordinates;
         const bands = resolveBands(opts);
-        const refAz = opts?.centerAzimuthDeg ?? rotationToAzimuth(opts?.rotation ?? 0);
 
         const lines: Position[][] = [];
         for (const band of bands) {
@@ -133,12 +130,8 @@ export class WeaponRangeFanCircular extends TacticalGraphicsBase<RangeFanOptions
             lines.push(ring);
         }
 
-        // Radial tick at the reference bearing, at the outermost band.
-        const outerRadiusM = bands[bands.length - 1].range;
-        const tickStartR = outerRadiusM * (1 - TICK_FRACTION);
-        const tickStart = pointAtAzimuth(center, refAz, tickStartR);
-        const tickEnd = pointAtAzimuth(center, refAz, outerRadiusM);
-        lines.push([tickStart, tickEnd]);
+        // Rings only. The template (APP-06 and MIL-STD-2525E 242100) is plain concentric
+        // circles; a radial reference tick used to mark the bearing the labels and grips sit on.
 
         return this.asMultiLineStringFeature(lines, {
             graphicName: this.name,
