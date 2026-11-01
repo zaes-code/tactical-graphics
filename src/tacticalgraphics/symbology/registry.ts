@@ -869,7 +869,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.Breach] = {graphic: breachPaint(getLabel(TacticalGraphicName.Breach))};
     registry[TacticalGraphicName.Clear] = {graphic: clearPaint(getLabel(TacticalGraphicName.Clear))};
     registry[TacticalGraphicName.TacticalDisrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.TacticalDisrupt), 0.75)};
-    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75)};
+    // The obstacle effect's three heads are solid; the mission task's are open. @see clearPaint
+    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75, [1, 3, 5])};
 
     for (const [name, label] of CARDINAL_LABEL_AREAS) {
         registry[name] = {
@@ -1004,8 +1005,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.SafeLaneOrGap] = {graphic: safeLaneOrGapPaint()};
     registry[TacticalGraphicName.OverheadWire] = {graphic: overheadWirePaint()};
     // 'F' for the mission task, '' for the table 5-19 twin and the ferry crossing.
-    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
-    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};
+    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix), {openHead: true})};
+    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix), {openHead: true})};
     registry[TacticalGraphicName.FerryCrossing] = {graphic: arrowheadedLinePaint()};
 
     registry[TacticalGraphicName.Pursuit] = {

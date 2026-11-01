@@ -8,7 +8,7 @@ import * as turf from '../core/turf';
  * # The zigzag is a screen size; how many teeth you get is the line's business
  *
  * FM 1-02.2 draws Fix as a short straight run, a zigzag, and a second straight run into
- * an arrowhead. The zigzag is a *texture*: a longer obstacle carries more of it, the way
+ * an arrowhead. APP-06 and MIL-STD-2525E draw the head open, and the paint follows them. The zigzag is a *texture*: a longer obstacle carries more of it, the way
  * the wire obstacles carry more barbs, and every tooth is the same size.
  *
  * **It used to be exactly three triangles, every dimension a fraction of the drawn
@@ -37,8 +37,12 @@ const FIX_TAIL_RATIO = 2.6;
 const FIX_MAX_LEAD_SHARE = 0.22;
 const FIX_MAX_TAIL_SHARE = 0.3;
 
-/** Below two apexes it is a kink rather than a zigzag. */
-const FIX_MIN_APEXES = 2;
+/**
+ * Below three apexes it is a kink rather than a zigzag, and the count is always odd: the
+ * run dips, peaks and dips again, starting and ending on the same side (APP-06 270503 and
+ * 341100, MIL-STD-2525E Tables L-XVI and L-XXI). The first apex is to the right of travel.
+ */
+const FIX_MIN_APEXES = 3;
 
 /** Arrowhead length, as a share of the step. */
 const FIX_ARROW_RATIO = 1.5;
@@ -100,7 +104,8 @@ export class Fix extends TacticalGraphicsBase<PointGraphicOptions> {
         const tail = Math.min(step * FIX_TAIL_RATIO, total * FIX_MAX_TAIL_SHARE);
         const band = Math.max(0, total - lead - tail);
 
-        const apexes = Math.max(FIX_MIN_APEXES, Math.floor(band / step));
+        const fits = Math.floor(band / step);
+        const apexes = Math.max(FIX_MIN_APEXES, fits % 2 === 0 ? fits - 1 : fits);
         const used = apexes * step;
         const start = lead + Math.max(0, band - used) / 2;
 

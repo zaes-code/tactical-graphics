@@ -43,14 +43,14 @@ import {
     routeControlMeasureStyle,
     securityOperationStyleFunc,
     sweptArcTaskStyleFunc,
-    tacticalFixStyleFunc,
     wireObstacleStyleFunc,
 } from '../openlayerStyles';
-import {handlesAreInert,defaultStandoffMetres, getLabel, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {handlesAreInert,defaultStandoffMetres, getLabel, getPaintFunction, groundLength, latitudeFromMercatorY, minimumFirstSegmentPx, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {GraphicLabels} from "../../../utils/graphicLinkRegistry";
 import openlayersAdapter from "../openlayersAdapter";
 import {readGraphicLabels, writeGraphicProperties} from "../graphicProperties";
 import {decorationMeters} from './decorationPx';
+import {asStyleFunction} from '../paintToOpenLayers';
 
 export class LineGraphicBase implements LineGraphic {
     base: Feature<LineString> = <Feature<LineString>>createBaseFeature();
@@ -118,8 +118,9 @@ export class LineGraphicBase implements LineGraphic {
                     return probableLineOfDeploymentStyleFunc()(feature, resolution);
                 case TacticalGraphicName.TacticalFix:
                 case TacticalGraphicName.Fix:
-                    // 'F' for the mission task, '' for the table 5-19 twin.
-                    return tacticalFixStyleFunc(getLabel(name))(feature, resolution);
+                    // The shared paint: 'F' for the mission task, '' for the table 5-19
+                    // twin, and an open head for both. @see arrowheadedLinePaint
+                    return asStyleFunction(getPaintFunction(name)!.graphic, name)(feature, resolution);
                 case TacticalGraphicName.FerryCrossing:
                     return ferryCrossingStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.BearingLine:

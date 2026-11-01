@@ -164,10 +164,14 @@ export function lineOfContactPaint(): LinePaint {
  * the collection is line work.
  *
  * `label` is the doctrinal letter: "F" for the mission task, empty for the table
- * 5-19 obstacle effect, which is the same zigzag with no glyph. **Unlike the block
+ * 5-19 obstacle effect, which is the same zigzag with no glyph.
+ *
+ * `openHead` strokes the head's two barbs instead of filling it. Fix and the tactical fix
+ * take it: APP-06 270503 / 341100 and MIL-STD-2525E Tables L-XVI and L-XXI all draw their
+ * head open (FM 1-02.2 alone fills it). Ferry crossing keeps its solid head. **Unlike the block
  * family this cuts no gap for it**, so an empty label simply draws nothing.
  */
-export function arrowheadedLinePaint(label = ''): LinePaint {
+export function arrowheadedLinePaint(label = '', {openHead = false}: {openHead?: boolean} = {}): LinePaint {
     return (feature, context) => {
         const color = lineColorOf(feature);
         const dashPx = amplifierDash(feature);
@@ -185,7 +189,11 @@ export function arrowheadedLinePaint(label = ''): LinePaint {
                 // a full-size head on a symbol half that wide. Ferry crossing's line is
                 // straight and reads the same either way. @see screenSizedArrowHead
                 const head = screenSizedArrowHead(member.coordinates[0], linePath, context.resolution, 'reach');
-                if (head) {
+                if (head && openHead) {
+                    // The two barbs alone, meeting at the tip the zigzag runs into.
+                    const [tip, left, right] = head;
+                    paints.push({geometry: {type: 'LineString', coordinates: [left, tip, right]}, stroke: {color, widthPx: LINE_WIDTH(), dashPx}});
+                } else if (head) {
                     paints.push({
                         geometry: {type: 'Polygon', coordinates: [head]},
                         fill: {color},
