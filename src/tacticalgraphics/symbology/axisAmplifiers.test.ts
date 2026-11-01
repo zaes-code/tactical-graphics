@@ -68,3 +68,34 @@ describe.each(AXES)('%s', name => {
         expect(texts(name, TacticalGraphicHostility.friend).some(p => p.text!.text === 'ENY')).toBe(false);
     });
 });
+
+/** 152300's Template boxes H outside the upper rail near the rear of the symbol. */
+describe('avenue of approach field H', () => {
+    const paint = (hostility: TacticalGraphicHostility) => {
+        const properties = {designation: 'X', additionalInfo: 'NOTE', radius: 1000, hostility};
+        return paintGraphic(buildPaintedGraphic(N.AvenueOfApproach, base, properties, resolution)!, context).filter(p => p.text);
+    };
+
+    it.each([TacticalGraphicHostility.friend, TacticalGraphicHostility.hostileFaker])('sits outside the upper rail at the rear (%s)', hostility => {
+        const marks = paint(hostility);
+        const h = marks.find(p => p.text!.text === 'NOTE')!;
+        const aa = marks.find(p => p.text!.text.startsWith('AA'))!;
+        const [hx, hy] = h.geometry.coordinates as Position;
+        // Behind AA, toward the rear (the rear is west), and above the arrow.
+        expect(hx).toBeLessThan((aa.geometry.coordinates as Position)[0]);
+        expect(hx).toBeLessThan(0.05 * 111_320);
+        // Above every vertex of the line work at the rear.
+        const rearTop = Math.max(
+            ...paintGraphic(buildPaintedGraphic(N.AvenueOfApproach, base, {radius: 1000}, resolution)!, context)
+                .filter(p => p.stroke)
+                .flatMap(p => (p.geometry.coordinates as Position[][]).flat())
+                .filter(([x]) => x < 0.05 * 111_320)
+                .map(([, y]) => y),
+        );
+        expect(hy).toBeGreaterThan(rearTop);
+        // Clear of a hostile arrow's upper ENY.
+        for (const eny of marks.filter(p => p.text!.text === 'ENY')) {
+            expect(Math.abs((eny.geometry.coordinates as Position)[1] - hy)).toBeGreaterThan(10 * resolution);
+        }
+    });
+});
