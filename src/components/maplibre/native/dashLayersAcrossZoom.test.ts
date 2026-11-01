@@ -97,7 +97,7 @@ function sampleGraphics() {
     const line = (lon: number) => ({type: 'LineString' as const, coordinates: [[lon, 40], [lon + 0.6, 40.05], [lon + 0.62, 40.2]]});
     return [
         buildTacticalGraphic(TacticalGraphicName.Counterattack, line(9), {designation: 'ALPHA'}),
-        buildTacticalGraphic(TacticalGraphicName.FordEasy, line(10)),
+        buildTacticalGraphic(TacticalGraphicName.Exploitation, line(10)),
         buildTacticalGraphic(TacticalGraphicName.PhaseLine, {type: 'LineString', coordinates: [[9, 39.6], [11, 39.6]]}, {
             designation: 'BRAVO',
             status: TacticalGraphicStatus.planned,

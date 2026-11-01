@@ -87,24 +87,12 @@ describe('geometry budget', () => {
     /**
      * The fords used to be the budget's worst case: their bars were cut into dashes here, a
      * third of the half-separation long, so a narrow gap on a long base meant thousands of
-     * coordinates. The dash is a stroke property now, sized on screen, so each bar is one
-     * line and the renderer is told which to break. @see DASHED_PARTS
+     * coordinates. A ford bar is three long dashes on every plate (271500, FM 1-02.2 Table
+     * 5-16, MIL-STD-2525E Table L-XVI), so the count is fixed whatever the gap. @see threeDashes
      */
-    it('the fords hand over each bar whole and name both as dashed', () => {
+    it('the fords draw three dashes per bar, however narrow the gap', () => {
         for (const name of [TacticalGraphicName.FordEasy, TacticalGraphicName.FordDifficult]) {
-            /*
-             * **Three points, because that is what a ford is now.** Its bars' separation was a
-             * `radius` amplifier and is an anchor point as of 2026-09-06, so a two-point base
-             * is a half-drawn symbol whose gap is a preview default — which is not the thing
-             * this test measures.
-             *
-             * **A narrow gap, because a fine dash period is the subject.** The dash length is
-             * a third of the half-separation, so the wider the bars sit the fewer dashes they
-             * carry — 360 km of gap draws 8 of them across this base and asserts nothing about
-             * the clamp. The `radius: 180_000` this used to pass never reached the generator
-             * as a separation at all; what it exercised was the small default.
-             * @see parallelRailFrame
-             */
+            // A narrow gap on a long base: what used to blow the budget.
             const bar = (LONG_BASE as {coordinates: number[][]}).coordinates;
             const across = turf.destination(turf.point(bar[bar.length - 1]), 12_000, 0, {units: 'meters'})
                 .geometry.coordinates;
@@ -116,8 +104,8 @@ describe('geometry budget', () => {
 
             const geometry = rendered.graphic.geometry as {type: string; coordinates: unknown[]};
             expect(geometry.type).toBe('MultiLineString');
-            expect(geometry.coordinates.length).toBe(name === TacticalGraphicName.FordDifficult ? 3 : 2);
-            expect(rendered.graphic.properties?.dashedParts).toEqual([0, 1]);
+            expect(geometry.coordinates.length).toBe(name === TacticalGraphicName.FordDifficult ? 7 : 6);
+            expect(rendered.graphic.properties?.dashedParts).toBeUndefined();
         }
     });
 });
