@@ -16,6 +16,7 @@
 import {
     GRAPHIC_ENTITY_CODES,
     TIP_FIRST_GRAPHICS,
+    TIP_FIRST_SINCE_SNAPSHOT_3,
     rotationAnchor,
     TacticalGraphicName,
     TacticalGraphicsRegistry,
@@ -113,10 +114,25 @@ describe('TIP_FIRST_GRAPHICS', () => {
             TacticalGraphicName.Recover,
             TacticalGraphicName.Demonstration,
             TacticalGraphicName.ObstacleBypassEasy,
-            TacticalGraphicName.DirectionOfMainAttack,
         ]) {
             expect(drawsTipFirst(name)).toBe(false);
         }
+    });
+
+    it('stores the four direction-of-attack arrows tip first, as their plates letter PT 1 at the head', () => {
+        // APP-06 140601, 140602, 140603 and 140605: "PT 1" under the arrowhead, "PT 2" at the rear.
+        for (const name of TIP_FIRST_SINCE_SNAPSHOT_3) {
+            expect(drawsTipFirst(name)).toBe(true);
+            expect(generatorOrder(name, [A, B])).toEqual([B, A]);
+        }
+        expect([...TIP_FIRST_SINCE_SNAPSHOT_3].sort()).toEqual(
+            [
+                TacticalGraphicName.AviationDirectionOfAttack,
+                TacticalGraphicName.DirectionOfMainAttack,
+                TacticalGraphicName.DirectionOfMainAttackFeint,
+                TacticalGraphicName.DirectionOfSupportingAttack,
+            ].sort(),
+        );
     });
 });
 
