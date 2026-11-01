@@ -7,6 +7,12 @@ import {BY_FIRE_SHAFT, BY_FIRE_STANDOFF, tipOverhangOf, widthPointForBuiltAxis} 
 import {getSmoothLines} from '../core/config';
 import {chaikinKeepingEnds, smoothingKindOf} from '../core/smoothing';
 
+/**
+ * How long the aviation axes' twist is, in half-widths of the body: about the width of the
+ * arrow and a half, as 151401 and 151402 draw it. @see MovementGraphicBase.twistWalls
+ */
+export const TWIST_HALF_WIDTHS = 3;
+
 export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
     type = "LineString";
 
@@ -22,6 +28,41 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
      */
     protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
         return geometryService.trimLineEnd(base.geometry.coordinates, radius * tipOverhangOf(this.name));
+    }
+
+    /**
+     * Crosses the two walls over their last `TWIST_HALF_WIDTHS` half-widths, so the body stays
+     * full width until a short twist just behind the head.
+     *
+     * 151401 and 151402 (APP-06 and MIL-STD-2525E Table L-X): "the crossover point on the
+     * symbol shall occur between Points 1 and 2", and both Templates draw it as a short twist
+     * right behind the head. The walls used to be joined across the whole last segment of the
+     * centre line, so a long last leg converged from point 2 all the way to the head and read
+     * as a long X. A last leg shorter than the twist crosses over the whole of it, as before.
+     *
+     * Pops each wall's end, pushes where the twist starts on it, then the *other* wall's end.
+     * Returns the two ends and the two twist starts, for the bars the attack helicopter draws.
+     */
+    protected twistWalls(left: Position[], right: Position[], radius: number) {
+        const [lastLeft] = left.splice(left.length - 1, 1);
+        const [lastRight] = right.splice(right.length - 1, 1);
+        const prevLeft = left[left.length - 1];
+        const prevRight = right[right.length - 1];
+        const lerp = (a: Position, b: Position, t: number): Position => [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+        const legLength = turf.distance(prevLeft, lastLeft, {units: 'meters'});
+        const twist = radius * TWIST_HALF_WIDTHS;
+        let startLeft = prevLeft;
+        let startRight = prevRight;
+        if (legLength > twist) {
+            const t = 1 - twist / legLength;
+            startLeft = lerp(prevLeft, lastLeft, t);
+            startRight = lerp(prevRight, lastRight, t);
+            left.push(startLeft);
+            right.push(startRight);
+        }
+        left.push(lastRight);
+        right.push(lastLeft);
+        return {lastLeft, lastRight, startLeft, startRight};
     }
 
     /**
@@ -127,16 +168,9 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
             rightArrowBase[rightArrowBase.length - 2],
             -radius,
         );
-        // add a twist in the middle of the arrow segment (same as AviationAxisOfAdvance)
-        const [lastLeft] = leftArrowBase.splice(leftArrowBase.length - 1, 1);
-        const [lastRight] = rightArrowBase.splice(rightArrowBase.length - 1, 1);
-
-        // Save twist edge start points before the push overwrites them
-        const secondToLastLeft = leftArrowBase[leftArrowBase.length - 1];
-        const secondToLastRight = rightArrowBase[rightArrowBase.length - 1];
-
-        leftArrowBase.push(lastRight);
-        rightArrowBase.push(lastLeft);
+        // The twist just behind the head. @see twistWalls
+        const {lastLeft, lastRight, startLeft: secondToLastLeft, startRight: secondToLastRight} =
+            this.twistWalls(leftArrowBase, rightArrowBase, radius);
         const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
 
         let arrowCoords: Position[] = [lastLeft, leftArrowHeadBase, arrowTipCoord, rightArrowHeadBase, lastRight];
@@ -157,8 +191,11 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
             [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
 
         const bars: Position[][] = [];
+        // The twist's own centre line, from where it starts to the head's base.
+        const twistFrom = lerp(secondToLastLeft, secondToLastRight, 0.5);
+        const twistTo = lerp(lastLeft, lastRight, 0.5);
         for (const t of [0.3, 0.7]) {
-            const center = lerp(secondToLastLinePoint, lastLinePoint, t);
+            const center = lerp(twistFrom, twistTo, t);
             // Intersect line (center + s*barDir) with Edge A (secondToLastLeft + u*edgeADir)
             const dA: Position = [center[0] - secondToLastLeft[0], center[1] - secondToLastLeft[1]];
             const denomA = cross(barDir, edgeADir);
@@ -186,10 +223,12 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
         const baseCoords = this.arrowCenterline(base, radius);
         // coords[0..1]: text label position (near tail, same as AviationAxisOfAdvance)
         const textCoords = geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius);
-        // coords[2]: actual twist intercept (midpoint of the last centerline segment)
+        // coords[2]: where the walls actually cross, halfway along the twist. @see twistWalls
         const last = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
-        const twistCenter: Position = [(secondToLast[0] + last[0]) / 2, (secondToLast[1] + last[1]) / 2];
+        const legLength = turf.distance(secondToLast, last, {units: 'meters'});
+        const back = legLength > 0 ? Math.min(1, (radius * TWIST_HALF_WIDTHS) / legLength) / 2 : 0.5;
+        const twistCenter: Position = [last[0] + back * (secondToLast[0] - last[0]), last[1] + back * (secondToLast[1] - last[1])];
         // coords[3]: direction point (for computing arrow heading)
         return this.asMultiPointFeature([...textCoords, twistCenter, secondToLast, ...this.labelPath(baseCoords)]);
     }
@@ -215,12 +254,8 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
             rightArrowBase[rightArrowBase.length - 2],
             -radius,
         );
-        // add a twist in the middle of the arrow segment
-        const [lastLeft] = leftArrowBase.splice(leftArrowBase.length - 1, 1);
-        const [lastRight] = rightArrowBase.splice(rightArrowBase.length - 1, 1);
-
-        leftArrowBase.push(lastRight);
-        rightArrowBase.push(lastLeft);
+        // The twist just behind the head. @see twistWalls
+        const {lastLeft, lastRight} = this.twistWalls(leftArrowBase, rightArrowBase, radius);
         const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
 
         let arrowCoords: Position[] = [lastLeft, leftArrowHeadBase, arrowTipCoord, rightArrowHeadBase, lastRight];

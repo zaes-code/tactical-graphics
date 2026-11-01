@@ -22,3 +22,22 @@ describe('avenue of approach (APP-06 152300)', () => {
         expect(drawn(TacticalGraphicName.AvenueOfApproach)).not.toEqual(drawn(TacticalGraphicName.MainAxisOfAdvance));
     });
 });
+
+/**
+ * 151401 / 151402 (APP-06, MIL-STD-2525E Table L-X): the walls hold their full width and cross
+ * in a short twist just behind the head, not across the whole last leg.
+ */
+describe.each([TacticalGraphicName.AviationAxisOfAdvance, TacticalGraphicName.AttackHelicopterAxisOfAdvance])('%s', name => {
+    it('keeps its body full width until about three half-widths behind the head', () => {
+        const [wall] = drawn(name);
+        const half = Math.abs(wall[0][1]);
+        const end = wall[wall.length - 1];
+        const twistStart = wall[wall.length - 2];
+        // The twist starts on the wall's own side, at full width...
+        expect(Math.abs(twistStart[1])).toBeCloseTo(half, 3);
+        expect(Math.sign(twistStart[1])).toBe(Math.sign(wall[0][1]));
+        // ...and ends on the other side three half-widths on.
+        expect(Math.sign(end[1])).toBe(-Math.sign(wall[0][1]));
+        expect((end[0] - twistStart[0]) / half).toBeCloseTo(3, 1);
+    });
+});
