@@ -525,6 +525,11 @@ export const RADIUS_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
     TacticalGraphicName.TargetAreaCircular,
+    // 241703, 241803 and 241903 letter `AM` along a `RADIUS (M)` arrow like the other seven
+    // circular target-acquisition zones, and were the three missing from this list.
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
     // APP-06 200300: its Template letters `AM` with `RADIUS (m)` written along the arrow,
     // so the radius is an amplifier the symbol carries and not only a drag read-out.
     TacticalGraphicName.NoAttackZone,
@@ -567,9 +572,9 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Deny,
     TacticalGraphicName.Locate,
     TacticalGraphicName.PsyOpsZoneCircular,
-    TacticalGraphicName.TargetBuildUpAreaCircular,
-    TacticalGraphicName.TargetValueAreaCircular,
-    TacticalGraphicName.ZoneOfResponsibilityCircular,
+    // The target build-up, target value and zone of responsibility circles left this list
+    // on 2026-10-31: their plates letter AM along a RADIUS (M) arrow, so the radius is an
+    // amplifier and they are in RADIUS_GRAPHICS with the rest of their family.
     /*
      * Not a circle, but sized by the same gesture. The rectangular target became
      * point-anchored in 3.2.0 — one anchor point, with the length swung and set by dragging
