@@ -730,15 +730,22 @@ export function cutArcAtLabel(
  */
 export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition): number {
     let rotation = -Math.atan2(to[1] - from[1], to[0] - from[0]);
-    if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
+    if (uprightFlipped(from, to)) rotation += Math.PI;
     if (rotation > Math.PI) rotation -= 2 * Math.PI;
     return rotation;
 }
 
-/** Whether {@link uprightRotation} turned the text through half a turn to keep it readable. */
+/**
+ * Whether {@link uprightRotation} turned the text through half a turn to keep it readable.
+ *
+ * **An exactly vertical segment reads bottom to top whichever way it was drawn**, so its
+ * half-turn is taken at `+π/2` and not at `-π/2`. Without that tie the two ends of one vertical
+ * line read in opposite directions, and one of them sat on the line, because
+ * {@link offsetAbove} can only match one of them. Two clicks in the same pixel column draw it.
+ */
 export function uprightFlipped(from: ProjectedPosition, to: ProjectedPosition): boolean {
     const raw = -Math.atan2(to[1] - from[1], to[0] - from[0]);
-    return raw > Math.PI / 2 || raw < -Math.PI / 2;
+    return raw >= Math.PI / 2 || raw < -Math.PI / 2;
 }
 
 /**
@@ -774,7 +781,8 @@ export function alignAlong(
  * "Up" is normalized against the map's north rather than taken from the
  * segment's direction of travel: a counter-clockwise perpendicular flips when the
  * same line is drawn right-to-left, which put every label below the line instead
- * of above it. A vertical segment has no up side, so the tie breaks east.
+ * of above it. A vertical segment has no up side, so the tie breaks west: that is where the
+ * top of the text is, since {@link uprightRotation} reads a vertical segment bottom to top.
  *
  * The offset is `px × resolution`, so it is a constant screen distance at every
  * zoom — the house rule for anything that has to clear a glyph.
@@ -793,7 +801,7 @@ export function offsetAbove(
 
     let nx = -dy / len;
     let ny = dx / len;
-    if (ny < 0 || (ny === 0 && nx < 0)) {
+    if (ny < 0 || (ny === 0 && nx > 0)) {
         nx = -nx;
         ny = -ny;
     }

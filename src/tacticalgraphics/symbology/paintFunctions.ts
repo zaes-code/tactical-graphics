@@ -62,6 +62,7 @@ import {
     offsetBelow,
     pathLength,
     textWidth,
+    uprightFlipped,
     uprightRotation,
 } from './decorations';
 
@@ -223,21 +224,34 @@ function withoutCoveringAmplifiers(paints: Paint[], context: PaintContext): Pain
     return changed ? out : paints;
 }
 
-interface TextBox {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-}
+/**
+ * The four corners of a label's glyphs on screen, in order round the box.
+ *
+ * **Turned with the text, not squared to the screen.** An axis-aligned box round a label laid
+ * along a diagonal line is half as tall as it is wide, so the dates under such a line always
+ * met the name's box over it and were taken away, on every diagonal. (Found turning every line
+ * graphic through four directions, 2026-11-01.)
+ */
+type TextBox = readonly (readonly [number, number])[];
 
 /** How far into each other two boxes must reach to count as overlapping, in pixels. */
 const OVERLAP_TOLERANCE_PX = 1;
 
+/** Separating axes: two convex boxes overlap unless some edge's normal parts them. */
 function overlaps(a: TextBox, b: TextBox): boolean {
-    return (
-        Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX) > OVERLAP_TOLERANCE_PX &&
-        Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY) > OVERLAP_TOLERANCE_PX
-    );
+    for (const box of [a, b]) {
+        for (let i = 0; i < box.length; i++) {
+            const [x0, y0] = box[i];
+            const [x1, y1] = box[(i + 1) % box.length];
+            const len = Math.hypot(x1 - x0, y1 - y0);
+            if (!len) continue;
+            const [nx, ny] = [-(y1 - y0) / len, (x1 - x0) / len];
+            const project = (p: readonly (readonly [number, number])[]) => p.map(([x, y]) => x * nx + y * ny);
+            const [pa, pb] = [project(a), project(b)];
+            if (Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb)) <= OVERLAP_TOLERANCE_PX) return false;
+        }
+    }
+    return true;
 }
 
 /** Line spacing of a multi-line label, as a share of the font size. */
@@ -271,19 +285,8 @@ function textBox(paint: Paint, context: PaintContext): TextBox | undefined {
     const cx = ax / context.resolution + (text.offsetXPx ?? 0);
     const cy = -ay / context.resolution + (text.offsetYPx ?? 0);
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const [x, y] of [[x0, y0], [x0 + width, y0], [x0, y0 + height], [x0 + width, y0 + height]]) {
-        const rx = cx + x * cos - y * sin;
-        const ry = cy + x * sin + y * cos;
-        minX = Math.min(minX, rx);
-        minY = Math.min(minY, ry);
-        maxX = Math.max(maxX, rx);
-        maxY = Math.max(maxY, ry);
-    }
-    return {minX, minY, maxX, maxY};
+    const corner = (x: number, y: number): [number, number] => [cx + x * cos - y * sin, cy + x * sin + y * cos];
+    return [corner(x0, y0), corner(x0 + width, y0), corner(x0 + width, y0 + height), corner(x0, y0 + height)];
 }
 
 /** The pixel size text is drawn at: the font shorthand's size times the mark's scale. */
@@ -630,8 +633,9 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         // pixels and is NOT rotated with the text, so the actual x-component of each
         // segment has to be checked — the "keep upright" flip makes the rotation
         // identical for both directions, and without this the label lands on the line.
-        const startOutsideRight = start[0] - startNext[0] >= 0;
-        const endOutsideRight = end[0] - endPrev[0] >= 0;
+        // Asked of the rotation rather than of x, so an exactly vertical line agrees with it.
+        const startOutsideRight = !uprightFlipped(startNext, start);
+        const endOutsideRight = !uprightFlipped(endPrev, end);
 
         // `ENY` goes on the outer side of each end, `ENY PL T ... PL T ENY`, so it is the first
         // word of a label left of its end and the last of one to the right. @see enyOutside
@@ -1306,8 +1310,8 @@ export function defaultLinePaint(
         const gap = DEFAULT_LINE_LABEL_GAP_PX;
         const res = context.resolution;
 
-        const startAlign: 'left' | 'right' = afterStart[0] >= start[0] ? 'left' : 'right';
-        const endAlign: 'left' | 'right' = end[0] >= beforeEnd[0] ? 'right' : 'left';
+        const startAlign: 'left' | 'right' = !uprightFlipped(start, afterStart) ? 'left' : 'right';
+        const endAlign: 'left' | 'right' = !uprightFlipped(beforeEnd, end) ? 'right' : 'left';
         const startRotation = uprightRotation(start, afterStart);
         const endRotation = uprightRotation(end, beforeEnd);
 

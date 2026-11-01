@@ -18,7 +18,7 @@ import {paintLineWork} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {DECORATION_MIN_PX, textWidth, uprightRotation} from './decorations';
+import {DECORATION_MIN_PX, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {amplifierDash, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {letterInGapScale} from './labelFit';
 
@@ -205,7 +205,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
         const infoAt = info && beside(from, to, 1, -INFO_OFFSET_PX * scale, context.resolution);
         // Ending at point 2 means right-justified on a run drawn east and left-justified on one
         // drawn west, now that the text no longer turns with the run.
-        if (info && infoAt) paints.push(text(infoAt, String(info), to[0] >= from[0] ? 'right' : 'left', 'amplifier'));
+        if (info && infoAt) paints.push(text(infoAt, String(info), !uprightFlipped(from, to) ? 'right' : 'left', 'amplifier'));
 
         return paints;
     };

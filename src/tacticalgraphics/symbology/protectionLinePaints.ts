@@ -26,6 +26,7 @@ import {
     endMarkScale,
     pathLength,
     splitPathAroundAll,
+    uprightFlipped,
     uprightRotation,
     walkPath,
 } from './decorations';
@@ -232,11 +233,11 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         };
         paints.push(amplifier(
             feature, outward(afterStart, start), 'ENY', scale,
-            uprightRotation(start, afterStart), afterStart[0] >= start[0] ? 'right' : 'left',
+            uprightRotation(start, afterStart), !uprightFlipped(start, afterStart) ? 'right' : 'left',
         ));
         paints.push(amplifier(
             feature, outward(beforeEnd, end), 'ENY', scale,
-            uprightRotation(beforeEnd, end), end[0] >= beforeEnd[0] ? 'left' : 'right',
+            uprightRotation(beforeEnd, end), !uprightFlipped(beforeEnd, end) ? 'left' : 'right',
         ));
         return paints;
     };
