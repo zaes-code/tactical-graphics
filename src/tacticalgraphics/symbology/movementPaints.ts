@@ -20,12 +20,13 @@
  * label-scale function"
  */
 
+import {TWIST_HALF_WIDTHS} from '../graphics/Movement';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
+import {alignAlong, offsetAbove, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
@@ -101,7 +102,7 @@ function text(
     feature: PaintFeature, at: ProjectedPosition,
     value: string,
     scale: number,
-    extra: {rotation?: number; align?: 'left' | 'center' | 'right'; halo?: boolean; kind?: TextKind} = {},
+    extra: {rotation?: number; align?: 'left' | 'center' | 'right'; baseline?: 'top' | 'middle' | 'bottom'; halo?: boolean; kind?: TextKind} = {},
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
@@ -113,7 +114,7 @@ function text(
             kind: extra.kind,
             rotation: extra.rotation,
             align: extra.align ?? 'center',
-            baseline: 'middle',
+            baseline: extra.baseline ?? 'middle',
             scale,
         },
     };
@@ -357,7 +358,9 @@ const AXIS_ENY_GAP_PX = 12;
  *
  * A hostile axis also says `ENY`, outside each rail at the rear, as the plates box field N
  * (APP-06 8.1.4). `halfWidth` is the arrow's half-width in projected meters, which is the
- * length of the span every generator in this family publishes.
+ * length of the span every generator in this family publishes. `behindHead` is more of the
+ * body, in the same meters, that the date stays out of: the two aviation axes' twist, which
+ * the dates ran through on every heading (found turning each line graphic, 2026-11-01).
  */
 function axisAmplifiers(
     feature: PaintFeature,
@@ -365,6 +368,7 @@ function axisAmplifiers(
     coords: ProjectedPosition[],
     pathFrom: number,
     halfWidth: number,
+    behindHead = 0,
 ): Paint[] {
     const [c0, c1] = coords;
     const published = coords.slice(pathFrom);
@@ -384,12 +388,15 @@ function axisAmplifiers(
 
     // Rear to head: the name, then the date.
     const date = areaDateLabel(feature);
-    const dateEnd = total - ARROWHEAD_LABEL_CLEARANCE_PX * res;
+    const dateEnd = total - ARROWHEAD_LABEL_CLEARANCE_PX * res - behindHead;
     const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - AXIS_NAME_DATE_GAP_PX * res : dateEnd;
     const name = feature.properties.designation?.trim();
     if (name && date && textWidth(context, name, fontStyle, scale) * res > nameRoom) {
         // Too short for two groups: centring the name in the room left would set it on the date.
-        place(dateEnd, nameAndDate(feature), 'right', 'end');
+        // The run keeps T toward the rear, so where the text is turned to read from the head
+        // back it starts with the dates. (It set T at the head on every arrow pointing west.)
+        const {a, b} = pointAlong(path, dateEnd);
+        place(dateEnd, uprightFlipped(a, b) ? `${date}     ${name}` : nameAndDate(feature), 'right', 'end');
     } else {
         if (name) place(Math.max(0, nameRoom) / 2, name, 'center', 'center');
         if (date) place(dateEnd, date, 'right', 'end', 'amplifier');
@@ -420,7 +427,8 @@ export function aviationAxisLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
-        return axisAmplifiers(feature, context, coords, 2, Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]));
+        const half = Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]);
+        return axisAmplifiers(feature, context, coords, 2, half, TWIST_HALF_WIDTHS * half);
     };
 }
 
@@ -597,7 +605,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
 
         const tdx = x1 - x0;
         const tdy = y1 - y0;
-        paints.push(...axisAmplifiers(feature, context, coords, 4, Math.hypot(tdx, tdy)));
+        paints.push(...axisAmplifiers(feature, context, coords, 4, Math.hypot(tdx, tdy), TWIST_HALF_WIDTHS * Math.hypot(tdx, tdy)));
 
         const heading = Math.atan2(cy - dy3, cx - dx3);
         // Half-size reference: the text span is the arrow's radius in map units.
@@ -845,6 +853,9 @@ export function mobileDefenseGraphicPaint(): (f: PaintFeature, c: PaintContext) 
     };
 }
 
+/** How far a direction must lean off an axis (sin 22.5 degrees) to count as leaning. */
+const LEANS_OFF_AXIS = Math.sin(Math.PI / 8);
+
 /** How far past the pre-placed anchor the date sits, in screen pixels. */
 const BRIDGE_DATE_GAP_PX = 12;
 
@@ -886,8 +897,12 @@ export function bridgeLabelPaint(): MovementPaint {
             const length = Math.hypot(dx, dy) || 1;
             const gap = BRIDGE_DATE_GAP_PX * context.resolution;
             const at: ProjectedPosition = [c1[0] + (dx / length) * gap, c1[1] + (dy / length) * gap];
-            const align = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'left' : 'right') : 'center';
-            paints.push(text(feature, at, date, scale, {align}));
+            // The box grows away from the end in both directions, so its nearest corner is the
+            // anchor: centred on a steep crossing it reached back over the flare tips.
+            const [ux, uy] = [dx / length, dy / length];
+            const align = ux > LEANS_OFF_AXIS ? 'left' : ux < -LEANS_OFF_AXIS ? 'right' : 'center';
+            const baseline = uy > LEANS_OFF_AXIS ? 'bottom' : uy < -LEANS_OFF_AXIS ? 'top' : 'middle';
+            paints.push(text(feature, at, date, scale, {align, baseline}));
         }
 
         return paints;

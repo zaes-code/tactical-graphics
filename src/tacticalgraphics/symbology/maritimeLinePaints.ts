@@ -205,11 +205,26 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
         const infoAt = info && beside(from, to, 1, -INFO_OFFSET_PX * scale, context.resolution);
         // Ending at point 2 means right-justified on a run drawn east and left-justified on one
         // drawn west, now that the text no longer turns with the run.
-        if (info && infoAt) paints.push(text(infoAt, String(info), !uprightFlipped(from, to) ? 'right' : 'left', 'amplifier'));
+        // **Upright text has to grow away from the line**, not along it. On a steep or diagonal
+        // run the end-justified H crossed the line's end (found turning the bearing lines
+        // through four directions, 2026-11-01), so once the side it sits on leans east or west
+        // it grows that way, and up or down with it.
+        if (info && infoAt) {
+            const [nx, ny] = [infoAt[0] - to[0], infoAt[1] - to[1]];
+            const n = Math.hypot(nx, ny) || 1;
+            const steep = Math.abs(nx / n) > LEANS;
+            const align = steep ? (nx > 0 ? 'left' : 'right') : !uprightFlipped(from, to) ? 'right' : 'left';
+            const mark = text(infoAt, String(info), align, 'amplifier');
+            if (steep && Math.abs(ny / n) > LEANS) mark.text!.baseline = ny > 0 ? 'bottom' : 'top';
+            paints.push(mark);
+        }
 
         return paints;
     };
 }
+
+/** How far a side must lean off the vertical (sin 22.5 degrees) to count as east, west, up or down. */
+const LEANS = Math.sin(Math.PI / 8);
 
 /**
  * The navigational line's tick, as a fraction of the run it sits on -- **measured, then

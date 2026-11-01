@@ -684,6 +684,28 @@ function upperLeftCorner(feature: PaintFeature): ProjectedPosition | undefined {
 }
 
 /**
+ * Where the four `PAA` markers go: on the outline, one to a side.
+ *
+ * A rectangle's are its edge midpoints. Any other ring takes the points where rays north,
+ * south, west and east of its centre cross it. The bounding box's edge midpoints, which these
+ * replace, are on the shape only while it is square to the screen: turned 45 degrees, all
+ * four stood off its corners (found turning every line-based graphic, 2026-11-01).
+ */
+function paaMarkerSpots(ring: readonly ProjectedPosition[] | undefined, fallback: ProjectedPosition[]): ProjectedPosition[] {
+    if (!ring || ring.length < 4) return fallback;
+    const open = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+    if (open.length === 4) {
+        return open.map((p, i) => {
+            const q = open[(i + 1) % 4];
+            return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] as ProjectedPosition;
+        });
+    }
+    const center = ringCenter(ring);
+    const spots = [Math.PI / 2, -Math.PI / 2, Math.PI, 0].map(angle => ringCrossingPoint(ring, center, angle));
+    return spots.every(Boolean) ? (spots as ProjectedPosition[]) : fallback;
+}
+
+/**
  * Position area for artillery: "PAA" at each of the four edge midpoints of the
  * shape's bounding box, plus the name and date-time group centered.
  *
@@ -704,12 +726,12 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
         const cx = (bounds.minX + bounds.maxX) / 2;
         const cy = (bounds.minY + bounds.maxY) / 2;
 
-        const paints: Paint[] = ([
+        const paints: Paint[] = paaMarkerSpots(feature.ring, [
             [cx, bounds.maxY],
             [cx, bounds.minY],
             [bounds.minX, cy],
             [bounds.maxX, cy],
-        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
+        ]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
 
         const at = anchorOf(feature);
         const designation = getFullLabel(name, feature.properties.designation ?? '').trim();
