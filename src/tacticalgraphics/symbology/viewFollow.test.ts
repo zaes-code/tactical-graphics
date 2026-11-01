@@ -142,6 +142,22 @@ describe('a phase line', () => {
         expect(Math.max(...at.map(p => p[0]))).toBeCloseTo(100_000 - VIEW_EDGE_INSET_PX * RESOLUTION);
     });
 
+    it('moves the label of an end that is on screen when the label itself would run off it', () => {
+        // The start sits just inside the view, but "PL RUTH" runs west past the edge.
+        const line: ProjectedPosition[] = [
+            [2_500, 0],
+            [80_000, 0],
+        ];
+        const paints = paint(feature(line), context(VIEW));
+        const [first, last] = paints.filter(p => p.text);
+        // Turned to read inward from the end, just above the line, rather than out past it.
+        const at = (first.geometry as {coordinates: ProjectedPosition}).coordinates;
+        expect(at[0]).toBeCloseTo(2_500);
+        expect(at[1]).toBeGreaterThan(0);
+        expect(first.text!.offsetXPx).toBe(0);
+        expect((last.geometry as {coordinates: ProjectedPosition}).coordinates).toEqual([80_000, 0]);
+    });
+
     it('moves only the label whose end is off screen', () => {
         const at = labels(
             paint(

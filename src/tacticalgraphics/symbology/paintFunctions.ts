@@ -669,9 +669,17 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
 
         // An end that is off screen takes its label to where the line leaves the view.
         // @see PaintContext.view
+        // An end counts as shown only when its whole label, which runs on past it, is.
         const view = insetView(context);
-        const startShown = !view || inView(start, view);
-        const endShown = !view || inView(end, view);
+        const labelFits = (at: ProjectedPosition, from: ProjectedPosition) => {
+            const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
+            if (!view || run === 0) return !view || inView(at, view);
+            const reach = (PHASE_LINE_GAP_PX + width) * context.resolution;
+            const far: ProjectedPosition = [at[0] + ((at[0] - from[0]) / run) * reach, at[1] + ((at[1] - from[1]) / run) * reach];
+            return inView(at, view) && inView(far, view);
+        };
+        const startShown = labelFits(start, startNext);
+        const endShown = labelFits(end, endPrev);
         if (startShown && endShown) return [lineWork, atStart(), atEnd()];
 
         // Nothing of the line inside the inset view: it is off screen or hugging an edge, and
