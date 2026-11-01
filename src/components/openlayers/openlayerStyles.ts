@@ -1359,8 +1359,8 @@ export function lineOfContactStyleFunc(): StyleFunction {
 
 
 /** **Ported.** @see retrogradePaints.ts, `retrogradeTaskPaint`. */
-export function retroGradeTaskStyleFunc(label: string): StyleFunction {
-    return asStyleFunction(retrogradeTaskPaint(label));
+export function retroGradeTaskStyleFunc(label: string, name?: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(retrogradeTaskPaint(label, name));
 }
 
 /**
