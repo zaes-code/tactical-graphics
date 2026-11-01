@@ -218,10 +218,18 @@ export class AdvanceToContact extends SolidManeuverArrow {
      * ratios give the same picture at a different head shape.
      */
     private static readonly ZIG_START_T = 0.5;
-    private static readonly ZIG_SEG_PER_FLANK = 0.534;
-    private static readonly ZIG_HEAD_PER_FLANK = 0.09;
-    /** Tilt of each stroke off the heading, toward the outside. FM's value, unchanged. */
-    private static readonly ZIG_ANGLE_DEG = 25;
+    /**
+     * **Sized by MIL-STD-2525E 342900, not FM.** "The length of the lightning bolts shall be
+     * at least twice the width of the base of the arrow and at a 45° angle from the arrow
+     * tip." Each stroke tilts 37° off the heading, which puts the whole bolt, two strokes and
+     * the step back between them, at 45°; a stroke of 1.16 flanks makes it 2.2 body widths end
+     * to end. FM's proportions (0.534 flanks at 25°) drew a bolt a third the head's length,
+     * which is what it carried until 2026-10-31.
+     */
+    private static readonly ZIG_SEG_PER_FLANK = 1.16;
+    private static readonly ZIG_HEAD_PER_FLANK = 0.2;
+    /** Tilt of each stroke off the heading, toward the outside. @see ZIG_SEG_PER_FLANK */
+    private static readonly ZIG_ANGLE_DEG = 37;
     /**
      * Clear space between the arrowhead's flank and the bolt that leaves it.
      *
@@ -303,6 +311,12 @@ export class AdvanceToContact extends SolidManeuverArrow {
     }
 }
 
+/** Half the frontal attack's tip line, in half-widths: twice the head's 4×radius base. */
+export const FRONTAL_ATTACK_BAR_HALF = 4;
+/** Where the turning movement's line crosses the first leg, and half its length in half-widths. */
+export const TURNING_MOVEMENT_LINE_AT = 0.35;
+export const TURNING_MOVEMENT_LINE_HALF = 3;
+
 export class FrontalAttack extends SolidManeuverArrow {
     constructor() { super(TacticalGraphicName.FrontalAttack); }
 
@@ -314,11 +328,13 @@ export class FrontalAttack extends SolidManeuverArrow {
 
         const arrowLines = super.generateGraphics(base, opts).geometry.coordinates;
 
-        // Vertical line at the arrow tip, perpendicular to arrow direction.
-        // Arrowhead base spans 4×radius; line is 50% larger → ±3×radius each side.
+        // The straight line across the tip, square to the arrow. The head's base spans
+        // 4×radius, and 152700 (APP-06, MIL-STD-2525E Table L-VII) says the line "shall be
+        // centered and at least twice the width of the base of the arrow" → ±4×radius.
+        // It was ±3×radius, one and a half times the base, until 2026-10-31.
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
-        const lineTop    = geometryService.getPerpendicularPoint(arrowTip, lastPoint,  3 * radius);
-        const lineBottom = geometryService.getPerpendicularPoint(arrowTip, lastPoint, -3 * radius);
+        const lineTop    = geometryService.getPerpendicularPoint(arrowTip, lastPoint,  FRONTAL_ATTACK_BAR_HALF * radius);
+        const lineBottom = geometryService.getPerpendicularPoint(arrowTip, lastPoint, -FRONTAL_ATTACK_BAR_HALF * radius);
 
         return this.asMultiLineStringFeature([...arrowLines, [lineTop, lineBottom]]);
     }
@@ -347,16 +363,17 @@ export class TurningMovement extends SolidManeuverArrow {
 
         const arrowLines = super.generateGraphics(base, opts).geometry.coordinates;
 
-        // Perpendicular crossing line at 60% along the first segment (toward the arrowhead).
-        // Linear interpolation is accurate enough for the short segments tactical graphics use.
-        // Extends ±1.5×radius — 50% wider than the 2×radius arrow body.
-        const t = 0.6;
+        // A long line square across the body near the tail. 152900 (APP-06 and MIL-STD-2525E
+        // Table L-VII) draws it a third of the way up the first leg and about three body
+        // widths long, well past both rails; it was a short bar at 60% reaching ±1.5×radius
+        // (FM 1-02.2's form) until 2026-10-31. Linear interpolation is accurate enough here.
+        const t = TURNING_MOVEMENT_LINE_AT;
         const crossPoint: Position = [
             baseCoords[0][0] + t * (baseCoords[1][0] - baseCoords[0][0]),
             baseCoords[0][1] + t * (baseCoords[1][1] - baseCoords[0][1]),
         ];
-        const tailTop    = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1],  1.5 * radius);
-        const tailBottom = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1], -1.5 * radius);
+        const tailTop    = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1],  TURNING_MOVEMENT_LINE_HALF * radius);
+        const tailBottom = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1], -TURNING_MOVEMENT_LINE_HALF * radius);
 
         return this.asMultiLineStringFeature([...arrowLines, [tailTop, tailBottom]]);
     }

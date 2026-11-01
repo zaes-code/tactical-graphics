@@ -41,3 +41,41 @@ describe.each([TacticalGraphicName.AviationAxisOfAdvance, TacticalGraphicName.At
         expect((end[0] - twistStart[0]) / half).toBeCloseTo(3, 1);
     });
 });
+
+const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+describe('frontal attack (152700, 2525E Table L-VII)', () => {
+    it('crosses its tip with a line twice the width of the head’s base', () => {
+        const lines = drawn(TacticalGraphicName.FrontalAttack);
+        const [, leftWing, , rightWing] = lines[1];
+        const bar = lines[lines.length - 1];
+        expect(dist(bar[0], bar[1]) / dist(leftWing, rightWing)).toBeCloseTo(2, 2);
+    });
+});
+
+describe('turning movement (152900, 2525E Table L-VII)', () => {
+    it('crosses the tail with a line three body widths long', () => {
+        const lines = drawn(TacticalGraphicName.TurningMovement);
+        const half = Math.abs(lines[0][0][1]);
+        const line = lines[lines.length - 1];
+        expect(dist(line[0], line[1]) / (2 * half)).toBeCloseTo(3, 1);
+        // A third of the way up the first leg, from the rear.
+        expect(line[0][0]).toBeLessThan(0.5);
+    });
+});
+
+describe('advance to contact (342900, 2525E Table L-XXI)', () => {
+    it('throws each bolt at least twice the body width, about 45 degrees off the heading', () => {
+        const lines = drawn(TacticalGraphicName.AdvanceToContact);
+        const half = Math.abs(lines[0][0][1]);
+        // [left body, head, right body, bolt, bolt head, bolt, bolt head]
+        for (const bolt of [lines[3], lines[5]]) {
+            const start = bolt[0];
+            const end = bolt[bolt.length - 1];
+            expect(dist(start, end)).toBeGreaterThanOrEqual(2 * 2 * half);
+            // The arrow runs along the x axis, so the bolt's angle off it is its angle off the heading.
+            const off = (Math.atan2(Math.abs(end[1] - start[1]), Math.abs(end[0] - start[0])) * 180) / Math.PI;
+            expect(Math.abs(off - 45)).toBeLessThan(5);
+        }
+    });
+});
