@@ -546,7 +546,9 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
-            return 'ATI ZONE';
+            // MIL-STD-2525E 2411xx prints ATIZ. FM 1-02.2 says ATI ZONE and APP-06 ATI;
+            // 2525E decides.
+            return 'ATIZ';
 
         case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.CallForFireZoneRectangular:
