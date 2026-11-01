@@ -152,17 +152,13 @@ const FIELD_OF_FIRE_BAR_SHARE = 0.057;
  * thickening rather than as a heavy stroke.
  */
 const FIELD_OF_FIRE_BAR_MIN_MULTIPLE = 2;
-/** Drop from the V's vertex to the top of its label, in screen pixels. */
-const FIELD_OF_FIRE_LABEL_OFFSET_PX = 8;
-
 /** A point `ratio` of the way from `a` to `b`. */
 function along(a: ProjectedPosition, b: ProjectedPosition, ratio: number): ProjectedPosition {
     return [a[0] + (b[0] - a[0]) * ratio, a[1] + (b[1] - a[1]) * ratio];
 }
 
 /**
- * Fields of fire: a V with a solid bar across the middle of its left leg and the
- * weapon's designation hanging below the vertex.
+ * Fields of fire: a V with a solid bar across the middle of its left leg.
  *
  * **And its three MIL-STD-2525E Change 1 variants**, which differ only in the bar and the
  * dash: final protective fire (right) carries it on the PT 1 to PT 3 leg, principal direction
@@ -173,10 +169,6 @@ function along(a: ProjectedPosition, b: ProjectedPosition, ratio: number): Proje
  * which is what makes its ends square — a rounded cap would read as a lozenge. It
  * is part of the symbol, so it takes the same standard-identity color as the legs
  * rather than a fixed black.
- *
- * **The label carries no halo.** It sits below the vertex in open space, where a
- * halo only thickens the glyph; every other amplifier in the library sits on or
- * beside line work and needs one.
  */
 export function fieldsOfFirePaint(name: TacticalGraphicName = TacticalGraphicName.FieldsOfFire): LinePaint {
     const blade = FIELD_OF_FIRE_BLADE[name];
@@ -211,22 +203,9 @@ export function fieldsOfFirePaint(name: TacticalGraphicName = TacticalGraphicNam
             });
         }
 
-        const label = feature.properties.designation ?? '';
-        if (vee.length >= 3 && label) {
-            paints.push({
-                geometry: {type: 'Point', coordinates: vee[1]},
-                text: {
-                    text: label,
-                    font: fontStyle,
-                    fill: labelColorOf(feature),
-                    align: 'center',
-                    baseline: 'top',
-                    offsetYPx: FIELD_OF_FIRE_LABEL_OFFSET_PX,
-                    scale: scaleOf(feature, context),
-                },
-            });
-        }
-
+        // No designation. None of 140500-140504 letters an amplifier: the box at point 1 on
+        // their Templates is the (grey) unit symbol the measure belongs to, which the plate
+        // says "may touch point 1". It used to draw field T below the vertex.
         return paints;
     };
 }

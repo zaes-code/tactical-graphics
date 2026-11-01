@@ -446,6 +446,8 @@ const PSYOPS_ZONE = f(true, false, true, true, false, {additionalInfo: true});
  */
 const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
+/** An area whose plate prints only its own literal: the status, and no designation. */
+const AREA_STATUS_ONLY = f(false, false, false, false, true);
 /**
  * Free fire / no fire / restrictive fire area (APP-06 2402xx, 2403xx, 2404xx).
  *
@@ -720,11 +722,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
-    [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false),
-    [TacticalGraphicName.FinalProtectiveFireLeft]: f(true, false, false, false, false),
-    [TacticalGraphicName.FinalProtectiveFireRight]: f(true, false, false, false, false),
-    [TacticalGraphicName.PrincipalDirectionOfFire]: f(true, false, false, false, false),
-    [TacticalGraphicName.SecondaryDirectionOfFire]: f(true, false, false, false, false),
+    // 140500-140504 letter no amplifier: the box at point 1 is the unit symbol, in grey.
+    [TacticalGraphicName.FieldsOfFire]: SHAPE_ONLY,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: SHAPE_ONLY,
+    [TacticalGraphicName.FinalProtectiveFireRight]: SHAPE_ONLY,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: SHAPE_ONLY,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: SHAPE_ONLY,
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
@@ -885,8 +888,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BaseCamp]: AREA_SIMPLE,
     [TacticalGraphicName.GuerrillaBase]: AREA_SIMPLE,
     [TacticalGraphicName.DetaineeHoldingArea]: AREA_SIMPLE,
-    [TacticalGraphicName.BombArea]: AREA_SIMPLE,
-    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_SIMPLE,
+    // 240808 and 242000 print the bare literal: no T box. (MIL-STD-2525E and APP-06.)
+    [TacticalGraphicName.BombArea]: AREA_STATUS_ONLY,
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_STATUS_ONLY,
     [TacticalGraphicName.Bridgehead]: AREA_SIMPLE,
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: AREA_SIMPLE,
     [TacticalGraphicName.HumanTerrain]: HUMAN_TERRAIN,
@@ -928,7 +932,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.CorpsSupportArea]: f(true, false, true, true, true),
     [TacticalGraphicName.FighterEngagementZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.ExtractionZone]: AREA_SIMPLE,
-    [TacticalGraphicName.RegimentalSupportArea]: AREA_SIMPLE,
+    // 310500 prints a bare RSA with no T box. (MIL-STD-2525E and APP-06.)
+    [TacticalGraphicName.RegimentalSupportArea]: AREA_STATUS_ONLY,
     [TacticalGraphicName.DropZone]: AREA_SIMPLE,
     [TacticalGraphicName.LandingZone]: AREA_SIMPLE,
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
@@ -1098,8 +1103,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
-    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: NAME_FIELD_ONLY,
+    // 151800 letters only the two N (ENY) boxes, and 271000 only UXO in its two gaps: no T.
+    [TacticalGraphicName.Encirclement]: SHAPE_ONLY,
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: SHAPE_ONLY,
     [TacticalGraphicName.FortifiedArea]: NAME_FIELD_ONLY,
     // No designation: its plate labels the shape with the words "AIRHEAD LINE" and offers
     // no name box. (User's call, 2026-09-01.) @see airheadLineLabelPaint
