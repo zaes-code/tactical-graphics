@@ -115,9 +115,14 @@ export function passageLanePaint(showDates = true): LinePaint {
     };
 }
 
-/** Where along the left leg the solid bar starts and ends. */
-const FIELD_OF_FIRE_BAR_FROM = 0.2;
-const FIELD_OF_FIRE_BAR_TO = 0.7;
+/**
+ * Where along its leg the solid bar starts and ends, from the leg's tip: 80% of the leg,
+ * centred. MIL-STD-2525E Change 1 140501: "The length of the 'blade' shall be 80% of the
+ * length of point 1 and point 2, centered and connected to the inside of the line." It ran
+ * 0.2 to 0.7, half the leg and off centre, until 2026-10-31.
+ */
+const FIELD_OF_FIRE_BAR_FROM = 0.1;
+const FIELD_OF_FIRE_BAR_TO = 0.9;
 /** Thickness of that bar, in screen pixels, before the cap below. */
 const FIELD_OF_FIRE_BAR_WIDTH_PX = 12;
 
@@ -147,7 +152,7 @@ function along(a: ProjectedPosition, b: ProjectedPosition, ratio: number): Proje
 }
 
 /**
- * Fields of fire: a V with a solid bar across the middle of its left leg.
+ * Fields of fire: a V with a solid bar along the inside of its left leg.
  *
  * **And its three MIL-STD-2525E Change 1 variants**, which differ only in the bar and the
  * dash: final protective fire (right) carries it on the PT 1 to PT 3 leg, principal direction
@@ -180,12 +185,26 @@ export function fieldsOfFirePaint(name: TacticalGraphicName = TacticalGraphicNam
                 LINE_WIDTH() * FIELD_OF_FIRE_BAR_MIN_MULTIPLE,
                 Math.min(FIELD_OF_FIRE_BAR_WIDTH_PX, legPx * FIELD_OF_FIRE_BAR_SHARE),
             );
+            // **On the inside of the line**, not centred on it: shifted toward the other leg so
+            // its outer edge runs along the line's. @see FIELD_OF_FIRE_BAR_FROM
+            const other = blade === 3 ? vee[0] : vee[2];
+            const dx = leg[1][0] - leg[0][0];
+            const dy = leg[1][1] - leg[0][1];
+            const len = Math.hypot(dx, dy) || 1;
+            let nx = -dy / len;
+            let ny = dx / len;
+            if (other && (other[0] - leg[1][0]) * nx + (other[1] - leg[1][1]) * ny < 0) {
+                nx = -nx;
+                ny = -ny;
+            }
+            const shift = (Math.max(0, widthPx - LINE_WIDTH()) / 2) * context.resolution;
+            const inside = (p: ProjectedPosition): ProjectedPosition => [p[0] + nx * shift, p[1] + ny * shift];
             paints.push({
                 geometry: {
                     type: 'LineString',
                     coordinates: [
-                        along(leg[0], leg[1], FIELD_OF_FIRE_BAR_FROM),
-                        along(leg[0], leg[1], FIELD_OF_FIRE_BAR_TO),
+                        inside(along(leg[0], leg[1], FIELD_OF_FIRE_BAR_FROM)),
+                        inside(along(leg[0], leg[1], FIELD_OF_FIRE_BAR_TO)),
                     ],
                 },
                 stroke: {color, widthPx, cap: 'butt'},

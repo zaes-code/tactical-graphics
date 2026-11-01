@@ -164,7 +164,9 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
                 : []),
             {
                 geometry: {type: 'LineString', coordinates: coords},
-                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
+                // Dashed whatever its status: the dash is the symbol. APP-06 260200, FM 1-02.2
+                // Table 5-8 and MIL-STD-2525E Table L-XIII all draw a CFL dashed. @see DASHED_PARTS
+                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: [...PLANNED_DASH_PX]},
             },
         ];
     };

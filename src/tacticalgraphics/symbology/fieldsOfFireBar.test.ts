@@ -60,3 +60,32 @@ describe('the field of fire bar', () => {
         expect(barWidth(10, 1)).toBeCloseTo(LINE_WIDTH() * 2, 6);
     });
 });
+
+/**
+ * MIL-STD-2525E Change 1 140501: "The length of the 'blade' shall be 80% of the length of
+ * point 1 and point 2, centered and connected to the inside of the line."
+ */
+describe('the blade against 2525E 140501', () => {
+    // [PT 2, PT 1, PT 3], 1000 px legs, the V opening upward.
+    const v: ProjectedPosition[] = [[-600, 800], [0, 0], [600, 800]];
+    const blade = (name: TacticalGraphicName) => {
+        const paints = fieldsOfFirePaint(name)({geometry: {type: 'MultiLineString', coordinates: [v]}, properties: {name}} as PaintFeature, context(1));
+        const bar = paints.find(p => p.stroke && p.stroke.widthPx !== LINE_WIDTH())!;
+        return {coords: (bar.geometry as {coordinates: ProjectedPosition[]}).coordinates, width: bar.stroke!.widthPx!};
+    };
+
+    it.each([
+        [TacticalGraphicName.FinalProtectiveFireLeft, -1],
+        [TacticalGraphicName.FinalProtectiveFireRight, 1],
+    ] as const)('%s runs 80% of its leg, centred, on the inside', (name, side) => {
+        const {coords: [a, b], width} = blade(name);
+        expect(Math.hypot(b[0] - a[0], b[1] - a[1])).toBeCloseTo(800, 0);
+        // Centred: its midpoint is the leg's midpoint, shifted inward by half the blade less half the line.
+        const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const legMid = [side * 300, 400];
+        const shift = Math.hypot(mid[0] - legMid[0], mid[1] - legMid[1]);
+        expect(shift).toBeCloseTo((width - LINE_WIDTH()) / 2, 6);
+        // Inward is toward the V's axis, x = 0.
+        expect(Math.abs(mid[0])).toBeLessThan(Math.abs(legMid[0]));
+    });
+});

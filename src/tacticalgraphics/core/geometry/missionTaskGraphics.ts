@@ -123,11 +123,17 @@ export function getSupportByFireSymbol(base: Position[], barHalf: number): Featu
     ]);
 }
 
-export function getBreachArrow(base: Position[], size: number, topBearingBuffer: number, bottomBearingBuffer: number): Feature<MultiLineString> {
+export function getBreachArrow(
+    base: Position[],
+    size: number,
+    topBearingBuffer: number,
+    bottomBearingBuffer: number,
+    tickShare = 0.75,
+): Feature<MultiLineString> {
     let offsetBase = computeParallelLineString(base, size);
     let bearing = turf.bearing(offsetBase[0], offsetBase[1]);
-    let top = turf.destination(offsetBase[1], size * .75, bearing + topBearingBuffer, {units: 'meters'})
-    let bottom = turf.destination(offsetBase[1], size * .75, bearing + bottomBearingBuffer, {units: 'meters'})
+    let top = turf.destination(offsetBase[1], size * tickShare, bearing + topBearingBuffer, {units: 'meters'})
+    let bottom = turf.destination(offsetBase[1], size * tickShare, bearing + bottomBearingBuffer, {units: 'meters'})
     return turf.multiLineString([offsetBase, [top.geometry.coordinates, bottom.geometry.coordinates]]);
 }
 

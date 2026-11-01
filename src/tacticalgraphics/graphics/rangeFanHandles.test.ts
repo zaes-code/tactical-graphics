@@ -101,3 +101,17 @@ describe('the sector range fan publishes a handle for every number it prints', (
         expect(circular).toHaveLength(1 + BANDS.length);
     });
 });
+
+/** APP-06 and MIL-STD-2525E 242100: the circular fan's template is plain concentric circles. */
+describe('the circular range fan draws its rings and nothing else', () => {
+    it('returns one closed ring per band, with no reference tick', () => {
+        const {graphic} = renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: CENTER},
+            properties: {tacticalGraphic: {name: TacticalGraphicName.WeaponSensorRangeFanCircular, rangeFan: {bands: BANDS}}},
+        } as never);
+        const lines = (graphic.geometry as {coordinates: number[][][]}).coordinates;
+        expect(lines).toHaveLength(BANDS.length);
+        for (const line of lines) expect(line[0]).toEqual(line[line.length - 1]);
+    });
+});

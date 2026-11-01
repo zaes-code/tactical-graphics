@@ -204,8 +204,8 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
  * drawn at, so it grew and shrank with the map while every other toothed graphic on
  * the same screen held its size, and it had no floor to fall through: zoomed out far
  * enough the outline became a band of sub-pixel noise instead of a line.
- * `encirclementToothSize` caps it against the ring's own on-screen size and drops it
- * below `DECORATION_MIN_PX`.
+ * `encirclementToothSize` sizes them so about ten fit round the ring, as every plate
+ * draws it, caps them on screen and drops them below `DECORATION_MIN_PX`.
  *
  * Outward is taken from the ring's winding rather than from drawing order, so a ring
  * drawn anticlockwise does not come out with its teeth on the inside.

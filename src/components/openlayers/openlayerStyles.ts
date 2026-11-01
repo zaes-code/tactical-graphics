@@ -1813,7 +1813,7 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
  *   the same zigzag with no glyph.
  */
 export function tacticalFixStyleFunc(label: string = 'F'): StyleFunction {
-    return asStyleFunction(arrowheadedLinePaint(label));
+    return asStyleFunction(arrowheadedLinePaint(label, {openHead: true}));
 }
 
 
