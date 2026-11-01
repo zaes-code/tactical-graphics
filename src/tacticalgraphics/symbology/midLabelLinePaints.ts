@@ -14,12 +14,13 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, getSmoothLines} from '../core/config';
+import {smoothingKindOf} from '../core/smoothing';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
-import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, isHostile, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -98,6 +99,30 @@ function midpointOf(coords: ProjectedPosition[]) {
 }
 
 /**
+ * `ENY` above each end of a hostile line whose designation sits at its middle.
+ *
+ * FM 1-02.2 Figure 5-9 puts field N at the far left and the far right of every line control
+ * measure, wherever the line's other text goes, and boundary's 110100 the same. Each mark runs
+ * inward from its end. Held at a
+ * legible size like any prefix, and gone once the line is under twice it. @see legibleDesignation
+ */
+export function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition[], scale: number, context: PaintContext): Paint[] {
+    if (!isHostile(feature)) return [];
+    const eny = legibleDesignation('ENY', 'ENY', scale, fontStyle, context, pathLength(coords) / context.resolution);
+    if (!eny.text) return [];
+    const start = coords[0];
+    const afterStart = coords[1];
+    const end = coords[coords.length - 1];
+    const beforeEnd = coords[coords.length - 2];
+    return [
+        textMark(feature, offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
+            uprightRotation(start, afterStart), afterStart[0] >= start[0] ? 'left' : 'right', 'bottom'),
+        textMark(feature, offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
+            uprightRotation(beforeEnd, end), end[0] >= beforeEnd[0] ? 'right' : 'left', 'bottom'),
+    ];
+}
+
+/**
  * The coordinated fire line: designation above the midpoint, dates below.
  *
  * The two labels straddle the line, `LABEL_OFFSET_PX` either side of it, and both
@@ -120,6 +145,7 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const shown = legibleDesignation(full, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
 
         return [
+            ...hostileEndMarks(feature, coords, scale, context),
             ...(shown.text
                 ? [
                     textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), shown.text, shown.scale, rotation, 'center', 'bottom'),
@@ -146,7 +172,7 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
 
 /**
  * The engineer work line: "EWL" above each end, and two optional free-text
- * amplifiers straddling the midpoint.
+ * amplifiers straddling the middle of every segment.
  *
  * The end labels hang off the *outside* of the line — aligned left at a start
  * that runs east, right at one that runs west — so the text grows away from the
@@ -195,18 +221,30 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
             ]
             : [];
 
-        const {p1, p2, point} = midpointOf(coords);
-        const rotation = uprightRotation(p1, p2);
-
-        if (midTop) {
-            paints.push(
-                textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midTop, scale, rotation, 'center', 'bottom'),
-            );
-        }
-        if (midBottom) {
-            paints.push(
-                textMark(feature, offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midBottom, scale, rotation, 'center', 'top'),
-            );
+        /*
+         * **Repeated on every segment.** APP-06 110300: "The line segment between each pair of
+         * anchor points will repeat all information associated with the line segment between
+         * points 1 and 2." A smoothed line has no anchor points left in it, only chords of a
+         * curve, so it keeps one pair at its middle.
+         */
+        const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
+        const spans = smoothed ? [midpointOf(coords)] : coords.slice(1).map((b, i) => {
+            const a = coords[i];
+            return {p1: a, p2: b, point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as ProjectedPosition};
+        });
+        for (const {p1, p2, point} of spans) {
+            if (p1[0] === p2[0] && p1[1] === p2[1]) continue;
+            const rotation = uprightRotation(p1, p2);
+            if (midTop) {
+                paints.push(
+                    textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midTop, scale, rotation, 'center', 'bottom'),
+                );
+            }
+            if (midBottom) {
+                paints.push(
+                    textMark(feature, offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midBottom, scale, rotation, 'center', 'top'),
+                );
+            }
         }
 
         paints.push({
@@ -217,14 +255,19 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
     };
 }
 
-/** Offsets `from` to the right of the direction `from`→`to`, by screen pixels. */
-function travelRightOffset(from: ProjectedPosition, to: ProjectedPosition, resolution: number, offsetPx: number): ProjectedPosition {
-    const dx = to[0] - from[0];
-    const dy = to[1] - from[1];
-    const len = Math.hypot(dx, dy);
-    if (len === 0) return from;
-    const offsetMap = offsetPx * resolution;
-    return [from[0] + (dy / len) * offsetMap, from[1] - (dx / len) * offsetMap];
+/** The point `d` along `path`, and the segment it lies on. */
+function pointAtDistance(path: ProjectedPosition[], d: number): {at: ProjectedPosition; a: ProjectedPosition; b: ProjectedPosition} {
+    let left = Math.max(0, d);
+    for (let i = 0; i < path.length - 1; i++) {
+        const [a, b] = [path[i], path[i + 1]];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (left <= length || i === path.length - 2) {
+            const t = length === 0 ? 0 : Math.min(1, left / length);
+            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], a, b};
+        }
+        left -= length;
+    }
+    return {at: path[0], a: path[0], b: path[1]};
 }
 
 /** Padding either side of "MFP" within the gap cut for it, in screen pixels. */
@@ -234,7 +277,7 @@ const MFP_DATE_HALF_HEIGHT_PX = 12;
 
 /**
  * The munition flight path: "MFP" set in a gap at the midpoint, and the date-time
- * group along the start of the line.
+ * group below the line halfway between point 1 and that midpoint.
  *
  * **The gap is measured from the rendered glyph**, not taken as a fraction of the
  * segment — the label is capped by the zoom-anchored scale while the segment is
@@ -267,29 +310,25 @@ export function munitionFlightPathPaint(): LinePaint {
             : 0;
         const {outline, center} = cutGapAlongPath(coords, index, t, halfGapPx * context.resolution);
 
-        const start = coords[0];
-        const afterStart = coords[1];
-
         return [
             ...(letterScale ? [textMark(feature, center, 'MFP', letterScale, uprightRotation(p1, p2), 'center', 'middle')] : []),
-            // Left-aligned so the DTG begins exactly at the line's start, which is
-            // the convention this symbol is drawn with.
-            //
-            // This one offset follows the **direction of travel** rather than the
-            // "up is north" rule the rest of this file uses: it sits to the right of
-            // a path drawn eastward and to the left of one drawn westward. That is
-            // what the symbol has always done, so it is preserved rather than
-            // quietly normalized — but it is an inconsistency, not a doctrine.
-            textMark(
-                feature,
-                travelRightOffset(start, afterStart, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
-                dateRangeLabel(feature.properties),
-                scale,
-                uprightRotation(start, afterStart),
-                'left',
-                'middle',
-                'amplifier',
-            ),
+            // APP-06 260600 note 3: the DTG is "displayed one time mid-way between Point 1 and
+            // midpoint of the graphic", below the line. It used to start at point 1, to the right
+            // of travel. Below means the "up is north" rule the rest of this file uses.
+            ...(() => {
+                const toMiddle = pathLength(coords.slice(0, index + 1)) + segLen * t;
+                const {at, a, b} = pointAtDistance(coords, toMiddle / 2);
+                return [textMark(
+                    feature,
+                    offsetBelow(at, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
+                    dateRangeLabel(feature.properties),
+                    scale,
+                    uprightRotation(a, b),
+                    'center',
+                    'middle',
+                    'amplifier',
+                )];
+            })(),
             {
                 geometry: {type: 'MultiLineString', coordinates: outline},
                 stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},

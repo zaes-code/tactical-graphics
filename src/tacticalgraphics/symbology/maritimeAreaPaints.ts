@@ -50,7 +50,7 @@ import {formatDistance} from '../core/symbology';
 // No `lineColorOf` here any more: with 200600's border white, every graphic this
 // module paints takes its colour from its own plate rather than from an affiliation.
 // @see COLOUR_NAMED_AREAS
-import {labelColorOf, scaleOf} from './paintFunctions';
+import {axisRotation, labelColorOf, scaleOf} from './paintFunctions';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -346,9 +346,9 @@ export function radarSearchDoctrinePaint(): AreaPaint {
  * midway between the start and stop ranges on the axis, and the rotation is read back off
  * the anchor's bearing from the graphic's own centre. This paint only draws it.
  *
- * **Upright rather than laid along the axis.** The plate boxes `T` and draws it level, and
- * a search axis sweeps the whole compass by design, so text turned to the axis would be
- * upside down through half of it. Same call as the bearing lines' letter.
+ * **Laid along the axis, kept upright.** The plate's own words are "aligned with the search
+ * axis", so the text turns with it; `axisRotation` flips it end for end rather than let it
+ * read upside down through half the compass. It was drawn level until 2026-10-31.
  */
 export function radarSearchLabelPaint(): AreaPaint {
     return (feature, context) => {
@@ -371,6 +371,7 @@ export function radarSearchLabelPaint(): AreaPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
+                rotation: axisRotation(feature),
                 /*
                  * **No `kind: 'amplifier'`.** A designation names the symbol, and the
                  * standing rule is that it survives "hide amplifiers" -- `amplifierSweep`

@@ -6,7 +6,7 @@
  * under twice their width is drawn whole too. (User, 2026-10-24.) @see letterInGapScale
  */
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, configureTacticalGraphics, resetTacticalGraphicsConfig} from '../core/config';
 import {TacticalGraphicName} from '../core/type';
 import {coordinatedFireLinePaint, engineerWorkLinePaint, munitionFlightPathPaint} from './midLabelLinePaints';
 import {scaleOf} from './paintFunctions';
@@ -50,6 +50,56 @@ describe('munitionFlightPathPaint', () => {
         const tiny = munitionFlightPathPaint()(path(150), context);
         expect(mfpOf(tiny)).toBeUndefined();
         expect(drawnLength(tiny)).toBeCloseTo(150, 9);
+    });
+});
+
+// APP-06 260600 note 3: the DTG "displayed one time mid-way between Point 1 and midpoint of the
+// graphic", below the line.
+describe('the munition flight path DTG', () => {
+    const dated = (coords: ProjectedPosition[]): PaintFeature =>
+        ({
+            geometry: {type: 'LineString', coordinates: coords},
+            properties: {name: TacticalGraphicName.MunitionFlightPath, startDate: 'W', endDate: 'W1'},
+        }) as unknown as PaintFeature;
+    const dtgOf = (paints: Paint[]) => paints.find(p => p.text?.text === 'W - W1')!;
+
+    it.each([
+        ['east', [[0, 0], [10_000, 0]], 2500],
+        ['west', [[10_000, 0], [0, 0]], 7500],
+    ] as const)('sits a quarter along and below a path drawn %s', (_, coords, x) => {
+        const dtg = dtgOf(munitionFlightPathPaint()(dated(coords.map(c => [...c]) as ProjectedPosition[]), context));
+        const [dx, dy] = dtg.geometry.coordinates as number[];
+        expect(dx).toBeCloseTo(x, 6);
+        expect(dy).toBeLessThan(0);
+        expect(dtg.text!.align).toBe('center');
+    });
+});
+
+// APP-06 110300: each segment between anchor points repeats the information of segment 1-2.
+describe('the engineer work line repeats T and T1 on every segment', () => {
+    const ewl = (coords: ProjectedPosition[]): Paint[] =>
+        engineerWorkLinePaint(TacticalGraphicName.EngineerWorkLine)(
+            {
+                geometry: {type: 'LineString', coordinates: coords},
+                properties: {name: TacticalGraphicName.EngineerWorkLine, designation: '326 EN BN', secondDesignation: '52 EN BN'},
+            } as unknown as PaintFeature,
+            context,
+        );
+
+    it('sets one pair over each of three segments', () => {
+        const paints = ewl([[0, 0], [10_000, 0], [20_000, 10_000], [30_000, 10_000]]);
+        expect(paints.filter(p => p.text?.text === '326 EN BN')).toHaveLength(3);
+        expect(paints.filter(p => p.text?.text === '52 EN BN')).toHaveLength(3);
+    });
+
+    it('keeps one pair on a smoothed line, which has no anchor points left in it', () => {
+        configureTacticalGraphics({smoothLines: true});
+        try {
+            const paints = ewl([[0, 0], [10_000, 0], [20_000, 10_000], [30_000, 10_000]]);
+            expect(paints.filter(p => p.text?.text === '326 EN BN')).toHaveLength(1);
+        } finally {
+            resetTacticalGraphicsConfig();
+        }
     });
 });
 

@@ -565,6 +565,26 @@ export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: nu
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
 
+/** True for a graphic drawn as the enemy's, by its affiliation rather than its color. */
+export function isHostile(feature: PaintFeature): boolean {
+    return hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+}
+
+/**
+ * A line label with its `ENY` moved to the outer side of the line's end.
+ *
+ * FM 1-02.2 Figure 5-9 sets field N at the far left and the far right of a line control
+ * measure, `N PL T ... PL T N`, so the marker leads a label that sits left of its end and
+ * trails one that sits right of it. `leftOfEnd` says which. Text without a leading `ENY`
+ * comes back as given.
+ */
+export function enyOutside(text: string, leftOfEnd: boolean): string {
+    if (leftOfEnd || !text.startsWith('ENY')) return text;
+    const rest = text.slice(3).trim();
+    return rest ? `${rest} ENY` : text;
+}
+
+
 /** Screen-pixel gap between the end of the line and the nearest edge of its label. */
 const PHASE_LINE_GAP_PX = 8;
 
@@ -588,7 +608,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const hostile = isHostile(feature);
         const prefix = [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' ');
         const full = (hostile ? 'ENY ' : '') + getFullLabel(name, feature.properties.designation ?? '');
 
@@ -613,10 +633,12 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const startOutsideRight = start[0] - startNext[0] >= 0;
         const endOutsideRight = end[0] - endPrev[0] >= 0;
 
+        // `ENY` goes on the outer side of each end, `ENY PL T ... PL T ENY`, so it is the first
+        // word of a label left of its end and the last of one to the right. @see enyOutside
         const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'right', offsetXPx: number): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
-                text,
+                text: enyOutside(text, offsetXPx + (align === 'right' ? -width : 0) < 0),
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: halo(),
@@ -1252,7 +1274,13 @@ export function defaultLinePaint(
         const free = DEFAULT_LINE_ADDITIONAL_INFO.has(name)
             ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
             : '';
-        const identifier = [free, getFullLabel(name, named)].filter(Boolean).join(' ');
+        /*
+         * **A hostile line says so in words at both ends, `ENY`**, on the outer side of each
+         * (FM 1-02.2 Figure 5-9, APP-06 8.1.4). Only phase line used to; every other line here
+         * drew red line work and nothing a monochrome print could read.
+         */
+        const hostile = isHostile(feature);
+        const identifier = [hostile ? 'ENY' : '', free, getFullLabel(name, named)].filter(Boolean).join(' ');
         const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
         const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
@@ -1267,7 +1295,14 @@ export function defaultLinePaint(
         // to read. Field H leads only on the generic line, which has no prefix, so it is never
         // cut here. The dates are capped at the name's size. @see withProportionateAmplifiers
         // @see legibleDesignation
-        const shown = legibleDesignation(identifier, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
+        const shown = legibleDesignation(
+            identifier,
+            [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' '),
+            scale,
+            fontStyle,
+            context,
+            pathLength(coords) / context.resolution,
+        );
         const gap = DEFAULT_LINE_LABEL_GAP_PX;
         const res = context.resolution;
 
@@ -1332,8 +1367,9 @@ export function defaultLinePaint(
         }
 
         return [
-            label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
-            label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
+            // A label aligned left runs inward from its end, so its first word is the outer one.
+            label(offsetAbove(start, start, afterStart, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(end, beforeEnd, end, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
             asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
             asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
             stroke,

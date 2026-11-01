@@ -176,17 +176,21 @@ describe('APP-06 152300 — the avenue of approach carries field H and the hosti
         ]);
     });
 
-    it('sets field H outside the casing, level with AA', () => {
+    // 152300's Template boxes H outside the upper rail near the rear of the symbol.
+    it('sets field H outside the upper rail, at the rear', () => {
         const f = withRails({designation: '3', additionalInfo: 'WADIS'});
-        const aa = spotOf(f, 'AA 3')!;
         const h = spotOf(f, 'WADIS')!;
-        // Straight out from the label, on the up-screen side, past the rail rather than on it.
-        expect(h[0]).toBeCloseTo(aa[0], 6);
-        expect(h[1] - aa[1]).toBeGreaterThan(HALF_WIDTH);
-        // ...and not so far that it reads as a separate symbol: exactly the half-width plus a
-        // fixed screen gap, so it stays put against the casing at every zoom. (The fixture's
-        // 40 m/px makes that gap look large in metres; on screen it is 12 px.)
-        expect(h[1] - aa[1]).toBeCloseTo(HALF_WIDTH + 12 * context.resolution, 6);
+        // At the rails' rear ends, on the up-screen side, past the rail rather than on it:
+        // exactly the half-width plus a fixed 12 px screen gap, at every zoom.
+        expect(h[0]).toBeCloseTo(-4000, 6);
+        expect(h[1]).toBeCloseTo(HALF_WIDTH + 12 * context.resolution, 6);
+    });
+
+    it('stands field H one line further out on a hostile arrow, clear of ENY', () => {
+        const f = withRails({designation: '3', additionalInfo: 'WADIS', hostility: TacticalGraphicHostility.hostileFaker});
+        const h = spotOf(f, 'WADIS')!;
+        const eny = spotOf(f, 'ENY')!;
+        expect(h[1] - eny[1]).toBeGreaterThan(12 * context.resolution);
     });
 
     it('marks ENY on each rail, and only for a hostile graphic', () => {
