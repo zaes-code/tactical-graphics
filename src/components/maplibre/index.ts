@@ -117,6 +117,7 @@ export type {FontStack, LayerBuckets} from './native/paintToLayers';
 
 // A keyless OSM raster basemap, the same tiles the OpenLayers demo uses.
 export {createBasemapStyle} from './basemapStyle';
+export {sampleBase} from './sampleGallery';
 
 /**
  * ## The library's own names, re-exported

@@ -734,6 +734,21 @@ function sheetBase(name: TacticalGraphicName, geometry: Geometry, properties: Om
     return buildTacticalGraphic(name, candidate, properties) ? candidate : geometry;
 }
 
+/**
+ * The base a draw would store for `name` laid west to east about `[0, 0]`, with the sizes it
+ * needs: one cell of the sample sheet, for a host that draws the symbol at a size of its own
+ * rather than on a map. `undefined` when nothing builds.
+ */
+export function sampleBase(
+    name: TacticalGraphicName,
+): {geometry: Geometry; properties: Omit<TacticalGraphicProperties, 'name'>} | undefined {
+    const properties = {radius: SAMPLE_RADIUS_M, rotation: 0, ...SAMPLE_PROPERTY_OVERRIDES[name]};
+    const chosen = candidateGeometries(name, 0, 0).find(g => buildTacticalGraphic(name, g, properties));
+    if (!chosen) return undefined;
+    const geometry = sheetBase(name, chosen, properties);
+    return {geometry, properties: sheetSizes(name, geometry, properties)};
+}
+
 export function buildSampleGraphics(
     hostility?: TacticalGraphicHostility,
     drawingResolution?: number,
