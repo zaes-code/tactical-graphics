@@ -56,3 +56,51 @@ describe('directionArrowPaint', () => {
         expect(texts(arrow(20, 10))).toEqual([]);
     });
 });
+
+/**
+ * APP-06 140601, 140602, 140603 and 140605 all box N behind T on the shaft, and every Enemy
+ * example reads `ENY MAIN`, set in a break of the line.
+ */
+describe('the four direction-of-attack arrows', () => {
+    const DIRECTION_ARROWS = [
+        TacticalGraphicName.DirectionOfMainAttack,
+        TacticalGraphicName.DirectionOfSupportingAttack,
+        TacticalGraphicName.DirectionOfMainAttackFeint,
+        TacticalGraphicName.AviationDirectionOfAttack,
+    ];
+    const paintArrow = (name: TacticalGraphicName, hostility: TacticalGraphicHostility): Paint[] =>
+        directionArrowPaint(name)(
+            {
+                geometry: {
+                    type: 'MultiLineString',
+                    coordinates: [
+                        [[0, 0], [400, 0]],
+                        [[390, 6], [400, 0], [390, -6]],
+                    ],
+                },
+                properties: {name, designation: 'BLUE', hostility},
+            } as unknown as PaintFeature,
+            context,
+        );
+
+    it.each(DIRECTION_ARROWS)('%s carries ENY behind its name when hostile', name => {
+        expect(texts(paintArrow(name, TacticalGraphicHostility.hostileFaker)).map(t => t.text)).toEqual(['BLUE', 'ENY']);
+        expect(texts(paintArrow(name, TacticalGraphicHostility.friend)).map(t => t.text)).toEqual(['BLUE']);
+    });
+
+    it.each(DIRECTION_ARROWS)('%s breaks its shaft where the text sits', name => {
+        const paints = paintArrow(name, TacticalGraphicHostility.hostileFaker);
+        const shaft = paints[0].geometry;
+        expect(shaft.type).toBe('MultiLineString');
+        const runs = (shaft as {coordinates: number[][][]}).coordinates;
+        expect(runs).toHaveLength(2);
+        // Every text anchor lies inside the break, clear of both runs.
+        const breakFrom = runs[0][runs[0].length - 1][0];
+        const breakTo = runs[1][0][0];
+        for (const t of paints.filter(p => p.text?.kind !== 'amplifier' && p.text)) {
+            const x = (t.geometry.coordinates as number[])[0];
+            expect(x).toBeGreaterThan(breakFrom);
+            expect(x).toBeLessThanOrEqual(breakTo);
+        }
+    });
+});

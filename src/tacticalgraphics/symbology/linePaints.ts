@@ -12,7 +12,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
+import {cutGapAlongPath, offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, asAmplifier, getFullLabel, hostilityOf, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
@@ -45,6 +45,8 @@ function label(
 const ARROW_LABEL_CLEARANCE_PX = 10;
 /** Gap between the designation and an "ENY" prefix set behind it. */
 const ARROW_ENY_GAP_PX = 36;
+/** Clearance either side of the text in the break cut for it, in screen pixels. */
+const ARROW_TEXT_BREAK_PAD_PX = 4;
 /** How far below the line the date-time group sits, before the label scale is applied. */
 const ARROW_DTG_OFFSET_PX = 20;
 
@@ -64,8 +66,12 @@ const ARROW_DTG_OFFSET_PX = 20;
  * right-to-left. Without that the designation runs over its own arrowhead.
  *
  * "ENY" is set further back still, cleared by the designation's own measured
- * width — and only for the supporting attack, which is the one variant whose plate
- * carries it.
+ * width, on every hostile variant: each of APP-06 140601, 140602, 140603 and 140605 boxes
+ * N behind T, and their Enemy examples read `ENY MAIN`. It used to be the supporting
+ * attack's alone.
+ *
+ * **The text sits in a break of the line**, as each of the four templates draws its T box:
+ * the shaft is cut from just ahead of the designation to just behind `ENY`.
  */
 export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
     return (feature, context) => {
@@ -76,10 +82,11 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         if (!baseCoords) return [];
 
         const color = lineColorOf(feature);
-        const paints: Paint[] = [{
+        const shaft: Paint = {
             geometry: {type: 'LineString', coordinates: baseCoords},
             stroke: {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
-        }];
+        };
+        const paints: Paint[] = [shaft];
 
         if (allCoords.length > 1) {
             // The feint's chevron is dashed as the symbol. @see DASHED_PARTS
@@ -120,9 +127,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
 
         const nameText = getFullLabel(name, feature.properties.designation ?? '');
         const dateText = areaDateLabel(feature);
-        const showEny =
-            name === TacticalGraphicName.DirectionOfSupportingAttack
-            && hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const showEny = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
 
         /*
          * `ENY` is the only prefix these arrows carry, and it is set apart from the name rather
@@ -140,10 +145,24 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
         }
 
+        let textPx = prefixOnly
+            ? (shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0)
+            : (nameText ? textWidth(context, nameText, fontStyle, scale) : 0);
         if (showEny && !prefixOnly) {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
             const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
             paints.push(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
+            textPx = nameWidthPx + ARROW_ENY_GAP_PX + textWidth(context, 'ENY', fontStyle, scale);
+        }
+        if (textPx > 0) {
+            // The break, measured along the shaft from the anchor back over the text.
+            const pad = ARROW_TEXT_BREAK_PAD_PX * context.resolution;
+            const lastLen = lineLen;
+            const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
+            const halfGap = (textPx * context.resolution) / 2 + pad;
+            const t = (lastLen - fromEnd - (textPx * context.resolution) / 2) / lastLen;
+            const {outline} = cutGapAlongPath(baseCoords, baseCoords.length - 2, t, halfGap);
+            shaft.geometry = {type: 'MultiLineString', coordinates: outline};
         }
 
         if (dateText) {
