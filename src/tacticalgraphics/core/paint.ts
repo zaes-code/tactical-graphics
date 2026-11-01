@@ -343,6 +343,12 @@ export interface PaintContext {
      * together with `view`; without either, every label sits where the symbol puts it.
      */
     avoid?: ProjectedBounds[];
+
+    /**
+     * Other graphics' line work, in projected meters, which labels keep off the same way they
+     * keep off `avoid`. A graphic's own lines are not in it: its labels sit on those by design.
+     */
+    avoidLines?: ProjectedPosition[][];
 }
 
 /** An axis-aligned box in projected meters. */

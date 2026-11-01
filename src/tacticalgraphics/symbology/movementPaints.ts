@@ -31,7 +31,7 @@ import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
-import {inView, insetView, pathUpTo, visibleStretch} from './viewFollow';
+import {inView, insetView, isTaken, pathUpTo, pointAlong, visibleStretch} from './viewFollow';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -637,18 +637,45 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
 function headSpanInView(context: PaintContext, coords: ProjectedPosition[], pathFrom: number): ProjectedPosition[] {
     const view = insetView(context);
     const path = coords.slice(pathFrom);
-    if (!view || path.length < 2 || inView(coords[1], view)) return coords;
-
-    const stretch = visibleStretch(path, view);
-    if (!stretch) return coords;
-    const head = stretch[stretch.length - 1];
-    const back = stretch[stretch.length - 2];
+    if (!view || path.length < 2) return coords;
     const span = Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]);
-    const run = Math.hypot(head[0] - back[0], head[1] - back[1]);
-    if (run === 0) return coords;
-    const tail: ProjectedPosition = [head[0] - ((head[0] - back[0]) / run) * span, head[1] - ((head[1] - back[1]) / run) * span];
-    return [tail, head, ...pathUpTo(path, head)];
+    const onScreen = inView(coords[1], view);
+    const clear = (tail: ProjectedPosition, head: ProjectedPosition) =>
+        !isTaken(
+            [(tail[0] + head[0]) / 2, (tail[1] + head[1]) / 2],
+            {alongPx: span / 2 / context.resolution, acrossPx: AXIS_LABEL_ACROSS_PX},
+            head[0] - tail[0],
+            head[1] - tail[1],
+            context,
+        );
+    if (onScreen && clear(coords[0], coords[1])) return coords;
+
+    const stretch = onScreen ? path : visibleStretch(path, view);
+    if (!stretch) return coords;
+    // The last visible point of the centerline, then steps back along it until the label is clear.
+    const last = distanceAlongPath(path, onScreen ? coords[1] : stretch[stretch.length - 1]);
+    const first = distanceAlongPath(path, stretch[0]);
+    const cut = (s: number): ProjectedPosition[] | undefined => {
+        const {at: head, from, to} = pointAlong(path, s);
+        const run = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        if (run === 0) return undefined;
+        const tail: ProjectedPosition = [head[0] - ((to[0] - from[0]) / run) * span, head[1] - ((to[1] - from[1]) / run) * span];
+        return [tail, head, ...pathUpTo(path, head)];
+    };
+    for (let k = onScreen ? 1 : 0; k <= AXIS_LABEL_SLIDES; k++) {
+        const s = last - k * span * 0.6;
+        if (s - span < first) break;
+        const moved = cut(s);
+        if (moved && inView(moved[1], view) && clear(moved[0], moved[1])) return moved;
+    }
+    return onScreen ? coords : (cut(last) ?? coords);
 }
+
+/** Half the axis label's height in screen pixels, for keeping it clear of other labels. */
+const AXIS_LABEL_ACROSS_PX = 9;
+
+/** How many steps back along the arrow an axis label tries before keeping its place. */
+const AXIS_LABEL_SLIDES = 6;
 
 export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPaint {
     const centered = name === TacticalGraphicName.InfiltrationLane;

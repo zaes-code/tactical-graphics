@@ -438,3 +438,76 @@ describe('a label whose place another label holds', () => {
         expect(inRing(at, ring)).toBe(true);
     });
 });
+
+describe('phase line and axis labels with places held', () => {
+    const held = (x: number, y: number, half = 4_000): ProjectedBounds => ({minX: x - half, minY: y - half, maxX: x + half, maxY: y + half});
+    const pl = (coords: ProjectedPosition[]): PaintFeature => ({
+        geometry: {type: 'LineString', coordinates: coords},
+        properties: {name: TacticalGraphicName.PhaseLine, designation: 'RUTH'},
+    });
+    const paint = phaseLinePaint(TacticalGraphicName.PhaseLine);
+
+    it('moves an end label into the line when the place past the end is held', () => {
+        const line = pl([
+            [20_000, 0],
+            [80_000, 0],
+        ]);
+        const free = labels(paint(line, context(VIEW)));
+        // Past the west end, where "PL RUTH" would run.
+        const moved = labels(paint(line, {...context(VIEW), avoid: [held(15_000, 0)]}));
+        expect(free[0][0]).toBe(20_000);
+        expect(moved[0][0]).toBeGreaterThan(20_000);
+        expect(moved[0][1]).toBe(0);
+        expect(moved[1]).toEqual([80_000, 0]);
+    });
+
+    it('slides an in-line label further in past a held place', () => {
+        const line = pl([
+            [-50_000, 0],
+            [150_000, 0],
+        ]);
+        const free = labels(paint(line, context(VIEW)));
+        const moved = labels(paint(line, {...context(VIEW), avoid: [held(free[0][0], 0)]}));
+        expect(moved[0][0]).toBeGreaterThan(free[0][0] + 4_000);
+        expect(moved[0][1]).toBe(0);
+    });
+
+    it("keeps a label off another graphic's line", () => {
+        const cfl = coordinatedFireLinePaint(TacticalGraphicName.CoordinatedFireLine);
+        const f: PaintFeature = {
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [10_000, 0],
+                    [90_000, 0],
+                ],
+            },
+            properties: {name: TacticalGraphicName.CoordinatedFireLine, designation: '1AD'},
+        };
+        const crossing: ProjectedPosition[] = [
+            [50_000, -40_000],
+            [50_000, 40_000],
+        ];
+        const at = labels(cfl(f, {...context(VIEW), avoidLines: [crossing]}));
+        expect(Math.abs(at[0][0] - 50_000)).toBeGreaterThan(2_000);
+    });
+
+    it('steps an axis label back along the arrow when its place is held', () => {
+        const paintAxis = axisOfAdvanceLabelPaint(TacticalGraphicName.MainAxisOfAdvance);
+        const axis: PaintFeature = {
+            geometry: {
+                type: 'MultiPoint',
+                coordinates: [
+                    [70_000, 0],
+                    [90_000, 0],
+                    [0, 0],
+                    [90_000, 0],
+                ],
+            },
+            properties: {name: TacticalGraphicName.MainAxisOfAdvance, designation: 'IRON'},
+        };
+        const free = labels(paintAxis(axis, context(VIEW)));
+        const moved = labels(paintAxis(axis, {...context(VIEW), avoid: [held(80_000, 0)]}));
+        expect(moved[0][0]).toBeLessThan(free[0][0] - 4_000);
+    });
+});

@@ -67,7 +67,7 @@ import {
     uprightRotation,
 } from './decorations';
 import {distanceAlongPath} from './curvedText';
-import {inView, insetView, pointAlong, visibleStretch} from './viewFollow';
+import {inView, insetView, isTaken, pointAlong, visibleStretch} from './viewFollow';
 
 /**
  * Blanks one amplifier line when the graphic is hiding them.
@@ -601,6 +601,9 @@ export function enyOutside(text: string, leftOfEnd: boolean): string {
 /** Screen-pixel gap between the end of the line and the nearest edge of its label. */
 const PHASE_LINE_GAP_PX = 8;
 
+/** How many places in from its edge a phase line label tries before keeping the first. */
+const PHASE_LINE_SLIDES = 8;
+
 /**
  * A line with its designation repeated outside each end, laid along the line's
  * own bearing and kept upright.
@@ -681,29 +684,54 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         };
         const startShown = labelFits(start, startNext);
         const endShown = labelFits(end, endPrev);
-        if (startShown && endShown) return [lineWork, atStart(), atEnd()];
+        // A label outside a shown end stays there unless another label or line holds the spot.
+        // @see PaintContext.avoid
+        const acrossPx = (BASE_FONT_SIZE_PX * scale) / 2;
+        const outsideClear = (at: ProjectedPosition, from: ProjectedPosition) => {
+            const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
+            if (run === 0) return true;
+            const [ux, uy] = [(at[0] - from[0]) / run, (at[1] - from[1]) / run];
+            const reach = (PHASE_LINE_GAP_PX + width / 2) * context.resolution;
+            return !isTaken([at[0] + ux * reach, at[1] + uy * reach], {alongPx: width / 2, acrossPx}, ux, uy, context);
+        };
+        const startOut = startShown && outsideClear(start, startNext);
+        const endOut = endShown && outsideClear(end, endPrev);
+        if (startOut && endOut) return [lineWork, atStart(), atEnd()];
 
         // Nothing of the line inside the inset view: it is off screen or hugging an edge, and
         // either way the labels are best left where the symbol puts them.
-        const stretch = visibleStretch(coords, view!);
+        const stretch = view ? visibleStretch(coords, view) : undefined;
         if (!stretch) return [lineWork, atStart(), atEnd()];
 
-        // In the line just inside the view's edge, reading along it, with the line work cut
-        // around it: the label keeps to the line rather than sitting over or under it.
+        // In the line just inside the view's edge (or the end whose outside is held), reading
+        // along it, with the line work cut around it: the label keeps to the line rather than
+        // sitting over or under it, and slides on in toward the middle past anything in its way.
         const halfGap = (width / 2 + PHASE_LINE_GAP_PX / 2) * context.resolution;
         const gaps: {at: number; halfGap: number}[] = [];
+        const middle = distanceAlongPath(coords, stretch[0]) + pathLength(stretch) / 2;
         const inLine = (edge: ProjectedPosition, inward: 1 | -1): Paint => {
-            const s = distanceAlongPath(coords, edge) + inward * (width / 2) * context.resolution;
+            const first = distanceAlongPath(coords, edge) + inward * (width / 2) * context.resolution;
+            const step = (width / 2 + PHASE_LINE_GAP_PX) * context.resolution;
+            let s = first;
+            for (let k = 0; k < PHASE_LINE_SLIDES; k++) {
+                const candidate = first + inward * k * step;
+                if (k > 0 && inward * (candidate - middle) > 0) break;
+                const {from, to, at} = pointAlong(coords, candidate);
+                if (!isTaken(at, {alongPx: width / 2 + PHASE_LINE_GAP_PX / 2, acrossPx}, to[0] - from[0], to[1] - from[1], context)) {
+                    s = candidate;
+                    break;
+                }
+            }
             const {at, from, to} = pointAlong(coords, s);
             gaps.push({at: s, halfGap});
             return endLabel(at, uprightRotation(from, to), 'center', 0);
         };
 
-        const labels = [startShown ? atStart() : inLine(stretch[0], 1)];
+        const labels = [startOut ? atStart() : inLine(startShown ? start : stretch[0], 1)];
         // Two labels need room for both and the gap between them; short of it, one is enough.
         const roomPx = pathLength(stretch) / context.resolution;
         if (startShown || endShown || roomPx >= 2 * width + 3 * PHASE_LINE_GAP_PX) {
-            labels.push(endShown ? atEnd() : inLine(stretch[stretch.length - 1], -1));
+            labels.push(endOut ? atEnd() : inLine(endShown ? end : stretch[stretch.length - 1], -1));
         }
         const runs = splitPathAroundAll(coords, gaps);
         const cutLine: Paint = runs.length ? {...lineWork, geometry: {type: 'MultiLineString', coordinates: runs}} : lineWork;

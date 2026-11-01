@@ -149,6 +149,7 @@ export {
     getDefaultLabelSize,
     getDefaultLineWidth,
     geometryConfigKey,
+    getFullSizeDecorations,
     getSmoothLines,
     getEnemyLabels,
     getTacticalGraphicsConfig,

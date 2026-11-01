@@ -313,11 +313,13 @@ export interface LabelFootprint {
  * judged clear of something it touches.
  */
 export function isTaken(at: ProjectedPosition, footprint: LabelFootprint, dx: number, dy: number, context: PaintContext): boolean {
-    const avoid = context.avoid;
-    if (!avoid?.length) return false;
+    const {avoid, avoidLines} = context;
+    if (!avoid?.length && !avoidLines?.length) return false;
     const len = Math.hypot(dx, dy) || 1;
     const [c, s] = [Math.abs(dx / len), Math.abs(dy / len)];
     const halfX = (c * footprint.alongPx + s * footprint.acrossPx) * context.resolution;
     const halfY = (s * footprint.alongPx + c * footprint.acrossPx) * context.resolution;
-    return avoid.some(box => at[0] - halfX < box.maxX && at[0] + halfX > box.minX && at[1] - halfY < box.maxY && at[1] + halfY > box.minY);
+    const box = {minX: at[0] - halfX, minY: at[1] - halfY, maxX: at[0] + halfX, maxY: at[1] + halfY};
+    if (avoid?.some(b => box.minX < b.maxX && box.maxX > b.minX && box.minY < b.maxY && box.maxY > b.minY)) return true;
+    return !!avoidLines?.some(line => line.some((p, i) => i > 0 && !!clipSegment(line[i - 1], p, box)));
 }
