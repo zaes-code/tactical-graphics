@@ -351,8 +351,9 @@ const AXIS_ENY_GAP_PX = 12;
  * separate group just behind the head**, and their Examples set the name mid-body and the
  * date-time group near the arrowhead. They used to be joined into one `name     DTG` run,
  * which put both behind the head (or both at the tail on the aviation axes). The date is
- * set right-aligned behind the head; the name is centered in the body left behind it, so the
- * two cannot meet however short the arrow is drawn.
+ * set right-aligned behind the head and the name is centered in the body left behind it.
+ * When that room is narrower than the name, which happens on a short arrow zoomed out, the
+ * two go back to one `name     DTG` run behind the head rather than overlap.
  *
  * A hostile axis also says `ENY`, outside each rail at the rear, as the plates box field N
  * (APP-06 8.1.4). `halfWidth` is the arrow's half-width in projected meters, which is the
@@ -386,8 +387,13 @@ function axisAmplifiers(
     const dateEnd = total - ARROWHEAD_LABEL_CLEARANCE_PX * res;
     const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - AXIS_NAME_DATE_GAP_PX * res : dateEnd;
     const name = feature.properties.designation?.trim();
-    if (name) place(Math.max(0, nameRoom) / 2, name, 'center', 'center');
-    if (date) place(dateEnd, date, 'right', 'end', 'amplifier');
+    if (name && date && textWidth(context, name, fontStyle, scale) * res > nameRoom) {
+        // Too short for two groups: centring the name in the room left would set it on the date.
+        place(dateEnd, nameAndDate(feature), 'right', 'end');
+    } else {
+        if (name) place(Math.max(0, nameRoom) / 2, name, 'center', 'center');
+        if (date) place(dateEnd, date, 'right', 'end', 'amplifier');
+    }
 
     if (hostilityOf(feature) === TacticalGraphicHostility.hostileFaker) {
         const [r0, r1] = path;
