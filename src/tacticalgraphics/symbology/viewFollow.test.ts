@@ -6,6 +6,7 @@
 
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
+import {buildPaintedGraphic, paintGraphic} from '../core/paintedGraphic';
 import type {Paint, PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {phaseLinePaint} from './paintFunctions';
 import {axisOfAdvanceLabelPaint} from './movementPaints';
@@ -509,5 +510,33 @@ describe('phase line and axis labels with places held', () => {
         const free = labels(paintAxis(axis, context(VIEW)));
         const moved = labels(paintAxis(axis, {...context(VIEW), avoid: [held(80_000, 0)]}));
         expect(moved[0][0]).toBeLessThan(free[0][0] - 4_000);
+    });
+});
+
+describe("an area label and another graphic's line", () => {
+    it('moves off a line crossing its middle, with no other labels placed yet', () => {
+        const ring = [
+            [0, 0],
+            [0.4, 0],
+            [0.4, 0.4],
+            [0, 0.4],
+            [0, 0],
+        ];
+        const graphic = buildPaintedGraphic(TacticalGraphicName.ObjectiveArea, {type: 'Polygon', coordinates: [ring]}, {designation: 'SWORD'}, 20)!;
+        const projected = (graphic.graphic.geometry as {coordinates: ProjectedPosition[][]}).coordinates[0];
+        const xs = projected.map(([x]) => x);
+        const ys = projected.map(([, y]) => y);
+        const [cx, cy] = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+        const view = {minX: Math.min(...xs) - 5_000, minY: Math.min(...ys) - 5_000, maxX: Math.max(...xs) + 5_000, maxY: Math.max(...ys) + 5_000};
+        const base = {resolution: 20, measureText: (t: string) => t.length * 9, view};
+        const across: ProjectedPosition[] = [
+            [view.minX, cy],
+            [view.maxX, cy],
+        ];
+        const free = labels(paintGraphic(graphic, base));
+        const moved = labels(paintGraphic(graphic, {...base, avoidLines: [across]}));
+        expect(free[0][1]).toBeCloseTo(cy, -2);
+        expect(Math.abs(moved[0][1] - cy)).toBeGreaterThan(100);
+        expect(Math.abs(free[0][0] - cx)).toBeLessThan(1_000);
     });
 });

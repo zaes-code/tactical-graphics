@@ -1071,11 +1071,11 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
 }
 
 /**
- * How far an area's centred name reaches, for sliding it clear of other labels; only worked out
- * when the context names places to avoid. @see PaintContext.avoid
+ * How far an area's centred name reaches, for sliding it clear of other labels and lines; only
+ * worked out when the context names something to avoid. @see PaintContext.avoid
  */
 function areaLabelFootprint(graphic: PaintedGraphic, context: PaintContext): LabelFootprint | undefined {
-    if (!context.avoid?.length) return undefined;
+    if (!context.avoid?.length && !context.avoidLines?.length) return undefined;
     const scale = configuredLabelScale();
     const text = getFullLabel(graphic.name, graphic.properties.designation ?? '');
     return {alongPx: (context.measureText(text, fontStyle) * scale) / 2, acrossPx: BASE_FONT_SIZE_PX * scale};
