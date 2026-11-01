@@ -129,6 +129,26 @@ export class Control extends MissionTask {
 
 }
 
+/**
+ * The inward triangles isolate, cordon and search and cordon and knock share, as
+ * MIL-STD-2525E Tables L-XXI draws all three (and APP-06 341500): small isosceles teeth,
+ * evenly spaced round both arcs, four on each, each about a fifth of the radius tall.
+ *
+ * They were seven teeth 0.4 of the radius tall, packed so close they read as a sawtooth
+ * until 2026-10-31. Each arc is `[from, to, count, gap]` in degrees from the rotation axis;
+ * a tooth's base spans 12 degrees and its centres sit 35 apart.
+ */
+const RING_TEETH_HEIGHT = 0.2;
+const RING_TEETH_UPPER = [34, 151, 4, 23] as const;
+const RING_TEETH_LOWER = [229, 346, 4, 23] as const;
+
+/** The two arcs' inward teeth, upper then lower. @see RING_TEETH_HEIGHT */
+function ringTeeth(center: Position, size: number, rotation: number): [Position[][], Position[][]] {
+    const arc = ([from, to, count, gap]: readonly [number, number, number, number]) =>
+        geometryService.generateArcTrianglesWithGap(center, size, rotation, from, to, size * RING_TEETH_HEIGHT, count, gap);
+    return [arc(RING_TEETH_UPPER), arc(RING_TEETH_LOWER)];
+}
+
 export class CordonAndSearch extends MissionTask {
     name: string = TacticalGraphicName.CordonAndSearch;
 
@@ -138,8 +158,7 @@ export class CordonAndSearch extends MissionTask {
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
 
-        let upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 30, 160, size / 2.5, 4);
-        let lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 240, 340, size / 2.5, 3);
+        let [upperTriangles, lowerTriangles] = ringTeeth(center, size, rotation);
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperTriangles).geometry,
@@ -192,8 +211,7 @@ export class Isolate extends MissionTask {
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
 
-        let upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 30, 160, size / 2.5, 4);
-        let lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 240, 340, size / 2.5, 3);
+        let [upperTriangles, lowerTriangles] = ringTeeth(center, size, rotation);
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperTriangles).geometry,
@@ -201,6 +219,18 @@ export class Isolate extends MissionTask {
         ]);
     }
 }
+
+/**
+ * Where Retain's tics run, in degrees from the rotation axis: round both arcs from just
+ * clear of the `R` to just short of each free end. APP-06 151205 and MIL-STD-2525E Table
+ * L-VIII draw them continuously, up to the start point, up to the arrowhead and either side
+ * of the letter. They stopped at 30-160 and 240-340 until 2026-10-31, leaving bare rim.
+ *
+ * Each range is the arc the tics are spread over, and every tic sits mid-way along its
+ * share of it, so the first and last land half a step in: at about 20 and 170, 215 and 340.
+ */
+const RETAIN_UPPER_TICS: readonly [number, number] = [13, 177];
+const RETAIN_LOWER_TICS: readonly [number, number] = [208, 347];
 
 export class Retain extends MissionTask {
     name: string = TacticalGraphicName.Retain;
@@ -210,8 +240,10 @@ export class Retain extends MissionTask {
         let {rotation, size} = opts;
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
-        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size * ARC_TIC_FRACTION, arcTicCount(130));
-        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size * ARC_TIC_FRACTION, arcTicCount(100));
+        const [upperFrom, upperTo] = RETAIN_UPPER_TICS;
+        const [lowerFrom, lowerTo] = RETAIN_LOWER_TICS;
+        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, upperFrom, upperTo, size * ARC_TIC_FRACTION, arcTicCount(upperTo - upperFrom));
+        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, lowerFrom, lowerTo, size * ARC_TIC_FRACTION, arcTicCount(lowerTo - lowerFrom));
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperRadialLineStrings).geometry,
