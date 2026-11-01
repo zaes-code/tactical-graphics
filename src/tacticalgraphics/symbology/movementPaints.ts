@@ -467,32 +467,34 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
         const paints = behindArrowhead(feature, context, coords, 4, ['AA', label].filter(Boolean).join(' '));
 
         /*
-         * **Field H sits outside the arrow, level with `AA`.** The plate boxes it clear of the
-         * line work and notes that it "should be movable to avoid obscuring key geographic
-         * information" -- so the one thing it must not do is land on the casing. The span this
-         * family publishes is one `radius` long and `radius` is the arrow's half-width, so
-         * offsetting by the span plus a fixed gap clears the rail at every zoom and every size
-         * without the paint having to know how wide the arrow was drawn.
+         * **Field H sits outside the upper rail, near the rear.** 152300's Template boxes it
+         * there, clear of the line work, and notes that it "should be movable to avoid
+         * obscuring key geographic information". It used to sit level with `AA` just behind
+         * the head. The span this family publishes is one `radius` long, the arrow's
+         * half-width, so offsetting by the span plus a fixed gap clears the rail at every
+         * zoom and size; a hostile arrow's `ENY` takes that spot, so H stands one line further
+         * out. Anchors 2 and 3 are the rails' rear ends; a feature without them keeps the
+         * old place behind the head.
          */
         const additional = feature.properties.additionalInfo?.trim();
         if (additional && paints.length) {
             const span = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]);
             const halfWidthPx = span / context.resolution;
-            // Level with where `AA` starts behind the head, which is not the first paint once
-            // a long name bends along the arrow. @see behindArrowhead
-            const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
-            const behind: ProjectedPosition = [c1[0] - ((c1[0] - c0[0]) / span) * clearance, c1[1] - ((c1[1] - c0[1]) / span) * clearance];
-            const at = offsetAbove(
-                behind,
-                c0,
-                c1,
-                context.resolution,
-                halfWidthPx + AVENUE_ADDITIONAL_INFO_GAP_PX,
-            );
+            const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
+            const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+            const rear: ProjectedPosition = coords.length >= 4
+                ? [(coords[2][0] + coords[3][0]) / 2, (coords[2][1] + coords[3][1]) / 2]
+                : [c1[0] - ((c1[0] - c0[0]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution,
+                    c1[1] - ((c1[1] - c0[1]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution];
+            const outPx = halfWidthPx + AVENUE_ADDITIONAL_INFO_GAP_PX + (hostile ? BASE_FONT_SIZE_PX * scale + AVENUE_ADDITIONAL_INFO_GAP_PX : 0);
+            // Turned to the rear segment of the center line (published from anchor 4), not the head's.
+            const [a, b] = coords.length >= 6 ? [coords[4], coords[5]] : [c0, c1];
+            const at = offsetAbove(rear, a, b, context.resolution, outPx);
             paints.push(
-                text(feature, at, additional, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
-                    rotation: uprightRotation(c0, c1),
-                    align: alignAlong('right', c0, c1),
+                text(feature, at, additional, scale, {
+                    rotation: uprightRotation(a, b),
+                    // Reading forward from the rear, toward the head.
+                    align: alignAlong(coords.length >= 4 ? 'left' : 'right', a, b),
                     // Free text the operator typed, so "name only" takes it away. The `AA`
                     // literal and the `ENY` marks are the symbol and stay.
                     kind: 'amplifier',
