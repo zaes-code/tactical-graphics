@@ -983,6 +983,25 @@ export function missionTaskLabelPaint(
 /** Screen-pixel standoff between a default line and the labels above and below it. */
 const DEFAULT_LINE_LABEL_GAP_PX = 8;
 
+/**
+ * Clear space, in screen pixels, two end labels must keep between them before a line draws
+ * one label at its middle instead. @see endLabelsCollide
+ */
+const END_LABEL_SEPARATION_PX = 12;
+
+/**
+ * Whether a line's two end labels, each set inward from its end, would run into each other.
+ *
+ * APP-06 puts the name at both ends of a line. Zoomed out far enough the line is shorter than
+ * the two names, and each name was drawn over the other at every engine (QA audit, 2026-10-31).
+ * Measured end to end rather than along the path: the labels sit at the ends, so a line that
+ * doubles back brings them together whatever its length.
+ */
+export function endLabelsCollide(start: ProjectedPosition, end: ProjectedPosition, widestPx: number, resolution: number): boolean {
+    const endsPx = Math.hypot(end[0] - start[0], end[1] - start[1]) / resolution;
+    return 2 * widestPx + END_LABEL_SEPARATION_PX > endsPx;
+}
+
 /** Declared beside the rule that fits every dash to its graphic. @see withFittedDashes */
 export {PLANNED_DASH_PX};
 
@@ -1268,25 +1287,42 @@ export function defaultLinePaint(
             ? PLANNED_DASH_PX
             : undefined;
 
+        const stroke: Paint = {
+            geometry: feature.geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
+        };
+        // Only a designation the size rule took away is left out; an empty one stays as it was.
+        // The dates go with it. @see withProportionateAmplifiers
+        if (!(shown.text || !identifier)) return [stroke];
+
+        /*
+         * **One label at the middle once the two ends would collide**, rather than two names
+         * printed over each other. The same rule on every engine, because it is decided here.
+         * @see endLabelsCollide
+         */
+        const widestPx = Math.max(
+            shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0,
+            dateLabel ? textWidth(context, dateLabel, fontStyle, scale) : 0,
+        );
+        if (endLabelsCollide(start, end, widestPx, res)) {
+            const i = centerSegmentIndex(coords);
+            const [a, b] = [coords[i], coords[i + 1]];
+            const middle: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const rotation = uprightRotation(a, b);
+            const centered = (paint: Paint): Paint => ({...paint, text: {...paint.text!, align: 'center'}});
+            return [
+                centered(label(offsetAbove(middle, a, b, res, gap), shown.text, rotation, 'left', 'bottom', shown.scale)),
+                asAmplifier(centered(label(offsetBelow(middle, a, b, res, gap), dateLabel, rotation, 'left', 'top'))),
+                stroke,
+            ];
+        }
+
         return [
-            // Only a designation the size rule took away is left out; an empty one stays as it was.
-            ...(shown.text || !identifier
-                ? [
-                    label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
-                    label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
-                ]
-                : []),
-            // The dates go with a name the size rule took away. @see withProportionateAmplifiers
-            ...(shown.text || !identifier
-                ? [
-                    asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
-                    asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
-                ]
-                : []),
-            {
-                geometry: feature.geometry,
-                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
-            },
+            label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
+            asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
+            asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+            stroke,
         ];
     };
 }
