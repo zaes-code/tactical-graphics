@@ -63,10 +63,10 @@ describe('the two draw limits agree', () => {
         expect(openLayersLimit(name)).toBe(drawClickCount(name) ?? baseVertexCount(name) ?? maxAreaVertices(name));
     });
 
-    it('caps the twelve six-point irregular areas at six (2525E draw rule Area10)', () => {
+    it('caps the twelve Area10 irregular areas at 100, not the six of the rule', () => {
         const capped = names.filter(n => maxAreaVertices(n) !== undefined);
         expect(capped).toHaveLength(12);
-        for (const name of capped) expect(openLayersLimit(name)).toBe(6);
+        for (const name of capped) expect(openLayersLimit(name)).toBe(100);
         expect(maxAreaVertices(TacticalGraphicName.FreeFireAreaIrregular)).toBeUndefined();
     });
 

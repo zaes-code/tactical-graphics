@@ -93,21 +93,22 @@ describe('every other graphic is untouched', () => {
     });
 });
 
-describe('the six-point irregular areas (2525E draw rule Area10)', () => {
+describe('the capped irregular areas (2525E draw rule Area10)', () => {
     // A ring of `n` distinct vertices, closed the way a Polygon's is.
     const ring = (n: number): [number, number][] => {
         const pts = Array.from({length: n}, (_, i): [number, number] => [100 * Math.cos((2 * Math.PI * i) / n), 100 * Math.sin((2 * Math.PI * i) / n)]);
         return [...pts, pts[0]];
     };
 
-    it('takes a vertex up to six and refuses the seventh', () => {
+    it('takes a vertex up to 100 and refuses the 101st', () => {
         const name = TacticalGraphicName.BlueKillBoxIrregular;
-        expect(maxAreaVertices(name)).toBe(6);
-        expect(acceptsInsertedVertex(name, ring(5), [80, 0])).toBe(true);
-        expect(acceptsInsertedVertex(name, ring(6), [80, 0])).toBe(false);
+        expect(maxAreaVertices(name)).toBe(100);
+        expect(acceptsInsertedVertex(name, ring(6), [80, 0])).toBe(true);
+        expect(acceptsInsertedVertex(name, ring(99), [80, 0])).toBe(true);
+        expect(acceptsInsertedVertex(name, ring(100), [80, 0])).toBe(false);
     });
 
     it('leaves an uncapped area alone', () => {
-        expect(acceptsInsertedVertex(TacticalGraphicName.FreeFireAreaIrregular, ring(6), [80, 0])).toBe(true);
+        expect(acceptsInsertedVertex(TacticalGraphicName.FreeFireAreaIrregular, ring(100), [80, 0])).toBe(true);
     });
 });
