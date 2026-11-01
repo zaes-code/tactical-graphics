@@ -305,29 +305,97 @@ function behindArrowhead(
     return onArrow(context, coords, pathFrom, straight, 'end');
 }
 
+/** A point `d` along `path`, and the segment it lies on. */
+function pointAlong(path: ProjectedPosition[], d: number): {at: ProjectedPosition; a: ProjectedPosition; b: ProjectedPosition} {
+    let left = Math.max(0, d);
+    for (let i = 0; i < path.length - 1; i++) {
+        const [a, b] = [path[i], path[i + 1]];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (left <= length || i === path.length - 2) {
+            const t = length === 0 ? 0 : Math.min(1, left / length);
+            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], a, b};
+        }
+        left -= length;
+    }
+    return {at: path[0], a: path[0], b: path[path.length - 1]};
+}
+
+/** Clear space between field T and the date-time group set ahead of it, in screen pixels. */
+const AXIS_NAME_DATE_GAP_PX = 24;
+/** The gap between an axis's rail and the `ENY` set outside it, in screen pixels. */
+const AXIS_ENY_GAP_PX = 12;
+
 /**
- * The aviation axis of advance: name and date on one line at the start of the
- * arrow, sized to the span.
+ * An axis of advance's three amplifiers, each where its plate boxes it.
+ *
+ * 151401 to 151406 and 342900 letter **T inside the body toward the rear** and **W - W1 as a
+ * separate group just behind the head**, and their Examples set the name mid-body and the
+ * date-time group near the arrowhead. They used to be joined into one `name     DTG` run,
+ * which put both behind the head (or both at the tail on the aviation axes). The date is
+ * set right-aligned behind the head; the name is centered in the body left behind it, so the
+ * two cannot meet however short the arrow is drawn.
+ *
+ * A hostile axis also says `ENY`, outside each rail at the rear, as the plates box field N
+ * (APP-06 8.1.4). `halfWidth` is the arrow's half-width in projected meters, which is the
+ * length of the span every generator in this family publishes.
+ */
+function axisAmplifiers(
+    feature: PaintFeature,
+    context: PaintContext,
+    coords: ProjectedPosition[],
+    pathFrom: number,
+    halfWidth: number,
+): Paint[] {
+    const [c0, c1] = coords;
+    const published = coords.slice(pathFrom);
+    const path = published.length >= 2 ? published : [c0, c1];
+    let total = 0;
+    for (let i = 0; i < path.length - 1; i++) total += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+    if (total === 0) return [];
+
+    const res = context.resolution;
+    const scale = spanProportionalScale(c0, c1, res, BASE_FONT_SIZE_PX);
+    const paints: Paint[] = [];
+    const place = (d: number, value: string, align: 'left' | 'center' | 'right', pathAlign: PathTextAlign, kind?: TextKind) => {
+        const {at, a, b} = pointAlong(path, d);
+        const straight = text(feature, at, value, scale, {rotation: uprightRotation(a, b), align: alignAlong(align, a, b), kind});
+        paints.push(...onArrow(context, coords, pathFrom, straight, pathAlign));
+    };
+
+    // Rear to head: the name, then the date.
+    const date = areaDateLabel(feature);
+    const dateEnd = total - ARROWHEAD_LABEL_CLEARANCE_PX * res;
+    const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - AXIS_NAME_DATE_GAP_PX * res : dateEnd;
+    const name = feature.properties.designation?.trim();
+    if (name) place(Math.max(0, nameRoom) / 2, name, 'center', 'center');
+    if (date) place(dateEnd, date, 'right', 'end', 'amplifier');
+
+    if (hostilityOf(feature) === TacticalGraphicHostility.hostileFaker) {
+        const [r0, r1] = path;
+        const length = Math.hypot(r1[0] - r0[0], r1[1] - r0[1]);
+        if (length > 0) {
+            const [ux, uy] = [(r1[0] - r0[0]) / length, (r1[1] - r0[1]) / length];
+            const out = halfWidth + AXIS_ENY_GAP_PX * res;
+            // A little ahead of the rear, so the mark reads beside the rail rather than off its end.
+            const along = Math.min(length / 2, halfWidth);
+            const rear: ProjectedPosition = [r0[0] + ux * along, r0[1] + uy * along];
+            for (const side of [1, -1]) {
+                paints.push(text(feature, [rear[0] - uy * out * side, rear[1] + ux * out * side], 'ENY', scale, {rotation: uprightRotation(r0, r1)}));
+            }
+        }
+    }
+    return paints;
+}
+
+/**
+ * The aviation axis of advance: T toward the rear, W - W1 behind the head, sized to the
+ * span. @see axisAmplifiers
  */
 export function aviationAxisLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
-        const value = nameAndDate(feature);
-        if (!value) return [];
-
-        /*
-         * **`alignAlong`, not a fixed `'left'`.** The rotation is kept upright, so an arrow
-         * pointing west has its text turned through 180 degrees — and a left-aligned block
-         * then runs *away* from the shaft instead of along it. Drawn west, the name and the
-         * date ended up off the tail entirely and reading in the wrong order against the
-         * arrow. The helper flips the alignment exactly when the rotation flipped.
-         */
-        const straight = text(feature, coords[0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
-            rotation: uprightRotation(coords[0], coords[1]),
-            align: alignAlong('left', coords[0], coords[1]),
-        });
-        return onArrow(context, coords, 2, straight, 'start');
+        return axisAmplifiers(feature, context, coords, 2, Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]));
     };
 }
 
@@ -449,6 +517,8 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
         const segLenMap = Math.hypot(dx, dy);
         if (segLenMap === 0) return [];
 
+        if (!centered) return axisAmplifiers(feature, context, coords, 2, segLenMap);
+
         const value = nameAndDate(feature);
         if (!value) return [];
 
@@ -500,14 +570,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
 
         const tdx = x1 - x0;
         const tdy = y1 - y0;
-        const value = nameAndDate(feature);
-        if (value) {
-            const straight = text(feature, [x0, y0], value, spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX), {
-                rotation: uprightRotation(coords[0], coords[1]),
-                align: alignAlong('left', coords[0], coords[1]),
-            });
-            paints.push(...onArrow(context, coords, 4, straight, 'start'));
-        }
+        paints.push(...axisAmplifiers(feature, context, coords, 4, Math.hypot(tdx, tdy)));
 
         const heading = Math.atan2(cy - dy3, cx - dx3);
         // Half-size reference: the text span is the arrow's radius in map units.
@@ -565,32 +628,18 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
 }
 
 /**
- * Advance to contact's amplifiers: APP-06 342900's `T` and `W . W1`, on one line
- * centered along the body.
+ * Advance to contact's amplifiers: APP-06 342900's `T` toward the rear and `W - W1` behind
+ * the head, as separate groups. @see axisAmplifiers
  *
- * **One line, not two, and that is the point.** `movementLabelPaint` puts the date on a
- * second span offset by `c1 - c0`, which works for the crossing graphics because their
- * label anchors are a whole segment apart. This arrow's anchors come from
- * `labelCoordsAtFraction`, so they sit its own half-width apart — a few pixels — and the
- * date lands on top of the designation. Joining them through `nameAndDate` cannot
- * collide however wide the arrow is drawn.
+ * They used to be one centered `T     W - W1` line, because `movementLabelPaint` sets the
+ * date a span further on and this arrow's span is only its half-width, so the two collided.
+ * Placed along the published center line instead, they cannot.
  */
 export function advanceToContactLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
-
-        const [c0, c1] = coords;
-        const value = nameAndDate(feature);
-        if (!value) return [];
-
-        const at: ProjectedPosition = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2];
-        // The ceiling moved into `spanProportionalScale`, where every caller gets it. This
-        // label is the longest in the family — a designation and two date-time groups — so
-        // it was the first to outgrow the symbol it names, and for a while the only one
-        // capped. @see spanProportionalScale
-        const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
-        return onArrow(context, coords, 2, text(feature, at, value, scale, {rotation: uprightRotation(c0, c1), align: 'center'}), 'center');
+        return axisAmplifiers(feature, context, coords, 2, Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]));
     };
 }
 
