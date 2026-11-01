@@ -300,6 +300,17 @@ describe('the label blocks, which are three different arrangements', () => {
         expect(mark.text?.text).toBe('FF');
     });
 
+    it('lays that designation along the search axis', () => {
+        // "aligned with the search axis": a north-east axis turns the text to it.
+        const feature = {
+            geometry: {type: 'Point', coordinates: [1000, 1000]},
+            graphicCenter: [0, 0],
+            properties: {name: TacticalGraphicName.RadarSearchDoctrine, designation: 'FF'},
+        } as unknown as PaintFeature;
+        const [mark] = radarSearchLabelPaint()(feature, context);
+        expect(mark.text?.rotation).toBeCloseTo(-Math.PI / 4, 9);
+    });
+
     it('keeps that designation when amplifiers are hidden', () => {
         // A designation names the symbol; `amplifierSweep` asserts it for every graphic and
         // caught this paint running its text through `amplifierText`.
