@@ -73,6 +73,11 @@ describe.each(AXES)('%s', name => {
         const near = 10;
         const wide: PaintContext = {resolution: near, measureText: (text: string) => text.length * 11};
         const paints = paintGraphic(buildPaintedGraphic(name, stubby, properties, near)!, wide).filter(p => p.text && p.text.fill !== 'rgba(0,0,0,0)');
+        // One run, straight where it fits a segment, which cannot overlap itself.
+        if (paints.length === 1) {
+            expect(paints[0].text!.text).toBe('DAVID     011200Z - 021800Z');
+            return;
+        }
         expect(paints.length).toBeGreaterThan(5);
         const x = (p: Paint) => (p.geometry.coordinates as Position)[0];
         // The name is painted first, rear to head, then the date.
@@ -90,6 +95,11 @@ describe.each(AXES)('%s', name => {
         const x = (p: Paint) => (p.geometry.coordinates as Position)[0];
         const run = paints.map(p => p.text!.text).join('');
         expect(run.indexOf('DAVID')).toBeGreaterThan(-1);
+        // Turned to read from the head back, a single run starts with the dates.
+        if (paints.length === 1) {
+            expect(run).toBe('011200Z - 021800Z     DAVID');
+            return;
+        }
         // The head is west: every date glyph lies west of every name glyph.
         const nameAt = paints.filter(p => p.text!.glyph ? 'DAVI'.includes(p.text!.text) : p.text!.text === 'DAVID').map(x);
         const dateAt = paints.filter(p => p.text!.glyph ? /[0-9Z]/.test(p.text!.text) : p.text!.text.startsWith('011200Z')).map(x);
@@ -137,5 +147,21 @@ describe('avenue of approach field H', () => {
         for (const eny of marks.filter(p => p.text!.text === 'ENY')) {
             expect(Math.abs((eny.geometry.coordinates as Position)[1] - hy)).toBeGreaterThan(10 * resolution);
         }
+    });
+});
+
+describe.each([N.AviationAxisOfAdvance, N.AttackHelicopterAxisOfAdvance])('%s keeps its dates out of the twist', name => {
+    it('ends W - W1 before the walls start to cross', () => {
+        // The dates ran through the crossing on every heading (found turning each line graphic
+        // through four directions, 2026-11-01).
+        const properties = {designation: 'DAVID', startDate: '011200Z', endDate: '021800Z', radius: 1000, hostility: TacticalGraphicHostility.friend};
+        const graphic = buildPaintedGraphic(name, base, properties, resolution)!;
+        const anchors = (graphic.labels as {geometry: {coordinates: Position[]}}).geometry.coordinates;
+        const crossing = anchors[2][0];
+        const end = anchors[anchors.length - 1][0];
+        const twistStart = crossing - (end - crossing);
+        const dates = paintGraphic(graphic, context).filter(p => p.text && (p.text.glyph ? /[0-9Z]/.test(p.text.text) : p.text.text.includes('011200Z')));
+        expect(dates.length).toBeGreaterThan(0);
+        for (const p of dates) expect((p.geometry.coordinates as Position)[0]).toBeLessThan(twistStart);
     });
 });

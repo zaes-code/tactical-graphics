@@ -69,6 +69,16 @@ export function distanceAlongPath(path: ProjectedPosition[], p: ProjectedPositio
 }
 
 /**
+ * Whether text laid from `start` to `end` along a path reads that way round: the run reads
+ * from whichever end lies further west, and an exactly vertical run reads bottom to top, as
+ * straight text does. @see uprightFlipped
+ */
+export function readsAlongPath(start: ProjectedPosition, end: ProjectedPosition): boolean {
+    const dx = end[0] - start[0];
+    return dx > 0 || (dx === 0 && end[1] >= start[1]);
+}
+
+/**
  * The run of text along `path`, or `undefined` when the caller's own straight label is right:
  * the run lies on one segment of the path, where a straight label already follows it.
  *
@@ -106,7 +116,7 @@ export function textAlongPath(
     if (start === wanted && scale === (spec.scale ?? 1) && segmentAt(w, start) === segmentAt(w, end)) return undefined;
 
     // Left to right on screen: the run is read from whichever end lies further west.
-    const forward = pointAt(w, end)[0] >= pointAt(w, start)[0];
+    const forward = readsAlongPath(pointAt(w, start), pointAt(w, end));
     const halos: Paint[] = [];
     const glyphs: Paint[] = [];
     let offset = 0;

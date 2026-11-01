@@ -13,6 +13,15 @@ import {chaikinKeepingEnds, smoothingKindOf} from '../core/smoothing';
  */
 export const TWIST_HALF_WIDTHS = 3;
 
+/** Where an aviation axis's walls cross: halfway along the twist behind the head. @see MovementGraphicBase.twistWalls */
+function twistCenterOf(centerline: Position[], radius: number): Position {
+    const last = centerline[centerline.length - 1];
+    const secondToLast = centerline[centerline.length - 2];
+    const legLength = turf.distance(secondToLast, last, {units: 'meters'});
+    const back = legLength > 0 ? Math.min(1, (radius * TWIST_HALF_WIDTHS) / legLength) / 2 : 0.5;
+    return [last[0] + back * (secondToLast[0] - last[0]), last[1] + back * (secondToLast[1] - last[1])];
+}
+
 export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
     type = "LineString";
 
@@ -224,13 +233,9 @@ export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
         // coords[0..1]: text label position (near tail, same as AviationAxisOfAdvance)
         const textCoords = geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius);
         // coords[2]: where the walls actually cross, halfway along the twist. @see twistWalls
-        const last = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
-        const legLength = turf.distance(secondToLast, last, {units: 'meters'});
-        const back = legLength > 0 ? Math.min(1, (radius * TWIST_HALF_WIDTHS) / legLength) / 2 : 0.5;
-        const twistCenter: Position = [last[0] + back * (secondToLast[0] - last[0]), last[1] + back * (secondToLast[1] - last[1])];
         // coords[3]: direction point (for computing arrow heading)
-        return this.asMultiPointFeature([...textCoords, twistCenter, secondToLast, ...this.labelPath(baseCoords)]);
+        return this.asMultiPointFeature([...textCoords, twistCenterOf(baseCoords, radius), secondToLast, ...this.labelPath(baseCoords)]);
     }
 }
 
@@ -265,8 +270,10 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
         const baseCoords = this.arrowCenterline(base, radius);
+        // coords[2] is where the walls cross, which the dates stay behind. @see aviationAxisLabelPaint
         return this.asMultiPointFeature([
             ...geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius),
+            twistCenterOf(baseCoords, radius),
             ...this.labelPath(baseCoords),
         ]);
     }

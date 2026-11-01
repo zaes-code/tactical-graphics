@@ -345,8 +345,10 @@ export class FrontalAttack extends SolidManeuverArrow {
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
-        // Midpoint of [lastPoint, arrowTip] = center of the arrowhead area
-        return this.asMultiPointFeature([lastPoint, arrowTip]);
+        // Midpoint of [lastPoint, arrowTip] = center of the arrowhead area. The centre line
+        // follows, so the name and dates behind the head bend with the body rather than
+        // running straight off it. @see letterWithNameAndDate
+        return this.asMultiPointFeature([lastPoint, arrowTip, ...this.labelPath(baseCoords)]);
     }
 }
 
@@ -384,7 +386,7 @@ export class TurningMovement extends SolidManeuverArrow {
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
-        return this.asMultiPointFeature([lastPoint, arrowTip]);
+        return this.asMultiPointFeature([lastPoint, arrowTip, ...this.labelPath(baseCoords)]);
     }
 }
 
