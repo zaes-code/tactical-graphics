@@ -112,7 +112,7 @@ export type {ViewTransform} from './projection';
 
 // The paint-list consumers, for a host driving its own rendering.
 export {paintToCanvas} from './canvas/paintToCanvas';
-export {bucketPaints, circleLayer, featureCollection, fillLayer, lineLayer, symbolLayer} from './native/paintToLayers';
+export {bucketPaints, circleLayer, featureCollection, fillLayer, lineLayer, symbolLayer, turnedSymbolLayer} from './native/paintToLayers';
 export type {FontStack, LayerBuckets} from './native/paintToLayers';
 
 // A keyless OSM raster basemap, the same tiles the OpenLayers demo uses.
