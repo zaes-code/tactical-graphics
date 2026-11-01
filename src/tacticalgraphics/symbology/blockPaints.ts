@@ -29,11 +29,10 @@ import {
     RATIO_LOCKED_LABEL_FONT_PX,
     configuredLabelScale,
     getLabelHaloColor,
-    graphicLabelScale,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
-import {lineColorOf, labelColorOf} from './paintFunctions';
-import {capLabelToGraphic, letterGapClearance, letterInGapScale} from './labelFit';
+import {lineColorOf, labelColorOf, symbolLetterScale} from './paintFunctions';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 
 type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -62,12 +61,7 @@ const GLYPH_GAP_PADDING_PX = 4;
  */
 function blockLetterScale(feature: PaintFeature, context: PaintContext, label: string, p1: ProjectedPosition, p2: ProjectedPosition): number {
     if (!label) return 0;
-    const desired = capLabelToGraphic(
-        graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution),
-        feature,
-        context,
-        RATIO_LOCKED_LABEL_FONT_PX,
-    );
+    const desired = symbolLetterScale(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
     const linePx = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / context.resolution;
     return letterInGapScale(desired, textWidth(context, label, RATIO_LOCKED_LABEL_FONT, 1), RATIO_LOCKED_LABEL_FONT_PX, linePx);
 }

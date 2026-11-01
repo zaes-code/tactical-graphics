@@ -41,7 +41,7 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
     getLabelUsesHostilityColor,
-    labelScale,
+    maxGraphicLabelScale,
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
@@ -766,11 +766,29 @@ function missionTaskLetterFont(ratioLocked: boolean): {font: string; fontPx: num
         : {font: fontStyle, fontPx: BASE_FONT_SIZE_PX};
 }
 
-/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or zoom-anchored. */
+/**
+ * The scale of a mission task's letter when it is drawn **from the symbol's own size on
+ * screen**: a quarter of the symbol (`capLabelToGraphic`'s share), never more than the
+ * ceiling every size-proportional label stops at. The letter is part of the symbol, so it
+ * shrinks as the symbol does and holds once the symbol is large.
+ *
+ * **No drawing zoom and no `graphicSize` in it** (2026-10-31). The block family and the
+ * zoom-anchored tasks used to take their letter from the zoom the task was drawn or restored
+ * at, through `graphicSize` when one was stamped. OpenLayers never stamps one for them and
+ * MapLibre filed any stored `radius` there, so the same breach drew a 24 px letter on
+ * OpenLayers and a 36 px one on MapLibre, and zoomed three times out OpenLayers took it to
+ * 8 px while the other engines held 26-33 px over a symbol a third the size. The bounds both
+ * engines carry are the one input they agree on.
+ */
+export function symbolLetterScale(feature: PaintFeature, context: PaintContext, fontPx: number): number {
+    return capLabelToGraphic(maxGraphicLabelScale(), feature, context, fontPx);
+}
+
+/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or the symbol's share. */
 function missionTaskLetterDesiredScale(feature: PaintFeature, context: PaintContext, ratioLocked: boolean): number {
     return ratioLocked
         ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
-        : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
+        : symbolLetterScale(feature, context, BASE_FONT_SIZE_PX);
 }
 
 /**
@@ -964,6 +982,25 @@ export function missionTaskLabelPaint(
 
 /** Screen-pixel standoff between a default line and the labels above and below it. */
 const DEFAULT_LINE_LABEL_GAP_PX = 8;
+
+/**
+ * Clear space, in screen pixels, two end labels must keep between them before a line draws
+ * one label at its middle instead. @see endLabelsCollide
+ */
+const END_LABEL_SEPARATION_PX = 12;
+
+/**
+ * Whether a line's two end labels, each set inward from its end, would run into each other.
+ *
+ * APP-06 puts the name at both ends of a line. Zoomed out far enough the line is shorter than
+ * the two names, and each name was drawn over the other at every engine (QA audit, 2026-10-31).
+ * Measured end to end rather than along the path: the labels sit at the ends, so a line that
+ * doubles back brings them together whatever its length.
+ */
+export function endLabelsCollide(start: ProjectedPosition, end: ProjectedPosition, widestPx: number, resolution: number): boolean {
+    const endsPx = Math.hypot(end[0] - start[0], end[1] - start[1]) / resolution;
+    return 2 * widestPx + END_LABEL_SEPARATION_PX > endsPx;
+}
 
 /** Declared beside the rule that fits every dash to its graphic. @see withFittedDashes */
 export {PLANNED_DASH_PX};
@@ -1250,25 +1287,42 @@ export function defaultLinePaint(
             ? PLANNED_DASH_PX
             : undefined;
 
+        const stroke: Paint = {
+            geometry: feature.geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
+        };
+        // Only a designation the size rule took away is left out; an empty one stays as it was.
+        // The dates go with it. @see withProportionateAmplifiers
+        if (!(shown.text || !identifier)) return [stroke];
+
+        /*
+         * **One label at the middle once the two ends would collide**, rather than two names
+         * printed over each other. The same rule on every engine, because it is decided here.
+         * @see endLabelsCollide
+         */
+        const widestPx = Math.max(
+            shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0,
+            dateLabel ? textWidth(context, dateLabel, fontStyle, scale) : 0,
+        );
+        if (endLabelsCollide(start, end, widestPx, res)) {
+            const i = centerSegmentIndex(coords);
+            const [a, b] = [coords[i], coords[i + 1]];
+            const middle: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const rotation = uprightRotation(a, b);
+            const centered = (paint: Paint): Paint => ({...paint, text: {...paint.text!, align: 'center'}});
+            return [
+                centered(label(offsetAbove(middle, a, b, res, gap), shown.text, rotation, 'left', 'bottom', shown.scale)),
+                asAmplifier(centered(label(offsetBelow(middle, a, b, res, gap), dateLabel, rotation, 'left', 'top'))),
+                stroke,
+            ];
+        }
+
         return [
-            // Only a designation the size rule took away is left out; an empty one stays as it was.
-            ...(shown.text || !identifier
-                ? [
-                    label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
-                    label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
-                ]
-                : []),
-            // The dates go with a name the size rule took away. @see withProportionateAmplifiers
-            ...(shown.text || !identifier
-                ? [
-                    asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
-                    asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
-                ]
-                : []),
-            {
-                geometry: feature.geometry,
-                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
-            },
+            label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
+            asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
+            asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+            stroke,
         ];
     };
 }
