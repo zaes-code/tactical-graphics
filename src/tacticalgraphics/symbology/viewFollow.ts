@@ -118,3 +118,21 @@ export function pathUpTo(path: ProjectedPosition[], point: ProjectedPosition): P
     if (bestT > 0) kept.push(point);
     return kept;
 }
+
+/**
+ * The point `s` along `path`, clamped to its ends, with the segment it falls on — the
+ * direction a label laid there reads along.
+ */
+export function pointAlong(path: ProjectedPosition[], s: number): {at: ProjectedPosition; from: ProjectedPosition; to: ProjectedPosition} {
+    let walked = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+        const [a, b] = [path[i], path[i + 1]];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (walked + len >= s || i === path.length - 2) {
+            const t = len === 0 ? 0 : Math.max(0, Math.min(1, (s - walked) / len));
+            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], from: a, to: b};
+        }
+        walked += len;
+    }
+    return {at: path[0], from: path[0], to: path[path.length - 1]};
+}

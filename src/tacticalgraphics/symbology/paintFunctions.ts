@@ -54,7 +54,6 @@ import {capLabelToGraphic, heldTextScale, letterGapClearance, letterInGapScale} 
 import {approachLetterScale} from './movementPaints';
 import {PLANNED_DASH_PX, strokeParts} from './dashFit';
 import {
-    alignAlong,
     centerSegmentIndex,
     crenellatedPath,
     cutArcAtLabel,
@@ -62,11 +61,13 @@ import {
     offsetAbove,
     offsetBelow,
     pathLength,
+    splitPathAroundAll,
     textWidth,
     uprightFlipped,
     uprightRotation,
 } from './decorations';
-import {inView, insetView, visibleStretch} from './viewFollow';
+import {distanceAlongPath} from './curvedText';
+import {inView, insetView, pointAlong, visibleStretch} from './viewFollow';
 
 /**
  * Blanks one amplifier line when the graphic is hiding them.
@@ -648,7 +649,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
 
         // `ENY` goes on the outer side of each end, `ENY PL T ... PL T ENY`, so it is the first
         // word of a label left of its end and the last of one to the right. @see enyOutside
-        const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'right', offsetXPx: number): Paint => ({
+        const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'center' | 'right', offsetXPx: number): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: enyOutside(text, offsetXPx + (align === 'right' ? -width : 0) < 0),
@@ -687,17 +688,26 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const stretch = visibleStretch(coords, view!);
         if (!stretch) return [lineWork, atStart(), atEnd()];
 
-        // Just above the line at the view's edge, reading inward along it.
-        const atEdge = (edge: ProjectedPosition, inward: ProjectedPosition): Paint => {
-            const lifted = offsetAbove(edge, edge, inward, context.resolution, (BASE_FONT_SIZE_PX / 2) * scale + PHASE_LINE_GAP_PX / 2);
-            return endLabel(lifted, uprightRotation(edge, inward), alignAlong('left', edge, inward) as 'left' | 'right', 0);
+        // In the line just inside the view's edge, reading along it, with the line work cut
+        // around it: the label keeps to the line rather than sitting over or under it.
+        const halfGap = (width / 2 + PHASE_LINE_GAP_PX / 2) * context.resolution;
+        const gaps: {at: number; halfGap: number}[] = [];
+        const inLine = (edge: ProjectedPosition, inward: 1 | -1): Paint => {
+            const s = distanceAlongPath(coords, edge) + inward * (width / 2) * context.resolution;
+            const {at, from, to} = pointAlong(coords, s);
+            gaps.push({at: s, halfGap});
+            return endLabel(at, uprightRotation(from, to), 'center', 0);
         };
-        const first = startShown ? atStart() : atEdge(stretch[0], stretch[1]);
+
+        const labels = [startShown ? atStart() : inLine(stretch[0], 1)];
         // Two labels need room for both and the gap between them; short of it, one is enough.
         const roomPx = pathLength(stretch) / context.resolution;
-        if (!startShown && !endShown && roomPx < 2 * width + 3 * PHASE_LINE_GAP_PX) return [lineWork, first];
-        const last = endShown ? atEnd() : atEdge(stretch[stretch.length - 1], stretch[stretch.length - 2]);
-        return [lineWork, first, last];
+        if (startShown || endShown || roomPx >= 2 * width + 3 * PHASE_LINE_GAP_PX) {
+            labels.push(endShown ? atEnd() : inLine(stretch[stretch.length - 1], -1));
+        }
+        const runs = splitPathAroundAll(coords, gaps);
+        const cutLine: Paint = runs.length ? {...lineWork, geometry: {type: 'MultiLineString', coordinates: runs}} : lineWork;
+        return [cutLine, ...labels];
     };
 }
 

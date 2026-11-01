@@ -9,7 +9,7 @@ import {resetTacticalGraphicsConfig} from '../core/config';
 import type {Paint, PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {phaseLinePaint} from './paintFunctions';
 import {axisOfAdvanceLabelPaint} from './movementPaints';
-import {VIEW_EDGE_INSET_PX, inView, pathUpTo, visibleStretch} from './viewFollow';
+import { inView, pathUpTo, visibleStretch} from './viewFollow';
 
 const RESOLUTION = 100;
 
@@ -137,9 +137,31 @@ describe('a phase line', () => {
         );
         expect(at).toHaveLength(2);
         for (const p of at) expect(inView(p, VIEW)).toBe(true);
-        // Inset from the edge, one at each side.
-        expect(Math.min(...at.map(p => p[0]))).toBeCloseTo(VIEW_EDGE_INSET_PX * RESOLUTION);
-        expect(Math.max(...at.map(p => p[0]))).toBeCloseTo(100_000 - VIEW_EDGE_INSET_PX * RESOLUTION);
+        // In the line, never over or under it, one just inside each edge.
+        for (const p of at) expect(p[1]).toBe(0);
+        expect(Math.min(...at.map(p => p[0]))).toBeLessThan(25_000);
+        expect(Math.max(...at.map(p => p[0]))).toBeGreaterThan(75_000);
+    });
+
+    it('cuts the line around a label moved into it, and leaves the rest whole', () => {
+        const paints = paint(
+            feature([
+                [-50_000, 0],
+                [150_000, 0],
+            ]),
+            context(VIEW),
+        );
+        const line = paints.find(p => p.stroke)!;
+        expect(line.geometry.type).toBe('MultiLineString');
+        const runs = (line.geometry as {coordinates: ProjectedPosition[][]}).coordinates;
+        expect(runs).toHaveLength(3);
+        // Each label lies inside a gap: no run passes under its anchor.
+        for (const at of labels(paints)) {
+            for (const run of runs) expect(at[0] > run[0][0] && at[0] < run[run.length - 1][0]).toBe(false);
+        }
+        // A stub of line still runs from each edge into its gap, so the line reads as going on.
+        expect(runs[0][0][0]).toBe(-50_000);
+        expect(runs[2][runs[2].length - 1][0]).toBe(150_000);
     });
 
     it('moves the label of an end that is on screen when the label itself would run off it', () => {
@@ -150,11 +172,11 @@ describe('a phase line', () => {
         ];
         const paints = paint(feature(line), context(VIEW));
         const [first, last] = paints.filter(p => p.text);
-        // Turned to read inward from the end, just above the line, rather than out past it.
+        // Turned into the line from its end, rather than out past it.
         const at = (first.geometry as {coordinates: ProjectedPosition}).coordinates;
-        expect(at[0]).toBeCloseTo(2_500);
-        expect(at[1]).toBeGreaterThan(0);
-        expect(first.text!.offsetXPx).toBe(0);
+        expect(at[1]).toBe(0);
+        expect(at[0]).toBeGreaterThan(2_500);
+        expect(first.text!.align).toBe('center');
         expect((last.geometry as {coordinates: ProjectedPosition}).coordinates).toEqual([80_000, 0]);
     });
 
