@@ -29,6 +29,7 @@ import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {labelScale as labelScale_} from '../core/symbology';
 import {CROSSED_HALF_WIDTH_PX, crossedMissionTaskLabelPaint, crossedMissionTaskLabelScale, crossedMissionTaskPaint, pursuitPaint} from './missionTaskPaints';
 import {capLabelToGraphic} from './labelFit';
+import {renderTacticalGraphic} from '../core/render';
 import {missionTaskLabelPaint} from './paintFunctions';
 
 const context = (resolution: number): PaintContext => ({
@@ -203,4 +204,52 @@ describe('pursuit draws its letter at its own scale, and drops it and closes the
         expect(letter(10)).toBeUndefined();
         expect(runPieces(10)).toBe(1);
     });
+});
+
+/**
+ * MIL-STD-2525E Table L-XXI draws all four crossed tasks wider than tall: Destroy, Suppress
+ * and Neutralize as an X of a 3:2 box's diagonals, Suppress with both strokes hashed and
+ * Neutralize with its "/" alone.
+ */
+describe('the crossed mission tasks against 2525E Table L-XXI', () => {
+    const generated = (name: TacticalGraphicName) =>
+        (renderTacticalGraphic({
+            type: 'Feature',
+            geometry: {type: 'Point', coordinates: [0, 0]},
+            properties: {tacticalGraphic: {name, radius: 1000}},
+        } as never).graphic.geometry as {coordinates: number[][][]}).coordinates;
+    const slopeDeg = ([a, b]: number[][]) => (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
+
+    it.each([TacticalGraphicName.Destroy, TacticalGraphicName.Suppress, TacticalGraphicName.Neutralize])(
+        '%s is an X of two diagonals 33.7 degrees off horizontal',
+        name => {
+            // Each line's direction, folded into [0, 180).
+            const [slash, back] = generated(name).slice(0, 2).map(arm => ((slopeDeg(arm) % 180) + 180) % 180);
+            const atan23 = (Math.atan(2 / 3) * 180) / Math.PI;
+            expect(slash).toBeCloseTo(atan23, 0);
+            expect(back).toBeCloseTo(180 - atan23, 0);
+        },
+    );
+
+    const hashed = (name: TacticalGraphicName): boolean[] => {
+        // Arms laid out as the generator does, wide enough to stay lettered.
+        const size = CROSSED_HALF_WIDTH_PX * 100;
+        const painted = crossedMissionTaskPaint(name)({
+            geometry: {type: 'MultiLineString', coordinates: [[[-size, -size * (2 / 3)], [size, size * (2 / 3)]], [[size, -size * (2 / 3)], [-size, size * (2 / 3)]]]},
+            properties: {name},
+            graphicSize: size,
+            graphicCenter: [0, 0],
+        } as PaintFeature, context(100));
+        // Each arm comes back as two pieces; the "/" rises left to right.
+        const rising = (p: Paint) => {
+            const [a, b] = (p.geometry as {coordinates: ProjectedPosition[]}).coordinates;
+            return (b[0] - a[0]) * (b[1] - a[1]) > 0;
+        };
+        const lines = painted.filter(p => p.geometry.type === 'LineString');
+        return [lines.filter(rising), lines.filter(p => !rising(p))].map(arm => arm.every(p => !!p.stroke?.dashPx?.length));
+    };
+
+    it('hashes both strokes of Suppress', () => expect(hashed(TacticalGraphicName.Suppress)).toEqual([true, true]));
+    it('hashes the "/" of Neutralize and leaves the "\\" solid', () => expect(hashed(TacticalGraphicName.Neutralize)).toEqual([true, false]));
+    it('hashes nothing on Destroy', () => expect(hashed(TacticalGraphicName.Destroy)).toEqual([false, false]));
 });
