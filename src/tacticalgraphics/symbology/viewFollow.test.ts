@@ -435,7 +435,7 @@ describe('a label whose place another label holds', () => {
         const footprint = {alongPx: 30, acrossPx: 8};
         expect(areaLabelInView(f, withAvoid([]), footprint)).toBe(f);
         const at = (areaLabelInView(f, withAvoid([taken(50_000, 0)]), footprint).geometry as {coordinates: ProjectedPosition}).coordinates;
-        expect(Math.abs(at[1])).toBeGreaterThan(6_000);
+        expect(Math.max(Math.abs(at[0] - 50_000), Math.abs(at[1]))).toBeGreaterThan(6_000);
         expect(inRing(at, ring)).toBe(true);
     });
 });

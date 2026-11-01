@@ -225,32 +225,34 @@ export function areaLabelInView(feature: PaintFeature, context: PaintContext, fo
     const visible = clipRing(ring, view);
     if (visible.length < 3) return feature;
     const middle = interiorPoint(visible);
-    // The visible part's middle, then the widest spans above and below it, nearest first.
+    // The visible part's middle, then places across the widest spans above and below it, the
+    // nearest heights first and each from its span's middle outward.
     const ys = visible.map(([, y]) => y);
     const [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
-    const candidates = [middle, ...(footprint ? SLIDE_SHARES.slice(1).map(share => spanMiddle(visible, minY + (maxY - minY) * share)) : [])];
+    const candidates = [middle, ...(footprint ? SLIDE_SHARES.flatMap(share => spanPlaces(visible, minY + (maxY - minY) * share)) : [])];
     const moved = candidates.find((p): p is ProjectedPosition => !!p && !taken(p)) ?? (inView(at, view) ? undefined : middle);
     return moved ? {...feature, geometry: {type: 'Point', coordinates: moved}} : feature;
 }
 
-/** The middle of the widest span across `ring` at height `y`. */
-function spanMiddle(ring: ProjectedPosition[], y: number): ProjectedPosition | undefined {
+/** Places across the widest span of `ring` at height `y`: its middle, then out toward its ends. */
+function spanPlaces(ring: ProjectedPosition[], y: number): ProjectedPosition[] {
     const xs: number[] = [];
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
         const [a, b] = [ring[j], ring[i]];
         if (a[1] > y !== b[1] > y) xs.push(a[0] + ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]));
     }
     xs.sort((p, q) => p - q);
-    let best: ProjectedPosition | undefined;
-    let widest = 0;
+    let span: [number, number] | undefined;
     for (let i = 0; i + 1 < xs.length; i += 2) {
-        if (xs[i + 1] - xs[i] > widest) {
-            widest = xs[i + 1] - xs[i];
-            best = [(xs[i] + xs[i + 1]) / 2, y];
-        }
+        if (!span || xs[i + 1] - xs[i] > span[1] - span[0]) span = [xs[i], xs[i + 1]];
     }
-    return best;
+    if (!span) return [];
+    const [x0, x1] = span;
+    return SPAN_SHARES.map(share => [x0 + (x1 - x0) * share, y] as ProjectedPosition);
 }
+
+/** Shares of a span an area label tries, middle first. */
+const SPAN_SHARES = [0.5, 0.35, 0.65, 0.2, 0.8];
 
 /**
  * A line's mid-label position `{index, t}`, moved to the middle of the line's visible stretch
