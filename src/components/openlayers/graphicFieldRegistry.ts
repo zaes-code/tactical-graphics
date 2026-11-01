@@ -227,6 +227,8 @@ function f(
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
+/** One date-time group and nothing else: the retrograde tasks whose plate boxes a lone W. */
+const SHAPE_AND_W = f(false, false, true, false, false);
 
 /**
  * Safe lane or gap (APP-06 290600): `T` / `AM` / `W` / `W1`, stacked beside the lane.
@@ -819,15 +821,17 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.WireSingleConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.WireDoubleStrandConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.WireTripleStrandConcertina]: SHAPE_ONLY,
-    [TacticalGraphicName.Delay]: SHAPE_ONLY,
+    // 2525E 340800 boxes W above the D (FM 1-02.2 adds W1; 2525E decides).
+    [TacticalGraphicName.Delay]: SHAPE_AND_W,
     [TacticalGraphicName.Withdraw]: SHAPE_ONLY,
     [TacticalGraphicName.WithdrawUnderPressure]: SHAPE_ONLY,
     [TacticalGraphicName.Retirement]: SHAPE_ONLY,
     // Disengage appears in Table 6-1 (Ch. 6) → no amplifiers.
     [TacticalGraphicName.Disengage]: MISSION_TASK,
     // Passage of lines / relief (Table 5-13 enabling operations): identifier only.
-    [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_ONLY,
-    [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_ONLY,
+    // APP-06 344100 / 344200 box W above the line near the arrowhead.
+    [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_AND_W,
+    [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_AND_W,
     // Exfiltrate (Table 6-1, Ch. 6) → no amplifiers.
     // Hostility and nothing else, like its twin: 343700's Template carries `EX` and no
     // amplifier box at all. (User's call, 2026-08-27.)
@@ -858,11 +862,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // W . W1 inside it -- so unlike FM's badge this one takes a designation and a
     // date-time range. @see FM 1-02.2 table 5-2 for what the letters mean.
     [TacticalGraphicName.AdvanceToContact]: AXIS_ARROW,
-    // 152700 and 152900 carry no amplifier of their own, but they do carry a width the
-    // operator dragged, and it is the same read-out the rest of the family shows.
-    // @see widthFromBase
-    [TacticalGraphicName.FrontalAttack]: f(false, false, false, false, false, {width: true}),
-    [TacticalGraphicName.TurningMovement]: f(false, false, false, false, false, {width: true}),
+    // 2525E 152700 / 152900 box T and W - W1 beside the fixed A / T, and the width the
+    // operator dragged is the same read-out the rest of the family shows. @see widthFromBase
+    [TacticalGraphicName.FrontalAttack]: f(true, false, true, true, false, {width: true}),
+    [TacticalGraphicName.TurningMovement]: f(true, false, true, true, false, {width: true}),
     [TacticalGraphicName.Pursuit]: SHAPE_ONLY,
     [TacticalGraphicName.Envelopment]: SHAPE_ONLY,
     [TacticalGraphicName.MobileDefense]: SHAPE_ONLY,

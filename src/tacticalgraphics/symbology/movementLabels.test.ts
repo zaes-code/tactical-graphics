@@ -253,3 +253,20 @@ describe('spanProportionalScale stops somewhere', () => {
         }
     });
 });
+
+describe('frontal attack and turning movement carry T and W - W1 (QA pass 2026-10-31)', () => {
+    // MIL-STD-2525E 152700 / 152900 box T and W - W1 beside the fixed A / T. They were
+    // offered no field and drew the letter alone.
+    it.each([
+        [TacticalGraphicName.FrontalAttack, 'A'],
+        [TacticalGraphicName.TurningMovement, 'T'],
+    ] as const)('%s', (name, letter) => {
+        const paint = getPaintFunction(name)!.label!;
+        const texts = paint(labelFeature(name, [0, 0], [4000, 0]), context)
+            .filter(p => p.text?.text)
+            .map(p => p.text!.text);
+        expect(texts[0]).toBe(letter);
+        expect(texts.slice(1).join(' ')).toContain('ALPHA');
+        expect(texts.slice(1).join(' ')).toContain('021200ZJUN26');
+    });
+});

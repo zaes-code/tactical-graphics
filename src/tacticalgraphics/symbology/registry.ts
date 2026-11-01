@@ -1133,7 +1133,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
-        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};
+        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name), name)};
     }
 
     for (const name of CORRIDOR_GRAPHICS) {
