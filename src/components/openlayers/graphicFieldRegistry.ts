@@ -227,6 +227,8 @@ function f(
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
+/** One date-time group and nothing else: the retrograde tasks whose plate boxes a lone W. */
+const SHAPE_AND_W = f(false, false, true, false, false);
 
 /**
  * Safe lane or gap (APP-06 290600): `T` / `AM` / `W` / `W1`, stacked beside the lane.
@@ -446,6 +448,8 @@ const PSYOPS_ZONE = f(true, false, true, true, false, {additionalInfo: true});
  */
 const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
+/** An area whose plate prints only its own literal: the status, and no designation. */
+const AREA_STATUS_ONLY = f(false, false, false, false, true);
 /**
  * Free fire / no fire / restrictive fire area (APP-06 2402xx, 2403xx, 2404xx).
  *
@@ -674,7 +678,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
-    [TacticalGraphicName.MinedArea]: MINE_AREA,
+    // 2525E 270800 boxes W below the area (the self-destruct DTG of scatterable mines);
+    // 270801 boxes no W and no H. 2525E decides over the earlier one-set-for-both call.
+    [TacticalGraphicName.MinedArea]: {...MINE_AREA, dtg1: true},
     [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
     [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
@@ -720,11 +726,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
 
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
-    [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false),
-    [TacticalGraphicName.FinalProtectiveFireLeft]: f(true, false, false, false, false),
-    [TacticalGraphicName.FinalProtectiveFireRight]: f(true, false, false, false, false),
-    [TacticalGraphicName.PrincipalDirectionOfFire]: f(true, false, false, false, false),
-    [TacticalGraphicName.SecondaryDirectionOfFire]: f(true, false, false, false, false),
+    // 140500-140504 letter no amplifier: the box at point 1 is the unit symbol, in grey.
+    [TacticalGraphicName.FieldsOfFire]: SHAPE_ONLY,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: SHAPE_ONLY,
+    [TacticalGraphicName.FinalProtectiveFireRight]: SHAPE_ONLY,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: SHAPE_ONLY,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: SHAPE_ONLY,
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
@@ -737,9 +744,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: COUNTERATTACK,
     [TacticalGraphicName.CounterattackByFire]: COUNTERATTACK,
-    // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
-    // the crossing-site symbols carry no name.
-    [TacticalGraphicName.Bridge]: SHAPE_ONLY,
+    // Mobility / water crossing. FM 1-02.2 Table 5-16's bridge carries no amplifiers, but
+    // MIL-STD-2525E 271100 (bridge or gap) boxes T between the rails and W - W1 below the
+    // point 2 / point 4 end, and so does APP-06. 2525E decides.
+    [TacticalGraphicName.Bridge]: f(true, false, true, true, false),
     // `T` over `W - W1`; the second date was missing. (User's call, 2026-09-01.)
     [TacticalGraphicName.Gap]: f(true, false, true, true, false),
     // `W - W1`, not a lone `W`. (User's call, 2026-09-01.)
@@ -815,15 +823,17 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.WireSingleConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.WireDoubleStrandConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.WireTripleStrandConcertina]: SHAPE_ONLY,
-    [TacticalGraphicName.Delay]: SHAPE_ONLY,
+    // 2525E 340800 boxes W above the D (FM 1-02.2 adds W1; 2525E decides).
+    [TacticalGraphicName.Delay]: SHAPE_AND_W,
     [TacticalGraphicName.Withdraw]: SHAPE_ONLY,
     [TacticalGraphicName.WithdrawUnderPressure]: SHAPE_ONLY,
     [TacticalGraphicName.Retirement]: SHAPE_ONLY,
     // Disengage appears in Table 6-1 (Ch. 6) → no amplifiers.
     [TacticalGraphicName.Disengage]: MISSION_TASK,
     // Passage of lines / relief (Table 5-13 enabling operations): identifier only.
-    [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_ONLY,
-    [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_ONLY,
+    // APP-06 344100 / 344200 box W above the line near the arrowhead.
+    [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_AND_W,
+    [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_AND_W,
     // Exfiltrate (Table 6-1, Ch. 6) → no amplifiers.
     // Hostility and nothing else, like its twin: 343700's Template carries `EX` and no
     // amplifier box at all. (User's call, 2026-08-27.)
@@ -854,11 +864,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // W . W1 inside it -- so unlike FM's badge this one takes a designation and a
     // date-time range. @see FM 1-02.2 table 5-2 for what the letters mean.
     [TacticalGraphicName.AdvanceToContact]: AXIS_ARROW,
-    // 152700 and 152900 carry no amplifier of their own, but they do carry a width the
-    // operator dragged, and it is the same read-out the rest of the family shows.
-    // @see widthFromBase
-    [TacticalGraphicName.FrontalAttack]: f(false, false, false, false, false, {width: true}),
-    [TacticalGraphicName.TurningMovement]: f(false, false, false, false, false, {width: true}),
+    // 2525E 152700 / 152900 box T and W - W1 beside the fixed A / T, and the width the
+    // operator dragged is the same read-out the rest of the family shows. @see widthFromBase
+    [TacticalGraphicName.FrontalAttack]: f(true, false, true, true, false, {width: true}),
+    [TacticalGraphicName.TurningMovement]: f(true, false, true, true, false, {width: true}),
     [TacticalGraphicName.Pursuit]: SHAPE_ONLY,
     [TacticalGraphicName.Envelopment]: SHAPE_ONLY,
     [TacticalGraphicName.MobileDefense]: SHAPE_ONLY,
@@ -884,8 +893,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BaseCamp]: AREA_SIMPLE,
     [TacticalGraphicName.GuerrillaBase]: AREA_SIMPLE,
     [TacticalGraphicName.DetaineeHoldingArea]: AREA_SIMPLE,
-    [TacticalGraphicName.BombArea]: AREA_SIMPLE,
-    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_SIMPLE,
+    // 240808 and 242000 print the bare literal: no T box. (MIL-STD-2525E and APP-06.)
+    [TacticalGraphicName.BombArea]: AREA_STATUS_ONLY,
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_STATUS_ONLY,
     [TacticalGraphicName.Bridgehead]: AREA_SIMPLE,
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: AREA_SIMPLE,
     [TacticalGraphicName.HumanTerrain]: HUMAN_TERRAIN,
@@ -927,7 +937,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.CorpsSupportArea]: f(true, false, true, true, true),
     [TacticalGraphicName.FighterEngagementZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.ExtractionZone]: AREA_SIMPLE,
-    [TacticalGraphicName.RegimentalSupportArea]: AREA_SIMPLE,
+    // 310500 prints a bare RSA with no T box. (MIL-STD-2525E and APP-06.)
+    [TacticalGraphicName.RegimentalSupportArea]: AREA_STATUS_ONLY,
     [TacticalGraphicName.DropZone]: AREA_SIMPLE,
     [TacticalGraphicName.LandingZone]: AREA_SIMPLE,
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
@@ -1097,8 +1108,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
-    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: NAME_FIELD_ONLY,
+    // 151800 letters only the two N (ENY) boxes, and 271000 only UXO in its two gaps: no T.
+    [TacticalGraphicName.Encirclement]: SHAPE_ONLY,
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: SHAPE_ONLY,
     [TacticalGraphicName.FortifiedArea]: NAME_FIELD_ONLY,
     // No designation: its plate labels the shape with the words "AIRHEAD LINE" and offers
     // no name box. (User's call, 2026-09-01.) @see airheadLineLabelPaint

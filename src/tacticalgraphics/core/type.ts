@@ -337,19 +337,23 @@ export function getLabel(name: TacticalGraphicName) {
             return 'TGMF';
         case TacticalGraphicName.BombArea:
             return 'BOMB';
+        // MIL-STD-2525E 242800 and FM 1-02.2 table 5-4 spell it out; 'KZ' was the enum's
+        // capitals. 310400 likewise prints REFUGEE / HOLDING AREA, as 310200 prints EPW.
+        case TacticalGraphicName.KillZone:
+            return 'KILL ZONE';
+        case TacticalGraphicName.RefugeeHoldingArea:
+            return 'REFUGEE HOLDING AREA';
 
         case TacticalGraphicName.BaseCamp:
         case TacticalGraphicName.GuerrillaBase:
         case TacticalGraphicName.DetaineeHoldingArea:
         case TacticalGraphicName.AssemblyArea:
         case TacticalGraphicName.EngagementArea:
-        case TacticalGraphicName.RefugeeHoldingArea:
         case TacticalGraphicName.BrigadeSupportArea:
         case TacticalGraphicName.DivisionSupportArea:
         case TacticalGraphicName.CorpsSupportArea:
         case TacticalGraphicName.DropZone:
         case TacticalGraphicName.LandingZone:
-        case TacticalGraphicName.KillZone:
         case TacticalGraphicName.PickupZone:
             return name.replace(/[^A-Z]/g, ''); // return the capital letters in the name as the label
         case TacticalGraphicName.Cover:
@@ -421,7 +425,7 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.FinalCoordinationLine:
             return 'FCL';
         case TacticalGraphicName.LineOfDepartureOrLineOfContact:
-            return 'LD/DC';
+            return 'LD/LC';
         case TacticalGraphicName.ProbableLineOfDeployment:
             return 'PLD';
         case TacticalGraphicName.Route:
@@ -542,7 +546,9 @@ export function getLabel(name: TacticalGraphicName) {
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular:
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
-            return 'ATI ZONE';
+            // MIL-STD-2525E 2411xx prints ATIZ. FM 1-02.2 says ATI ZONE and APP-06 ATI;
+            // 2525E decides.
+            return 'ATIZ';
 
         case TacticalGraphicName.CallForFireZoneIrregular:
         case TacticalGraphicName.CallForFireZoneRectangular:

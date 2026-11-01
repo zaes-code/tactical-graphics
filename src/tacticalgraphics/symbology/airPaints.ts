@@ -228,7 +228,8 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         const detail = !feature.hideAmplifiers;
         if (detail && props.minAltitude) values.push(column('MIN ALT:', formatAltitude(props.minAltitude, props.altitudeDatum)));
         if (detail && props.maxAltitude) values.push(column('MAX ALT:', formatAltitude(props.maxAltitude, props.altitudeDatum)));
-        if (detail && props.grid) values.push(column('GRID:', props.grid));
+        // `GRID Y - Yn` with no colon, as 2525E 240101-240103 print it beside `EFF W - W1`.
+        if (detail && props.grid) values.push(column('GRID', props.grid));
         // The effective time is the two date-time groups joined, and it **replaces** any
         // `eff` the caller set rather than falling back to it: the OpenLayers dispatcher
         // assigns `labels.eff = dateLabel` before calling the style, so an `eff` typed by

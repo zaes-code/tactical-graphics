@@ -337,13 +337,14 @@ function areaText(
     scale: number,
     baseline: 'top' | 'middle' | 'bottom',
     align: 'left' | 'center' | 'right' = 'center',
+    fill: string = labelColorOf(feature),
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
         text: {
             text,
             font: fontStyle,
-            fill: labelColorOf(feature),
+            fill,
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             align,
             baseline,
@@ -608,7 +609,9 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
             const at = ringCrossing(ring, middle, bearing);
             if (!at) continue;
             letters.push(at);
-            paints.push(areaText(feature, at, 'M', scale, 'middle'));
+            // The M marks are part of the outline, so they take the line colour: 2525E and
+            // APP-06 draw them green with the ring. They used to be in the label colour.
+            paints.push(areaText(feature, at, 'M', scale, 'middle', 'center', color));
         }
         // The two `N` boxes, between north and each shoulder — on the fence, like the
         // `M`s, rather than floating above it. (User's call, 2026-08-27.)

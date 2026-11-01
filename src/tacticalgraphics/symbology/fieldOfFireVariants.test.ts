@@ -100,11 +100,11 @@ describe('the fields-of-fire family', () => {
             expect(dashed(name)).toEqual([]);
     });
 
-    it('keeps the designation below the vertex on all five', () => {
+    it('draws no designation on any of the five, whose Templates letter none', () => {
+        // 140500-140504: the box at point 1 is the grey unit symbol, not field T. A
+        // designation carried by an imported graphic is not drawn.
         for (const name of FIELD_OF_FIRE_GRAPHICS) {
-            const labels = painted(name).paints.filter(p => p.text);
-            expect(labels).toHaveLength(1);
-            expect((labels[0].geometry as {coordinates: ProjectedPosition}).coordinates).toEqual(PT1);
+            expect(painted(name).paints.filter(p => p.text)).toEqual([]);
         }
     });
 });

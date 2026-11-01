@@ -275,6 +275,54 @@ const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
 ];
 
 /**
+ * The areas whose plate sets the symbol's own literal **on a line of its own**, over the
+ * designation, rather than beside it as a prefix.
+ *
+ * Read by both {@link areaLabelStackPaint} and {@link areaDefaultLabelPaint}, so whichever
+ * route an engine takes to one of these graphics, the stack comes out the same. That is the
+ * point of a table here rather than a branch in the registry: the OpenLayers switch and the
+ * paint registry reach these graphics by different functions.
+ *
+ * - The free, no and restrictive fire areas: MIL-STD-2525E 2402xx-2404xx and APP-06 set
+ *   `FFA` over `T` over `W - W1`.
+ * - Kill zone (2525E 242800): `KILL ZONE` over `T`.
+ * - FARP (310300), DHA (310100) and refugee holding area (310400, `REFUGEE` / `HOLDING
+ *   AREA`): the literal over `T`, the same layout as the EPW holding area.
+ * - Regimental support area (310500), bomb area (240808) and terminally guided munition
+ *   footprint (242000): the bare literal. Encirclement and the UXO area: nothing. Their Template carries no `T` box, so a
+ *   designation arriving on an imported graphic is not drawn.
+ */
+export const STACKED_AREA_LITERALS: Partial<Record<TacticalGraphicName, {lines: string[]; withDesignation?: boolean}>> = {
+    [TacticalGraphicName.FreeFireAreaCircular]: {lines: ['FFA']},
+    [TacticalGraphicName.FreeFireAreaIrregular]: {lines: ['FFA']},
+    [TacticalGraphicName.FreeFireAreaRectangular]: {lines: ['FFA']},
+    [TacticalGraphicName.NoFireAreaCircular]: {lines: ['NFA']},
+    [TacticalGraphicName.NoFireAreaIrregular]: {lines: ['NFA']},
+    [TacticalGraphicName.NoFireAreaRectangular]: {lines: ['NFA']},
+    [TacticalGraphicName.RestrictiveFireAreaCircular]: {lines: ['RFA']},
+    [TacticalGraphicName.RestrictiveFireAreaIrregular]: {lines: ['RFA']},
+    [TacticalGraphicName.RestrictiveFireAreaRectangular]: {lines: ['RFA']},
+    [TacticalGraphicName.KillZone]: {lines: ['KILL ZONE']},
+    [TacticalGraphicName.ForwardArmingAndRefuelingPoint]: {lines: ['FARP']},
+    [TacticalGraphicName.DetaineeHoldingArea]: {lines: ['DHA']},
+    [TacticalGraphicName.RefugeeHoldingArea]: {lines: ['REFUGEE', 'HOLDING AREA']},
+    [TacticalGraphicName.RegimentalSupportArea]: {lines: ['RSA'], withDesignation: false},
+    [TacticalGraphicName.BombArea]: {lines: ['BOMB'], withDesignation: false},
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: {lines: ['TGMF'], withDesignation: false},
+    // Nothing in the middle at all: 151800 letters only its two ENY boxes and 271000 only the
+    // UXO in its two gaps, and both of those are drawn with the outline. A centred T used to
+    // sit inside each.
+    [TacticalGraphicName.Encirclement]: {lines: [], withDesignation: false},
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: {lines: [], withDesignation: false},
+};
+
+/** The areas whose plate breaks `W - W1` after the hyphen. @see areaDefaultLabelPaint */
+const STACKED_DATE_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
+]);
+
+/**
  * The default: designation over date-time group, centered on the anchor.
  *
  * What every area graphic gets when its family has no bespoke layout, and the
@@ -304,6 +352,10 @@ export function areaLabelStackPaint(
         withDesignation?: boolean;
     } = {},
 ): AreaLabelPaint {
+    const stacked = STACKED_AREA_LITERALS[name];
+    if (stacked && !options.literalLines) {
+        options = {literalLines: stacked.lines, withDesignation: stacked.withDesignation, ...options};
+    }
     return (feature, context) => {
         const at = anchorOf(feature);
         if (!at) return [];
@@ -724,6 +776,8 @@ export function areaDefaultLabelPaint(
      */
     withHostileFlanks = false,
 ): AreaLabelPaint {
+    // A plate that stacks the literal is drawn by the stack, whichever route reached it.
+    if (withLiteral && !withHostileFlanks && STACKED_AREA_LITERALS[name]) return areaLabelStackPaint(name);
     return (feature, context) => {
         const at = anchorOf(feature);
         if (!at) return [];
@@ -732,6 +786,13 @@ export function areaDefaultLabelPaint(
         const designation = feature.properties.designation ?? '';
         const text = withLiteral ? getFullLabel(name, designation) : designation.trim();
         const date = areaDateLabel(feature);
+        // APP-06 242400 / 242500 stack the pair, `W -` over `W1`, and every Example prints it
+        // on two lines: one centred block, so the lines space with the font.
+        if (STACKED_DATE_AREAS.has(name)) {
+            const lines = [text, ...date.replace(' - ', ' -\n').split('\n')].filter(line => line.length > 0);
+            const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
+            return designationStack(feature, context, at, lines, scale, text, withLiteral ? getLabel(name) : '').concat(flanks);
+        }
 
         // The two marks are separately anchored, so they are capped as **one block**: the
         // date hangs `DEFAULT_DATE_OFFSET_PX` below the designation, and fitting each alone

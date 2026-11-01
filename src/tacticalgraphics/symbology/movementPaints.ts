@@ -240,11 +240,30 @@ export const envelopmentLabelPaint = (): MovementPaint =>
 export const mobileDefenseLabelPaint = (): MovementPaint =>
     fixedLetterPaint('MD', {upright: true, align: 'center'});
 
-/** Turning movement: "T" starting at the arrowhead base. */
-export const turningMovementLabelPaint = (): MovementPaint => fixedLetterPaint('T');
+/**
+ * A fixed letter in the arrowhead, plus the operator's `T` and `W - W1` set back from it in
+ * the body, the axis family's single "name  dates" line. @see behindArrowhead
+ *
+ * The anchors are the arrowhead's base and tip. The run behind the base is one head length
+ * long, which is what the line is sized to: the same span-proportional scale as an axis.
+ */
+function letterWithNameAndDate(letter: string): MovementPaint {
+    const letterPaint = fixedLetterPaint(letter);
+    return (feature, context) => {
+        const paints = letterPaint(feature, context);
+        const coords = anchors(feature);
+        if (coords.length < 2) return paints;
+        const [base, tip] = coords;
+        const rear: ProjectedPosition = [2 * base[0] - tip[0], 2 * base[1] - tip[1]];
+        return paints.concat(behindArrowhead(feature, context, [rear, base], 2, nameAndDate(feature)));
+    };
+}
 
-/** Frontal attack: "A" starting at the arrowhead base. */
-export const frontalAttackLabelPaint = (): MovementPaint => fixedLetterPaint('A');
+/** Turning movement: "T" starting at the arrowhead base, with `T` and `W - W1` behind it. */
+export const turningMovementLabelPaint = (): MovementPaint => letterWithNameAndDate('T');
+
+/** Frontal attack: "A" starting at the arrowhead base, with `T` and `W - W1` behind it. */
+export const frontalAttackLabelPaint = (): MovementPaint => letterWithNameAndDate('A');
 
 /**
  * Counterattack: "CATK", with the user's designation appended after it.
