@@ -41,7 +41,7 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
     getLabelUsesHostilityColor,
-    labelScale,
+    maxGraphicLabelScale,
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
@@ -766,11 +766,29 @@ function missionTaskLetterFont(ratioLocked: boolean): {font: string; fontPx: num
         : {font: fontStyle, fontPx: BASE_FONT_SIZE_PX};
 }
 
-/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or zoom-anchored. */
+/**
+ * The scale of a mission task's letter when it is drawn **from the symbol's own size on
+ * screen**: a quarter of the symbol (`capLabelToGraphic`'s share), never more than the
+ * ceiling every size-proportional label stops at. The letter is part of the symbol, so it
+ * shrinks as the symbol does and holds once the symbol is large.
+ *
+ * **No drawing zoom and no `graphicSize` in it** (2026-10-31). The block family and the
+ * zoom-anchored tasks used to take their letter from the zoom the task was drawn or restored
+ * at, through `graphicSize` when one was stamped. OpenLayers never stamps one for them and
+ * MapLibre filed any stored `radius` there, so the same breach drew a 24 px letter on
+ * OpenLayers and a 36 px one on MapLibre, and zoomed three times out OpenLayers took it to
+ * 8 px while the other engines held 26-33 px over a symbol a third the size. The bounds both
+ * engines carry are the one input they agree on.
+ */
+export function symbolLetterScale(feature: PaintFeature, context: PaintContext, fontPx: number): number {
+    return capLabelToGraphic(maxGraphicLabelScale(), feature, context, fontPx);
+}
+
+/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or the symbol's share. */
 function missionTaskLetterDesiredScale(feature: PaintFeature, context: PaintContext, ratioLocked: boolean): number {
     return ratioLocked
         ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
-        : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
+        : symbolLetterScale(feature, context, BASE_FONT_SIZE_PX);
 }
 
 /**
