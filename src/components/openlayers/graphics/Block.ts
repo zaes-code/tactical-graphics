@@ -1,5 +1,6 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {drawnSizeMeters, getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {drawnSizeMeters, getLabel, getPaintFunction, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {asStyleFunction} from '../paintToOpenLayers';
 import Feature from 'ol/Feature';
 import {
     attackByFireStyleFunc,
@@ -125,9 +126,9 @@ export class Block implements LineGraphic {
                     return clearStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.TacticalDisrupt:
                 case TacticalGraphicName.Disrupt:
-                    // 0.75 places the D at the center of the middle trident
-                    // prong (which spans 0.5 → 1.0 of the user's base line).
-                    return clearStyleFunc(getLabel(name), 0.75)(feature, resolution);
+                    // The shared paint, so the obstacle's filled heads and the task's open
+                    // ones are stated once for both engines. @see clearPaint
+                    return asStyleFunction(getPaintFunction(name)!.graphic, name)(feature, resolution);
                 default:
                     return defaultStyleFunc()(feature, resolution);
             }
