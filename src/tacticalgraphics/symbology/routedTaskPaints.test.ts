@@ -139,4 +139,12 @@ describe('exfiltrate finds a segment that holds EX', () => {
         const runs = lines(paints).filter(run => run.some(([, ry]) => ry > 0 && ry < 5_000));
         for (const run of runs) for (const [, ry] of run) expect(Math.abs(ry - 2_500)).toBeGreaterThan(50);
     });
+
+    it('never sets EX on the last segment, which the arrowhead sits on', () => {
+        // Zoomed out, only the long last leg held EX, and the letters went over the head.
+        const paints = exfiltratePaint('EX')(route([[0, 0], [10, 0], [20, 0], [10_000, 0]]), context(10));
+        const at = paints.find(p => p.text)?.geometry.coordinates as ProjectedPosition | undefined;
+        expect(at).toBeDefined();
+        expect(at![0]).toBeLessThan(20);
+    });
 });

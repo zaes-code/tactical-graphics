@@ -20,18 +20,17 @@
  * label-scale function"
  */
 
-import {TWIST_HALF_WIDTHS} from '../graphics/Movement';
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} from '../core/paint';
-import {BASE_FONT_SIZE_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {alignAlong, offsetAbove, textWidth, uprightFlipped, uprightRotation} from './decorations';
+import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {strokeParts} from './dashFit';
-import {distanceAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
+import {distanceAlongPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -256,7 +255,8 @@ function letterWithNameAndDate(letter: string): MovementPaint {
         if (coords.length < 2) return paints;
         const [base, tip] = coords;
         const rear: ProjectedPosition = [2 * base[0] - tip[0], 2 * base[1] - tip[1]];
-        return paints.concat(behindArrowhead(feature, context, [rear, base], 2, nameAndDate(feature)));
+        // The centre line the generator publishes after the two, so the run bends with the body.
+        return paints.concat(behindArrowhead(feature, context, [rear, base, ...coords.slice(2)], 2, nameAndDate(feature)));
     };
 }
 
@@ -378,7 +378,7 @@ function axisAmplifiers(
     if (total === 0) return [];
 
     const res = context.resolution;
-    const scale = spanProportionalScale(c0, c1, res, BASE_FONT_SIZE_PX);
+    let scale = spanProportionalScale(c0, c1, res, BASE_FONT_SIZE_PX);
     const paints: Paint[] = [];
     const place = (d: number, value: string, align: 'left' | 'center' | 'right', pathAlign: PathTextAlign, kind?: TextKind) => {
         const {at, a, b} = pointAlong(path, d);
@@ -395,8 +395,14 @@ function axisAmplifiers(
         // Too short for two groups: centring the name in the room left would set it on the date.
         // The run keeps T toward the rear, so where the text is turned to read from the head
         // back it starts with the dates. (It set T at the head on every arrow pointing west.)
-        const {a, b} = pointAlong(path, dateEnd);
-        place(dateEnd, uprightFlipped(a, b) ? `${date}     ${name}` : nameAndDate(feature), 'right', 'end');
+        const run = nameAndDate(feature);
+        // And it fits the room behind the head, or the path slides it forward over the head
+        // (and over an aviation axis's twist) to make it fit. @see textAlongPath
+        const runWidth = textWidth(context, run, fontStyle, scale) * res;
+        // Never under the legibility floor, though: an arrow too short even for that keeps it.
+        if (runWidth > dateEnd) scale = Math.min(scale, Math.max((scale * Math.max(0, dateEnd)) / runWidth, (MIN_LEGIBLE_TEXT_PX * 1.001) / BASE_FONT_SIZE_PX));
+        const from = pointAlong(path, Math.max(0, dateEnd - textWidth(context, run, fontStyle, scale) * res)).at;
+        place(dateEnd, readsAlongPath(from, pointAlong(path, dateEnd).at) ? run : `${date}     ${name}`, 'right', 'end');
     } else {
         if (name) place(Math.max(0, nameRoom) / 2, name, 'center', 'center');
         if (date) place(dateEnd, date, 'right', 'end', 'amplifier');
@@ -420,6 +426,17 @@ function axisAmplifiers(
 }
 
 /**
+ * How much of an aviation axis's body, back from the head, its twist takes: twice the run
+ * from the crossing the generator publishes to the end of the centre line.
+ */
+function twistBehindHead(crossing: ProjectedPosition, path: ProjectedPosition[]): number {
+    if (path.length < 2) return 0;
+    let total = 0;
+    for (let i = 0; i < path.length - 1; i++) total += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+    return Math.max(0, 2 * (total - distanceAlongPath(path, crossing)));
+}
+
+/**
  * The aviation axis of advance: T toward the rear, W - W1 behind the head, sized to the
  * span. @see axisAmplifiers
  */
@@ -427,8 +444,9 @@ export function aviationAxisLabelPaint(): MovementPaint {
     return (feature, context) => {
         const coords = anchors(feature);
         if (coords.length < 2) return [];
+        if (coords.length < 4) return [];
         const half = Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]);
-        return axisAmplifiers(feature, context, coords, 2, half, TWIST_HALF_WIDTHS * half);
+        return axisAmplifiers(feature, context, coords, 3, half, twistBehindHead(coords[2], coords.slice(3)));
     };
 }
 
@@ -605,7 +623,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
 
         const tdx = x1 - x0;
         const tdy = y1 - y0;
-        paints.push(...axisAmplifiers(feature, context, coords, 4, Math.hypot(tdx, tdy), TWIST_HALF_WIDTHS * Math.hypot(tdx, tdy)));
+        paints.push(...axisAmplifiers(feature, context, coords, 4, Math.hypot(tdx, tdy), twistBehindHead(coords[2], coords.slice(4))));
 
         const heading = Math.atan2(cy - dy3, cx - dx3);
         // Half-size reference: the text span is the arrow's radius in map units.

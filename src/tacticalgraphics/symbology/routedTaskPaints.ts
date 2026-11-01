@@ -251,7 +251,10 @@ export function exfiltratePaint(label: string): TaskPaint {
             return {i, a, b, scale, gapRatio};
         };
         const candidates = route.slice(1).map((_, i) => fit(i));
-        const chosen = candidates.find(c => c.gapRatio > 0 && c.gapRatio < 0.5) ?? candidates[0];
+        // Never the last segment of a bent route, which the arrowhead sits on: zoomed out, when
+        // nothing nearer the tail held the letters, they went there and over the head.
+        const searched = candidates.length > 1 ? candidates.slice(0, -1) : candidates;
+        const chosen = searched.find(c => c.gapRatio > 0 && c.gapRatio < 0.5) ?? candidates[0];
         const {i, a: p1, b: p2, scale, gapRatio} = chosen;
         const dx = p2[0] - p1[0];
         const dy = p2[1] - p1[1];
