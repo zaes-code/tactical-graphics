@@ -123,6 +123,7 @@ import {
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
     dashedOutlinePaint,
+    zoneOfFirePaint,
     obstacleAreaPaint,
     restrictedTerrainPaint,
     freeFireAreaCircularPaint,
@@ -797,7 +798,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleRestrictedArea]: {graphic: obstacleAreaPaint({outward: false, hatched: true})},
         // APP-06 242600 note 1: the boundary is a broken line in *all* status
         // depictions, so the dash is the symbol rather than a status.
-        [TacticalGraphicName.ZoneOfFire]: {graphic: dashedOutlinePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
+        [TacticalGraphicName.ZoneOfFire]: {graphic: zoneOfFirePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
         // Told apart from each other by texture alone. @see hatchTileSegments
         // Sector 1 over Sector 2 over field H, which is the whole of what these two say.
         // @see sectorModifierPaints

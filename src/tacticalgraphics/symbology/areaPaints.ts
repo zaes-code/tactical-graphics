@@ -304,6 +304,21 @@ export function dashedOutlinePaint(): AreaPaint {
 }
 
 /**
+ * Zone of fire (APP-06 242600): the dashed outline, unless `hideBoundary` switches it off.
+ *
+ * Note 2: the boundary *"shall be able to be switched off leaving only the label and T
+ * visible"*. Switched off, the outline is still emitted, fully transparent, so the zone can
+ * still be clicked and selected on the engines that pick features by what they drew.
+ */
+export function zoneOfFirePaint(): AreaPaint {
+    const outline = dashedOutlinePaint();
+    return (feature, context) => {
+        if (!feature.properties.hideBoundary) return outline(feature, context);
+        return outline(feature, context).map(paint => ({...paint, stroke: {...paint.stroke!, color: 'rgba(0,0,0,0)'}}));
+    };
+}
+
+/**
  * A hatched area under a solid outline — the restricted-terrain pair.
  *
  * Unlike {@link limitedAccessAreaPaint} the outline never dashes and the hatch is the

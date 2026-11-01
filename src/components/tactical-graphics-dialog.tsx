@@ -113,6 +113,7 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.mineType) labels.mineType = stored.mineType;
     if (fields.mobility) labels.mobility = stored.mobility;
     if (fields.terrain) labels.terrain = stored.terrain;
+    if (fields.boundarySwitch) labels.hideBoundary = stored.hideBoundary;
     if (fields.hostility) labels.confidence = stored.confidence;
     if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
     if (fields.direction) labels.direction = stored.direction;
@@ -646,6 +647,26 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                         label="Name only — hide other amplifiers"
                                     />
                                 </Box>
+                                )}
+
+                                {/* APP-06 242600 Note 2: the zone of fire's boundary can be switched off. */}
+                                {fields.boundarySwitch && (
+                                    <Box sx={{mt: 1}}>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    checked={pendingChanges.labels.hideBoundary ?? false}
+                                                    onChange={(_e, checked) =>
+                                                        setPendingChanges(prev => ({
+                                                            ...prev,
+                                                            labels: {...prev.labels, hideBoundary: checked || undefined},
+                                                        }))
+                                                    }
+                                                />
+                                            }
+                                            label="Hide boundary"
+                                        />
+                                    </Box>
                                 )}
 
                                 {fields.hostility && (

@@ -366,6 +366,7 @@ export {
 export {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './symbology/cbrnPaints';
 export {
     dashedOutlinePaint,
+    zoneOfFirePaint,
     encirclementPaint,
     fortifiedAreaPaint,
     freeFireAreaCircularPaint,

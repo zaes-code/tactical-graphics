@@ -345,6 +345,19 @@ describe('editable state survives', () => {
         expect(labels.hostility).toBe(TacticalGraphicHostility.hostileFaker);
     });
 
+    it('keeps a zone of fire with its boundary switched off (APP-06 242600 Note 2)', () => {
+        const from = fakeManager();
+        const handler = build(from, TacticalGraphicName.ZoneOfFire);
+        const holder = handler.graphic as {setLabel?: (l: unknown) => void};
+        holder.setLabel?.({designation: 'ZF 1', hostility: TacticalGraphicHostility.friend, hideBoundary: true});
+
+        const {snapshot, to} = roundTrip(from);
+        expect(JSON.stringify(snapshot)).toContain('"hideBoundary":true');
+        const labels = readGraphicLabels(to.graphicControllers[0].graphic.base);
+        expect(labels.hideBoundary).toBe(true);
+        expect(labels.designation).toBe('ZF 1');
+    });
+
     it('re-subscribes the restored graphic to zoom changes', () => {
         const from = fakeManager();
         build(from, TacticalGraphicName.Cover);

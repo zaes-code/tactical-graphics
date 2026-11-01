@@ -62,6 +62,8 @@ tacticalGraphic: {
     terrain: 'Ground',        // TacticalGraphicTerrain — APP-06 Table 8-25 sector 2,
                               // the word under that icon, and the color the area is
                               // hatched in
+    hideBoundary: true,       // zone of fire only: draw the label and T without the
+                              // dashed boundary (APP-06 242600 Note 2)
 
     // Geometry, in meters.
     radius: 1000,             // how far the symbol reaches from its own center:
