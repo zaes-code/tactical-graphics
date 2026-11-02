@@ -257,21 +257,6 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
     };
 }
 
-/** The point `d` along `path`, and the segment it lies on. */
-function pointAtDistance(path: ProjectedPosition[], d: number): {at: ProjectedPosition; a: ProjectedPosition; b: ProjectedPosition} {
-    let left = Math.max(0, d);
-    for (let i = 0; i < path.length - 1; i++) {
-        const [a, b] = [path[i], path[i + 1]];
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (left <= length || i === path.length - 2) {
-            const t = length === 0 ? 0 : Math.min(1, left / length);
-            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], a, b};
-        }
-        left -= length;
-    }
-    return {at: path[0], a: path[0], b: path[1]};
-}
-
 /** Padding either side of "MFP" within the gap cut for it, in screen pixels. */
 const MFP_GAP_PADDING_PX = 4;
 /** Half the declared cap height of `fontStyle`, per unit of scale. */
@@ -314,19 +299,22 @@ export function munitionFlightPathPaint(): LinePaint {
 
         return [
             ...(letterScale ? [textMark(feature, center, 'MFP', letterScale, uprightRotation(p1, p2), 'center', 'middle')] : []),
-            // APP-06 260600 note 3: the DTG is "displayed one time mid-way between Point 1 and
-            // midpoint of the graphic", below the line. It used to start at point 1, to the right
-            // of travel. Below means the "up is north" rule the rest of this file uses.
+            // The DTG starts at the line's left end on screen and runs under its first segment
+            // (user, 2026-11-02, restoring what the library drew before the audit). APP-06 260600
+            // note 3 asks for it once, mid-way between point 1 and the middle; the user kept the
+            // older layout. An exactly vertical path starts from its bottom end, where an upright
+            // vertical label begins. Below means the "up is north" rule the rest of this file uses.
             ...(() => {
-                const toMiddle = pathLength(coords.slice(0, index + 1)) + segLen * t;
-                const {at, a, b} = pointAtDistance(coords, toMiddle / 2);
+                const last = coords[coords.length - 1];
+                const fromFirst = coords[0][0] < last[0] || (coords[0][0] === last[0] && coords[0][1] <= last[1]);
+                const [a, b] = fromFirst ? [coords[0], coords[1]] : [last, coords[coords.length - 2]];
                 return [textMark(
                     feature,
-                    offsetBelow(at, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
+                    offsetBelow(a, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
                     dateRangeLabel(feature.properties),
                     scale,
                     uprightRotation(a, b),
-                    'center',
+                    uprightFlipped(a, b) ? 'right' : 'left',
                     'middle',
                     'amplifier',
                 )];

@@ -63,15 +63,17 @@ describe('the munition flight path DTG', () => {
         }) as unknown as PaintFeature;
     const dtgOf = (paints: Paint[]) => paints.find(p => p.text?.text === 'W - W1')!;
 
+    // The user kept the pre-audit layout (2026-11-02): it starts at the left end on screen and
+    // runs under the line, whichever way the path was drawn.
     it.each([
-        ['east', [[0, 0], [10_000, 0]], 2500],
-        ['west', [[10_000, 0], [0, 0]], 7500],
-    ] as const)('sits a quarter along and below a path drawn %s', (_, coords, x) => {
+        ['east', [[0, 0], [10_000, 0]]],
+        ['west', [[10_000, 0], [0, 0]]],
+    ] as const)('starts at the left end, below, on a path drawn %s', (_, coords) => {
         const dtg = dtgOf(munitionFlightPathPaint()(dated(coords.map(c => [...c]) as ProjectedPosition[]), context));
         const [dx, dy] = dtg.geometry.coordinates as number[];
-        expect(dx).toBeCloseTo(x, 6);
+        expect(dx).toBeCloseTo(0, 6);
         expect(dy).toBeLessThan(0);
-        expect(dtg.text!.align).toBe('center');
+        expect(dtg.text!.align).toBe('left');
     });
 });
 
