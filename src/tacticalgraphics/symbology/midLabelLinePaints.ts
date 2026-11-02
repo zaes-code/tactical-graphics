@@ -258,6 +258,21 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
     };
 }
 
+/** The point `d` along `path`, and the segment it lies on. */
+function locate(path: ProjectedPosition[], d: number): {at: ProjectedPosition; index: number} {
+    let left = Math.max(0, d);
+    for (let i = 0; i < path.length - 1; i++) {
+        const [a, b] = [path[i], path[i + 1]];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (left <= length || i === path.length - 2) {
+            const t = length === 0 ? 0 : Math.min(1, left / length);
+            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], index: i};
+        }
+        left -= length;
+    }
+    return {at: path[0], index: 0};
+}
+
 /** Padding either side of "MFP" within the gap cut for it, in screen pixels. */
 const MFP_GAP_PADDING_PX = 4;
 /** Half the declared cap height of `fontStyle`, per unit of scale. */
@@ -300,31 +315,19 @@ export function munitionFlightPathPaint(): LinePaint {
 
         return [
             ...(letterScale ? [textMark(feature, center, 'MFP', letterScale, uprightRotation(p1, p2), 'center', 'middle')] : []),
-            // The DTG starts at the line's left end on screen and runs under its first segment
-            // (user, 2026-11-02, restoring what the library drew before the audit). APP-06 260600
-            // note 3 asks for it once, mid-way between point 1 and the middle; the user kept the
-            // older layout. An exactly vertical path starts from its bottom end, where an upright
-            // vertical label begins. Below means the "up is north" rule the rest of this file uses.
+            // APP-06 260600 note 3: the DTG is "displayed one time mid-way between Point 1 and
+            // midpoint of the graphic", below the line (the user asked for the plate's place back,
+            // 2026-11-02, for consistency). Below means the "up is north" rule the rest of this file
+            // uses, taken on the segment the DTG's centre lands on; the run then follows the path
+            // on a line offset below it, so it never leaves the line where it turns. @see textOnPath
             ...(() => {
-                const last = coords[coords.length - 1];
-                const fromFirst = coords[0][0] < last[0] || (coords[0][0] === last[0] && coords[0][1] <= last[1]);
-                const path = fromFirst ? coords : [...coords].reverse();
-                const [a, b] = [path[0], path[1]];
-                const below = offsetBelow(a, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX);
-                const straight = textMark(
-                    feature,
-                    below,
-                    dateRangeLabel(feature.properties),
-                    scale,
-                    uprightRotation(a, b),
-                    uprightFlipped(a, b) ? 'right' : 'left',
-                    'middle',
-                    'amplifier',
-                );
-                // Past the first segment the run follows the path, on a line offset below it, so
-                // it never leaves the line where it turns (user, 2026-11-02). @see textAlongPath
-                const under = offsetPath(path, [below[0] - a[0], below[1] - a[1]], 0);
-                return textOnPath(under, distanceAlongPath(under, below), 'start', straight.text!, context);
+                const toMiddle = pathLength(coords.slice(0, index + 1)) + segLen * t;
+                const centre = locate(coords, toMiddle / 2);
+                const [a, b] = [coords[centre.index], coords[centre.index + 1]];
+                const below = offsetBelow(centre.at, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX);
+                const spec = textMark(feature, below, dateRangeLabel(feature.properties), scale, uprightRotation(a, b), 'center', 'middle', 'amplifier').text!;
+                const under = offsetPath(coords, [below[0] - centre.at[0], below[1] - centre.at[1]], centre.index);
+                return textOnPath(under, distanceAlongPath(under, below), 'center', spec, context);
             })(),
             {
                 geometry: {type: 'MultiLineString', coordinates: outline},
