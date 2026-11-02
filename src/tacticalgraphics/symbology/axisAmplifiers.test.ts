@@ -7,10 +7,12 @@
  * the head, at the tail on the aviation axes, with no ENY at all.
  */
 import type {Geometry, Position} from 'geojson';
-import {buildPaintedGraphic, paintGraphic, resetTacticalGraphicsConfig} from '../index';
+import {buildPaintedGraphic, configureTacticalGraphics, paintGraphic, resetTacticalGraphicsConfig} from '../index';
 import {TacticalGraphicHostility, TacticalGraphicName as N} from '../core/type';
 import type {Paint, PaintContext} from '../core/paint';
 
+// The hostile marks are pinned here, and a host switches them on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => configureTacticalGraphics({enemyLabels: true}));
 afterEach(() => resetTacticalGraphicsConfig());
 
 const resolution = 30;

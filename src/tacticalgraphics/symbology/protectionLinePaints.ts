@@ -18,7 +18,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
+import { TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
 import {MINE_GLYPH_GAP_PX, mineGlyph, mineGlyphExtent, mineGlyphPitch} from './minePaints';
 import {
     DECORATION_MIN_PX,
@@ -33,11 +33,11 @@ import {
 import {
     PLANNED_DASH_PX,
     amplifierDash,
-    hostilityOf,
     lineColorOf,
     plannedStatusRing,
     scaleOf,
     labelColorOf,
+    showsEny,
 } from './paintFunctions';
 
 type ProtectionPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -215,7 +215,7 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         // hostile marker goes*, the way every other `N` box in the standard does — it is
         // not something to print. So the ends carry `ENY` when the mineline is the
         // enemy's and nothing at all otherwise. (User's call, 2026-08-27.)
-        if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return paints;
+        if (!showsEny(feature)) return paints;
 
         const start = path[0];
         const afterStart = path[1];

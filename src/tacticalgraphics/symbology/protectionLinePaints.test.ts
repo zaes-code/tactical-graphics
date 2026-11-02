@@ -12,7 +12,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import * as turf from '../core/turf';
 import {renderTacticalGraphic} from '../core/render';
 import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName, TacticalGraphicStatus} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {
     fortifiedPositionPaint,
     mineClusterPaint,
@@ -51,7 +51,8 @@ const lines = (paints: Paint[]): ProjectedPosition[][] =>
 
 const texts = (paints: Paint[]) => paints.filter(p => p.text).map(p => p.text!.text);
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 const hostile = (coordinates: ProjectedPosition[] = EAST, extra: Record<string, unknown> = {}) =>
     feature(TacticalGraphicName.Mineline, coordinates, {

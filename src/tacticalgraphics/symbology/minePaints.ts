@@ -36,7 +36,7 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicMineType} from '../core/type';
-import {PLANNED_DASH_PX, amplifierText, hostilityOf, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
+import {PLANNED_DASH_PX, amplifierText, hostilityOf, labelColorOf, lineColorOf, scaleOf, showsEny} from './paintFunctions';
 import {dashScale, fitDash} from './dashFit';
 import {DECORATION_MIN_PX, centredRun, decorationScale, splitAtCorners} from './decorations';
 import {fitSymbolScale} from './symbolFit';
@@ -489,7 +489,7 @@ export function minefieldAreaPaint(): MinePaint {
         const paints: Paint[] = [{geometry, stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()}}];
 
         const ring = geometry.coordinates[0];
-        if (!isHostile(feature) || !ring || ring.length < 4) return paints;
+        if (!showsEny(feature) || !ring || ring.length < 4) return paints;
 
         const xs = ring.map(p => p[0]);
         const ys = ring.map(p => p[1]);
@@ -615,7 +615,7 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
         }
         // The two `N` boxes, between north and each shoulder — on the fence, like the
         // `M`s, rather than floating above it. (User's call, 2026-08-27.)
-        if (isHostile(feature)) {
+        if (showsEny(feature)) {
             for (const bearing of FENCE_ENY_BEARINGS) {
                 const at = ringCrossing(ring, middle, bearing);
                 if (!at) continue;

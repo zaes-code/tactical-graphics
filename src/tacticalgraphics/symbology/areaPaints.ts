@@ -27,7 +27,7 @@ import {
     textWidth,
     topmostSegmentIndex,
 } from './decorations';
-import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {terrainHatchColor} from './sectorModifierPaints';
 
 /** A paint function, in the shape the registry stores. */
@@ -231,7 +231,7 @@ export function encirclementPaint(): AreaPaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         }];
 
-        if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return paints;
+        if (!showsEny(feature)) return paints;
 
         for (const member of paintGeometryMembers(feature.geometry)) {
             if (member.type !== 'MultiPoint') continue;

@@ -45,7 +45,7 @@ import {
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
-import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, getEnemyLabels} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
@@ -574,6 +574,14 @@ export function isHostile(feature: PaintFeature): boolean {
 }
 
 /**
+ * Whether a graphic writes `ENY`: hostile, and the host asked for the word as well as the
+ * color. Every `ENY` the library draws asks this. @see TacticalGraphicsConfigOptions.enemyLabels
+ */
+export function showsEny(feature: PaintFeature): boolean {
+    return isHostile(feature) && getEnemyLabels();
+}
+
+/**
  * A line label with its `ENY` moved to the outer side of the line's end.
  *
  * FM 1-02.2 Figure 5-9 sets field N at the far left and the far right of a line control
@@ -611,7 +619,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const hostile = isHostile(feature);
+        const hostile = showsEny(feature);
         const prefix = [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' ');
         const full = (hostile ? 'ENY ' : '') + getFullLabel(name, feature.properties.designation ?? '');
 
@@ -1283,7 +1291,7 @@ export function defaultLinePaint(
          * (FM 1-02.2 Figure 5-9, APP-06 8.1.4). Only phase line used to; every other line here
          * drew red line work and nothing a monochrome print could read.
          */
-        const hostile = isHostile(feature);
+        const hostile = showsEny(feature);
         const identifier = [hostile ? 'ENY' : '', free, getFullLabel(name, named)].filter(Boolean).join(' ');
         const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
         const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');

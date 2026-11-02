@@ -24,11 +24,11 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition, TextKind} fro
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
+import { TacticalGraphicName} from '../core/type';
 import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
-import {hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
 
@@ -427,7 +427,7 @@ function axisAmplifiers(
         if (date) place(dateEnd, date, 'right', 'end', 'amplifier');
     }
 
-    if (hostilityOf(feature) === TacticalGraphicHostility.hostileFaker) {
+    if (showsEny(feature)) {
         const [r0, r1] = path;
         const length = Math.hypot(r1[0] - r0[0], r1[1] - r0[1]);
         if (length > 0) {
@@ -502,7 +502,7 @@ const AVENUE_ADDITIONAL_INFO_GAP_PX = 12;
  * anchors simply paints nothing rather than guessing where the rails were.
  */
 function avenueHostileMarks(feature: PaintFeature, context: PaintContext, coords: ProjectedPosition[]): Paint[] {
-    if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return [];
+    if (!showsEny(feature)) return [];
     if (coords.length < 4) return [];
 
     const [, , left, right] = coords;
@@ -551,7 +551,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             const span = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]);
             const halfWidthPx = span / context.resolution;
             const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
-            const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+            const hostile = showsEny(feature);
             const rear: ProjectedPosition = coords.length >= 4
                 ? [(coords[2][0] + coords[3][0]) / 2, (coords[2][1] + coords[3][1]) / 2]
                 : [c1[0] - ((c1[0] - c0[0]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution,

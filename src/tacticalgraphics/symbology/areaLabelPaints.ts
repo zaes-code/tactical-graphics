@@ -24,9 +24,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
+import { TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {amplifierText, asAmplifier, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf, legibleDesignation} from './paintFunctions';
+import {amplifierText, asAmplifier, showsEny, formatDesignationWithCountry, getFullLabel, labelColorOf, legibleDesignation} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
@@ -448,7 +448,7 @@ export function actionAreaLabelPaint(
  * text amplifiers do not. @see ai/decisions.md, the hostility colour rule
  */
 function hostileFlankMarks(feature: PaintFeature, context: PaintContext): Paint[] {
-    if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return [];
+    if (!showsEny(feature)) return [];
     const ring = feature.ring;
     if (!ring || ring.length < 4) return [];
 

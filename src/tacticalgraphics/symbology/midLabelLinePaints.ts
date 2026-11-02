@@ -20,7 +20,7 @@ import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloCol
 import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
-import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, isHostile, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, showsEny, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -107,7 +107,7 @@ function midpointOf(coords: ProjectedPosition[]) {
  * legible size like any prefix, and gone once the line is under twice it. @see legibleDesignation
  */
 export function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition[], scale: number, context: PaintContext): Paint[] {
-    if (!isHostile(feature)) return [];
+    if (!showsEny(feature)) return [];
     const eny = legibleDesignation('ENY', 'ENY', scale, fontStyle, context, pathLength(coords) / context.resolution);
     if (!eny.text) return [];
     const start = coords[0];

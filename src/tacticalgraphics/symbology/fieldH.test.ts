@@ -13,7 +13,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {getPaintFunction} from './registry';
 
 const context: PaintContext = {
@@ -44,7 +44,8 @@ const spotOf = (paints: Paint[], match: string): ProjectedPosition | undefined =
     return hit && hit.geometry.type === 'Point' ? (hit.geometry.coordinates as ProjectedPosition) : undefined;
 };
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('APP-06 120400 — airfield zone', () => {
     it('sets field H outside the area, to its right', () => {
