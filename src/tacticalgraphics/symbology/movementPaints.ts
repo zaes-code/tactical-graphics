@@ -263,6 +263,8 @@ function letterWithNameAndDate(letter: string): MovementPaint {
 const HEAD_LETTER_AT = 0.35;
 /** The letter's font size as a share of the head's on-screen length, which keeps it inside the head. */
 const HEAD_LETTER_SIZE = 0.65;
+/** The letter's ceiling, as a multiple of the ceiling the name and dates share. */
+const HEAD_LETTER_CAP = 1.5;
 
 /**
  * Frontal attack's A and turning movement's T, **set in the arrowhead and sized from it**.
@@ -274,7 +276,11 @@ const HEAD_LETTER_SIZE = 0.65;
  */
 function headLetter(feature: PaintFeature, context: PaintContext, letter: string, base: ProjectedPosition, tip: ProjectedPosition): Paint {
     const headPx = Math.hypot(tip[0] - base[0], tip[1] - base[1]) / context.resolution;
-    const scale = Math.max(scaleOf(feature, context), (headPx * HEAD_LETTER_SIZE) / BASE_FONT_SIZE_PX);
+    // Capped like every other movement label, at a little more than their ceiling so the
+    // letter still reads as the larger mark; uncapped it grew without bound on zoom-in
+    // (user, 2026-11-02). @see maxGraphicLabelScale
+    const grown = Math.min((headPx * HEAD_LETTER_SIZE) / BASE_FONT_SIZE_PX, maxGraphicLabelScale() * HEAD_LETTER_CAP);
+    const scale = Math.max(scaleOf(feature, context), grown);
     const at: ProjectedPosition = [base[0] + (tip[0] - base[0]) * HEAD_LETTER_AT, base[1] + (tip[1] - base[1]) * HEAD_LETTER_AT];
     return text(feature, at, letter, scale, {rotation: uprightRotation(base, tip), align: 'center'});
 }

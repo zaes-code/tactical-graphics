@@ -123,6 +123,17 @@ describe('frontal attack and turning movement set their letter in the head', () 
     });
 });
 
+describe('the head letter has a ceiling', () => {
+    // Sized from the head alone it grew without bound on zoom-in (user, 2026-11-02).
+    it.each([TacticalGraphicName.FrontalAttack, TacticalGraphicName.TurningMovement])('%s', name => {
+        const paint = getPaintFunction(name)!.label!;
+        const letter = name === TacticalGraphicName.FrontalAttack ? 'A' : 'T';
+        const zoomedIn = {...context, resolution: context.resolution / 1000};
+        const mark = paint(labelFeature(name, EAST.from, EAST.to), zoomedIn).find(p => p.text?.text === letter)!;
+        expect(mark.text!.scale).toBeLessThanOrEqual(maxGraphicLabelScale() * 1.5 + 1e-9);
+    });
+});
+
 describe('the counterattacks label just behind the arrowhead', () => {
     const NAMES = [TacticalGraphicName.Counterattack, TacticalGraphicName.CounterattackByFire];
 
