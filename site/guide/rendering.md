@@ -268,7 +268,7 @@ Below the engine, the same flag is `hideAmplifiers` on the OpenLayers **feature*
 the `tacticalGraphic` bag), or on the `PaintFeature` on MapLibre.
 
 **The symbol's own text is never hidden.** A cover's `C`, a mission task's letter, a `PL`
-prefix: hide those and the reader is looking at a different graphic.
+prefix, an `ACP` number: hide those and the reader is looking at a different graphic.
 `TextKind` is what separates the two, and a mark that never says which it is counts as part
 of the symbol — a stray date is noise, a missing letter is wrong.
 

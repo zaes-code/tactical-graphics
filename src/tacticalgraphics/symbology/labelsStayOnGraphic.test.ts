@@ -63,7 +63,7 @@ describe('ACP labels', () => {
         expect('ACP 1'.length * 9 * scale).toBeLessThanOrEqual(2 * 20);
     });
 
-    it('are no longer drawn: MIL-STD-2525E 170100 grays the ACP circles', () => {
+    it('go rather than overrun a corridor zoomed out', () => {
         const base: Geometry = {
             type: 'LineString',
             coordinates: [
@@ -73,9 +73,28 @@ describe('ACP labels', () => {
             ],
         };
         const corridor = buildPaintedGraphic(N.AirCorridor, base, {width: 2500}, 50)!;
-        // The half-width is still filed, because the leg labels are sized from it.
+        const zoomedOut = paintGraphic(corridor, context(40000));
+        expect(zoomedOut.filter(p => p.text?.text.startsWith('ACP'))).toEqual([]);
+        expect(paintGraphic(corridor, context(20)).filter(p => p.text?.text.startsWith('ACP')).length).toBe(3);
+    });
+
+    it('size from the corridor half-width it files as width, as OpenLayers does', () => {
+        // A corridor files `width`, never `radius`; read only `radius`, an imported one drew its
+        // ACP labels against a fixed 12 px circle, a third of OpenLayers' size.
+        const base: Geometry = {
+            type: 'LineString',
+            coordinates: [
+                [-116.51, 35.16],
+                [-116.54, 35.23],
+                [-116.45, 35.24],
+            ],
+        };
+        const corridor = buildPaintedGraphic(N.AirCorridor, base, {width: 2500}, 50)!;
         expect(corridor.labels?.graphicSize).toBe(1250);
-        expect(paintGraphic(corridor, context(20)).filter(p => p.text?.text.startsWith('ACP'))).toEqual([]);
+        const acp = paintGraphic(corridor, context(20)).find(p => p.text?.text === 'ACP 1')!;
+        // The circle is 1250 m across at 20 m/px, so about 62 px in radius: the label fills its
+        // share of that, capped at the largest a graphic's label is drawn.
+        expect(acp.text!.scale).toBeGreaterThan(1);
     });
 });
 

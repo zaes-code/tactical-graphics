@@ -41,21 +41,18 @@ export class AirCorridor extends TacticalGraphicsBase<MovementGraphicOptions> {
         this.name = name;
     }
 
-    /**
-     * The two rails of every leg, and nothing else.
-     *
-     * MIL-STD-2525E 170100 (Corridor1) draws two parallel rails with square open ends. Its
-     * examples show a circle at each ACP and CCP, but in gray, and the table's note says gray
-     * marks only explain the measure and are not part of it; FM 1-02.2 Table 5-23 grays them
-     * the same way. They used to be drawn in the line color, so every turning point read as
-     * part of the corridor. The rails are still the outer tangents of a circle of `radius` at
-     * each point, which for equal circles is a parallel offset at half the width.
-     *
-     * Still a collection, with one member, so a consumer that walks the members is unchanged.
-     */
     generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<GeometryCollection> {
-        const pathCoordinates = this.getMovementGeometry(base.geometry.coordinates, opts?.radius || 20);
-        return this.asGeometryCollectionFeature([this.asMultiLineStringFeature(pathCoordinates).geometry]);
+        let baseCoords = base.geometry.coordinates;
+        let corridors = (baseCoords).map(coord => {
+            return this.createCircleGeometry(coord, opts?.radius || 20)
+        });
+        let pathCoordinates = this.getMovementGeometry(baseCoords, opts?.radius || 20);
+        return this.asGeometryCollectionFeature(
+            [
+                this.asMultiLineStringFeature(pathCoordinates).geometry,
+                ...corridors.map(corridor => this.asPolygonFeature(corridor).geometry)
+            ]
+        )
     }
 
     /**
@@ -76,6 +73,11 @@ export class AirCorridor extends TacticalGraphicsBase<MovementGraphicOptions> {
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature(base.geometry.coordinates);
     }
+
+    // generate corridors
+    createCircleGeometry = (coord: Position, radius: number): Position[][] => {
+        return geometryService.createCircle(coord, radius);
+    };
 
     getMovementGeometry = (baseCoords: Position[], radius: number): Position[][] => {
         const segments: number[][][] = [];
