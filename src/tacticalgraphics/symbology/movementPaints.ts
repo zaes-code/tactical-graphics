@@ -248,22 +248,41 @@ export const mobileDefenseLabelPaint = (): MovementPaint =>
  * long, which is what the line is sized to: the same span-proportional scale as an axis.
  */
 function letterWithNameAndDate(letter: string): MovementPaint {
-    const letterPaint = fixedLetterPaint(letter);
     return (feature, context) => {
-        const paints = letterPaint(feature, context);
         const coords = anchors(feature);
-        if (coords.length < 2) return paints;
+        if (coords.length < 2) return [];
         const [base, tip] = coords;
+        const paints = [headLetter(feature, context, letter, base, tip)];
         const rear: ProjectedPosition = [2 * base[0] - tip[0], 2 * base[1] - tip[1]];
         // The centre line the generator publishes after the two, so the run bends with the body.
         return paints.concat(behindArrowhead(feature, context, [rear, base, ...coords.slice(2)], 2, nameAndDate(feature)));
     };
 }
 
-/** Turning movement: "T" starting at the arrowhead base, with `T` and `W - W1` behind it. */
+/** Where the letter's centre sits from the head's base toward its tip: about the triangle's centroid. */
+const HEAD_LETTER_AT = 0.35;
+/** The letter's font size as a share of the head's on-screen length, which keeps it inside the head. */
+const HEAD_LETTER_SIZE = 0.65;
+
+/**
+ * Frontal attack's A and turning movement's T, **set in the arrowhead and sized from it**.
+ *
+ * They used to start at the head's base at the ordinary label size, so on a wide arrow the
+ * letter was small and sat against the dates behind it (user, 2026-11-02). Centred near the
+ * triangle's centroid and sized from the head's length, it fills the head at every zoom and
+ * stays larger than the name and dates, which are capped. Never smaller than a plain label.
+ */
+function headLetter(feature: PaintFeature, context: PaintContext, letter: string, base: ProjectedPosition, tip: ProjectedPosition): Paint {
+    const headPx = Math.hypot(tip[0] - base[0], tip[1] - base[1]) / context.resolution;
+    const scale = Math.max(scaleOf(feature, context), (headPx * HEAD_LETTER_SIZE) / BASE_FONT_SIZE_PX);
+    const at: ProjectedPosition = [base[0] + (tip[0] - base[0]) * HEAD_LETTER_AT, base[1] + (tip[1] - base[1]) * HEAD_LETTER_AT];
+    return text(feature, at, letter, scale, {rotation: uprightRotation(base, tip), align: 'center'});
+}
+
+/** Turning movement: "T" in the arrowhead, with `T` and `W - W1` behind it. */
 export const turningMovementLabelPaint = (): MovementPaint => letterWithNameAndDate('T');
 
-/** Frontal attack: "A" starting at the arrowhead base, with `T` and `W - W1` behind it. */
+/** Frontal attack: "A" in the arrowhead, with `T` and `W - W1` behind it. */
 export const frontalAttackLabelPaint = (): MovementPaint => letterWithNameAndDate('A');
 
 /**
