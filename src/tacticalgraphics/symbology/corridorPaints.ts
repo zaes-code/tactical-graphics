@@ -3,14 +3,13 @@
  *
  * Air corridor, low-level transit route, minimum-risk route, safe lane, special
  * corridor, standard-use Army aircraft flight route, transit corridor and
- * unmanned-aircraft corridor. Eight names, one shape: a pair of rails along each
- * leg, the designation between them, and a block of properties hanging off the
- * left. No ACP circles: MIL-STD-2525E 170100 grays them, and gray marks are not part
- * of the measure.
+ * unmanned-aircraft corridor. Eight names, one shape: a pair of rails with a
+ * circle at each turning point, an "ACP n" in every circle, the designation along
+ * each leg, and a block of properties hanging off the top-left.
  *
  * **Every piece of text here stays in the label color, including on a hostile
  * corridor.** FM 1-02.2 colors the *lines* of a control measure by standard
- * identity — the rails — while text amplifiers stay black.
+ * identity — the rails and the circle strokes — while text amplifiers stay black.
  * Table 5-3's enemy boundary is the reference: red line, black labels.
  */
 
@@ -23,6 +22,7 @@ import {
     formatDistance,
     fontStyle,
     getLabelHaloColor,
+    graphicLabelScale,
 } from '../core/symbology';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {TacticalGraphicName, getLabel} from '../core/type';
@@ -63,9 +63,6 @@ const LEG_LABEL_HEIGHT_SHARE = 0.7;
 
 /**
  * Scale for an "ACP n" label: as large as its circle holds, and no larger.
- *
- * @deprecated The corridors no longer draw ACP circles or labels (MIL-STD-2525E 170100
- * grays them). Kept so existing imports still compile; nothing in the library calls it.
  *
  * - With the circle's real rendered radius, the label is fitted inside it and capped at the
  *   size-proportional scale, so a wide corridor gets a big label and a narrow one a small
@@ -153,10 +150,12 @@ function amplifier(
 }
 
 /**
- * The corridor's labels: the properties block and the designation on each leg.
+ * The corridor's labels: the properties block, the designation on each leg, and
+ * "ACP n" in every circle.
  *
  * Painted from the **labels** feature, whose geometry is the MultiPoint of
- * turning points — so the midpoint of each consecutive pair is a leg.
+ * turning points — so `coords[i]` is a circle center and the midpoint of each
+ * consecutive pair is a leg.
  */
 export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
@@ -169,10 +168,13 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const text = getFullLabel(name, props.designation ?? '');
         const baseScale = scaleOf(feature, context);
 
-        // `graphicSize` is the corridor's half-width in map units, so dividing by the
-        // resolution gives the rails' distance from the centre line in pixels.
-        const halfWidthPx =
+        // The ACP labels track the circle rather than the zoom: `graphicSize` is the
+        // corridor radius in map units, so dividing by the resolution gives the
+        // circle's rendered pixel radius, and the size-proportional scale grows the
+        // text from that same number.
+        const circleRadiusPx =
             feature.graphicSize && feature.graphicSize > 0 ? groundPixels(feature.graphicSize, feature, context) : undefined;
+        const acpScale = graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution);
 
         const paints: Paint[] = [];
 
@@ -203,22 +205,22 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * At least one leg always draws: the size is capped by the widest leg's own
          * allowance, so that leg passes the test by construction.
          */
-        const radiusPx = halfWidthPx ?? ACP_FALLBACK_RADIUS_PX;
+        const radiusPx = circleRadiusPx ?? ACP_FALLBACK_RADIUS_PX;
         const legWidthPx = radiusPx * 2;
         // Two dimensions, two caps: the label's length against the leg it runs along --
         // per leg, since legs differ -- and its height against the gap between the rails,
         // which is one number for the whole corridor.
         const heightCap = (legWidthPx * LEG_LABEL_HEIGHT_SHARE) / BASE_FONT_SIZE_PX;
         /*
-         * **The run clear of the turns, not the whole leg.**
+         * **The run between the circles, not the whole leg.**
          *
-         * At a turning point the next leg's rails cross this one's, half a width either
-         * side of the point. The label is centred on the leg's midpoint, so measuring it
-         * against the *whole* leg let it run into the next leg's rails at a sharp turn.
-         * What is actually available is the leg less half a width at each end. (This
-         * used to be the run between the ACP circles, which were the same size.)
+         * A leg's endpoints are turning points, and every turning point carries an `ACP n`
+         * circle of `radiusPx`. The label is centred on the leg's midpoint, so measuring
+         * it against the *whole* leg let it grow straight through the circles at either
+         * end -- the closer the circles were to each other, the more of the label they
+         * covered. What is actually available is the clear span between them.
          *
-         * Zero for a leg no longer than the corridor is wide. `capLabelToSpan` returns
+         * Zero for a leg whose circles already meet or overlap. `capLabelToSpan` returns
          * the desired scale unchanged for a non-positive span -- reasonable for it, wrong
          * here -- so that case is answered before it is asked: no room means this leg
          * cannot carry the label at any size, which is what a zero says.
@@ -227,9 +229,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
         const legClearPx: number[] = [];
         for (let i = 0; i < coords.length - 1; i++) {
             const legPx = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]) / context.resolution;
-            // Only a turn takes the half-widths: a corridor of one leg has none, and since the
-            // ACP circles went (2026-10-31) nothing else stands at its ends.
-            const clearPx = coords.length === 2 ? legPx : legPx - legWidthPx;
+            const clearPx = legPx - legWidthPx;
             legClearPx.push(clearPx);
             legClearCaps.push(clearPx > 0 ? capLabelToSpan(context, text, fontStyle, baseScale, clearPx) : 0);
         }
@@ -306,7 +306,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             const anchorX = westEdge - INFO_BLOCK_GAP_PX * baseScale * context.resolution;
             /*
              * Held to the designation so the block never reads as the more important of
-             * the two -- but not to a *zero* designation. When the turns leave no leg
+             * the two -- but not to a *zero* designation. When the circles leave no leg
              * able to carry the name, no name is drawn, and the block is the only thing
              * still saying what the corridor is. It sits outside the graphic and cannot
              * collide with anything, so it keeps its own cap instead.
@@ -326,6 +326,23 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             }));
         }
 
+        const acpAt = (index: number): Paint => {
+            const labelText = `ACP ${index + 1}`;
+            return {
+                geometry: {type: 'Point', coordinates: coords[index]},
+                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+                text: {
+                    text: labelText,
+                    font: fontStyle,
+                    fill: labelColorOf(feature),
+                    halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                    align: 'center',
+                    baseline: 'middle',
+                    scale: acpLabelScale(context, labelText, fontStyle, baseScale, circleRadiusPx, acpScale),
+                },
+            };
+        };
+
         for (let i = 0; i < coords.length - 1; i++) {
             const [x0, y0] = coords[i];
             const [x1, y1] = coords[i + 1];
@@ -333,7 +350,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
             if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
 
             // One size for the whole corridor, and only on the legs that can hold it
-            // clear of the turns. @see designationScale
+            // clear of their own ACP circles. @see designationScale
             if (designationScale > 0 && legClearCaps[i] >= designationScale) {
                 // Too small to read, the name goes and `AC` stays, legible, on each leg whose
                 // clear run is at least twice it. The prefix's scale does not depend on the
@@ -343,16 +360,21 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 const shown = legibleDesignation(text, getLabel(name), designationScale, fontStyle, context, legClearPx[i]);
                 if (shown.text && shown.scale <= heightCap) paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], shown.text, shown.scale, {rotation}));
             }
+            paints.push(acpAt(i));
         }
+
+        // The last turning point has no leg after it, so it is added on its own.
+        paints.push(acpAt(coords.length - 1));
         return paints;
     };
 }
 
 /**
- * The corridor's line work: the rails of every leg.
+ * The corridor's line work: the rails and the circle at each turning point.
  *
  * The generator emits a collection, and every member of it is stroked in the
- * affiliation color with no fill.
+ * affiliation color with no fill — a filled circle would hide whatever the
+ * corridor passes over, and the ACP label inside it.
  */
 export function airCorridorPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
     return feature => {

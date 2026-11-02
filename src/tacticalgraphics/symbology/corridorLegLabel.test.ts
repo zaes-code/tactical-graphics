@@ -160,21 +160,20 @@ describe('a corridor draws its designation at one size', () => {
 });
 
 /**
- * # The designation never runs into a turn
+ * # The designation never runs into an ACP circle
  *
- * At a turning point the next leg's rails cross this one's, half a width either side of the
- * point (where the ACP circles stood until 2026-10-31). The designation is centred on the leg,
- * so what is available is the leg less half a width at each end. A corridor of one leg has no
- * turn, and its whole leg is available.
+ * Every turning point carries an `ACP n` circle, and the designation is centred on the
+ * leg between two of them. It was measured against the *whole* leg, so it grew straight
+ * through the circles at either end — the closer together the circles, the more of the
+ * name they covered. What is available is the clear run between them.
  */
-describe('the designation keeps clear of the turns', () => {
+describe('the designation keeps clear of the ACP circles', () => {
     /** Metres per pixel chosen so the numbers below are also the pixel counts. */
     const px = context.resolution;
 
     const corridorOf = (legPx: number, halfWidthM: number) =>
         ({
-            // Both legs the same, each ending at the turn between them.
-            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [legPx * px, 0], [legPx * px, legPx * px]]},
+            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [legPx * px, 0]]},
             properties: {name: TacticalGraphicName.AirCorridor, designation: 'CORRIDOR BLUE', width: halfWidthM * 2},
             graphicSize: halfWidthM,
         }) as unknown as PaintFeature;
@@ -192,7 +191,7 @@ describe('the designation keeps clear of the turns', () => {
         ['a wide corridor on a long leg', 600, 30_000],
         ['a wide corridor on a short leg', 150, 30_000],
         ['a narrow corridor on a long leg', 600, 4_000],
-    ])('%s: the label stops short of the turn', (_name, legPx, halfWidthM) => {
+    ])('%s: the label stops short of the circle', (_name, legPx, halfWidthM) => {
         const feature = corridorOf(legPx, halfWidthM);
         // groundPixels at the equator, where these synthetic coordinates sit.
         const circlePx = halfWidthM / context.resolution;
@@ -202,22 +201,9 @@ describe('the designation keeps clear of the turns', () => {
         if (reach > 0) expect(reach).toBeLessThanOrEqual(clearHalf);
     });
 
-    it('draws nothing on a leg its turns already swallow', () => {
-        // Half-widths of 150px either end of a 200px leg overlap at the midpoint.
+    it('draws nothing on a leg its circles already swallow', () => {
+        // Circles of 150px radius either end of a 200px leg: they overlap at the midpoint.
         expect(reachPx(corridorOf(200, 150 * context.resolution))).toBe(0);
-    });
-
-    it('names a corridor of one leg however wide it is', () => {
-        // A 200 px leg with 150 px half-widths: a turn either end would leave nothing, but a
-        // single leg has no turn, and the name fits inside it.
-        const single = {
-            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [200 * px, 0]]},
-            properties: {name: TacticalGraphicName.AirCorridor, designation: 'CORRIDOR BLUE', width: 300 * px},
-            graphicSize: 150 * px,
-        } as unknown as PaintFeature;
-        const reach = reachPx(single);
-        expect(reach).toBeGreaterThan(0);
-        expect(reach).toBeLessThanOrEqual(100);
     });
 
     it('still draws the amplifier block when no leg can carry the name', () => {

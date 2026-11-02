@@ -8,31 +8,18 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
-import type {GeometryCollection, MultiLineString} from 'geojson';
 import {airCorridorLabelPaint} from './corridorPaints';
-import {renderTacticalGraphic} from '../core/render';
-
-const AIR_CORRIDORS = [
-    TacticalGraphicName.AirCorridor,
-    TacticalGraphicName.LowLevelTransitRoute,
-    TacticalGraphicName.MinimumRiskRoute,
-    TacticalGraphicName.SafeLane,
-    TacticalGraphicName.SpecialCorridor,
-    TacticalGraphicName.StandardUseArmyAircraftFlightRoute,
-    TacticalGraphicName.TransitCorridor,
-    TacticalGraphicName.UnmannedAircraftCorridor,
-];
 
 const context: PaintContext = {
     resolution: 1,
     measureText: (text, font) => text.length * parseFloat(font.match(/(\d*\.?\d+)px/)?.[1] ?? '16') * 0.6,
 };
 
-/** One leg `length` px long (two, turning, when `turn`), 20 px half-width, labels capped by a `boundsPx` extent. */
-const corridor = (length: number, boundsPx: number, turn = false): Paint[] =>
+/** One leg `length` px long, circles of 20 px radius, labels capped by a `boundsPx` extent. */
+const corridor = (length: number, boundsPx: number): Paint[] =>
     airCorridorLabelPaint(TacticalGraphicName.AirCorridor)(
         {
-            geometry: {type: 'MultiPoint', coordinates: (turn ? [[0, 0], [length, 0], [length, length]] : [[0, 0], [length, 0]]) as ProjectedPosition[]},
+            geometry: {type: 'MultiPoint', coordinates: [[0, 0], [length, 0]] as ProjectedPosition[]},
             properties: {name: TacticalGraphicName.AirCorridor, designation: 'ALPHA'},
             graphicSize: 20,
             bounds: {minX: 0, minY: 0, maxX: boundsPx, maxY: 0},
@@ -59,24 +46,7 @@ describe('airCorridorLabelPaint', () => {
     });
 
     it('draws no designation on a leg whose clear run is under twice AC', () => {
-        // 50 px legs meeting at a turn, 40 px of each inside the half-widths: 10 px clear.
-        expect(legs(corridor(50, 6, true))).toEqual([]);
-    });
-});
-
-describe('an air corridor is its rails and nothing else', () => {
-    // MIL-STD-2525E 170100 Corridor1: two parallel rails with square open ends. The ACP and
-    // CCP circles in its examples are gray, which the table's note says is not part of the
-    // measure (FM 1-02.2 Table 5-23 grays them too).
-    it.each(AIR_CORRIDORS.map(name => [String(name), name] as const))('%s', (_label, name) => {
-        const out = renderTacticalGraphic({
-            type: 'Feature',
-            geometry: {type: 'LineString', coordinates: [[0, 0], [0.1, 0], [0.1, 0.1]]},
-            properties: {tacticalGraphic: {name, radius: 1000}},
-        } as never);
-        const members = (out.graphic.geometry as GeometryCollection).geometries;
-        expect(members.map(m => m.type)).toEqual(['MultiLineString']);
-        // Two rails per leg, two legs.
-        expect((members[0] as MultiLineString).coordinates).toHaveLength(4);
+        // 50 px between centers, 40 px of it inside the two circles: 10 px clear.
+        expect(legs(corridor(50, 6))).toEqual([]);
     });
 });
