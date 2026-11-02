@@ -92,7 +92,8 @@ describe('a movement label sits the same distance from the arrowhead either way 
         // label reads back from the arrowhead and a fixed-letter one reads forward from its
         // anchor, so pinning the literal `left` here made the test a hostage to a placement
         // change rather than a guard on the bug.
-        for (const name of [TacticalGraphicName.CounterattackByFire, TacticalGraphicName.TurningMovement]) {
+        // Turning movement left this list on 2026-11-02: its T is centred in the head now.
+        for (const name of [TacticalGraphicName.CounterattackByFire]) {
             const paint = getPaintFunction(name)!.label!;
             const east = paint(labelFeature(name, EAST.from, EAST.to), context)[0];
             const west = paint(labelFeature(name, WEST.from, WEST.to), context)[0];
@@ -100,6 +101,23 @@ describe('a movement label sits the same distance from the arrowhead either way 
             // The anchor is the generator's; the flip must not move it.
             const at = (p: typeof east) => (p.geometry as {coordinates: ProjectedPosition}).coordinates;
             expect(Math.abs(at(east)[0] - EAST.from[0])).toBeCloseTo(Math.abs(at(west)[0] - WEST.from[0]), 0);
+        }
+    });
+});
+
+describe('frontal attack and turning movement set their letter in the head', () => {
+    it.each([
+        [TacticalGraphicName.FrontalAttack, 'A'],
+        [TacticalGraphicName.TurningMovement, 'T'],
+    ] as const)('%s: centred between base and tip, larger than a plain label', (name, letter) => {
+        const paint = getPaintFunction(name)!.label!;
+        for (const {from, to} of [EAST, WEST]) {
+            const mark = paint(labelFeature(name, from, to), context).find(p => p.text?.text === letter)!;
+            const [x] = (mark.geometry as {coordinates: ProjectedPosition}).coordinates;
+            expect(mark.text!.align).toBe('center');
+            expect(Math.abs(x - from[0])).toBeGreaterThan(0);
+            expect(Math.abs(x - from[0])).toBeLessThan(Math.abs(to[0] - from[0]) / 2);
+            expect(mark.text!.scale).toBeGreaterThan(1);
         }
     });
 });
