@@ -63,17 +63,16 @@ describe('the munition flight path DTG', () => {
         }) as unknown as PaintFeature;
     const dtgOf = (paints: Paint[]) => paints.find(p => p.text?.text === 'W - W1')!;
 
-    // The user kept the pre-audit layout (2026-11-02): it starts at the left end on screen and
-    // runs under the line, whichever way the path was drawn.
+    // APP-06 260600 note 3: once, mid-way between point 1 and the middle, below the line.
     it.each([
-        ['east', [[0, 0], [10_000, 0]]],
-        ['west', [[10_000, 0], [0, 0]]],
-    ] as const)('starts at the left end, below, on a path drawn %s', (_, coords) => {
+        ['east', [[0, 0], [10_000, 0]], 2500],
+        ['west', [[10_000, 0], [0, 0]], 7500],
+    ] as const)('sits a quarter along and below a path drawn %s', (_, coords, x) => {
         const dtg = dtgOf(munitionFlightPathPaint()(dated(coords.map(c => [...c]) as ProjectedPosition[]), context));
         const [dx, dy] = dtg.geometry.coordinates as number[];
-        expect(dx).toBeCloseTo(0, 6);
+        expect(dx).toBeCloseTo(x, 6);
         expect(dy).toBeLessThan(0);
-        expect(dtg.text!.align).toBe('left');
+        expect(dtg.text!.align).toBe('center');
     });
 });
 
@@ -160,10 +159,11 @@ describe('the coordinated fire line is always dashed', () => {
 });
 
 describe('the munition flight path DTG on a bent path', () => {
-    // A first segment too short for the dates: past the bend they follow the path below it
-    // rather than running straight off it (user, 2026-11-02).
+    // Dates centred on a bend follow the path below it rather than running straight off it
+    // (user, 2026-11-02).
     it('keeps every glyph the same distance below the line', () => {
-        const path: ProjectedPosition[] = [[0, 0], [600, 0], [600, -20_000]];
+        // A quarter of the way along is the bend itself, so the centred dates straddle it.
+        const path: ProjectedPosition[] = [[0, 0], [2000, 0], [2000, -6000]];
         const feature = {
             geometry: {type: 'LineString', coordinates: path},
             properties: {name: TacticalGraphicName.MunitionFlightPath, startDate: '011200ZOCT26', endDate: '021800ZOCT26'},
@@ -177,6 +177,7 @@ describe('the munition flight path DTG on a bent path', () => {
             return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
         }));
         const distances = glyphs.map(g => off(g.geometry.coordinates as number[]));
-        expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(context.resolution * 4);
+        // Round the outside of a bend a mitered offset stands up to root 2 further out.
+        expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(context.resolution * 8);
     });
 });
