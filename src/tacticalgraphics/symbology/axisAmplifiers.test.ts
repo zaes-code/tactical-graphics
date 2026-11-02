@@ -164,6 +164,34 @@ describe('avenue of approach field H is level', () => {
     });
 });
 
+describe('avenue of approach field H clears the line work', () => {
+    // Level text beside a climbing rail touched it at its far end (user, 2026-11-02).
+    it.each([TacticalGraphicHostility.friend, TacticalGraphicHostility.hostileFaker])('on a climbing arrow (%s)', hostility => {
+        const climbing: Geometry = {type: 'LineString', coordinates: [[0.2, 0.08], [0, 0], [0.19, 0.09]]};
+        const properties = {designation: 'X', additionalInfo: 'STEEP-SIDED WADIS', radius: 1000, hostility};
+        const marks = paintGraphic(buildPaintedGraphic(N.AvenueOfApproach, climbing, properties, resolution)!, context);
+        const h = marks.find(p => p.text?.text === 'STEEP-SIDED WADIS')!;
+        const [x, y] = h.geometry.coordinates as Position;
+        const w = 'STEEP-SIDED WADIS'.length * 9 * h.text!.scale! * resolution;
+        const hh = 16 * h.text!.scale! * resolution;
+        const x0 = h.text!.align === 'left' ? x : h.text!.align === 'right' ? x - w : x - w / 2;
+        const y0 = h.text!.baseline === 'bottom' ? y : h.text!.baseline === 'top' ? y - hh : y - hh / 2;
+        const strokes = marks.filter(p => p.stroke).flatMap(p => {
+            const g = p.geometry as {type: string; coordinates: unknown};
+            return (g.type === 'LineString' ? [g.coordinates] : g.coordinates) as Position[][];
+        });
+        for (const path of strokes) {
+            for (let i = 0; i < path.length - 1; i++) {
+                for (let k = 0; k <= 50; k++) {
+                    const px = path[i][0] + ((path[i + 1][0] - path[i][0]) * k) / 50;
+                    const py = path[i][1] + ((path[i + 1][1] - path[i][1]) * k) / 50;
+                    expect(px >= x0 && px <= x0 + w && py >= y0 && py <= y0 + hh).toBe(false);
+                }
+            }
+        }
+    });
+});
+
 describe.each([N.AviationAxisOfAdvance, N.AttackHelicopterAxisOfAdvance])('%s keeps its dates out of the twist', name => {
     it('ends W - W1 before the walls start to cross', () => {
         // The dates ran through the crossing on every heading (found turning each line graphic

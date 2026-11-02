@@ -30,7 +30,7 @@ import {letterGapClearance, letterInGapScale} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
-import {distanceAlongPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
+import {distanceAlongPath, offsetPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -574,10 +574,45 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
              */
             const [ox, oy] = [at[0] - rear[0], at[1] - rear[1]];
             const on = Math.hypot(ox, oy) || 1;
+            const align = ox / on > LEANS_OFF_AXIS ? 'left' : ox / on < -LEANS_OFF_AXIS ? 'right' : 'center';
+            const baseline = oy / on > LEANS_OFF_AXIS ? 'bottom' : oy / on < -LEANS_OFF_AXIS ? 'top' : 'middle';
+            /*
+             * **Never touching the rail.** Level text beside a climbing rail met it at the far
+             * end of the label (user, 2026-11-02), so the label steps further out along the same
+             * line until its whole box, widened by the gap, is clear of the upper rail. The rail is
+             * the centre line moved out by the half-width, on the side H sits.
+             */
+            const res = context.resolution;
+            const widthM = textWidth(context, additional, fontStyle, scale) * res;
+            const heightM = BASE_FONT_SIZE_PX * scale * res;
+            const gapM = AVENUE_ADDITIONAL_INFO_GAP_PX * res;
+            const centre = coords.length >= 6 ? coords.slice(4) : [c0, c1];
+            const rail = offsetPath(centre, [(ox / on) * span, (oy / on) * span], 0);
+            const boxAt = (p: ProjectedPosition) => {
+                const x0 = align === 'left' ? p[0] : align === 'right' ? p[0] - widthM : p[0] - widthM / 2;
+                const y0 = baseline === 'bottom' ? p[1] : baseline === 'top' ? p[1] - heightM : p[1] - heightM / 2;
+                return [x0 - gapM, y0 - gapM, x0 + widthM + gapM, y0 + heightM + gapM];
+            };
+            const touches = (p: ProjectedPosition) => {
+                const [x0, y0, x1, y1] = boxAt(p);
+                for (let i = 0; i < rail.length - 1; i++) {
+                    const [ra, rb] = [rail[i], rail[i + 1]];
+                    const steps = Math.max(1, Math.ceil(Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) / (2 * res)));
+                    for (let k = 0; k <= steps; k++) {
+                        const [x, y] = [ra[0] + ((rb[0] - ra[0]) * k) / steps, ra[1] + ((rb[1] - ra[1]) * k) / steps];
+                        if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return true;
+                    }
+                }
+                return false;
+            };
+            let place = at;
+            for (let step = 0; step < 200 && touches(place); step++) {
+                place = [place[0] + (ox / on) * 2 * res, place[1] + (oy / on) * 2 * res];
+            }
             paints.push(
-                text(feature, at, additional, scale, {
-                    align: ox / on > LEANS_OFF_AXIS ? 'left' : ox / on < -LEANS_OFF_AXIS ? 'right' : 'center',
-                    baseline: oy / on > LEANS_OFF_AXIS ? 'bottom' : oy / on < -LEANS_OFF_AXIS ? 'top' : 'middle',
+                text(feature, place, additional, scale, {
+                    align,
+                    baseline,
                     // Free text the operator typed, so "name only" takes it away. The `AA`
                     // literal and the `ENY` marks are the symbol and stay.
                     kind: 'amplifier',
