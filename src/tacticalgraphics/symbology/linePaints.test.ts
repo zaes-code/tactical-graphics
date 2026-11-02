@@ -7,7 +7,7 @@
  */
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, resetTacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {directionArrowPaint} from './linePaints';
 
 const context: PaintContext = {
@@ -38,7 +38,8 @@ const arrow = (length: number, boundsPx: number): Paint[] =>
 
 const texts = (paints: Paint[]) => paints.filter(p => p.text?.text).map(p => p.text!);
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('directionArrowPaint', () => {
     it('sets BLUE and ENY apart while legible', () => {
@@ -88,19 +89,26 @@ describe('the four direction-of-attack arrows', () => {
         expect(texts(paintArrow(name, TacticalGraphicHostility.friend)).map(t => t.text)).toEqual(['BLUE']);
     });
 
-    it.each(DIRECTION_ARROWS)('%s breaks its shaft where the text sits', name => {
+    it.each(DIRECTION_ARROWS)('%s breaks its shaft where each word sits, with the shaft between', name => {
+        // `A —N—T—>`: ENY and the name are two breaks, and the line shows between them
+        // (user, 2026-11-02).
         const paints = paintArrow(name, TacticalGraphicHostility.hostileFaker);
         const shaft = paints[0].geometry;
         expect(shaft.type).toBe('MultiLineString');
         const runs = (shaft as {coordinates: number[][][]}).coordinates;
-        expect(runs).toHaveLength(2);
-        // Every text anchor lies inside the break, clear of both runs.
-        const breakFrom = runs[0][runs[0].length - 1][0];
-        const breakTo = runs[1][0][0];
-        for (const t of paints.filter(p => p.text?.kind !== 'amplifier' && p.text)) {
+        expect(runs).toHaveLength(3);
+        const breaks = [0, 1].map(i => [runs[i][runs[i].length - 1][0], runs[i + 1][0][0]]);
+        const words = paints.filter(p => p.text?.kind !== 'amplifier' && p.text);
+        expect(words).toHaveLength(2);
+        for (const t of words) {
             const x = (t.geometry.coordinates as number[])[0];
-            expect(x).toBeGreaterThan(breakFrom);
-            expect(x).toBeLessThanOrEqual(breakTo);
+            expect(breaks.some(([from, to]) => x > from && x <= to)).toBe(true);
         }
+    });
+
+    it.each(DIRECTION_ARROWS)('%s cuts one break when ENY is off', name => {
+        resetTacticalGraphicsConfig();
+        const runs = (paintArrow(name, TacticalGraphicHostility.hostileFaker)[0].geometry as {coordinates: number[][][]}).coordinates;
+        expect(runs).toHaveLength(2);
     });
 });

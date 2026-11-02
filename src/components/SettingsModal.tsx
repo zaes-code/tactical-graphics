@@ -364,6 +364,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={color => onHostilityColorChange(hostility, color)}
                 />
             ))}
+            <ToggleSetting
+                label="Write ENY on Hostile"
+                hint="APP-06 8.1.4: the word as well as the color, for monochrome use"
+                checked={settings.enemyLabels === true}
+                onChange={enemyLabels => onChange({enemyLabels})}
+            />
 
             <Divider/>
             <Typography sx={sectionSx}>Base colors</Typography>

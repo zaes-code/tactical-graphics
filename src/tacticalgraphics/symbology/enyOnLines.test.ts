@@ -9,7 +9,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, resetTacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {getPaintFunction} from './registry';
 
 const context: PaintContext = {
@@ -61,7 +61,8 @@ const LINES = [
     TacticalGraphicName.NamedAreaOfInterestLine,
 ];
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('ENY on the outer side of each end of a hostile line', () => {
     it.each(LINES)('%s leads its west label and trails its east one', name => {
@@ -100,5 +101,16 @@ describe('ENY on the outer side of each end of a hostile line', () => {
     it('marks both ends of a hostile boundary (APP-06 110100)', () => {
         expect(texts(paint(TacticalGraphicName.Boundary, EAST, TacticalGraphicHostility.hostileFaker)).filter(t => t === 'ENY')).toHaveLength(2);
         expect(texts(paint(TacticalGraphicName.Boundary, EAST, TacticalGraphicHostility.friend))).not.toContain('ENY');
+    });
+});
+
+describe('ENY is the host\'s choice', () => {
+    // Off by default: the red line work says hostile, and a host that wants the word as well
+    // turns it on (user, 2026-11-02). @see TacticalGraphicsConfigOptions.enemyLabels
+    it.each(LINES)('%s writes no ENY unless enemyLabels is on', name => {
+        resetTacticalGraphicsConfig();
+        expect(texts(paint(name, EAST, TacticalGraphicHostility.hostileFaker)).some(t => t.includes('ENY'))).toBe(false);
+        setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true}));
+        expect(texts(paint(name, EAST, TacticalGraphicHostility.hostileFaker)).some(t => t.includes('ENY'))).toBe(true);
     });
 });

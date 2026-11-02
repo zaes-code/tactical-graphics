@@ -150,6 +150,7 @@ export {
     getDefaultLineWidth,
     geometryConfigKey,
     getSmoothLines,
+    getEnemyLabels,
     getTacticalGraphicsConfig,
     resetTacticalGraphicsConfig,
     setDefaultLabelSize,

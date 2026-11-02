@@ -19,7 +19,7 @@
  */
 
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {getPaintFunction} from './registry';
@@ -69,7 +69,8 @@ const SPAN = 600_000;
 const EAST = {from: [0, 0] as ProjectedPosition, to: [SPAN, 0] as ProjectedPosition, tipX: SPAN};
 const WEST = {from: [SPAN, 0] as ProjectedPosition, to: [0, 0] as ProjectedPosition, tipX: 0};
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('a movement label sits the same distance from the arrowhead either way round', () => {
     const NAMES = [

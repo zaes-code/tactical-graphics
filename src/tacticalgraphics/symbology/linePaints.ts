@@ -11,9 +11,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {cutGapAlongPath, offsetBelow, pathLength, textWidth, uprightFlipped, uprightRotation} from './decorations';
-import {amplifierDash, asAmplifier, getFullLabel, hostilityOf, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import { TacticalGraphicName} from '../core/type';
+import {cutGapAlongPath, offsetBelow, pathLength, splitAtCorners, textWidth, uprightFlipped, uprightRotation} from './decorations';
+import {amplifierDash, asAmplifier, getFullLabel, showsEny, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
 
@@ -39,6 +39,17 @@ function label(
             scale,
         },
     };
+}
+
+/** The segment and fraction `distance` along `path`, clamped to its ends. */
+function locateAlong(path: ProjectedPosition[], distance: number): {index: number; t: number} {
+    let left = Math.max(0, distance);
+    for (let i = 0; i < path.length - 1; i++) {
+        const length = Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+        if (left <= length || i === path.length - 2) return {index: i, t: length === 0 ? 0 : Math.min(1, left / length)};
+        left -= length;
+    }
+    return {index: 0, t: 0};
 }
 
 /** Clearance between the arrowhead's wing base and the start of the text. */
@@ -127,7 +138,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
 
         const nameText = getFullLabel(name, feature.properties.designation ?? '');
         const dateText = areaDateLabel(feature);
-        const showEny = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const showEny = showsEny(feature);
 
         /*
          * `ENY` is the only prefix these arrows carry, and it is set apart from the name rather
@@ -145,24 +156,36 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
         }
 
-        let textPx = prefixOnly
-            ? (shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0)
-            : (nameText ? textWidth(context, nameText, fontStyle, scale) : 0);
+        const pad = ARROW_TEXT_BREAK_PAD_PX * context.resolution;
+        const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
+        // One break in the shaft, `widthPx` of text ending `backPx` behind the anchor, on `path`
+        // whose far end is the shaft's end.
+        const cut = (path: ProjectedPosition[], backPx: number, widthPx: number) => {
+            const middle = pathLength(path) - fromEnd - (backPx + widthPx / 2) * context.resolution;
+            const {index, t} = locateAlong(path, middle);
+            return cutGapAlongPath(path, index, t, (widthPx * context.resolution) / 2 + pad);
+        };
+
         if (showEny && !prefixOnly) {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
+            const enyWidthPx = textWidth(context, 'ENY', fontStyle, scale);
             const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
             paints.push(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
-            textPx = nameWidthPx + ARROW_ENY_GAP_PX + textWidth(context, 'ENY', fontStyle, scale);
-        }
-        if (textPx > 0) {
-            // The break, measured along the shaft from the anchor back over the text.
-            const pad = ARROW_TEXT_BREAK_PAD_PX * context.resolution;
-            const lastLen = lineLen;
-            const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
-            const halfGap = (textPx * context.resolution) / 2 + pad;
-            const t = (lastLen - fromEnd - (textPx * context.resolution) / 2) / lastLen;
-            const {outline} = cutGapAlongPath(baseCoords, baseCoords.length - 2, t, halfGap);
-            shaft.geometry = {type: 'MultiLineString', coordinates: outline};
+            /*
+             * **Two breaks, with the shaft running between them.** Each of 140601-140605 boxes
+             * N and T separately on the line, `A —N—T—>`, so `ENY` and the name are two words
+             * on the shaft rather than one gap with nothing in its middle (user, 2026-11-02).
+             */
+            const eny = cut(baseCoords, nameWidthPx + ARROW_ENY_GAP_PX, enyWidthPx);
+            const outline = [...splitAtCorners(eny.before)];
+            if (nameText) outline.push(...cut(eny.after, 0, nameWidthPx).outline);
+            else outline.push(eny.after);
+            shaft.geometry = {type: 'MultiLineString', coordinates: outline.filter(run => run.length > 1 && pathLength(run) > 0)};
+        } else {
+            const textPx = prefixOnly
+                ? (shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0)
+                : (nameText ? textWidth(context, nameText, fontStyle, scale) : 0);
+            if (textPx > 0) shaft.geometry = {type: 'MultiLineString', coordinates: cut(baseCoords, 0, textPx).outline};
         }
 
         if (dateText) {

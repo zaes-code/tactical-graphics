@@ -8,7 +8,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {
     MINE_GLYPH_GAP_PX,
     mineFillPaint,
@@ -56,7 +56,8 @@ const strokeCount = (paints: Paint[]) =>
         return total + 1;
     }, 0);
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('APP-06 Table 8-24 — the mine-type icons', () => {
     it('draws three of them in a row, whatever the type', () => {

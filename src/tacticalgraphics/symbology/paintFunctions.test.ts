@@ -17,7 +17,7 @@
  */
 
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {RATIO_LOCKED_LABEL_FONT, fontStyle, ratioLockedLabelScale} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {arcMissionTaskPaint, defaultLinePaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
@@ -49,7 +49,8 @@ const lineFeature = (coords: ProjectedPosition[], overrides: Partial<PaintFeatur
 /** A 400 km line — long enough to carry teeth at a middling resolution. */
 const LONG_LINE: ProjectedPosition[] = [[0, 0], [400_000, 0]];
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('the symbology layer needs no DOM', () => {
     it('paints a phase line with no canvas and no map', () => {
