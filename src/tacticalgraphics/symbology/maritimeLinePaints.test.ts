@@ -489,3 +489,17 @@ describe('bearing-line text stays upright', () => {
         for (const mark of marks) expect(mark.text!.rotation ?? 0).toBe(0);
     });
 });
+
+describe('a vertical bearing line keeps H within its length', () => {
+    // The H sat level with point 2 and centred on it, so half of it stood above the line's
+    // top end (user, 2026-11-02). It now hangs back along the line from point 2.
+    it.each([
+        ['drawn north', [[0, 0], [0, 5000]], 'top'],
+        ['drawn south', [[0, 5000], [0, 0]], 'bottom'],
+    ] as const)('%s', (_, coords, baseline) => {
+        const name = BEARING_LINES[0];
+        const paints = bearingLinePaint(name)(lineFeature(name, coords.map(c => [...c]) as ProjectedPosition[], {additionalInfo: 'CONTACT'}), context);
+        const info = paints.find(p => p.text?.text === 'CONTACT')!;
+        expect(info.text!.baseline).toBe(baseline);
+    });
+});

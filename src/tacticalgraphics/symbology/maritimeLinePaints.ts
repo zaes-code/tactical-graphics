@@ -216,6 +216,10 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
             const align = steep ? (nx > 0 ? 'left' : 'right') : !uprightFlipped(from, to) ? 'right' : 'left';
             const mark = text(infoAt, String(info), align, 'amplifier');
             if (steep && Math.abs(ny / n) > LEANS) mark.text!.baseline = ny > 0 ? 'bottom' : 'top';
+            // On a near-vertical run the text sits level with point 2 and hangs back along the
+            // line from it, so it stays within the line's length rather than standing half
+            // above its end (user, 2026-11-02).
+            else if (steep) mark.text!.baseline = to[1] > from[1] ? 'top' : 'bottom';
             paints.push(mark);
         }
 
