@@ -45,9 +45,9 @@ export class SafeLaneOrGap extends TacticalGraphicsBase<PointGraphicOptions> {
     /**
      * Both anchors, entry first.
      *
-     * The plate stacks `T` / `AM` / `W` / `W1` down one side of the lane starting level
-     * with point 1, so the paint needs the direction as well as the corner — and a single
-     * point gives it neither.
+     * The plate stacks `T` / `AM` / `W` / `W1` down the left of the lane, looking from point 1
+     * to point 2, centred between them, so the paint needs the direction as well as the
+     * middle — and a single point gives it neither.
      */
     generateLabels(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiPoint> {
         const coords = base.geometry.coordinates;
