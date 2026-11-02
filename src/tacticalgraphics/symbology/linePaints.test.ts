@@ -7,7 +7,7 @@
  */
 import type {Paint, PaintContext, PaintFeature} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {TacticalGraphicsConfig, resetTacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {directionArrowPaint} from './linePaints';
 
 const context: PaintContext = {
