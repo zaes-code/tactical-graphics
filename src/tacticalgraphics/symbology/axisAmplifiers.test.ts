@@ -150,6 +150,18 @@ describe('avenue of approach field H', () => {
     });
 });
 
+describe('avenue of approach field H is level', () => {
+    // 152300 boxes H level beside a climbing arrow (user, 2026-11-02).
+    it('carries no rotation on a diagonal arrow', () => {
+        const diagonal: Geometry = {type: 'LineString', coordinates: ((base as {coordinates: Position[]}).coordinates).map(([x, y]) => [x, y + x] as Position)};
+        const properties = {designation: 'X', additionalInfo: 'NOTE', radius: 1000, hostility: TacticalGraphicHostility.friend};
+        const marks = paintGraphic(buildPaintedGraphic(N.AvenueOfApproach, diagonal, properties, resolution)!, context).filter(p => p.text);
+        const h = marks.find(p => p.text!.text === 'NOTE')!;
+        expect(h.text!.rotation ?? 0).toBe(0);
+        expect(marks.find(p => p.text!.text.startsWith('AA'))!.text!.rotation ?? 0).not.toBe(0);
+    });
+});
+
 describe.each([N.AviationAxisOfAdvance, N.AttackHelicopterAxisOfAdvance])('%s keeps its dates out of the twist', name => {
     it('ends W - W1 before the walls start to cross', () => {
         // The dates ran through the crossing on every heading (found turning each line graphic

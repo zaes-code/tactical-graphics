@@ -560,11 +560,18 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             // Turned to the rear segment of the center line (published from anchor 4), not the head's.
             const [a, b] = coords.length >= 6 ? [coords[4], coords[5]] : [c0, c1];
             const at = offsetAbove(rear, a, b, context.resolution, outPx);
+            /*
+             * **Level, whatever the arrow's heading.** 152300's Template boxes H level beside
+             * a climbing arrow and its Example prints "STEEP-SIDED WADIS" level too; it used to
+             * turn with the rear segment (user, 2026-11-02). Level text grows away from the
+             * rail the way the crossings' dates do: its nearest corner is the anchor.
+             */
+            const [ox, oy] = [at[0] - rear[0], at[1] - rear[1]];
+            const on = Math.hypot(ox, oy) || 1;
             paints.push(
                 text(feature, at, additional, scale, {
-                    rotation: uprightRotation(a, b),
-                    // Reading forward from the rear, toward the head.
-                    align: alignAlong(coords.length >= 4 ? 'left' : 'right', a, b),
+                    align: ox / on > LEANS_OFF_AXIS ? 'left' : ox / on < -LEANS_OFF_AXIS ? 'right' : 'center',
+                    baseline: oy / on > LEANS_OFF_AXIS ? 'bottom' : oy / on < -LEANS_OFF_AXIS ? 'top' : 'middle',
                     // Free text the operator typed, so "name only" takes it away. The `AA`
                     // literal and the `ENY` marks are the symbol and stay.
                     kind: 'amplifier',
