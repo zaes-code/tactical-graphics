@@ -193,7 +193,14 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
             });
         }
 
-        const rotation = uprightRotation(from, to);
+        /*
+         * **An exactly vertical convoy keeps the layout it always had**: text turned with the
+         * axis as drawn and the dates on its west side. The line rule that reads every vertical
+         * segment bottom to top (2026-11-01) flipped a convoy drawn due south, and the user
+         * asked for the convoy to stay as it was (2026-11-02). @see uprightFlipped
+         */
+        const vertical = from[0] === to[0];
+        const rotation = vertical ? -Math.atan2(to[1] - from[1], 0) : uprightRotation(from, to);
         /*
          * **The labels scale with the symbol, and are then capped.**
          *
@@ -290,7 +297,9 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
          * up, so nothing else would give it away. "Below" is normalized against the map's
          * north there, which is the only definition that holds. @see offsetAbove
          */
-        const under = offsetBelow(at(neck / 2, 0), from, to, res, bodyHalfPx + DATE_GAP_PX * scale);
+        const underGapPx = bodyHalfPx + DATE_GAP_PX * scale;
+        const middle = at(neck / 2, 0);
+        const under: ProjectedPosition = vertical ? [middle[0] - underGapPx * res, middle[1]] : offsetBelow(middle, from, to, res, underGapPx);
         // The date-time group has the whole body to run under, and nothing beside it, but it is
         // never drawn larger than the fields inside the body. @see withProportionateAmplifiers
         const dateScale = Math.min(capLabelToSpan(context, dates, fontStyle, scale, neck / res), weapon || info ? pairScale : Infinity);
