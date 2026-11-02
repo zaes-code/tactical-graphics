@@ -69,7 +69,7 @@ const SPAN = 600_000;
 const EAST = {from: [0, 0] as ProjectedPosition, to: [SPAN, 0] as ProjectedPosition, tipX: SPAN};
 const WEST = {from: [SPAN, 0] as ProjectedPosition, to: [0, 0] as ProjectedPosition, tipX: 0};
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('a movement label sits the same distance from the arrowhead either way round', () => {

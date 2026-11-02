@@ -217,10 +217,10 @@ export interface TacticalGraphicsConfigOptions {
 
     /**
      * Write `ENY` on hostile graphics as well as drawing them in the hostile color. Default
-     * `false`: a hostile graphic is identified by its red line work alone.
+     * `true`; set it `false` to identify hostile graphics by their red line work alone.
      *
-     * APP-06 8.1.4 and FM 1-02.2 field N add `ENY` where color is not available, so a host
-     * that prints in monochrome, or simply wants both cues, turns this on. It covers every
+     * APP-06 8.1.4 and FM 1-02.2 field N add `ENY` so a hostile graphic still reads as one
+     * where color is not available, which is why it is on unless a host opts out. It covers every
      * place the library writes `ENY`: the ends of lines, the arrows, the areas and the
      * obstacles. Paint only, so `refreshStyles()` is enough to apply a change.
      */
@@ -397,7 +397,7 @@ export function getSmoothLines(): boolean {
 
 /** Whether hostile graphics write `ENY` as well as drawing in the hostile color. @see TacticalGraphicsConfigOptions.enemyLabels */
 export function getEnemyLabels(): boolean {
-    return _config.enemyLabels ?? false;
+    return _config.enemyLabels ?? true;
 }
 
 /**

@@ -367,7 +367,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <ToggleSetting
                 label="Write ENY on Hostile"
                 hint="APP-06 8.1.4: the word as well as the color, for monochrome use"
-                checked={settings.enemyLabels === true}
+                checked={settings.enemyLabels !== false}
                 onChange={enemyLabels => onChange({enemyLabels})}
             />
 

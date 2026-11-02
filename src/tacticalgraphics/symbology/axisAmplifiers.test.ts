@@ -11,7 +11,7 @@ import {buildPaintedGraphic, configureTacticalGraphics, paintGraphic, resetTacti
 import {TacticalGraphicHostility, TacticalGraphicName as N} from '../core/type';
 import type {Paint, PaintContext} from '../core/paint';
 
-// The hostile marks are pinned here, and a host switches them on. @see TacticalGraphicsConfigOptions.enemyLabels
+// The hostile marks are pinned here, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => configureTacticalGraphics({enemyLabels: true}));
 afterEach(() => resetTacticalGraphicsConfig());
 

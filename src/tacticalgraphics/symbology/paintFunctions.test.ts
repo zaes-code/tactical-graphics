@@ -49,7 +49,7 @@ const lineFeature = (coords: ProjectedPosition[], overrides: Partial<PaintFeatur
 /** A 400 km line — long enough to carry teeth at a middling resolution. */
 const LONG_LINE: ProjectedPosition[] = [[0, 0], [400_000, 0]];
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('the symbology layer needs no DOM', () => {

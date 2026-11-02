@@ -61,7 +61,7 @@ const LINES = [
     TacticalGraphicName.NamedAreaOfInterestLine,
 ];
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('ENY on the outer side of each end of a hostile line', () => {
@@ -104,13 +104,13 @@ describe('ENY on the outer side of each end of a hostile line', () => {
     });
 });
 
-describe('ENY is the host\'s choice', () => {
-    // Off by default: the red line work says hostile, and a host that wants the word as well
-    // turns it on (user, 2026-11-02). @see TacticalGraphicsConfigOptions.enemyLabels
-    it.each(LINES)('%s writes no ENY unless enemyLabels is on', name => {
+describe("ENY is the host's choice", () => {
+    // On by default, and a host content with the red line work alone turns it off
+    // (user, 2026-11-02). @see TacticalGraphicsConfigOptions.enemyLabels
+    it.each(LINES)('%s writes ENY by default and none when enemyLabels is off', name => {
         resetTacticalGraphicsConfig();
-        expect(texts(paint(name, EAST, TacticalGraphicHostility.hostileFaker)).some(t => t.includes('ENY'))).toBe(false);
-        setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true}));
         expect(texts(paint(name, EAST, TacticalGraphicHostility.hostileFaker)).some(t => t.includes('ENY'))).toBe(true);
+        setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: false}));
+        expect(texts(paint(name, EAST, TacticalGraphicHostility.hostileFaker)).some(t => t.includes('ENY'))).toBe(false);
     });
 });

@@ -51,7 +51,7 @@ const lines = (paints: Paint[]): ProjectedPosition[][] =>
 
 const texts = (paints: Paint[]) => paints.filter(p => p.text).map(p => p.text!.text);
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 const hostile = (coordinates: ProjectedPosition[] = EAST, extra: Record<string, unknown> = {}) =>

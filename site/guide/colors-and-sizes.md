@@ -20,7 +20,7 @@ configureTacticalGraphics({
     obstacleColors: true,          // default true — see below
     obstacleColor: '#00AC00',      // the green itself
     smoothLines: false,            // default false — see below
-    enemyLabels: false,            // default false — see below
+    enemyLabels: true,             // default true — see below
 });
 
 graphics.refreshStyles();   // repaint what is already drawn
@@ -35,12 +35,12 @@ handle does the right thing for either engine; on OpenLayers without the façade
 
 ## ENY on hostile graphics
 
-A hostile graphic draws its line work in the hostile color. `enemyLabels: true` also writes
-`ENY` on it, wherever the standards put field N: at both ends of a line, on the direction of
-attack arrows, outside an axis's rails, on the hostile areas and obstacles. APP-06 8.1.4 asks
-for the word when color is not available, so turn it on for monochrome output, or when you
-want both cues. It is off by default, and it changes paint only, so `refreshStyles()` applies
-it.
+A hostile graphic draws its line work in the hostile color, and by default also writes `ENY`
+on it wherever the standards put field N: at both ends of a line, on the direction of attack
+arrows, outside an axis's rails, on the hostile areas and obstacles. APP-06 8.1.4 asks for the
+word so the graphic still reads as hostile where color is not available. Set
+`enemyLabels: false` to rely on the color alone. It changes paint only, so `refreshStyles()`
+applies it.
 
 ## Smooth lines
 
