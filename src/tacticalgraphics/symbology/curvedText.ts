@@ -140,3 +140,48 @@ export function textAlongPath(
     }
     return [...halos, ...glyphs];
 }
+
+/**
+ * `path` moved sideways, segment by segment, to the side `toward` points from `segment`
+ * (the last by default) and by its length, so a run of text can follow the route at a fixed distance.
+ * Each vertex is mitered, so the offset holds round a bend.
+ */
+export function offsetPath(path: ProjectedPosition[], toward: [number, number], segment = path.length - 2): ProjectedPosition[] {
+    const distance = Math.hypot(toward[0], toward[1]);
+    const n = path.length;
+    if (n < 2 || distance === 0) return path;
+    const normals = path.slice(1).map((b, i) => {
+        const a = path[i];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        return [-(b[1] - a[1]) / len, (b[0] - a[0]) / len] as [number, number];
+    });
+    const ref = normals[Math.max(0, Math.min(normals.length - 1, segment))];
+    const side = ref[0] * toward[0] + ref[1] * toward[1] >= 0 ? distance : -distance;
+    return path.map((p, i) => {
+        const [a, b] = [normals[Math.max(0, i - 1)], normals[Math.min(normals.length - 1, i)]];
+        // A miter: the mean normal stretched by 1 / cos(half the turn), capped at twice the
+        // distance so a hairpin does not throw the vertex far out.
+        const [mx, my] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const k = Math.min(2, 1 / Math.max(mx * mx + my * my, 0.25));
+        return [p[0] + mx * k * side, p[1] + my * k * side] as ProjectedPosition;
+    });
+}
+
+/**
+ * Text on `path` whatever its length: {@link textAlongPath} where the run crosses a vertex,
+ * else one straight label stood on the segment it falls on, turned to that segment. A caller's
+ * own straight label is turned to the segment it was anchored on, which need not be the one
+ * the text ends up on once the path turns short of it.
+ */
+export function textOnPath(path: ProjectedPosition[], at: number, align: PathTextAlign, spec: TextSpec, context: PaintContext): Paint[] {
+    const bent = textAlongPath(path, at, align, spec, context);
+    if (bent) return bent;
+    const w = walk(path);
+    const s = Math.max(0, Math.min(w.length, at));
+    const i = segmentAt(w, s);
+    const [a, b] = [path[i], path[i + 1]];
+    const forward = readsAlongPath(a, b);
+    const [dx, dy] = forward ? [b[0] - a[0], b[1] - a[1]] : [a[0] - b[0], a[1] - b[1]];
+    const textAlign = align === 'center' ? 'center' : (align === 'end') === forward ? 'right' : 'left';
+    return [{geometry: {type: 'Point', coordinates: pointAt(w, s)}, text: {...spec, rotation: -Math.atan2(dy, dx), align: textAlign, baseline: 'middle'}}];
+}

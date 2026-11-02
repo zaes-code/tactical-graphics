@@ -20,6 +20,7 @@ import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloCol
 import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
+import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, showsEny, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -307,17 +308,23 @@ export function munitionFlightPathPaint(): LinePaint {
             ...(() => {
                 const last = coords[coords.length - 1];
                 const fromFirst = coords[0][0] < last[0] || (coords[0][0] === last[0] && coords[0][1] <= last[1]);
-                const [a, b] = fromFirst ? [coords[0], coords[1]] : [last, coords[coords.length - 2]];
-                return [textMark(
+                const path = fromFirst ? coords : [...coords].reverse();
+                const [a, b] = [path[0], path[1]];
+                const below = offsetBelow(a, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX);
+                const straight = textMark(
                     feature,
-                    offsetBelow(a, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX),
+                    below,
                     dateRangeLabel(feature.properties),
                     scale,
                     uprightRotation(a, b),
                     uprightFlipped(a, b) ? 'right' : 'left',
                     'middle',
                     'amplifier',
-                )];
+                );
+                // Past the first segment the run follows the path, on a line offset below it, so
+                // it never leaves the line where it turns (user, 2026-11-02). @see textAlongPath
+                const under = offsetPath(path, [below[0] - a[0], below[1] - a[1]], 0);
+                return textOnPath(under, distanceAlongPath(under, below), 'start', straight.text!, context);
             })(),
             {
                 geometry: {type: 'MultiLineString', coordinates: outline},
