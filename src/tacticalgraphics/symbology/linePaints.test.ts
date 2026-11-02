@@ -112,3 +112,57 @@ describe('the four direction-of-attack arrows', () => {
         expect(runs).toHaveLength(2);
     });
 });
+
+describe('direction of attack labels stay on a bent route', () => {
+    // A long leg up the page and a last leg too short for "ENY  BLUE": the words left the line
+    // where it turned (user, 2026-11-02). Every glyph must stand on the route.
+    const route: [number, number][] = [[0, -400], [0, 0], [60, 0]];
+    const paints = directionArrowPaint(TacticalGraphicName.DirectionOfMainAttack)(
+        {
+            geometry: {type: 'MultiLineString', coordinates: [route, [[50, 6], [60, 0], [50, -6]]]},
+            properties: {name: TacticalGraphicName.DirectionOfMainAttack, designation: 'BLUE', hostility: TacticalGraphicHostility.hostileFaker},
+        } as unknown as PaintFeature,
+        context,
+    );
+    const offRoute = ([x, y]: number[]) =>
+        Math.min(...route.slice(1).map((b, i) => {
+            const a = route[i];
+            const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+            const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)));
+            return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+        }));
+
+    it('sets ENY and the name on the line, glyph by glyph', () => {
+        const words = paints.filter(p => p.text && p.text.kind !== 'amplifier' && p.text.fill !== 'rgba(0,0,0,0)');
+        expect(words.map(p => p.text!.text).join('')).toBe('BLUEENY');
+        for (const p of words) expect(offRoute(p.geometry.coordinates as number[])).toBeLessThan(1);
+    });
+});
+
+describe('direction of attack dates follow a bend under a short last leg', () => {
+    // The last leg is shorter than the dates, so they must bend round onto the leg before it
+    // and stay the same distance from the route (user, 2026-11-02).
+    it('stands the dates on the leg they fall on, one offset from the route', () => {
+        const route: [number, number][] = [[0, 300], [400, 0], [440, 0]];
+        const paints = directionArrowPaint(TacticalGraphicName.DirectionOfMainAttack)(
+            {
+                geometry: {type: 'MultiLineString', coordinates: [route, [[380, 60], [440, 0], [380, -60]]]},
+                properties: {name: TacticalGraphicName.DirectionOfMainAttack, designation: 'ALPHA', startDate: '011200ZOCT26', endDate: '021800ZOCT26'},
+            } as unknown as PaintFeature,
+            context,
+        );
+        const dates = paints.filter(p => p.text?.kind === 'amplifier' && p.text.fill !== 'rgba(0,0,0,0)');
+        // They fit on the long leg, so they are one label turned to that leg, not to the last.
+        expect(dates).toHaveLength(1);
+        expect(dates[0].text!.rotation).toBeCloseTo(-Math.atan2(-300, 400), 6);
+        const off = ([x, y]: number[]) => Math.min(...route.slice(1).map((b, i) => {
+            const a = route[i];
+            const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+            const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)));
+            return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+        }));
+        const d = dates.map(p => off(p.geometry.coordinates as number[]));
+        expect(Math.max(...d)).toBeLessThan(40);
+        expect(Math.min(...d)).toBeGreaterThan(15);
+    });
+});

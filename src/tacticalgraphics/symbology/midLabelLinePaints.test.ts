@@ -158,3 +158,25 @@ describe('the coordinated fire line is always dashed', () => {
         expect(line.stroke?.dashPx?.length).toBeGreaterThan(0);
     });
 });
+
+describe('the munition flight path DTG on a bent path', () => {
+    // A first segment too short for the dates: past the bend they follow the path below it
+    // rather than running straight off it (user, 2026-11-02).
+    it('keeps every glyph the same distance below the line', () => {
+        const path: ProjectedPosition[] = [[0, 0], [600, 0], [600, -20_000]];
+        const feature = {
+            geometry: {type: 'LineString', coordinates: path},
+            properties: {name: TacticalGraphicName.MunitionFlightPath, startDate: '011200ZOCT26', endDate: '021800ZOCT26'},
+        } as unknown as PaintFeature;
+        const glyphs = munitionFlightPathPaint()(feature, context).filter(p => p.text?.glyph && p.text.fill !== 'rgba(0,0,0,0)');
+        expect(glyphs.length).toBeGreaterThan(10);
+        const off = ([x, y]: number[]) => Math.min(...path.slice(1).map((b, i) => {
+            const a = path[i];
+            const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+            const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)));
+            return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+        }));
+        const distances = glyphs.map(g => off(g.geometry.coordinates as number[]));
+        expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(context.resolution * 4);
+    });
+});

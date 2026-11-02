@@ -11,11 +11,13 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 import { TacticalGraphicName} from '../core/type';
 import {cutGapAlongPath, offsetBelow, pathLength, splitAtCorners, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {amplifierDash, asAmplifier, getFullLabel, showsEny, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
+import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -150,14 +152,22 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             ? legibleDesignation(enyFull, 'ENY', scale, fontStyle, context, pathLength(baseCoords) / context.resolution)
             : {text: enyFull, scale};
         const prefixOnly = shown.text !== enyFull;
+        const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
+        /*
+         * **On the shaft, bending with it.** A word ending `backPx` behind the anchor is laid
+         * along the drawn route, so on a short last leg it follows the turn rather than running
+         * straight off the line (user, 2026-11-02). Where it fits on the last leg, the straight
+         * label is kept. @see textAlongPath
+         */
+        const onShaft = (straight: Paint, backPx: number): Paint[] =>
+            textOnPath(baseCoords, pathLength(baseCoords) - fromEnd - backPx * context.resolution, 'end', straight.text!, context);
         if (prefixOnly) {
-            if (shown.text) paints.push(label(feature, anchor, shown.text, shown.scale, {rotation, align}));
+            if (shown.text) paints.push(...onShaft(label(feature, anchor, shown.text, shown.scale, {rotation, align}), 0));
         } else if (nameText) {
-            paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
+            paints.push(...onShaft(label(feature, anchor, nameText, scale, {rotation, align}), 0));
         }
 
         const pad = ARROW_TEXT_BREAK_PAD_PX * context.resolution;
-        const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
         // One break in the shaft, `widthPx` of text ending `backPx` behind the anchor, on `path`
         // whose far end is the shaft's end.
         const cut = (path: ProjectedPosition[], backPx: number, widthPx: number) => {
@@ -170,7 +180,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
             const enyWidthPx = textWidth(context, 'ENY', fontStyle, scale);
             const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
-            paints.push(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
+            paints.push(...onShaft(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}), nameWidthPx + ARROW_ENY_GAP_PX));
             /*
              * **Two breaks, with the shaft running between them.** Each of 140601-140605 boxes
              * N and T separately on the line, `A —N—T—>`, so `ENY` and the name are two words
@@ -190,7 +200,18 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
 
         if (dateText) {
             const at = offsetBelow(anchor, p1, p2, context.resolution, ARROW_DTG_OFFSET_PX * scale);
-            paints.push(asAmplifier(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'})));
+            const straight = asAmplifier(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'}));
+            // The dates follow the route too, on a line offset below it by the same amount,
+            // measured to the middle of the text since the glyphs are centred on their path.
+            const offsetPx = (ARROW_DTG_OFFSET_PX + BASE_FONT_SIZE_PX / 2) * scale;
+            const below = offsetBelow(anchor, p1, p2, context.resolution, offsetPx);
+            const under = offsetPath(baseCoords, [below[0] - anchor[0], below[1] - anchor[1]]);
+            // Measured from the anchor's place on the route, which a short last leg can put on an
+            // earlier leg than the one `below` was offset from.
+            const {index, t} = locateAlong(baseCoords, pathLength(baseCoords) - fromEnd);
+            const [ra, rb] = [baseCoords[index], baseCoords[index + 1]];
+            const onRoute: ProjectedPosition = [ra[0] + (rb[0] - ra[0]) * t, ra[1] + (rb[1] - ra[1]) * t];
+            paints.push(...textOnPath(under, distanceAlongPath(under, onRoute), 'end', straight.text!, context));
         }
 
         return paints;
