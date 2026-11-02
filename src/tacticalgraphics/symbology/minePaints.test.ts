@@ -56,7 +56,7 @@ const strokeCount = (paints: Paint[]) =>
         return total + 1;
     }, 0);
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('APP-06 Table 8-24 — the mine-type icons', () => {

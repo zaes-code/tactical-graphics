@@ -44,7 +44,7 @@ const spotOf = (paints: Paint[], match: string): ProjectedPosition | undefined =
     return hit && hit.geometry.type === 'Point' ? (hit.geometry.coordinates as ProjectedPosition) : undefined;
 };
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('APP-06 120400 — airfield zone', () => {

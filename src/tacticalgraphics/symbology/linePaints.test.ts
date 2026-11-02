@@ -38,7 +38,7 @@ const arrow = (length: number, boundsPx: number): Paint[] =>
 
 const texts = (paints: Paint[]) => paints.filter(p => p.text?.text).map(p => p.text!);
 
-// These pin the ENY marks, which a host switches on. @see TacticalGraphicsConfigOptions.enemyLabels
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
 beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('directionArrowPaint', () => {
@@ -107,7 +107,7 @@ describe('the four direction-of-attack arrows', () => {
     });
 
     it.each(DIRECTION_ARROWS)('%s cuts one break when ENY is off', name => {
-        resetTacticalGraphicsConfig();
+        setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: false}));
         const runs = (paintArrow(name, TacticalGraphicHostility.hostileFaker)[0].geometry as {coordinates: number[][][]}).coordinates;
         expect(runs).toHaveLength(2);
     });
