@@ -875,7 +875,7 @@ export function mobileDefenseGraphicPaint(): (f: PaintFeature, c: PaintContext) 
 const LEANS_OFF_AXIS = Math.sin(Math.PI / 8);
 
 /** How far past the pre-placed anchor the date sits, in screen pixels. */
-const BRIDGE_DATE_GAP_PX = 12;
+const BRIDGE_DATE_GAP_PX = 4;
 
 /**
  * Bridge, gap and assault crossing: the designation across the crossing, and the
