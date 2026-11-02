@@ -196,13 +196,14 @@ describe('APP-06 290600 — safe lane or gap', () => {
     const spotOf = (entry: ProjectedPosition, exit: ProjectedPosition, ctx = context()) =>
         (markOf({designation: 'L'}, entry, exit, ctx).geometry as {coordinates: ProjectedPosition}).coordinates;
 
-    it('sets the column right of the line running point 1 to point 2', () => {
-        // Right of *travel*: drawn southward the column is west of the lane, drawn
-        // northward it is east. Taking the side from the map's north instead would put it
-        // on the same compass side both times -- the column would jump across the symbol
-        // when the same lane was redrawn the other way round.
-        expect(spotOf([0, 0], [0, -20_000])[0]).toBeLessThan(0);
-        expect(spotOf([0, -20_000], [0, 0])[0]).toBeGreaterThan(0);
+    it('sets the column left of the line running point 1 to point 2, centred on it', () => {
+        // The plate draws point 1 above point 2 with the column on the east: left of
+        // *travel*. Drawn southward the column is east of the lane, drawn northward it is
+        // west, and a lane drawn east to west carries it underneath (user, 2026-11-02).
+        expect(spotOf([0, 0], [0, -20_000])[0]).toBeGreaterThan(0);
+        expect(spotOf([0, -20_000], [0, 0])[0]).toBeLessThan(0);
+        expect(spotOf([20_000, 0], [0, 0])[1]).toBeLessThan(0);
+        expect(spotOf([0, 0], [0, -20_000])[1]).toBeCloseTo(-10_000, 0);
     });
 
     it('never rotates the column', () => {
@@ -251,11 +252,11 @@ describe('APP-06 290600 — safe lane or gap', () => {
         // The anchor sits on the corner nearest the symbol, so both alignments have to
         // follow the offset. Hung the other way the block starts clear and then walks over
         // the line it is labelling.
-        expect(markOf({designation: 'L'}, [0, 0], [0, -20_000]).text!.align).toBe('right');
-        expect(markOf({designation: 'L'}, [0, -20_000], [0, 0]).text!.align).toBe('left');
-        // A lane running east: the offset is straight down, so the block hangs below it.
-        expect(markOf({designation: 'L'}, [0, 0], [20_000, 0]).text!.baseline).toBe('top');
-        expect(markOf({designation: 'L'}, [20_000, 0], [0, 0]).text!.baseline).toBe('bottom');
+        expect(markOf({designation: 'L'}, [0, 0], [0, -20_000]).text!.align).toBe('left');
+        expect(markOf({designation: 'L'}, [0, -20_000], [0, 0]).text!.align).toBe('right');
+        // A lane running west: the offset is straight down, so the block hangs below it.
+        expect(markOf({designation: 'L'}, [20_000, 0], [0, 0]).text!.baseline).toBe('top');
+        expect(markOf({designation: 'L'}, [0, 0], [20_000, 0]).text!.baseline).toBe('bottom');
     });
 
     it('does not print the date range twice', () => {

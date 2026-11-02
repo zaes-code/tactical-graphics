@@ -205,9 +205,15 @@ export function safeLaneOrGapPaint(): LinePaint {
         const len = Math.hypot(dx, dy);
         if (len === 0) return lineWork;
 
-        // The right hand looking from point 1 to point 2, in a projection whose y runs up.
-        const rightX = dy / len;
-        const rightY = -dx / len;
+        /*
+         * **The left hand looking from point 1 to point 2**, in a projection whose y runs up.
+         * APP-06 290600's Template draws point 1 at the top, point 2 below it and the column
+         * on the east, which is the left of travel; turned so point 1 is east of point 2, it
+         * sits under the lane. It was on the right, and started level with point 1 (user,
+         * 2026-11-02). The names below keep `right` for the side the column is on.
+         */
+        const rightX = -dy / len;
+        const rightY = dx / len;
 
         /*
          * How far the drawn symbol reaches on that side, measured rather than assumed.
@@ -225,7 +231,9 @@ export function safeLaneOrGapPaint(): LinePaint {
             }
         }
         const offset = reach + SAFE_LANE_LABEL_GAP_PX * context.resolution;
-        const at: ProjectedPosition = [entry[0] + rightX * offset, entry[1] + rightY * offset];
+        // Centred on the lane, as the plate draws the column between the two points.
+        const middle: ProjectedPosition = [(entry[0] + exit[0]) / 2, (entry[1] + exit[1]) / 2];
+        const at: ProjectedPosition = [middle[0] + rightX * offset, middle[1] + rightY * offset];
 
         /*
          * The block grows away from the lane in both axes.
