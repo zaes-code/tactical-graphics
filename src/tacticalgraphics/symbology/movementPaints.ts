@@ -352,21 +352,6 @@ function behindArrowhead(
     return onArrow(context, coords, pathFrom, straight, 'end');
 }
 
-/** A point `d` along `path`, and the segment it lies on. */
-function pointAlong(path: ProjectedPosition[], d: number): {at: ProjectedPosition; a: ProjectedPosition; b: ProjectedPosition} {
-    let left = Math.max(0, d);
-    for (let i = 0; i < path.length - 1; i++) {
-        const [a, b] = [path[i], path[i + 1]];
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (left <= length || i === path.length - 2) {
-            const t = length === 0 ? 0 : Math.min(1, left / length);
-            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], a, b};
-        }
-        left -= length;
-    }
-    return {at: path[0], a: path[0], b: path[path.length - 1]};
-}
-
 /** Clear space between field T and the date-time group set ahead of it, in screen pixels. */
 const AXIS_NAME_DATE_GAP_PX = 24;
 /** The gap between an axis's rail and the `ENY` set outside it, in screen pixels. */
@@ -408,7 +393,7 @@ function axisAmplifiers(
     let scale = spanProportionalScale(c0, c1, res, BASE_FONT_SIZE_PX);
     const paints: Paint[] = [];
     const place = (d: number, value: string, align: 'left' | 'center' | 'right', pathAlign: PathTextAlign, kind?: TextKind) => {
-        const {at, a, b} = pointAlong(path, d);
+        const {at, from: a, to: b} = pointAlong(path, d);
         const straight = text(feature, at, value, scale, {rotation: uprightRotation(a, b), align: alignAlong(align, a, b), kind});
         paints.push(...onArrow(context, coords, pathFrom, straight, pathAlign));
     };
