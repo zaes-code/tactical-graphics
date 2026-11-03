@@ -21,6 +21,7 @@ configureTacticalGraphics({
     obstacleColor: '#00AC00',      // the green itself
     smoothLines: false,            // default false — see below
     enemyLabels: true,             // default true — see below
+    autoPlaceLabels: true,         // default true — see below
 });
 
 graphics.refreshStyles();   // repaint what is already drawn
@@ -41,6 +42,13 @@ arrows, outside an axis's rails, on the hostile areas and obstacles. APP-06 8.1.
 word so the graphic still reads as hostile where color is not available. Set
 `enemyLabels: false` to rely on the color alone. It changes paint only, so `refreshStyles()`
 applies it.
+
+## Label placement
+
+By default a label whose usual place is off screen slides onto the visible part of its graphic,
+and labels step aside from other labels and from other graphics' lines. Set
+`autoPlaceLabels: false` to draw every label at its doctrinal place whatever the view. It
+changes paint only, so `refreshStyles()` applies it, on every renderer.
 
 ## Smooth lines
 

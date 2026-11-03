@@ -11,7 +11,7 @@
 import {Feature} from 'ol';
 import {LineString, Point} from 'ol/geom';
 import type {Style} from 'ol/style';
-import {TACTICAL_GRAPHIC_KEY, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {TACTICAL_GRAPHIC_KEY, TacticalGraphicName, configureTacticalGraphics, resetTacticalGraphicsConfig} from '@zaes/tactical-graphics';
 import {beginPaintFrame, endPaintFrame, toPaintFeature} from './paintToOpenLayers';
 import {getAreaLabelStylesFn, phaseLineStyleFunc} from './openlayerStyles';
 
@@ -37,7 +37,10 @@ const textAt = (styles: Style[]) =>
 
 const style = phaseLineStyleFunc(TacticalGraphicName.PhaseLine);
 
-afterEach(() => endPaintFrame());
+afterEach(() => {
+    endPaintFrame();
+    resetTacticalGraphicsConfig();
+});
 
 describe('the OpenLayers paint frame', () => {
     // Only the middle of the line is on screen: both ends, and their labels, are off it.
@@ -52,6 +55,14 @@ describe('the OpenLayers paint frame', () => {
         beginPaintFrame(view, RESOLUTION, () => [{id: 'a', feature: toPaintFeature(line)!}]);
         const inside = textAt(style(line, RESOLUTION) as Style[]);
         expect(inside.some(([x, y]) => x >= view.minX && x <= view.maxX && y >= view.minY && y <= view.maxY)).toBe(true);
+    });
+
+    it('leaves the label at its usual place when the host turns auto placement off', () => {
+        configureTacticalGraphics({autoPlaceLabels: false});
+        const line = phaseLine('a', 0, 'BLUE');
+        const outside = textAt(style(line, RESOLUTION) as Style[]);
+        beginPaintFrame(view, RESOLUTION, () => [{id: 'a', feature: toPaintFeature(line)!}]);
+        expect(textAt(style(line, RESOLUTION) as Style[])).toEqual(outside);
     });
 
     it('keeps two labels styled in one frame off each other', () => {

@@ -12,6 +12,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {paintGeometryMembers} from '../core/paint';
+import {getAutoPlaceLabels} from '../core/config';
 
 /** Screen pixels left around a label's box, so two labels never touch. */
 const LABEL_BOX_PAD_PX = 3;
@@ -143,7 +144,7 @@ export function paintWithClearance<T>(
     context: PaintContext,
     paint: (item: T, context: PaintContext) => Paint[],
 ): Paint[][] {
-    if (!context.view) return items.map(({item}) => paint(item, context));
+    if (!context.view || !getAutoPlaceLabels()) return items.map(({item}) => paint(item, context));
     const space = emptyLabelSpace();
     for (const {id, feature} of items) addGraphicLines(space, id, feature, context.view);
     return items.map(({id, item}) => {

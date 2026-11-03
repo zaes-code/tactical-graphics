@@ -9,6 +9,7 @@ import {
     TacticalGraphicName,
     addGraphicLines,
     emptyLabelSpace,
+    getAutoPlaceLabels,
     hatchTileSegments,
     placeAreaLabel,
     takeLabels,
@@ -417,7 +418,7 @@ export function asStyleFunction(
         // withFittedDashes, withFadedPaints
         // Inside a map frame, the view is known and the labels painted earlier in it are
         // kept clear of. @see beginPaintFrame
-        const inFrame = frame && Math.abs(frame.resolution - resolution) <= resolution * 1e-9 ? frame : undefined;
+        const inFrame = frame && getAutoPlaceLabels() && Math.abs(frame.resolution - resolution) <= resolution * 1e-9 ? frame : undefined;
         const context = inFrame
             ? withClearance({...paintContext(resolution), view: inFrame.view}, spaceOf(inFrame), paintFeature.graphicId ?? '')
             : paintContext(resolution);

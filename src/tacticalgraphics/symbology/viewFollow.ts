@@ -1,5 +1,6 @@
 import type {PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {distanceAlongPath} from './curvedText';
+import {getAutoPlaceLabels} from '../core/config';
 
 /**
  * How far, in screen pixels, a label moved onto the view keeps clear of its edge.
@@ -12,7 +13,7 @@ export const VIEW_EDGE_INSET_PX = 16;
 /** The view shrunk by `px` screen pixels on every side, or `undefined` when nothing is left of it. */
 export function insetView(context: PaintContext, px: number = VIEW_EDGE_INSET_PX): ProjectedBounds | undefined {
     const view = context.view;
-    if (!view) return undefined;
+    if (!view || !getAutoPlaceLabels()) return undefined;
     const d = px * context.resolution;
     const inset = {minX: view.minX + d, minY: view.minY + d, maxX: view.maxX - d, maxY: view.maxY - d};
     return inset.minX < inset.maxX && inset.minY < inset.maxY ? inset : undefined;
@@ -412,7 +413,7 @@ export interface LabelFootprint {
  */
 export function isTaken(at: ProjectedPosition, footprint: LabelFootprint, dx: number, dy: number, context: PaintContext): boolean {
     const {avoid, avoidLines} = context;
-    if (!avoid?.length && !avoidLines?.length) return false;
+    if (!getAutoPlaceLabels() || (!avoid?.length && !avoidLines?.length)) return false;
     const len = Math.hypot(dx, dy) || 1;
     const [c, s] = [Math.abs(dx / len), Math.abs(dy / len)];
     const halfX = (c * footprint.alongPx + s * footprint.acrossPx) * context.resolution;

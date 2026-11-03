@@ -28,6 +28,8 @@ Labels that follow the view and keep clear of each other, on every renderer.
   each graphic's labels slide along their line, or across their area, clear of the labels
   already placed and of the other graphics' lines, through the new optional
   **`PaintContext.avoid`** and **`avoidLines`**. A label with no clear place keeps its usual one.
+- **`autoPlaceLabels`**, on by default, turns both off: set it `false` and every label keeps its
+  doctrinal place whatever the view.
   The pass is `paintWithClearance`, with `emptyLabelSpace`, `addGraphicLines`, `withClearance`,
   `takeLabels` and `textBounds` for an engine or host that paints graphics itself.
 - **`fullSizeDecorations`** in `TacticalGraphicsConfigOptions` (default `false`), read with

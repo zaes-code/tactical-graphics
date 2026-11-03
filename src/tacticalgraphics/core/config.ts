@@ -227,6 +227,16 @@ export interface TacticalGraphicsConfigOptions {
     enemyLabels?: boolean;
 
     /**
+     * Move labels to stay on screen and clear of each other. Default `true`.
+     *
+     * With it on, a label whose usual place is off the map slides into the visible part of its
+     * graphic, and labels step aside from other labels and line work. Set it `false` to draw
+     * every label at its doctrinal place whatever the view. Paint only, so `refreshStyles()` is
+     * enough to apply a change. @see PaintContext.view, PaintContext.avoid
+     */
+    autoPlaceLabels?: boolean;
+
+    /**
      * Keep a line's or area's decorations — obstacle teeth, wire loops, ditch teeth,
      * battlements — at full size however small the graphic is on screen. Default `false`.
      *
@@ -277,6 +287,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly altitudeUnit?: AltitudeUnit;
     readonly smoothLines?: boolean;
     readonly enemyLabels?: boolean;
+    readonly autoPlaceLabels?: boolean;
     readonly fullSizeDecorations?: boolean;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
@@ -298,6 +309,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
         if (options.smoothLines !== undefined) this.smoothLines = options.smoothLines;
         if (options.enemyLabels !== undefined) this.enemyLabels = options.enemyLabels;
+        if (options.autoPlaceLabels !== undefined) this.autoPlaceLabels = options.autoPlaceLabels;
         if (options.fullSizeDecorations !== undefined) this.fullSizeDecorations = options.fullSizeDecorations;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
@@ -331,6 +343,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
             smoothLines: overrides.smoothLines ?? this.smoothLines,
             enemyLabels: overrides.enemyLabels ?? this.enemyLabels,
+            autoPlaceLabels: overrides.autoPlaceLabels ?? this.autoPlaceLabels,
             fullSizeDecorations: overrides.fullSizeDecorations ?? this.fullSizeDecorations,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
@@ -417,6 +430,11 @@ export function getSmoothLines(): boolean {
 /** Whether hostile graphics write `ENY` as well as drawing in the hostile color. @see TacticalGraphicsConfigOptions.enemyLabels */
 export function getEnemyLabels(): boolean {
     return _config.enemyLabels ?? true;
+}
+
+/** Whether labels move to stay on screen and clear of each other. @see TacticalGraphicsConfigOptions.autoPlaceLabels */
+export function getAutoPlaceLabels(): boolean {
+    return _config.autoPlaceLabels ?? true;
 }
 
 /**

@@ -152,6 +152,7 @@ export {
     getFullSizeDecorations,
     getSmoothLines,
     getEnemyLabels,
+    getAutoPlaceLabels,
     getTacticalGraphicsConfig,
     resetTacticalGraphicsConfig,
     setDefaultLabelSize,

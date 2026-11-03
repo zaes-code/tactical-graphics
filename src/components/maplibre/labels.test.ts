@@ -8,7 +8,7 @@
  */
 
 import {vi} from 'vitest';
-import {TacticalGraphicName, type Paint} from '@zaes/tactical-graphics';
+import {TacticalGraphicName, configureTacticalGraphics, resetTacticalGraphicsConfig, type Paint} from '@zaes/tactical-graphics';
 import {buildTacticalGraphic} from './maplibreAdapter';
 import {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {zoomForResolution} from './projection';
@@ -100,6 +100,8 @@ const objective = (id: string, designation: string) => ({
 
 const inView = ([lon, lat]: number[]) => lon >= VIEW.west && lon <= VIEW.east && lat >= VIEW.south && lat <= VIEW.north;
 
+afterEach(() => resetTacticalGraphicsConfig());
+
 describe('the native layers', () => {
     /** Each label drawn, as its lon/lat and text. */
     const labels = (map: ReturnType<typeof fakeMap>) =>
@@ -125,6 +127,25 @@ describe('the native layers', () => {
         const alpha = labels(map).find(l => l.text.includes('ALPHA'))!;
         const bravo = labels(map).find(l => l.text.includes('BRAVO'))!;
         expect(Math.hypot(alpha.at[0] - bravo.at[0], alpha.at[1] - bravo.at[1])).toBeGreaterThan(0.001);
+        renderer.destroy();
+    });
+
+    it('leave every label at its usual place when auto placement is off', () => {
+        configureTacticalGraphics({autoPlaceLabels: false});
+        const map = fakeMap();
+        const renderer = new NativeLayerRenderer(map as never);
+        renderer.add(longLine());
+        renderer.add(objective('a', 'ALPHA'));
+        renderer.add(objective('b', 'BRAVO'));
+        renderer.flush();
+        expect(
+            labels(map)
+                .filter(({text}) => text.includes('BLUE'))
+                .some(({at}) => inView(at)),
+        ).toBe(false);
+        const alpha = labels(map).find(l => l.text.includes('ALPHA'))!;
+        const bravo = labels(map).find(l => l.text.includes('BRAVO'))!;
+        expect(Math.hypot(alpha.at[0] - bravo.at[0], alpha.at[1] - bravo.at[1])).toBeLessThan(1e-9);
         renderer.destroy();
     });
 });
@@ -154,6 +175,24 @@ describe('the canvas overlay', () => {
         const alpha = labels().find(l => l.text.includes('ALPHA'))!;
         const bravo = labels().find(l => l.text.includes('BRAVO'))!;
         expect(Math.hypot(alpha.at[0] - bravo.at[0], alpha.at[1] - bravo.at[1])).toBeGreaterThan(100);
+        renderer.destroy();
+    });
+
+    it('leaves every label at its usual place when auto placement is off', () => {
+        configureTacticalGraphics({autoPlaceLabels: false});
+        const renderer = new CanvasOverlayRenderer(fakeMap() as never);
+        renderer.add(longLine());
+        renderer.add(objective('a', 'ALPHA'));
+        renderer.add(objective('b', 'BRAVO'));
+        const halfWidthM = 0.4 * 111_320;
+        expect(
+            labels()
+                .filter(({text}) => text.includes('BLUE'))
+                .some(({at: [x]}) => Math.abs(x) <= halfWidthM),
+        ).toBe(false);
+        const alpha = labels().find(l => l.text.includes('ALPHA'))!;
+        const bravo = labels().find(l => l.text.includes('BRAVO'))!;
+        expect(Math.hypot(alpha.at[0] - bravo.at[0], alpha.at[1] - bravo.at[1])).toBeLessThan(1e-6);
         renderer.destroy();
     });
 });
