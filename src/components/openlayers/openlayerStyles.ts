@@ -218,7 +218,6 @@ import {
     minefieldAreaPaint,
     cbrnContaminatedAreaPaint,
     cbrnMarkPaint,
-    dashedOutlinePaint,
     zoneOfFirePaint,
     fortifiedAreaPaint,
     restrictedTerrainPaint,

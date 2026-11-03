@@ -122,7 +122,6 @@ import {
     fortifiedAreaPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
-    dashedOutlinePaint,
     zoneOfFirePaint,
     obstacleAreaPaint,
     restrictedTerrainPaint,
