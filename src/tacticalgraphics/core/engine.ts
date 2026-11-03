@@ -280,7 +280,7 @@ export interface TacticalGraphicsEngine {
      * one to take. Calls `onChange`, as any change to the set of graphics does.
      *
      * Also how a host hides a graphic: remove it, and add it back when it should show
-     * again. Optional; the MapLibre engine implements it.
+     * again. Optional; the MapLibre and OpenLayers engines implement it.
      */
     remove?(id: string): boolean;
 
@@ -288,7 +288,7 @@ export interface TacticalGraphicsEngine {
      * Draws one graphic at `opacity`, 0 to 1, for a host that dims graphics it wants seen
      * but not stressed. View state like {@link setAmplifiersHidden}: never in
      * {@link snapshot}, gone after {@link restore} or {@link clearAll}. Optional; the
-     * MapLibre engine implements it.
+     * MapLibre and OpenLayers engines implement it.
      */
     setOpacity?(id: string, opacity: number): void;
 

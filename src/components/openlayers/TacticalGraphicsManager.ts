@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx, getAutoPlaceLabels} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -317,7 +317,7 @@ export class TacticalGraphicsManager {
      */
     private openPaintFrame = (event: RenderEvent): void => {
         const state = event.frameState;
-        if (!state?.extent) return;
+        if (!state?.extent || !getAutoPlaceLabels()) return;
         const [minX, minY, maxX, maxY] = state.extent;
         let labels: globalThis.Map<string, Feature> | undefined;
         beginPaintFrame(
@@ -351,6 +351,8 @@ export class TacticalGraphicsManager {
      * The layer rather than the source, so no one listening for edits hears of one.
      */
     private restyleForView = (): void => {
+        // Off, nothing on the map depends on the view, so the frames OpenLayers already styled stand.
+        if (!getAutoPlaceLabels()) return;
         this.renderingVectorLayer.changed();
     };
 

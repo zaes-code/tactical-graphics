@@ -472,8 +472,10 @@ function hostileFlankMarks(feature: PaintFeature, context: PaintContext, nameSca
     const center = ringCenter(ring);
     // **Capped to the graphic like any label on the outline, and no larger than the name.** At
     // the centred scale it stood several times the size of the name on a small area, and a
-    // short name (a generic area's) barely shrinks. @see outsideScaleOf
-    const fitted = Math.min(outsideScaleOf(feature, context), nameScale);
+    // short name (a generic area's) barely shrinks. Never under the legibility floor, though: ENY
+    // is the hostile marker that does not rely on colour, so it stays while the outline does.
+    // @see outsideScaleOf, withLegibleText
+    const fitted = Math.min(scaleOf(feature, context), Math.max(Math.min(outsideScaleOf(feature, context), nameScale), MIN_LEGIBLE_TEXT_PX / BASE_FONT_SIZE_PX));
     const marks: Paint[] = [];
     for (const angle of [0, Math.PI]) {
         const spot = ringCrossingPoint(ring, center, angle);

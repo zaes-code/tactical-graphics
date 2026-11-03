@@ -50,6 +50,13 @@ Labels that follow the view and keep clear of each other, on every renderer.
   opacity; OpenLayers and the canvas overlay fade each color through the new
   `withFadedPaints`.
 
+### Changed
+
+- **`ENY` on a hostile area is sized to the area.** It sits on the outline, so it takes the cap
+  every label there takes, and it is never larger than the area's name. It never goes
+  below the smallest legible size, so a hostile area keeps its marker when its name is too
+  small to show. Affects the action areas, the generic area and the corps support area.
+
 ## [4.7.0] — 2026-11-02
 
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in

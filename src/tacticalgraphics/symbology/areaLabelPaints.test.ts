@@ -93,7 +93,7 @@ describe.each([
 
 /*
  * ENY at the area's own scale ignored the cap that fits the name inside the outline, so on
- * a small hostile area it stood several times the size of the name. (User, 2026-11-03.)
+ * a small hostile area it stood several times the size of the name.
  */
 describe('ENY on a hostile area is no larger than its name', () => {
     const hostile = (name: TacticalGraphicName, sidePx: number): PaintFeature => {
@@ -134,5 +134,16 @@ describe('ENY on an unnamed hostile generic area', () => {
 
     it('shrinks with the area, with no name to follow', () => {
         expect(enyScale(30)).toBeLessThan(enyScale(400));
+    });
+});
+
+describe('ENY on a hostile area too small for its name', () => {
+    it('stays, at the smallest legible size, as the hostile marker', () => {
+        const feature = area(TacticalGraphicName.AreaGeneric, 20, 'ALPHA');
+        feature.properties.hostility = TacticalGraphicHostility.hostileFaker;
+        const paints = actionAreaLabelPaint(TacticalGraphicName.AreaGeneric, {withAdditionalInfo: true})(feature, context);
+        const eny = legible(paints).filter(([text]) => text === 'ENY');
+        expect(eny).toHaveLength(2);
+        for (const [, px] of eny) expect(px).toBeCloseTo(MIN_LEGIBLE_TEXT_PX);
     });
 });
