@@ -3,7 +3,7 @@
  *
  * A DTG is `DDHHMMZMONYY` — `021200ZJUN26` is 02 June 2026 at 12:00 Zulu. **Two digits
  * of year**, which is what FM 1-02.2 prints on every plate and what the README has
- * always documented; the dialog wrote four (`021200ZJUN2026`) until 2026-08-03, so every
+ * always documented; the dialog used to write four (`021200ZJUN2026`), so every
  * graphic drawn before then carries the long form.
  *
  * Lives here rather than inside the dialog component so it can be tested without
@@ -44,7 +44,7 @@ function twoDigitYear(year: number): string {
  *
  * Reads the four-digit form too, and ISO 8601. Dropping it would not merely fail to display an older
  * graphic's date — the input would come up empty, and saving the dialog would write that
- * emptiness back over a value the user never touched.
+ * emptiness back over a value the operator never touched.
  */
 export function dtgToDateTimeLocal(dtg: string): string {
     const iso = isoToDateTimeLocal(dtg);
