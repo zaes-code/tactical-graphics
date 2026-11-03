@@ -143,7 +143,7 @@ describe('an area label OpenLayers would not style', () => {
             s => s.getText()?.getText() === 'SWORD' || s.getText()?.getText()?.includes('SWORD'),
         );
         expect(drawn.length).toBeGreaterThan(0);
-        const at = (drawn[0].getGeometry() as {getCoordinates(): number[]}).getCoordinates();
+        const at = (drawn[0].getGeometry() as unknown as {getCoordinates(): number[]}).getCoordinates();
         expect(at[0] >= view.minX && at[0] <= view.maxX && at[1] >= view.minY && at[1] <= view.maxY).toBe(true);
     });
 
