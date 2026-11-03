@@ -21,7 +21,7 @@ import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
-import {type LabelFootprint, midSegmentInView} from './viewFollow';
+import {endAnchorInView, type LabelFootprint, midSegmentInView} from './viewFollow';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, showsEny, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -199,29 +199,40 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         // designations at the middle carry no prefix and are left to the floor.
         // @see legibleDesignation
         const ends = legibleDesignation(getFullLabel(name, ''), getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
-        const start = coords[0];
-        const afterStart = coords[1];
-        const end = coords[coords.length - 1];
-        const beforeEnd = coords[coords.length - 2];
+        /*
+         * **An end off screen takes its prefix to where the line comes into the view**, reading
+         * inward from there over the line, as the line control measures' end labels do.
+         * @see endAnchorInView
+         */
+        const endFootprint: LabelFootprint = {
+            alongPx: ends.text ? textWidth(context, ends.text, fontStyle, ends.scale) / 2 : 0,
+            acrossPx: LABEL_OFFSET_PX + BASE_FONT_SIZE_PX * ends.scale,
+        };
+        const movedStart = ends.text ? endAnchorInView(coords, 'start', endFootprint, context) : undefined;
+        const movedEnd = ends.text ? endAnchorInView(coords, 'end', endFootprint, context) : undefined;
+        const [start, afterStart] = movedStart ? [movedStart.at, movedStart.to] : [coords[0], coords[1]];
+        const startFrom = movedStart ? movedStart.from : start;
+        const [end, beforeEnd] = movedEnd ? [movedEnd.at, movedEnd.from] : [coords[coords.length - 1], coords[coords.length - 2]];
+        const endTo = movedEnd ? movedEnd.to : end;
 
         const paints: Paint[] = ends.text
             ? [
                 textMark(
                     feature,
-                    offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX),
+                    offsetAbove(start, startFrom, afterStart, context.resolution, LABEL_OFFSET_PX),
                     ends.text,
                     ends.scale,
-                    uprightRotation(start, afterStart),
-                    !uprightFlipped(start, afterStart) ? 'left' : 'right',
+                    uprightRotation(startFrom, afterStart),
+                    !uprightFlipped(startFrom, afterStart) ? 'left' : 'right',
                     'bottom',
                 ),
                 textMark(
                     feature,
-                    offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX),
+                    offsetAbove(end, beforeEnd, endTo, context.resolution, LABEL_OFFSET_PX),
                     ends.text,
                     ends.scale,
-                    uprightRotation(beforeEnd, end),
-                    !uprightFlipped(beforeEnd, end) ? 'right' : 'left',
+                    uprightRotation(beforeEnd, endTo),
+                    !uprightFlipped(beforeEnd, endTo) ? 'right' : 'left',
                     'bottom',
                 ),
             ]
@@ -234,9 +245,16 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
          * curve, so it keeps one pair at its middle.
          */
         const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
-        const spans = smoothed ? [midpointOf(coords, context)] : coords.slice(1).map((b, i) => {
+        // A segment whose middle is off screen carries its pair at the middle of what is in view
+        // of it, clear of other labels, as each of a corridor's legs does. @see midSegmentInView
+        const footprint: LabelFootprint = {
+            alongPx: Math.max(midTop ? textWidth(context, midTop, fontStyle, scale) : 0, midBottom ? textWidth(context, midBottom, fontStyle, scale) : 0) / 2,
+            acrossPx: LABEL_OFFSET_PX + BASE_FONT_SIZE_PX * scale,
+        };
+        const spans = smoothed ? [midpointOf(coords, context, footprint)] : coords.slice(1).map((b, i) => {
             const a = coords[i];
-            return {p1: a, p2: b, point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as ProjectedPosition};
+            const {t} = midSegmentInView([a, b], {index: 0, t: 0.5}, context, footprint);
+            return {p1: a, p2: b, point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t] as ProjectedPosition};
         });
         for (const {p1, p2, point} of spans) {
             if (p1[0] === p2[0] && p1[1] === p2[1]) continue;

@@ -235,3 +235,20 @@ describe('movement arrows and ring labels that follow the view', () => {
         expect(numbers({resolution, measureText, view}).length).toBeGreaterThan(0);
     });
 });
+
+describe('engineer work line', () => {
+    it('brings its end prefixes and its middle designation onto the view', () => {
+        const {without, within: shownMiddle} = painted(TacticalGraphicName.EngineerWorkLine, {designation: 'ALPHA'});
+        expect(without.filter(t => t.text === 'EWL').every(t => !inView(t.at))).toBe(true);
+        expect(shownMiddle.filter(t => t.text === 'EWL' && inView(t.at)).length).toBe(2);
+        expect(shownMiddle.some(t => t.text === 'ALPHA' && inView(t.at))).toBe(true);
+    });
+
+    it('takes each segment middle to the part of it in view', () => {
+        // East of the line's middle: the segment's own middle is off screen to the west.
+        const view = {minX: 100_000, minY: -30_000, maxX: 180_000, maxY: 30_000};
+        const {without, within: shown} = inViewCounts(TacticalGraphicName.EngineerWorkLine, LONG_LINE, {designation: 'ALPHA'}, view);
+        expect(without).toBe(0);
+        expect(shown).toBeGreaterThan(0);
+    });
+});
