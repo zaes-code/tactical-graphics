@@ -50,3 +50,29 @@ it('a retrograde task draws its letter at its own scale, and drops it and closes
     const [, first, second] = lines(tiny);
     expect(second[0][0] - first[1][0]).toBe(0);
 });
+
+describe('the W the plate boxes over the run (QA pass 2026-10-31)', () => {
+    const dated = (name: TacticalGraphicName): PaintFeature => ({
+        ...feature(400),
+        properties: {name, startDate: '011200ZOCT26'},
+    });
+    const texts = (name: TacticalGraphicName) =>
+        retrogradeTaskPaint('D', name)(dated(name), context).filter(p => p.text).map(p => p.text!.text);
+
+    it.each([TacticalGraphicName.Delay, TacticalGraphicName.ForwardPassageOfLines, TacticalGraphicName.RearwardPassageOfLines])(
+        '%s draws W above the letter',
+        name => {
+            // 2525E 340800 sets W over D; APP-06 344100 / 344200 box W above the line.
+            const paints = retrogradeTaskPaint('D', name)(dated(name), context);
+            const letter = paints.find(p => p.text?.text === 'D')!;
+            const date = paints.find(p => p.text?.text === '011200ZOCT26')!;
+            expect(date).toBeDefined();
+            const y = (p: Paint) => (p.geometry as {coordinates: ProjectedPosition}).coordinates[1];
+            expect(y(date)).toBeGreaterThan(y(letter));
+        },
+    );
+
+    it('draws no date on a retrograde task whose plate letters none', () => {
+        expect(texts(TacticalGraphicName.Withdraw)).toEqual(['D']);
+    });
+});

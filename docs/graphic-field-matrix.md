@@ -64,10 +64,10 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | blue kill box circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242303 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | blue kill box irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242301 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | blue kill box rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 242302 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| bomb area | MIL-STD-2525 + APP-06 | 240808 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bomb area | MIL-STD-2525 + APP-06 | 240808 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | boundary | MIL-STD-2525 + FM 1-02.2 + APP-06 | 110100 | Y | Y | Y |  | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |
 | breach | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340200 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| bridge | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| bridge | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271100 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | bridgehead | APP-06 | 120800 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | bridgehead line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | brigade support area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -104,7 +104,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | defeat | MIL-STD-2525 + APP-06 | 344300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | defended area, ellipse/circle | MIL-STD-2525 + APP-06 | 200201 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
 | defended area, rectangle | MIL-STD-2525 + APP-06 | 200202 | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| delay | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| delay | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340800 |  |  |  |  | Y |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | delay line | FM 1-02.2 |  | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | demonstration | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | deny | APP-06 | 343400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -118,7 +118,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | disrupt | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270502 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | division support area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | drop zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 150600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| encirclement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151800 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| encirclement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | enemy prisoner of war holding area | MIL-STD-2525 + APP-06 | 310200 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | engagement area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 151300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | engineer work line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 110300 | Y | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -132,12 +132,12 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | Explosives, State of Readiness 2 (Armed but Passable) | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | extraction zone | MIL-STD-2525 + APP-06 | 150700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | ferry crossing | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| fields of fire / sector of fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140500 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| fields of fire / sector of fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | fighter engagement zone | MIL-STD-2525 + APP-06 | 171400 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
 | final coordination line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140700 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | final protective fire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240703 | Y | Y |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |
-| final protective fire (left) | MIL-STD-2525 | 140501 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| final protective fire (right) | MIL-STD-2525 | 140502 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| final protective fire (left) | MIL-STD-2525 | 140501 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| final protective fire (right) | MIL-STD-2525 | 140502 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | fire support area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241003 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | fire support area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241001 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | fire support area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241002 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
@@ -154,11 +154,11 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | forward arming and refueling point | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | forward edge of battle area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | forward line of own troops | MIL-STD-2525 + FM 1-02.2 + APP-06 | 140100 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| forward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| forward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344100 |  |  |  |  | Y |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | free fire area circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240203 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | free fire area irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240201 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | free fire area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240202 | Y |  | Y |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| frontal attack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| frontal attack | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152700 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | gap | FM 1-02.2 |  | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | group/series of targets | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240805 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | guard | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342202 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -197,7 +197,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | main axis of advance feint | FM 1-02.2 + APP-06 | 151406 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | main supply route | MIL-STD-2525 + FM 1-02.2 + APP-06 | 330300 | Y |  |  |  | Y | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |
 | mine cluster | MIL-STD-2525 + APP-06 | 290400 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| mined area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270800 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
+| mined area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270800 |  |  |  | Y | Y |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
 | mined area, fenced | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270801 |  |  |  | Y | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
 | minefield, dynamic depiction | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270707 |  |  |  | Y | Y |  | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
 | mineline | MIL-STD-2525 + APP-06 | 290101 |  |  |  |  | Y |  |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |
@@ -241,7 +241,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | position area artillery circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240502 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | position area artillery irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240503 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | position area artillery rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240501 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| principal direction of fire | MIL-STD-2525 | 140503 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| principal direction of fire | MIL-STD-2525 | 140503 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | probable line of deployment | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141200 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | PsyOps zone, circular | APP-06 | 242703 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | PsyOps zone, irregular | APP-06 | 242701 | Y |  |  | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -255,10 +255,10 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | radiological contaminated area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 272000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | radiological contaminated area, toxic industrial material | APP-06 | 272001 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | raft site | MIL-STD-2525 + APP-06 | 290800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| rearward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| rearward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344200 |  |  |  |  | Y |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | recover | APP-06 | 344600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | refugee holding area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| regimental support area | MIL-STD-2525 + APP-06 | 310500 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| regimental support area | MIL-STD-2525 + APP-06 | 310500 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | release line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | relief in place | MIL-STD-2525 + FM 1-02.2 + APP-06 | 341900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | restricted operations zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171000 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
@@ -275,7 +275,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | safe lane or gap | MIL-STD-2525 + APP-06 | 290600 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | screen | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342203 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | search area / reconnaissance area | MIL-STD-2525 + APP-06 | 152200 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| secondary direction of fire | MIL-STD-2525 | 140504 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| secondary direction of fire | MIL-STD-2525 | 140504 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | secure | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342100 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | seize | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342300 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | severely restricted terrain | APP-06 | 152500 |  |  |  | Y |  |  |  |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |
@@ -296,19 +296,19 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | target area of interest | MIL-STD-2525 + FM 1-02.2 + APP-06 | 120300 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | target area rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 240802 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y | Y |  |  |  |  |
 | target area, single target (AEGIS) | APP-06 | 240804 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| target build up area circular | MIL-STD-2525 + APP-06 | 241703 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target build up area circular | MIL-STD-2525 + APP-06 | 241703 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | target build up area irregular | MIL-STD-2525 + APP-06 | 241701 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | target build up area rectangular | MIL-STD-2525 + APP-06 | 241702 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| target value area circular | MIL-STD-2525 + APP-06 | 241803 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| target value area circular | MIL-STD-2525 + APP-06 | 241803 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | target value area irregular | MIL-STD-2525 + APP-06 | 241801 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | target value area rectangular | MIL-STD-2525 + APP-06 | 241802 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| terminally guided munition footprint | MIL-STD-2525 + APP-06 | 242000 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| terminally guided munition footprint | MIL-STD-2525 + APP-06 | 242000 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | transit corridor | MIL-STD-2525 + FM 1-02.2 + APP-06 | 170600 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
 | trip wire | MIL-STD-2525 + FM 1-02.2 + APP-06 | 290500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | turn | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344700 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | turn | MIL-STD-2525 + FM 1-02.2 + APP-06 | 270504 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| turning movement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152900 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  | Y |  |  |  |  |  |
-| unexploded explosive ordnance (UXO) area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271000 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| turning movement | MIL-STD-2525 + FM 1-02.2 + APP-06 | 152900 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
+| unexploded explosive ordnance (UXO) area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | unmanned aircraft (UA) corridor | FM 1-02.2 |  | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  | Y | Y | Y |  |  |  |  |  |
 | unmanned aircraft restricted operations zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171200 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
 | weapon engagement zone | MIL-STD-2525 + FM 1-02.2 + APP-06 | 171300 | Y |  |  |  | Y | Y | Y | Y |  |  |  |  |  | Y | Y |  |  |  |  |  |  |
@@ -327,8 +327,8 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | withdraw | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342400 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | withdraw under pressure | MIL-STD-2525 + FM 1-02.2 + APP-06 | 342500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | zone of fire | APP-06 | 242600 | Y |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| zone of responsibility circular | MIL-STD-2525 + APP-06 | 241903 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| zone of responsibility circular | MIL-STD-2525 + APP-06 | 241903 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | zone of responsibility irregular | MIL-STD-2525 + APP-06 | 241901 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | zone of responsibility rectangular | MIL-STD-2525 + APP-06 | 241902 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 
-| **Totals** | | | 183 | 6 | 20 | 27 | 271 | 84 | 110 | 109 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 46 | 5 | 26 | 3 | 3 | 3 |
+| **Totals** | | | 176 | 6 | 20 | 27 | 271 | 84 | 117 | 112 | 5 | 3 | 4 | 3 | 2 | 23 | 23 | 46 | 5 | 29 | 3 | 3 | 3 |

@@ -130,7 +130,7 @@ describe('the colours the plates state outright', () => {
          * **Two plates letter `AM` / `AM1` / `AN` and mean different things by them.** The
          * ellipses call theirs axis *radii* and state `AN` counter-clockwise from east;
          * 240802 calls its two *"the target length (AM1) in metres and target width (AM) in
-         * metres"* — full figures — and states `AN` as a compass attitude **in mils**.
+         * metres"* — full figures — and states `AN` as a clockwise attitude **in mils**.
          *
          * Numbers chosen so each mistake is visible: halving would print `20 km`, and
          * reading the angle as degrees would print `60` where the answer is 1067.
@@ -139,8 +139,26 @@ describe('the colours the plates state outright', () => {
         const drawn = textsOf(getPaintFunction(TacticalGraphicName.TargetAreaRectangular)!.label!(feature, context)).join('\n');
         expect(drawn).toContain('AM = 40 km');
         expect(drawn).toContain('AM1 = 224 km');
-        // 90 - 30 = 60 degrees of compass attitude, and 60 degrees is 1067 mils.
-        expect(drawn).toContain('AN = 1067 mils');
+        // A length 30 degrees counter-clockwise of east is the Template turned 330 degrees
+        // clockwise, and 330 degrees is 5867 mils.
+        expect(drawn).toContain('AN = 5867 mils');
+    });
+
+    it('reads the 240802 AN as the Template turned clockwise, as its Example draws 1200 mils', () => {
+        /*
+         * The Example: AM = 60, AM1 = 112, AN = 1200 mils (67.5 degrees), drawn with the 112 m
+         * side on a bearing of about 157 and the 60 m side on about 67. So the length lies on
+         * AN + 90. Until 2026-10-31 the caption printed the length's own bearing instead.
+         */
+        const lengthBearing = 67.5 + 90;
+        // `rotation` is the length axis counter-clockwise from east: 90 - bearing.
+        const rotation = 90 - lengthBearing;
+        const feature = anchorFeature(TacticalGraphicName.TargetAreaRectangular, {width: 60, length: 112, rotation});
+        const drawn = textsOf(getPaintFunction(TacticalGraphicName.TargetAreaRectangular)!.label!(feature, context)).join('\n');
+        expect(drawn).toContain('AN = 1200 mils');
+        // And a length running east-west is the Template as drawn.
+        const level = anchorFeature(TacticalGraphicName.TargetAreaRectangular, {width: 60, length: 112, rotation: 0});
+        expect(textsOf(getPaintFunction(TacticalGraphicName.TargetAreaRectangular)!.label!(level, context)).join('\n')).toContain('AN = 0 mils');
     });
 
     it.each([
@@ -298,6 +316,17 @@ describe('the label blocks, which are three different arrangements', () => {
         const [mark] = radarSearchLabelPaint()(anchorFeature(TacticalGraphicName.RadarSearchDoctrine, {designation: 'FF'}, at), context);
         expect((mark.geometry as {coordinates: ProjectedPosition}).coordinates).toEqual(at);
         expect(mark.text?.text).toBe('FF');
+    });
+
+    it('lays that designation along the search axis', () => {
+        // "aligned with the search axis": a north-east axis turns the text to it.
+        const feature = {
+            geometry: {type: 'Point', coordinates: [1000, 1000]},
+            graphicCenter: [0, 0],
+            properties: {name: TacticalGraphicName.RadarSearchDoctrine, designation: 'FF'},
+        } as unknown as PaintFeature;
+        const [mark] = radarSearchLabelPaint()(feature, context);
+        expect(mark.text?.rotation).toBeCloseTo(-Math.PI / 4, 9);
     });
 
     it('keeps that designation when amplifiers are hidden', () => {

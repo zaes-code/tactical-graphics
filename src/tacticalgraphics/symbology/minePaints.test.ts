@@ -8,7 +8,7 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {TacticalGraphicHostility, TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {
     MINE_GLYPH_GAP_PX,
     mineFillPaint,
@@ -56,7 +56,8 @@ const strokeCount = (paints: Paint[]) =>
         return total + 1;
     }, 0);
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('APP-06 Table 8-24 — the mine-type icons', () => {
     it('draws three of them in a row, whatever the type', () => {
@@ -218,6 +219,16 @@ describe('APP-06 270707 / 270800 / 270801 — the three mine areas', () => {
         // Outline, the M markers, and the run of crosses between them.
         expect(fenced.filter(p => p.text).map(p => p.text!.text)).toEqual(['M', 'M', 'M', 'M']);
         expect(fenced.some(p => p.geometry.type === 'MultiLineString')).toBe(true);
+    });
+
+    it('draws the M marks in the line colour, as part of the outline', () => {
+        // 2525E 270800 / 270801 draw the Ms green with the ring; they were in the label colour.
+        for (const paints of [minedAreaPaint()(areaFeature(), context()), minedAreaFencedPaint()(areaFeature(), context())]) {
+            const line = paints.find(p => p.stroke)!.stroke!.color;
+            const ms = paints.filter(p => p.text?.text === 'M');
+            expect(ms).toHaveLength(4);
+            for (const m of ms) expect(m.text!.fill).toBe(line);
+        }
     });
 
     /*

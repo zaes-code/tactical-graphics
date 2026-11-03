@@ -48,7 +48,7 @@ describe('turnedLabelFlips', () => {
 describe('which labels turn with the map', () => {
     const limitOfAdvance = (coordinates: number[][]) => {
         const graphic = buildTacticalGraphic(TacticalGraphicName.LimitOfAdvance, {type: 'LineString', coordinates}, {}, RES)!;
-        return bucketPaintsInto(emptyBuckets(), paintTacticalGraphic(graphic, {resolution: RES} as never)).symbols;
+        return bucketPaintsInto(emptyBuckets(), paintTacticalGraphic(graphic, {resolution: RES, measureText: (text: string) => text.length * 10})).symbols;
     };
 
     it('turns a line label drawn exactly east to west, whose rotation is zero', () => {

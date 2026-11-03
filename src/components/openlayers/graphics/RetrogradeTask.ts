@@ -66,7 +66,7 @@ export class RetrogradeTask implements LineGraphic {
             this.labels.set('drawingResolution', drawingResolution);
         }
         this.setSymbolId('');
-        this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name)));
+        this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name), name));
         /*
          * **A separate label paint, for the graphics whose letter is not in their line work.**
          *

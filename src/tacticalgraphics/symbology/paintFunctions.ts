@@ -41,11 +41,11 @@ import {
     getLabelFillColor,
     getLabelHaloColor,
     getLabelUsesHostilityColor,
-    labelScale,
+    maxGraphicLabelScale,
     ratioLockedLabelScale,
     supportsHostility,
 } from '../core/symbology';
-import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, getEnemyLabels} from '../core/config';
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
@@ -62,6 +62,7 @@ import {
     offsetBelow,
     pathLength,
     textWidth,
+    uprightFlipped,
     uprightRotation,
 } from './decorations';
 
@@ -223,21 +224,34 @@ function withoutCoveringAmplifiers(paints: Paint[], context: PaintContext): Pain
     return changed ? out : paints;
 }
 
-interface TextBox {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-}
+/**
+ * The four corners of a label's glyphs on screen, in order round the box.
+ *
+ * **Turned with the text, not squared to the screen.** An axis-aligned box round a label laid
+ * along a diagonal line is half as tall as it is wide, so the dates under such a line always
+ * met the name's box over it and were taken away, on every diagonal. (Found turning every line
+ * graphic through four directions, 2026-11-01.)
+ */
+type TextBox = readonly (readonly [number, number])[];
 
 /** How far into each other two boxes must reach to count as overlapping, in pixels. */
 const OVERLAP_TOLERANCE_PX = 1;
 
+/** Separating axes: two convex boxes overlap unless some edge's normal parts them. */
 function overlaps(a: TextBox, b: TextBox): boolean {
-    return (
-        Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX) > OVERLAP_TOLERANCE_PX &&
-        Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY) > OVERLAP_TOLERANCE_PX
-    );
+    for (const box of [a, b]) {
+        for (let i = 0; i < box.length; i++) {
+            const [x0, y0] = box[i];
+            const [x1, y1] = box[(i + 1) % box.length];
+            const len = Math.hypot(x1 - x0, y1 - y0);
+            if (!len) continue;
+            const [nx, ny] = [-(y1 - y0) / len, (x1 - x0) / len];
+            const project = (p: readonly (readonly [number, number])[]) => p.map(([x, y]) => x * nx + y * ny);
+            const [pa, pb] = [project(a), project(b)];
+            if (Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb)) <= OVERLAP_TOLERANCE_PX) return false;
+        }
+    }
+    return true;
 }
 
 /** Line spacing of a multi-line label, as a share of the font size. */
@@ -271,19 +285,8 @@ function textBox(paint: Paint, context: PaintContext): TextBox | undefined {
     const cx = ax / context.resolution + (text.offsetXPx ?? 0);
     const cy = -ay / context.resolution + (text.offsetYPx ?? 0);
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const [x, y] of [[x0, y0], [x0 + width, y0], [x0, y0 + height], [x0 + width, y0 + height]]) {
-        const rx = cx + x * cos - y * sin;
-        const ry = cy + x * sin + y * cos;
-        minX = Math.min(minX, rx);
-        minY = Math.min(minY, ry);
-        maxX = Math.max(maxX, rx);
-        maxY = Math.max(maxY, ry);
-    }
-    return {minX, minY, maxX, maxY};
+    const corner = (x: number, y: number): [number, number] => [cx + x * cos - y * sin, cy + x * sin + y * cos];
+    return [corner(x0, y0), corner(x0 + width, y0), corner(x0 + width, y0 + height), corner(x0, y0 + height)];
 }
 
 /** The pixel size text is drawn at: the font shorthand's size times the mark's scale. */
@@ -565,6 +568,34 @@ export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: nu
 
 // ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
 
+/** True for a graphic drawn as the enemy's, by its affiliation rather than its color. */
+export function isHostile(feature: PaintFeature): boolean {
+    return hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+}
+
+/**
+ * Whether a graphic writes `ENY`: hostile, and the host asked for the word as well as the
+ * color. Every `ENY` the library draws asks this. @see TacticalGraphicsConfigOptions.enemyLabels
+ */
+export function showsEny(feature: PaintFeature): boolean {
+    return isHostile(feature) && getEnemyLabels();
+}
+
+/**
+ * A line label with its `ENY` moved to the outer side of the line's end.
+ *
+ * FM 1-02.2 Figure 5-9 sets field N at the far left and the far right of a line control
+ * measure, `N PL T ... PL T N`, so the marker leads a label that sits left of its end and
+ * trails one that sits right of it. `leftOfEnd` says which. Text without a leading `ENY`
+ * comes back as given.
+ */
+export function enyOutside(text: string, leftOfEnd: boolean): string {
+    if (leftOfEnd || !text.startsWith('ENY')) return text;
+    const rest = text.slice(3).trim();
+    return rest ? `${rest} ENY` : text;
+}
+
+
 /** Screen-pixel gap between the end of the line and the nearest edge of its label. */
 const PHASE_LINE_GAP_PX = 8;
 
@@ -588,7 +619,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const hostile = hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const hostile = showsEny(feature);
         const prefix = [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' ');
         const full = (hostile ? 'ENY ' : '') + getFullLabel(name, feature.properties.designation ?? '');
 
@@ -610,13 +641,16 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         // pixels and is NOT rotated with the text, so the actual x-component of each
         // segment has to be checked — the "keep upright" flip makes the rotation
         // identical for both directions, and without this the label lands on the line.
-        const startOutsideRight = start[0] - startNext[0] >= 0;
-        const endOutsideRight = end[0] - endPrev[0] >= 0;
+        // Asked of the rotation rather than of x, so an exactly vertical line agrees with it.
+        const startOutsideRight = !uprightFlipped(startNext, start);
+        const endOutsideRight = !uprightFlipped(endPrev, end);
 
+        // `ENY` goes on the outer side of each end, `ENY PL T ... PL T ENY`, so it is the first
+        // word of a label left of its end and the last of one to the right. @see enyOutside
         const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'right', offsetXPx: number): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
-                text,
+                text: enyOutside(text, offsetXPx + (align === 'right' ? -width : 0) < 0),
                 font: fontStyle,
                 fill: labelColorOf(feature),
                 halo: halo(),
@@ -766,11 +800,29 @@ function missionTaskLetterFont(ratioLocked: boolean): {font: string; fontPx: num
         : {font: fontStyle, fontPx: BASE_FONT_SIZE_PX};
 }
 
-/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or zoom-anchored. */
+/**
+ * The scale of a mission task's letter when it is drawn **from the symbol's own size on
+ * screen**: a quarter of the symbol (`capLabelToGraphic`'s share), never more than the
+ * ceiling every size-proportional label stops at. The letter is part of the symbol, so it
+ * shrinks as the symbol does and holds once the symbol is large.
+ *
+ * **No drawing zoom and no `graphicSize` in it** (2026-10-31). The block family and the
+ * zoom-anchored tasks used to take their letter from the zoom the task was drawn or restored
+ * at, through `graphicSize` when one was stamped. OpenLayers never stamps one for them and
+ * MapLibre filed any stored `radius` there, so the same breach drew a 24 px letter on
+ * OpenLayers and a 36 px one on MapLibre, and zoomed three times out OpenLayers took it to
+ * 8 px while the other engines held 26-33 px over a symbol a third the size. The bounds both
+ * engines carry are the one input they agree on.
+ */
+export function symbolLetterScale(feature: PaintFeature, context: PaintContext, fontPx: number): number {
+    return capLabelToGraphic(maxGraphicLabelScale(), feature, context, fontPx);
+}
+
+/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or the symbol's share. */
 function missionTaskLetterDesiredScale(feature: PaintFeature, context: PaintContext, ratioLocked: boolean): number {
     return ratioLocked
         ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
-        : capLabelToGraphic(labelScale(feature.drawingResolution, context.resolution), feature, context);
+        : symbolLetterScale(feature, context, BASE_FONT_SIZE_PX);
 }
 
 /**
@@ -964,6 +1016,25 @@ export function missionTaskLabelPaint(
 
 /** Screen-pixel standoff between a default line and the labels above and below it. */
 const DEFAULT_LINE_LABEL_GAP_PX = 8;
+
+/**
+ * Clear space, in screen pixels, two end labels must keep between them before a line draws
+ * one label at its middle instead. @see endLabelsCollide
+ */
+const END_LABEL_SEPARATION_PX = 12;
+
+/**
+ * Whether a line's two end labels, each set inward from its end, would run into each other.
+ *
+ * APP-06 puts the name at both ends of a line. Zoomed out far enough the line is shorter than
+ * the two names, and each name was drawn over the other at every engine (QA audit, 2026-10-31).
+ * Measured end to end rather than along the path: the labels sit at the ends, so a line that
+ * doubles back brings them together whatever its length.
+ */
+export function endLabelsCollide(start: ProjectedPosition, end: ProjectedPosition, widestPx: number, resolution: number): boolean {
+    const endsPx = Math.hypot(end[0] - start[0], end[1] - start[1]) / resolution;
+    return 2 * widestPx + END_LABEL_SEPARATION_PX > endsPx;
+}
 
 /** Declared beside the rule that fits every dash to its graphic. @see withFittedDashes */
 export {PLANNED_DASH_PX};
@@ -1165,6 +1236,18 @@ const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parenthes
 const DEFAULT_LINE_ADDITIONAL_INFO: ReadonlySet<TacticalGraphicName> = new Set([TacticalGraphicName.LineGeneric]);
 
 /**
+ * The default lines that carry their literal and nothing else.
+ *
+ * IFF off and IFF on: FM 1-02.2 says symbols without amplifier fields "must be used as
+ * depicted", and the plate prints `IFF OFF` / `IFF ON` at each end alone. The dialog offers
+ * no field, but a designation or a date arriving on an imported graphic used to draw.
+ */
+const DEFAULT_LINE_LITERAL_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.IdentificationFriendOrFoeOff,
+    TacticalGraphicName.IdentificationFriendOrFoeOn,
+]);
+
+/**
  * How a line sets its country code, if it takes one at all.
  *
  * Exported so a renderer that assembles its own options can start from the same answer
@@ -1178,13 +1261,15 @@ export function defaultLinePaint(
     name: TacticalGraphicName,
     options: DefaultLineOptions = {},
 ): (f: PaintFeature, c: PaintContext) => Paint[] {
-    const {alwaysDashed = false, showDates = true, countryCode = defaultLineCountryCodeStyle(name)} = options;
+    const literalOnly = DEFAULT_LINE_LITERAL_ONLY.has(name);
+    const {alwaysDashed = false, countryCode = defaultLineCountryCodeStyle(name)} = options;
+    const showDates = !literalOnly && (options.showDates ?? true);
     return (feature, context) => {
         if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiPoint') return [];
         const coords = feature.geometry.coordinates;
         if (coords.length < 2) return [];
 
-        const designation = feature.properties.designation ?? '';
+        const designation = literalOnly ? '' : feature.properties.designation ?? '';
         const country = (feature.properties.countryCode ?? '').trim();
         const named =
             countryCode === undefined || !country
@@ -1201,7 +1286,13 @@ export function defaultLinePaint(
         const free = DEFAULT_LINE_ADDITIONAL_INFO.has(name)
             ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
             : '';
-        const identifier = [free, getFullLabel(name, named)].filter(Boolean).join(' ');
+        /*
+         * **A hostile line says so in words at both ends, `ENY`**, on the outer side of each
+         * (FM 1-02.2 Figure 5-9, APP-06 8.1.4). Only phase line used to; every other line here
+         * drew red line work and nothing a monochrome print could read.
+         */
+        const hostile = showsEny(feature);
+        const identifier = [hostile ? 'ENY' : '', free, getFullLabel(name, named)].filter(Boolean).join(' ');
         const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
         const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
         const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
@@ -1216,12 +1307,19 @@ export function defaultLinePaint(
         // to read. Field H leads only on the generic line, which has no prefix, so it is never
         // cut here. The dates are capped at the name's size. @see withProportionateAmplifiers
         // @see legibleDesignation
-        const shown = legibleDesignation(identifier, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
+        const shown = legibleDesignation(
+            identifier,
+            [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' '),
+            scale,
+            fontStyle,
+            context,
+            pathLength(coords) / context.resolution,
+        );
         const gap = DEFAULT_LINE_LABEL_GAP_PX;
         const res = context.resolution;
 
-        const startAlign: 'left' | 'right' = afterStart[0] >= start[0] ? 'left' : 'right';
-        const endAlign: 'left' | 'right' = end[0] >= beforeEnd[0] ? 'right' : 'left';
+        const startAlign: 'left' | 'right' = !uprightFlipped(start, afterStart) ? 'left' : 'right';
+        const endAlign: 'left' | 'right' = !uprightFlipped(beforeEnd, end) ? 'right' : 'left';
         const startRotation = uprightRotation(start, afterStart);
         const endRotation = uprightRotation(end, beforeEnd);
 
@@ -1250,25 +1348,43 @@ export function defaultLinePaint(
             ? PLANNED_DASH_PX
             : undefined;
 
+        const stroke: Paint = {
+            geometry: feature.geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
+        };
+        // Only a designation the size rule took away is left out; an empty one stays as it was.
+        // The dates go with it. @see withProportionateAmplifiers
+        if (!(shown.text || !identifier)) return [stroke];
+
+        /*
+         * **One label at the middle once the two ends would collide**, rather than two names
+         * printed over each other. The same rule on every engine, because it is decided here.
+         * @see endLabelsCollide
+         */
+        const widestPx = Math.max(
+            shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0,
+            dateLabel ? textWidth(context, dateLabel, fontStyle, scale) : 0,
+        );
+        if (endLabelsCollide(start, end, widestPx, res)) {
+            const i = centerSegmentIndex(coords);
+            const [a, b] = [coords[i], coords[i + 1]];
+            const middle: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const rotation = uprightRotation(a, b);
+            const centered = (paint: Paint): Paint => ({...paint, text: {...paint.text!, align: 'center'}});
+            return [
+                centered(label(offsetAbove(middle, a, b, res, gap), shown.text, rotation, 'left', 'bottom', shown.scale)),
+                asAmplifier(centered(label(offsetBelow(middle, a, b, res, gap), dateLabel, rotation, 'left', 'top'))),
+                stroke,
+            ];
+        }
+
         return [
-            // Only a designation the size rule took away is left out; an empty one stays as it was.
-            ...(shown.text || !identifier
-                ? [
-                    label(offsetAbove(start, start, afterStart, res, gap), shown.text, startRotation, startAlign, 'bottom', shown.scale),
-                    label(offsetAbove(end, beforeEnd, end, res, gap), shown.text, endRotation, endAlign, 'bottom', shown.scale),
-                ]
-                : []),
-            // The dates go with a name the size rule took away. @see withProportionateAmplifiers
-            ...(shown.text || !identifier
-                ? [
-                    asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
-                    asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
-                ]
-                : []),
-            {
-                geometry: feature.geometry,
-                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
-            },
+            // A label aligned left runs inward from its end, so its first word is the outer one.
+            label(offsetAbove(start, start, afterStart, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(end, beforeEnd, end, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
+            asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
+            asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+            stroke,
         ];
     };
 }

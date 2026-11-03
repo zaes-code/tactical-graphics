@@ -525,6 +525,11 @@ export const RADIUS_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
     TacticalGraphicName.TargetAreaCircular,
+    // 241703, 241803 and 241903 letter `AM` along a `RADIUS (M)` arrow like the other seven
+    // circular target-acquisition zones, and were the three missing from this list.
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
     // APP-06 200300: its Template letters `AM` with `RADIUS (m)` written along the arrow,
     // so the radius is an amplifier the symbol carries and not only a drag read-out.
     TacticalGraphicName.NoAttackZone,
@@ -567,9 +572,9 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Deny,
     TacticalGraphicName.Locate,
     TacticalGraphicName.PsyOpsZoneCircular,
-    TacticalGraphicName.TargetBuildUpAreaCircular,
-    TacticalGraphicName.TargetValueAreaCircular,
-    TacticalGraphicName.ZoneOfResponsibilityCircular,
+    // The target build-up, target value and zone of responsibility circles left this list
+    // on 2026-10-31: their plates letter AM along a RADIUS (M) arrow, so the radius is an
+    // amplifier and they are in RADIUS_GRAPHICS with the rest of their family.
     /*
      * Not a circle, but sized by the same gesture. The rectangular target became
      * point-anchored in 3.2.0 — one anchor point, with the length swung and set by dragging
@@ -1126,6 +1131,8 @@ export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
  *   also *draw* — `passageLineGraphic` emits `[start, end]` as one of its three sub-lines.
  *   A hashed line there would be a second line on top of a solid one.
  * - **Ferry crossing** is a plain line with an end mark; its base is the symbol.
+ * - **Bridge, gap and assault crossing** place their points on the rails themselves since the
+ *   plate numbering pass, so there is no hidden centreline left to mark.
  * - **Roadblock complete (executed)** is switched off. @see ai/excluded-graphics.md
  */
 const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
@@ -1153,11 +1160,9 @@ const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.CounterattackByFire,
     TacticalGraphicName.InfiltrationLane,
 
-    // The crossings: two rails offset from the drawn line, solid on bridge, gap and
-    // assault crossing and dashed on the two fords.
-    TacticalGraphicName.Bridge,
-    TacticalGraphicName.Gap,
-    TacticalGraphicName.AssaultCrossing,
+    // The two fords: dashed rails offset from the drawn line. Bridge, gap and assault crossing
+    // left this list on 2026-11-02: their points are now the rails' own ends, two per side,
+    // so the line ran along one rail and then diagonally across the gap (user's call).
     TacticalGraphicName.FordEasy,
     TacticalGraphicName.FordDifficult,
 

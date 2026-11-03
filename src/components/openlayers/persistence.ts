@@ -69,7 +69,8 @@ import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojs
 import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
-    upgradeAxisBase,
+    upgradeSavedLine,
+    declaredSnapshotVersion,
     completeDemolitionBase,
     carriesWidthPointInBase,
     axisFromRectangleRing,
@@ -185,7 +186,7 @@ export interface RestoreReport {
     restored: number;
     failed: RestoreFailure[];
     /**
-     * The version the file declared, or {@link SNAPSHOT_VERSION} where it declared none.
+     * The version the file declared, or `LEGACY_SNAPSHOT_VERSION` where it declared none.
      *
      * **A missing version is not an invalid file.** Every MapLibre export up to 2026-09-04
      * carried none — the stamp lived in this module, which MapLibre cannot import — and a
@@ -877,13 +878,14 @@ export function restoreTacticalGraphics(
                  * to happen here rather than in `normalizeDrawnBase`, because it spends a number
                  * that lives beside the geometry and the normalizer only ever sees the geometry.
                  *
-                 * A file that declares no version is read as version 1, which is what every
-                 * unversioned collection actually is. @see upgradeAxisBase, snapshotVersionOf
+                 * A file that declares no version is read as version 1, except that each axis
+                 * arrow's geometry says whether it already ends in its width point. The same
+                 * call reverses a direction-of-attack arrow saved before version 3.
+                 * @see upgradeSavedLine, snapshotVersionOf
                  */
                 const stored = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
-                const upgraded = report.version < SNAPSHOT_VERSION
-                    ? upgradeAxisBase(name, stored, state.width, defaultWidthMetres(resolution))
-                    : stored;
+                const declared = declaredSnapshotVersion(snapshot) !== undefined;
+                const upgraded = upgradeSavedLine(report.version, declared, name, stored, state.width, defaultWidthMetres(resolution)).coordinates;
                 // And a demolition obstacle saved with two points gets its third, whatever the
                 // version: the draw that allowed it was current. @see completeDemolitionBase
                 const tidied = normalizeDrawnBase(name, completeDemolitionBase(name, upgraded));

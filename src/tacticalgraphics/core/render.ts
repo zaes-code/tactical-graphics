@@ -161,6 +161,11 @@ export interface TacticalGraphicProperties {
      * area is hatched in. @see TacticalGraphicTerrain
      */
     terrain?: TacticalGraphicTerrain;
+    /**
+     * Zone of fire (242600) only: draw the label and T without the dashed boundary.
+     * APP-06 Note 2 asks for a way to switch the boundary off. Absent or `false` draws it.
+     */
+    hideBoundary?: boolean;
 
     // ── Geometry inputs ────────────────────────────────────────────────────
     /**
@@ -357,6 +362,8 @@ export interface GraphicLabels {
     mobility?: TacticalGraphicMobility;
     /** @see TacticalGraphicProperties.terrain */
     terrain?: TacticalGraphicTerrain;
+    /** @see TacticalGraphicProperties.hideBoundary */
+    hideBoundary?: boolean;
     status?: TacticalGraphicStatus;
     confidence?: TacticalGraphicConfidence;
     rangeFan?: RangeFanConfig;

@@ -122,7 +122,7 @@ import {
     fortifiedAreaPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
-    dashedOutlinePaint,
+    zoneOfFirePaint,
     obstacleAreaPaint,
     restrictedTerrainPaint,
     freeFireAreaCircularPaint,
@@ -797,7 +797,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleRestrictedArea]: {graphic: obstacleAreaPaint({outward: false, hatched: true})},
         // APP-06 242600 note 1: the boundary is a broken line in *all* status
         // depictions, so the dash is the symbol rather than a status.
-        [TacticalGraphicName.ZoneOfFire]: {graphic: dashedOutlinePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
+        [TacticalGraphicName.ZoneOfFire]: {graphic: zoneOfFirePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
         // Told apart from each other by texture alone. @see hatchTileSegments
         // Sector 1 over Sector 2 over field H, which is the whole of what these two say.
         // @see sectorModifierPaints
@@ -869,7 +869,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.Breach] = {graphic: breachPaint(getLabel(TacticalGraphicName.Breach))};
     registry[TacticalGraphicName.Clear] = {graphic: clearPaint(getLabel(TacticalGraphicName.Clear))};
     registry[TacticalGraphicName.TacticalDisrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.TacticalDisrupt), 0.75)};
-    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75)};
+    // The obstacle effect's three heads are solid; the mission task's are open. @see clearPaint
+    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75, [1, 3, 5])};
 
     for (const [name, label] of CARDINAL_LABEL_AREAS) {
         registry[name] = {
@@ -1004,8 +1005,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.SafeLaneOrGap] = {graphic: safeLaneOrGapPaint()};
     registry[TacticalGraphicName.OverheadWire] = {graphic: overheadWirePaint()};
     // 'F' for the mission task, '' for the table 5-19 twin and the ferry crossing.
-    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
-    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};
+    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix), {openHead: true})};
+    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix), {openHead: true})};
     registry[TacticalGraphicName.FerryCrossing] = {graphic: arrowheadedLinePaint()};
 
     registry[TacticalGraphicName.Pursuit] = {
@@ -1133,7 +1134,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
-        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};
+        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name), name)};
     }
 
     for (const name of CORRIDOR_GRAPHICS) {

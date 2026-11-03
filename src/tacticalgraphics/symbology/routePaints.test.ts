@@ -32,17 +32,21 @@ const identifiers = (paints: Paint[]) => paints.filter(p => p.text?.text?.starts
 beforeEach(() => resetTacticalGraphicsConfig());
 
 describe('routeControlMeasurePaint', () => {
-    it('draws MSR 1 at both ends while it is legible', () => {
-        expect(identifiers(route(400, 400)).map(t => t.text)).toEqual(['MSR 1', 'MSR 1']);
+    // APP-06 330300 and FM 1-02.2 Table 5-17: one `MSR T`, centered above the line.
+    it('draws MSR 1 once, centered over the middle, while it is legible', () => {
+        const ids = route(400, 400).filter(p => p.text?.text?.startsWith('MSR'));
+        expect(ids.map(p => p.text!.text)).toEqual(['MSR 1']);
+        expect((ids[0].geometry.coordinates as number[])[0]).toBeCloseTo(200, 6);
+        expect(ids[0].text!.align).toBe('center');
     });
 
     it('drops the name and holds MSR at 6 px, leaving the arrows at the route scale', () => {
         const paints = route(100, 10, RouteDirection.oneWay);
         const ids = identifiers(paints);
-        expect(ids.map(t => t.text)).toEqual(['MSR', 'MSR']);
+        expect(ids.map(t => t.text)).toEqual(['MSR']);
         for (const t of ids) expect(16 * t.scale!).toBeCloseTo(6, 9);
-        // The arrowheads are still drawn, one at each end.
-        expect(paints.filter(p => p.fill)).toHaveLength(2);
+        // The arrowhead is still drawn, under the identifier.
+        expect(paints.filter(p => p.fill)).toHaveLength(1);
     });
 
     it('draws no identifier on a route under twice MSR', () => {
