@@ -12,6 +12,7 @@ import {TacticalGraphicName} from '../core/type';
 import {resetTacticalGraphicsConfig} from '../core/config';
 import {buildPaintedGraphic, paintGraphic} from '../core/paintedGraphic';
 import type {Paint, PaintContext, ProjectedBounds, ProjectedPosition} from '../core/paint';
+import {pointAlong} from './viewFollow';
 
 beforeEach(() => resetTacticalGraphicsConfig());
 
@@ -79,5 +80,158 @@ describe('labels that follow the view, by family', () => {
             const plain = texts(paintGraphic(graphic, {resolution: 100, measureText}));
             expect(texts(paintGraphic(graphic, {resolution: 100, measureText, view: everything}))).toEqual(plain);
         }
+    });
+});
+
+/** Whether `p` lies inside `view`. */
+const within =
+    (view: ProjectedBounds) =>
+    ([x, y]: ProjectedPosition) =>
+        x >= view.minX && x <= view.maxX && y >= view.minY && y <= view.maxY;
+
+/** The labels a graphic paints with and without `view`, and which of them land in it. */
+function inViewCounts(name: TacticalGraphicName, geometry: object, properties: Record<string, unknown>, view: ProjectedBounds) {
+    const graphic = buildPaintedGraphic(name, geometry as never, properties as never, 100)!;
+    const resolution = (view.maxX - view.minX) / 400;
+    const shown = within(view);
+    const count = (ctx: PaintContext) => texts(paintGraphic(graphic, ctx)).filter(t => shown(t.at)).length;
+    return {without: count({resolution, measureText}), within: count({resolution, measureText, view})};
+}
+
+describe('arrows and areas that follow the view', () => {
+    it('direction of attack: the name comes along the shaft from behind an off-screen head', () => {
+        // Drawn tip first, so the head is far off to the east of the view.
+        const arrow = {
+            type: 'LineString',
+            coordinates: [
+                [3, 0],
+                [-3, 0],
+            ],
+        };
+        const {without, within: shown} = inViewCounts(TacticalGraphicName.DirectionOfMainAttack, arrow, {designation: 'ALPHA'}, VIEW);
+        expect(without).toBe(0);
+        expect(shown).toBe(1);
+    });
+
+    it('UXO area: a side whose middle is off screen carries its UXO on the part in view', () => {
+        const square = {
+            type: 'Polygon',
+            coordinates: [
+                [
+                    [-2, -2],
+                    [2, -2],
+                    [2, 2],
+                    [-2, 2],
+                    [-2, -2],
+                ],
+            ],
+        };
+        // Low on the west side of the square: its middle, at the equator, is well above the view.
+        const view = {minX: -240_000, minY: -200_000, maxX: -200_000, maxY: -160_000};
+        const {without, within: shown} = inViewCounts(TacticalGraphicName.UnexplodedExplosiveOrdnanceArea, square, {}, view);
+        expect(without).toBe(0);
+        expect(shown).toBeGreaterThan(0);
+    });
+
+    it('ship area of interest: the AOI under the shape slides along to the part in view', () => {
+        const rect = {
+            type: 'Polygon',
+            coordinates: [
+                [
+                    [-2, -1],
+                    [2, -1],
+                    [2, 1],
+                    [-2, 1],
+                    [-2, -1],
+                ],
+            ],
+        };
+        const graphic = buildPaintedGraphic(TacticalGraphicName.ShipAreaOfInterestRectangle, rect as never, {} as never, 100)!;
+        const box = graphic.graphic.bounds!;
+        // The line under the shape, near its east end.
+        const view = {minX: box.maxX - 60_000, minY: box.minY - 30_000, maxX: box.maxX - 10_000, maxY: box.minY + 20_000};
+        const {without, within: shown} = inViewCounts(TacticalGraphicName.ShipAreaOfInterestRectangle, rect, {}, view);
+        expect(without).toBe(0);
+        expect(shown).toBe(1);
+    });
+});
+
+describe('movement arrows and ring labels that follow the view', () => {
+    /** A sample-sheet base, spread out `k` times about its first point so it is far wider than the view. */
+    async function spread(name: TacticalGraphicName, k: number) {
+        const {sampleBase} = await import('../../components/maplibre/sampleGallery');
+        const sample = sampleBase(name)!;
+        const geometry = sample.geometry as {type: string; coordinates: unknown};
+        const flat: number[][] = [];
+        const walk = (c: unknown): void => void (typeof (c as number[])[0] === 'number' ? flat.push(c as number[]) : (c as unknown[]).forEach(walk));
+        walk(geometry.coordinates);
+        const [ox, oy] = flat[0];
+        const up = (c: unknown): unknown =>
+            typeof (c as number[])[0] === 'number'
+                ? [ox + ((c as number[])[0] - ox) * k, oy + ((c as number[])[1] - oy) * k]
+                : (c as unknown[]).map(up);
+        return buildPaintedGraphic(
+            name,
+            {...geometry, coordinates: up(geometry.coordinates)} as never,
+            {designation: 'ALPHA', ...sample.properties} as never,
+            100,
+        )!;
+    }
+
+    it('counterattack: the name comes along the arrow to the part in view', async () => {
+        const graphic = await spread(TacticalGraphicName.Counterattack, 40);
+        // The centre line the label is laid along is the label feature's points from the third on.
+        const line = (graphic.labels!.geometry as {coordinates: ProjectedPosition[]}).coordinates.slice(2);
+        const at = pointAlong(line, 0.3 * line.reduce((sum, p, i) => (i ? sum + Math.hypot(p[0] - line[i - 1][0], p[1] - line[i - 1][1]) : 0), 0)).at;
+        const view = {minX: at[0] - 40_000, minY: at[1] - 30_000, maxX: at[0] + 40_000, maxY: at[1] + 30_000};
+        const shown = within(view);
+        const resolution = 100;
+        const labels = (ctx: PaintContext) => texts(paintGraphic(graphic, ctx)).filter(t => shown(t.at));
+        expect(labels({resolution, measureText})).toEqual([]);
+        expect(labels({resolution, measureText, view}).length).toBeGreaterThan(0);
+    });
+
+    it('range fan: a band block comes round its ring to the part in view', async () => {
+        const graphic = await spread(TacticalGraphicName.WeaponSensorRangeFanCircular, 1);
+        const center = (graphic.labels!.geometry as {coordinates: ProjectedPosition[]}).coordinates[0];
+        const box = graphic.graphic.bounds!;
+        const r = Math.max(box.maxX - box.minX, box.maxY - box.minY) / 2;
+        // The west side of the ring: its bottom, where the block usually hangs, is off screen.
+        const view = {minX: center[0] - r - r / 5, minY: center[1] - r / 5, maxX: center[0] - r + r / 5, maxY: center[1] + r / 5};
+        const shown = within(view);
+        const resolution = (2 * r) / 5 / 400;
+        const blocks = (ctx: PaintContext) => texts(paintGraphic(graphic, ctx)).filter(t => shown(t.at));
+        expect(blocks({resolution, measureText})).toEqual([]);
+        expect(blocks({resolution, measureText, view}).length).toBe(1);
+    });
+
+    it('minimum safe distance: a zone number comes round its ring to the part in view', () => {
+        const graphic = buildPaintedGraphic(
+            TacticalGraphicName.MinimumSafeDistanceZone,
+            {
+                type: 'LineString',
+                coordinates: [
+                    [0, 0],
+                    [2, 0],
+                    [3, 0],
+                ],
+            } as never,
+            {} as never,
+            100,
+        );
+        expect(graphic).toBeTruthy();
+        const box = graphic!.graphic.bounds!;
+        // The west edge of the rings: the numbers sit east, so off screen without the view.
+        const view = {
+            minX: box.minX - 10_000,
+            minY: (box.minY + box.maxY) / 2 - 30_000,
+            maxX: box.minX + 70_000,
+            maxY: (box.minY + box.maxY) / 2 + 30_000,
+        };
+        const shown = within(view);
+        const resolution = (view.maxX - view.minX) / 400;
+        const numbers = (ctx: PaintContext) => texts(paintGraphic(graphic!, ctx)).filter(t => shown(t.at));
+        expect(numbers({resolution, measureText})).toEqual([]);
+        expect(numbers({resolution, measureText, view}).length).toBeGreaterThan(0);
     });
 });

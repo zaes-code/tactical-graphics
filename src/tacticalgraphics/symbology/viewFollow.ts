@@ -138,6 +138,56 @@ export function pointAlong(path: ProjectedPosition[], s: number): {at: Projected
     return {at: path[0], from: path[0], to: path[path.length - 1]};
 }
 
+/**
+ * Where along `path` a label centred at distance `center`, reaching `halfPx` either way, sits so
+ * it is on screen: `center` itself when the whole label already is, otherwise the nearest place
+ * on the visible stretch that has room for it, or that stretch's middle when it is shorter than
+ * the label. Unchanged without a view or when none of the path is in it.
+ *
+ * For a label laid on a shaft, such as an arrow's designation, whose gap in the line is cut at
+ * the same distance: moving the distance moves the text and its gap together.
+ */
+export function distanceInView(path: ProjectedPosition[], center: number, halfPx: number, context: PaintContext): number {
+    const view = insetView(context);
+    if (!view || path.length < 2) return center;
+    const half = halfPx * context.resolution;
+    if (inView(pointAlong(path, center - half).at, view) && inView(pointAlong(path, center + half).at, view)) return center;
+    const stretch = visibleStretch(path, view);
+    if (!stretch) return center;
+    const first = distanceAlongPath(path, stretch[0]);
+    const last = distanceAlongPath(path, stretch[stretch.length - 1]);
+    if (last - first <= 2 * half) return (first + last) / 2;
+    return Math.min(last - half, Math.max(first + half, center));
+}
+
+/**
+ * The direction from `center` to where a label on `ring` goes: `preferred` (a unit vector) when
+ * the ring's point that way is on screen, otherwise toward the on-screen point of the ring
+ * nearest that way round. Unchanged without a view or when none of the ring is in it.
+ *
+ * For a label set on a ring at a fixed bearing, a zone's number in its gap or a range fan's band
+ * block under its ring, which has to come round the ring to the part that can be seen.
+ */
+export function ringDirectionInView(ring: ProjectedPosition[], center: ProjectedPosition, preferred: [number, number], context: PaintContext): [number, number] {
+    const view = insetView(context);
+    if (!view || ring.length < 3) return preferred;
+    let ahead: ProjectedPosition | undefined;
+    let aheadDot = -Infinity;
+    let best: ProjectedPosition | undefined;
+    let bestDot = -Infinity;
+    for (const p of ring) {
+        const [dx, dy] = [p[0] - center[0], p[1] - center[1]];
+        const len = Math.hypot(dx, dy);
+        if (len === 0) continue;
+        const dot = (dx * preferred[0] + dy * preferred[1]) / len;
+        if (dot > aheadDot) [ahead, aheadDot] = [p, dot];
+        if (inView(p, view) && dot > bestDot) [best, bestDot] = [p, dot];
+    }
+    if (!best || (ahead && inView(ahead, view))) return preferred;
+    const len = Math.hypot(best[0] - center[0], best[1] - center[1]);
+    return [(best[0] - center[0]) / len, (best[1] - center[1]) / len];
+}
+
 /** How many steps of its own length an end label moved onto the view may slide on inward. */
 const END_LABEL_SLIDES = 6;
 

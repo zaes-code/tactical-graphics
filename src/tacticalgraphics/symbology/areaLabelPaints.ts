@@ -30,6 +30,7 @@ import {amplifierText, asAmplifier, showsEny, formatDesignationWithCountry, getF
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {insetView} from './viewFollow';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -230,11 +231,19 @@ export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
          * text to nothing. The engine reported the mark and the map showed no words. The
          * outside labels here all bypass it for the same reason. @see zoneLabelPaint
          */
+        /*
+         * **Under the middle, or along under the shape to the view** when the middle is off to
+         * one side and the line under the shape is on screen. @see PaintContext.view
+         */
+        const y = box.minY - BELOW_SHAPE_GAP_PX * context.resolution;
+        let x = (box.minX + box.maxX) / 2;
+        const view = insetView(context);
+        if (view && y >= view.minY && y <= view.maxY && (x < view.minX || x > view.maxX)) {
+            const [lo, hi] = [Math.max(box.minX, view.minX), Math.min(box.maxX, view.maxX)];
+            if (lo < hi) x = Math.min(hi, Math.max(lo, x));
+        }
         return [{
-            geometry: {
-                type: 'Point',
-                coordinates: [(box.minX + box.maxX) / 2, box.minY - BELOW_SHAPE_GAP_PX * context.resolution],
-            },
+            geometry: {type: 'Point', coordinates: [x, y]},
             text: {
                 text: literal,
                 font: fontStyle,

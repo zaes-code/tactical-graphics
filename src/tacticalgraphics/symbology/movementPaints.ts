@@ -31,7 +31,7 @@ import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
-import {inView, insetView, isTaken, pathUpTo, pointAlong, visibleStretch} from './viewFollow';
+import {distanceInView, inView, insetView, isTaken, pathUpTo, pointAlong, visibleStretch} from './viewFollow';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -146,8 +146,17 @@ function nameAndDate(feature: PaintFeature): string {
 function onArrow(context: PaintContext, coords: ProjectedPosition[], pathFrom: number, straight: Paint, align: PathTextAlign): Paint[] {
     const path = coords.slice(pathFrom);
     if (path.length < 2 || !straight.text || straight.geometry.type !== 'Point') return [straight];
-    const at = distanceAlongPath(path, straight.geometry.coordinates);
-    return textAlongPath(path, at, align, straight.text, context) ?? [straight];
+    const natural = distanceAlongPath(path, straight.geometry.coordinates);
+    /*
+     * **Along the arrow to the nearest place in view, when its own place is off screen.** The
+     * run is measured from its middle, which `align` puts behind, ahead of or on the anchor.
+     * @see distanceInView
+     */
+    const halfPx = textWidth(context, straight.text.text, straight.text.font, straight.text.scale ?? 1) / 2;
+    const toMiddle = (align === 'end' ? -halfPx : align === 'start' ? halfPx : 0) * context.resolution;
+    const at = distanceInView(path, natural + toMiddle, halfPx, context) - toMiddle;
+    const moved: Paint = at === natural ? straight : {...straight, geometry: {type: 'Point', coordinates: pointAlong(path, at).at}};
+    return textAlongPath(path, at, align, moved.text!, context) ?? [moved];
 }
 
 /**
