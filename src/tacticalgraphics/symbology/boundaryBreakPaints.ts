@@ -36,7 +36,7 @@ const CARDINALS = [Math.PI / 2, 0, -Math.PI / 2, Math.PI] as const;
  *
  * **Just enough to keep the glyphs off the stroke ends.** It was six, which on a
  * three-letter abbreviation opened a break half as wide again as the word it holds — the
- * outline read as broken rather than as lettered. (User's call, 2026-08-27.)
+ * outline read as broken rather than as lettered.
  */
 const GAP_PADDING_PX = 2;
 
@@ -255,7 +255,7 @@ export function contourLineBoundaryPaint(): CardinalPaint {
  * The dose that goes in the break, from field **H**.
  *
  * 272200's Template carries one lettered box and it is `H`; the Example fills it with
- * `30 CGH`. It read `designation` until 2026-09-01, which put an amplifier on the symbol
+ * `30 CGH`. It read `designation`, which put an amplifier on the symbol
  * that no plate asks for and left the one it does ask for with nowhere to go.
  *
  * **Both halves of the symbol read this**, because one sizes the gap in the outline and the

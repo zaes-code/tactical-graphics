@@ -132,7 +132,7 @@ function pathBetweenStars(path: ProjectedPosition[], radius: number): ProjectedP
     const endAt = walkPath(path, total - fromEnd);
     if (!startAt || !endAt) return null;
 
-    // Whatever the user drew between the two cuts, plus the cuts themselves. A vertex
+    // Whatever the operator drew between the two cuts, plus the cuts themselves. A vertex
     // inside either star is dropped rather than kept and hidden: the paint is the line,
     // and a renderer measuring it should measure what is on the screen.
     const middle: ProjectedPosition[] = [];
@@ -171,7 +171,6 @@ export function decisionLinePaint(): EndGlyphPaint {
          * 110500's template letters the pair `T/AS`, and the slash is the separator the plate
          * draws. This composed `designation/secondDesignation`, which put a field the graphic
          * does not offer into the star and left the country code with nowhere to go.
-         * (User's call, 2026-09-01.)
          */
         const text = [feature.properties.designation, feature.properties.countryCode]
             .map(part => (part ?? '').trim())

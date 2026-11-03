@@ -19,7 +19,7 @@ import {
     Typography,
 } from '@mui/material';
 import {formatDistance} from './openlayers/openlayerStyles';
-import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit} from '@zaes/tactical-graphics';
+import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit, targetAttitudeMils} from '@zaes/tactical-graphics';
 import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
 import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
@@ -113,6 +113,7 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
     if (fields.mineType) labels.mineType = stored.mineType;
     if (fields.mobility) labels.mobility = stored.mobility;
     if (fields.terrain) labels.terrain = stored.terrain;
+    if (fields.boundarySwitch) labels.hideBoundary = stored.hideBoundary;
     if (fields.hostility) labels.confidence = stored.confidence;
     if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
     if (fields.direction) labels.direction = stored.direction;
@@ -648,6 +649,26 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                 </Box>
                                 )}
 
+                                {/* APP-06 242600 Note 2: the zone of fire's boundary can be switched off. */}
+                                {fields.boundarySwitch && (
+                                    <Box sx={{mt: 1}}>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    checked={pendingChanges.labels.hideBoundary ?? false}
+                                                    onChange={(_e, checked) =>
+                                                        setPendingChanges(prev => ({
+                                                            ...prev,
+                                                            labels: {...prev.labels, hideBoundary: checked || undefined},
+                                                        }))
+                                                    }
+                                                />
+                                            }
+                                            label="Hide boundary"
+                                        />
+                                    </Box>
+                                )}
+
                                 {fields.hostility && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
                                         <FormControl fullWidth>
@@ -987,8 +1008,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                   * Amplifier AN. Shown alongside the other shape read-outs
                                   * and for the same reason: the attitude is what the edge
                                   * handle swings, so a typed box here would need keeping in
-                                  * step with the gesture. Degrees, where the plate quotes
-                                  * mils — the same angle, converted where a host wants it.
+                                  * step with the gesture. In mils, as the plate quotes it.
                                   */}
                                 {fields.attitude && measured.rotation !== undefined && (
                                     <Box sx={{minWidth: 180, mt: 1}}>
@@ -996,7 +1016,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                             Attitude
                                         </Typography>
                                         <Typography id="attitude-readout" variant="body2">
-                                            {`${Math.round(((measured.rotation % 360) + 360) % 360)}°`}
+                                            {`${targetAttitudeMils(measured.rotation)} mils`}
                                         </Typography>
                                     </Box>
                                 )}

@@ -1,5 +1,6 @@
 import openlayersAdapter from "../openlayersAdapter";
-import {drawnSizeMeters, getLabel, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {drawnSizeMeters, getLabel, getPaintFunction, ratioLockOf, TacticalGraphicName} from '@zaes/tactical-graphics';
+import {asStyleFunction} from '../paintToOpenLayers';
 import Feature from 'ol/Feature';
 import {
     attackByFireStyleFunc,
@@ -29,7 +30,7 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
     // Handle is the end of the crossbar, drawn at 1 × size by `getBlockArrow`.
     [TacticalGraphicName.TacticalBlock]: 1,
     [TacticalGraphicName.Block]: 1,
-    // Exploitation's arrowhead-wing entry left on 2026-09-10 with the grip itself: its four
+    // Exploitation's arrowhead-wing entry left with the grip itself: its four
     // angled lines take their length from point 3 now. @see exploitationAnchors
 };
 
@@ -38,7 +39,7 @@ const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
  * member of the family (20 px at the drawing zoom), in the same screen-pixel unit.
  *
  * `TacticalBlock` needs one because it and `Penetration` must look and behave
- * identically (user's call, 2026-07-29) and their generators spend `size`
+ * identically and their generators spend `size`
  * differently: `getPenetrationArrowGraphic` draws its front line at ±3 × size —
  * 120 px across at the default — while `getBlockArrow` draws its crossbar at
  * ±1 × size, which would be 40 px. 60 px puts block's crossbar at the same 120 px
@@ -72,7 +73,7 @@ export class Block implements LineGraphic {
      * two-point axis plus a size derived beside it.
      *
      * True for the four bracket mission tasks once drawn, and false for one of them restored
-     * from a snapshot written before 2026-09-06 — which is the point of asking the geometry
+     * from a snapshot written — which is the point of asking the geometry
      * rather than the registry. @see updateGeometry
      */
     private get anchorsAreInTheBase(): boolean {
@@ -84,12 +85,12 @@ export class Block implements LineGraphic {
      * That floor *extends the base geometry*, and it is a screen-pixel constant times
      * the map resolution — right on a draw (it keeps a barely-dragged graphic legible)
      * and wrong on a restore, where the geometry is already final and re-applying a
-     * larger floor silently lengthens the line the user drew. Set by
+     * larger floor silently lengthens the line the operator drew. Set by
      * `applyRestoredGeometry` for the rebuild only. @see LineGraphicBase for the twin.
      */
     suspendMinimumLength = false;
     // Minimum base-length in screen pixels at the drawing zoom — forces the
-    // graphic to render at a recognisable size from the moment the user starts
+    // graphic to render at a recognisable size from the moment the operator starts
     // drawing, even if the cursor hasn't moved far from the first click.
     private static MIN_BASE_PX = 100;
 
@@ -125,9 +126,9 @@ export class Block implements LineGraphic {
                     return clearStyleFunc(getLabel(name))(feature, resolution);
                 case TacticalGraphicName.TacticalDisrupt:
                 case TacticalGraphicName.Disrupt:
-                    // 0.75 places the D at the center of the middle trident
-                    // prong (which spans 0.5 → 1.0 of the user's base line).
-                    return clearStyleFunc(getLabel(name), 0.75)(feature, resolution);
+                    // The shared paint, so the obstacle's filled heads and the task's open
+                    // ones are stated once for both engines. @see clearPaint
+                    return asStyleFunction(getPaintFunction(name)!.graphic, name)(feature, resolution);
                 default:
                     return defaultStyleFunc()(feature, resolution);
             }
@@ -153,7 +154,7 @@ export class Block implements LineGraphic {
          *
          * The block family's generators put a derived *offset* grip first and the segment's
          * ends after it, which is why the rest is `slice(1)`. The four bracket mission tasks
-         * stopped being that on 2026-09-06: their bases hold the three points APP-06 names,
+         * stopped being that: their bases hold the three points APP-06 names,
          * there is no offset to peel off, and slicing one away would drop point 1 and then
          * treat it as a width handle. @see frontEdgeFrame, handleContract
          *

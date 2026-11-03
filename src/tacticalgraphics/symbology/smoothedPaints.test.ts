@@ -30,7 +30,7 @@ function hardAndSmooth(name: N, geometry: Geometry, properties: Record<string, u
     const hard = paints(name, geometry, properties, res);
     configureTacticalGraphics({smoothLines: true});
     const smooth = paints(name, geometry, properties, res);
-    resetTacticalGraphicsConfig();
+    configureTacticalGraphics({smoothLines: false});
     return {hard, smooth};
 }
 
@@ -94,6 +94,7 @@ describe('smoothed, the marks a hard line carries are still there', () => {
 
     it("keeps a hostile encirclement's ENY gaps", () => {
         const hostile = {hostility: TacticalGraphicHostility.hostileFaker, decorationSize: 4000};
+        configureTacticalGraphics({enemyLabels: true});
         const {hard, smooth} = hardAndSmooth(N.Encirclement, ring, hostile, 200);
         expect(texts(hard, 'ENY')).toBe(2);
         expect(texts(smooth, 'ENY')).toBe(2);

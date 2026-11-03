@@ -35,7 +35,7 @@ import {
  *
  * What it buys is exactness. `measureText` here is the same ruler the gap math
  * used, at the same moment, so a hole and the glyph inside it cannot drift apart
- * — which is the failure mode risk 3 in `ai/maplibre-renderer.md` predicts for
+ * — which is the failure mode to expect from
  * the declarative path.
  */
 export class CanvasOverlayRenderer {

@@ -13,6 +13,7 @@ import {baseGeometryFor, renderTacticalGraphic} from '../core/render';
 import {allowedGestures, drawClickCount, dropSizePx, hasDerivedAnchors} from '../core/symbology';
 import {baseVertexCount, usesDrawnAnchors} from '../core/handles';
 import {anchorsForParallelLegs} from '../core/anchors';
+import {normalizeDrawnBase} from '../core/drawnBase';
 import {TacticalGraphicName} from '../core/type';
 import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {demonstrationPaint, escortPaint} from './escortAndDemonstrationPaints';
@@ -414,5 +415,21 @@ describe('letters in gaps, zoomed out', () => {
         const tiny = demonstrationPaint('DEM')(at(0.4), ctx);
         expect(tiny.find(p => p.text)).toBeUndefined();
         expect((tiny[0].geometry as {coordinates: ProjectedPosition[][]}).coordinates).toHaveLength(3);
+    });
+});
+
+describe('343600 escort point 1', () => {
+    // "Point 1 defines the centre of the graphic. Point 2 and Point 3 defines the length."
+    it('is the middle of the bar, wherever it was clicked', () => {
+        const settled = normalizeDrawnBase(TacticalGraphicName.Escort, [[0.008, 0.003], [-0.01, 0], [0.01, 0]]);
+        expect(settled[0][0]).toBeCloseTo(0, 12);
+        expect(settled[0][1]).toBeCloseTo(0, 12);
+        expect(settled.slice(1)).toEqual([[-0.01, 0], [0.01, 0]]);
+    });
+
+    it('follows the bar when an end moves', () => {
+        const settled = normalizeDrawnBase(TacticalGraphicName.Escort, [[0, 0], [-0.01, 0], [0.03, 0.02]]);
+        expect(settled[0][0]).toBeCloseTo(0.01, 12);
+        expect(settled[0][1]).toBeCloseTo(0.01, 12);
     });
 });

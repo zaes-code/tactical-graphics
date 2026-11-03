@@ -17,7 +17,7 @@ import {writeGraphicProperties} from "../graphicProperties";
  * on top of MissionTaskGraphicBase so the controller plumbing
  * (size/rotation drag, translate/rotate handles) is reused — the only
  * differences are:
- *   1. The geometry generator receives the user-edited multi-band config
+ *   1. The geometry generator receives the operator-edited multi-band config
  *      (bands + azimuths) as RangeFanOptions, which means setLabel must
  *      regenerate geometry, not just restyle.
  *   2. The graphic feature is a MultiLineString of arcs/edges/axis, so it
@@ -97,7 +97,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * The plate states four numbers and two of them are angles — the search axis and the
      * stop relative bearing — so the grips that set those report degrees rather than the
      * distance the measure line was built for. Cleared the moment a range grip takes over,
-     * the same way `measuringBand` is. (User's call, 2026-09-10.) @see measureAngle
+     * the same way `measuringBand` is. @see measureAngle
      */
     private measuringAngle?: {caption: string; degrees: number};
 
@@ -213,7 +213,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * and the opening into a pair of absolute band azimuths, because it shares this holder.
      * The saved file then described a radar search doctrine in a different symbol's terms,
      * and two of the four values the plate names appeared nowhere under their own names.
-     * (User's report, 2026-09-05.) @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     * @see TacticalGraphicProperties.searchAxisAzimuthDeg
      *
      * `startRange` is absent between the second click and the third, which is what the
      * generator reads as "half drawn" and draws a bare arc for.
@@ -300,7 +300,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
             centerAzimuthDeg: rangeFan?.centerAzimuthDeg,
             // 200700 is described by its own four numbers; the band fields above stay for the
             // two weapon fans, and for a 200700 restored from a snapshot written before
-            // 2026-09-05, whose four are still in that shape. @see RadarSearchDoctrine.frame
+            // whose four are still in that shape. @see RadarSearchDoctrine.frame
             ...this.radarOptions(),
         };
         const tacticalGraphic = openlayersAdapter.getTacticalGraphic(
@@ -318,7 +318,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         this.publishHandles(handles as MultiPoint);
         this.label.setGeometry(labels);
         // Stamp the drawn size on every feature in the group so the dialog
-        // can read it no matter which one the user clicked (the visible
+        // can read it no matter which one the operator clicked (the visible
         // feature is the graphic MultiLineString, not the label point).
         this.label.set('graphicSize', this.size);
         this.graphic.set('graphicSize', this.size);
@@ -346,7 +346,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * **The axis goes into `rotation`, not into `centerAzimuthDeg`.** Both reach
      * `resolveCenterAzimuth` and `centerAzimuthDeg` wins — which is exactly why the drawn
      * axis must not be filed there: the rotate gesture turns `rotation`, so an axis stamped
-     * as a centre azimuth would outrank every rotation the user then applied and the symbol
+     * as a centre azimuth would outrank every rotation the operator then applied and the symbol
      * would sit still under a drag that visibly moved its handle. `rotation` is degrees
      * counter-clockwise from east, so the azimuth converts on the way in.
      * @see rotationToAzimuth, radarSearchFromClicks
@@ -378,7 +378,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
          * axis and the start range together and the third settles the stop range, so the
          * read-out names the azimuth throughout and adds whichever range is being placed.
          * The axis had no read-out at all before: the measure line reports a distance, and
-         * an azimuth is not one. (User's call, 2026-09-10.) @see measureParts
+         * an azimuth is not one. @see measureParts
          */
         this.measuringDraw = [
             {caption: RADAR_READOUT_CAPTIONS.azimuth, degrees: normAz(frame.centerAzimuthDeg)},
@@ -451,8 +451,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * The inherited stamp files `radius` and `rotation`, which for this symbol are a second
      * copy of the stop range and the search axis — the same "one fact stated twice" the
      * demolition block's `width` was, and the reason a consumer reading the GeoJSON found a
-     * range fan's amplifiers instead of the values the plate names. (User's report,
-     * 2026-09-05.)
+     * range fan's amplifiers instead of the values the plate names.
      *
      * The two weapon fans are untouched: they really are described by bands and a drawn
      * radius. @see TacticalGraphicProperties.searchAxisAzimuthDeg
@@ -473,7 +472,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * here — the one door a restore comes through — is what keeps the round trip closed
      * without persistence needing to know this symbol exists.
      *
-     * A snapshot written before 2026-09-05 carries none of them and falls through to the
+     * A snapshot written carries none of them and falls through to the
      * generator's own reading of the bands and the rotation. @see RadarSearchDoctrine.frame
      */
     /**
@@ -481,7 +480,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      *
      * Called by `applyRestoredGeometry` before it rebuilds the frame, because a
      * point-anchored graphic restores through `updateGeom` — there is no `setBaseFeature` on
-     * that path to read them off the base. A snapshot written before 2026-09-05 carries none
+     * that path to read them off the base. A snapshot written carries none
      * of them and falls through to the generator's own reading of the bands and the rotation.
      * @see RadarSearchDoctrine.frame
      */
@@ -641,7 +640,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
 
         // No user-entered bands: the fan is rendering `resolveBands`' fallback
         // single band derived from `size`, so drive `size` and leave the
-        // amplifiers alone rather than inventing a band the user never typed.
+        // amplifiers alone rather than inventing a band the operator never typed.
         if (!configBands || configBands.length === 0) {
             // Both metres as of 3.2.0 — this used to scale a kilometer band up to `size`.
             this.size = clamped;
@@ -650,7 +649,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         }
 
         // `resolveBands` sorts a copy of the array but keeps the band objects,
-        // so the sorted entry is identity-equal to one of the user's rows.
+        // so the sorted entry is identity-equal to one of the operator's rows.
         const target = configBands.indexOf(sorted[bandIndex]);
         if (target < 0) return;
 
@@ -670,7 +669,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
      * the stated centre azimuth over `rotation` outright — so on a fan whose bearings had
      * been typed, the rotate gesture moved the axis arrow and **nothing else**: the wedges
      * stayed where they were, the printed bearings kept their old values, and the arrow
-     * ended up pointing out of its own fan. That is what the user saw.
+     * ended up pointing out of its own fan. That is what the operator saw.
      *
      * So a rotate is folded into the numbers instead of competing with them. Every stated
      * bearing turns by the same delta, the printed values change with the symbol, and
@@ -823,7 +822,7 @@ export class RangeFanGraphicBase extends MissionTaskGraphicBase {
         const stated = {leftAzimuthDeg: current.leftAz, rightAzimuthDeg: current.rightAz, ...next};
 
         // `resolveBands` sorts a copy but keeps the band objects, so the sorted entry is
-        // identity-equal to one of the user's rows -- unless there are no rows at all, in
+        // identity-equal to one of the operator's rows -- unless there are no rows at all, in
         // which case it is the fallback band derived from `size` and there is nothing to
         // edit until it is written down.
         const configBands = this.graphicLabels?.rangeFan?.bands;

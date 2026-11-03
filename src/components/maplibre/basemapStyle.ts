@@ -16,7 +16,6 @@ import type {StyleSpecification} from 'maplibre-gl';
  * **Don't remove either while trimming controls.** `basemapEnabled` is the
  * escape hatch if traffic ever stops being modest, matching the OpenLayers side.
  *
- * @see ai/decisions.md — the keyless alternatives that were compared
  */
 
 /** Matches `basemapEnabled` in `openlayerStyles.ts`: `REACT_APP_BASEMAP=off` drops the tiles. */

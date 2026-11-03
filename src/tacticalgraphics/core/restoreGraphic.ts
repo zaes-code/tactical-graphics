@@ -1,8 +1,8 @@
 import type {Feature, FeatureCollection} from 'geojson';
-import {upgradeAxisBase} from './axisWidth';
+import {upgradeSavedLine} from './savedBase';
 import {completeDemolitionBase} from './drawnBase';
 import {applyAmplifierAliases, migrateRetiredGraphic, TACTICAL_GRAPHIC_KEY, type TacticalGraphicProperties} from './render';
-import {SNAPSHOT_VERSION, editableBaseGeometry, snapshotVersionOf} from './snapshot';
+import {declaredSnapshotVersion, editableBaseGeometry, snapshotVersionOf} from './snapshot';
 import {DEFAULT_OFFSET_PX, buildPaintedGraphic, type PaintedGraphic} from './paintedGraphic';
 
 /** One graphic read back out of a file, and the identity the file gave it. */
@@ -28,23 +28,23 @@ export function restoreSnapshotGraphics(snapshot: FeatureCollection, resolution:
     /*
      * **The file's own version, because a version 1 axis arrow is a different shape.**
      *
-     * The eleven filed their width as an amplifier until 2026-09-10 and carry it as
+     * The eleven filed their width as an amplifier and carry it as
      * their last coordinate now, so an older record is a run of route points and a
      * `width` where a current one is that run plus a coordinate. A collection that
-     * declares no version is read as version 1, which is what every unversioned one
-     * actually is — MapLibre wrote them itself until 2026-09-04.
-     * @see upgradeAxisBase, snapshotVersionOf
+     * declares no version is read as version 1, except that each axis arrow's own
+     * geometry says whether it already carries its width point. @see upgradeSavedLine
      */
     const version = snapshotVersionOf(snapshot);
+    const declared = declaredSnapshotVersion(snapshot) !== undefined;
     const restored: RestoredGraphic[] = [];
     for (const feature of snapshot.features ?? []) {
-        const built = restoreFeature(feature, version, resolution);
+        const built = restoreFeature(feature, version, declared, resolution);
         if (built) restored.push(built);
     }
     return restored;
 }
 
-function restoreFeature(feature: Feature, version: number, resolution: number): RestoredGraphic | undefined {
+function restoreFeature(feature: Feature, version: number, declared: boolean, resolution: number): RestoredGraphic | undefined {
     const props = feature.properties ?? {};
     const stored = props[TACTICAL_GRAPHIC_KEY] as TacticalGraphicProperties | undefined;
     // @see applyAmplifierAliases — a snapshot may predate the 3.0.0 rename.
@@ -65,21 +65,15 @@ function restoreFeature(feature: Feature, version: number, resolution: number): 
     if (!properties?.name || !geometry) return undefined;
     // The geometry an engine edits, out of the one the file carries. @see filedBaseGeometry
     geometry = editableBaseGeometry(properties.name, geometry, properties);
-    // A demolition obstacle saved with two points (OpenLayers allowed it until
-    // 2026-09-21) gets its third, whatever the version. @see completeDemolitionBase
+    // A demolition obstacle saved with two points gets its third, whatever the version. @see completeDemolitionBase
     if (geometry.type === 'LineString') {
         const completed = completeDemolitionBase(properties.name, geometry.coordinates);
         if (completed !== geometry.coordinates) geometry = {...geometry, coordinates: completed};
     }
-    if (version < SNAPSHOT_VERSION && geometry.type === 'LineString') {
-        const upgraded = upgradeAxisBase(
-            properties.name,
-            geometry.coordinates,
-            properties.width,
-            resolution * DEFAULT_OFFSET_PX * 2,
-        );
-        if (upgraded !== geometry.coordinates) {
-            geometry = {...geometry, coordinates: upgraded};
+    if (geometry.type === 'LineString') {
+        const upgraded = upgradeSavedLine(version, declared, properties.name, geometry.coordinates, properties.width, resolution * DEFAULT_OFFSET_PX * 2);
+        if (upgraded.coordinates !== geometry.coordinates) geometry = {...geometry, coordinates: upgraded.coordinates};
+        if (upgraded.widthSpent) {
             // **And the amplifier goes with it**, because the point now says what it
             // said. Left in the bag it is the second copy the whole change exists to
             // remove, and it rides straight back out into the next save.

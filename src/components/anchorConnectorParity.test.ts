@@ -46,13 +46,9 @@ const TWO_RINGS_CLOSED = [[[0, 0], [1, 0], [1, 1], [0, 0]], [[-1, -1], [2, -1], 
 const RES = 100;
 
 /** The families the user named, plus the two they named as the reference. */
-const CROSSINGS = [
-    TacticalGraphicName.Bridge,
-    TacticalGraphicName.Gap,
-    TacticalGraphicName.AssaultCrossing,
-    TacticalGraphicName.FordEasy,
-    TacticalGraphicName.FordDifficult,
-];
+const CROSSINGS = [TacticalGraphicName.FordEasy, TacticalGraphicName.FordDifficult];
+/** Points on the rails themselves since the plate numbering pass, so nothing to mark (user, 2026-11-02). */
+const RAIL_POINT_CROSSINGS = [TacticalGraphicName.Bridge, TacticalGraphicName.Gap, TacticalGraphicName.AssaultCrossing];
 const CONVOYS = [TacticalGraphicName.MovingConvoy, TacticalGraphicName.HaltedConvoy];
 const EXPLOSIVES = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
@@ -94,6 +90,12 @@ describe('which graphics hash a line between their anchor points', () => {
         expect(drawsAnchorConnector(name)).toBe(false);
     });
 
+    // Their points sit on the rails, two per side, so a line through them ran along one rail
+    // and then diagonally across the gap.
+    it.each(RAIL_POINT_CROSSINGS)('%s does not, because its points are on its rails', name => {
+        expect(drawsAnchorConnector(name)).toBe(false);
+    });
+
     /**
      * Every listed name is a registered graphic, so a rename cannot leave a dead entry
      * quietly switching the mark off for a symbol that still needs it. `Record`-typed
@@ -102,8 +104,9 @@ describe('which graphics hash a line between their anchor points', () => {
     it('names only registered graphics', () => {
         const registered: string[] = listTacticalGraphicNames();
         const listed = registered.filter(name => drawsAnchorConnector(name as TacticalGraphicName));
-        // 28 since 2026-09-21, when 271204 joined the demolition family.
-        expect(listed).toHaveLength(28);
+        // 28 since 2026-09-21, when 271204 joined the demolition family; 25 since bridge, gap
+        // and assault crossing left it on 2026-11-02.
+        expect(listed).toHaveLength(25);
     });
 });
 
@@ -200,8 +203,8 @@ describe('OpenLayers un-hides the construction line on the selected graphic', ()
 
     it('leaves an unselected graphic\'s base hidden', () => {
         const manager = stubbedManager();
-        const selected = build(manager, TacticalGraphicName.Bridge, 'a');
-        const other = build(manager, TacticalGraphicName.Bridge, 'b');
+        const selected = build(manager, TacticalGraphicName.FordEasy, 'a');
+        const other = build(manager, TacticalGraphicName.FordEasy, 'b');
 
         manager.setInteractionMode(InteractionType.edit);
         manager.setSelection(selected);
@@ -255,7 +258,7 @@ describe('the OpenLayers style of the construction line', () => {
     }
 
     it('draws in the inert-handle color, not the affiliation color', () => {
-        const style = styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]]);
+        const style = styleOf(TacticalGraphicName.FordEasy, [[0, 0], [1, 0]]);
         expect(style.getStroke().getColor()).toBe(DEFAULT_PALETTE.inertHandleColor);
     });
 
@@ -264,17 +267,17 @@ describe('the OpenLayers style of the construction line', () => {
      * a red construction line laid along a red casing is indistinguishable from it.
      */
     it('stays inert on a hostile graphic', () => {
-        const style = styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]], TacticalGraphicHostility.hostileFaker);
+        const style = styleOf(TacticalGraphicName.FordEasy, [[0, 0], [1, 0]], TacticalGraphicHostility.hostileFaker);
         expect(style.getStroke().getColor()).toBe(DEFAULT_PALETTE.inertHandleColor);
     });
 
     it('follows the host\'s inert color when one is configured', () => {
         configureTacticalGraphics({inertHandleColor: '#404040'});
-        expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]]).getStroke().getColor()).toBe('#404040');
+        expect(styleOf(TacticalGraphicName.FordEasy, [[0, 0], [1, 0]]).getStroke().getColor()).toBe('#404040');
     });
 
     it('is hashed', () => {
-        expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0]]).getStroke().getLineDash()).toEqual([4, 4]);
+        expect(styleOf(TacticalGraphicName.FordEasy, [[0, 0], [1, 0]]).getStroke().getLineDash()).toEqual([4, 4]);
     });
 
     it('stops at point 2 for the demolition family', () => {
@@ -298,7 +301,7 @@ describe('the OpenLayers style of the construction line', () => {
     });
 
     it('leaves the geometry alone for a graphic whose whole base is the run', () => {
-        expect(styleOf(TacticalGraphicName.Bridge, [[0, 0], [1, 0], [2, 1]]).getGeometry()).toBeNull();
+        expect(styleOf(TacticalGraphicName.FordEasy, [[0, 0], [1, 0], [2, 1]]).getGeometry()).toBeNull();
     });
 });
 
@@ -345,7 +348,7 @@ describe('MapLibre draws the same construction line', () => {
     it('skips a graphic whose base is a point', () => {
         const point = {
             id: 'x',
-            name: TacticalGraphicName.Bridge,
+            name: TacticalGraphicName.FordEasy,
             base: {type: 'Feature', properties: {}, geometry: {type: 'Point', coordinates: [0, 0]}},
         } as unknown as MapLibreTacticalGraphic;
         expect(connectorFeatures([point])).toEqual([]);

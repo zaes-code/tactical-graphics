@@ -72,7 +72,7 @@ export function createMapLibrePropertiesSource(
                          * holds none and this has to be derived — exactly as the OpenLayers
                          * source derives it. Without that the panel had no measured figure for
                          * them and drew the *typed input* instead, which is an empty box on a
-                         * number the operator sets by dragging. (User's report, 2026-09-11.)
+                         * number the operator sets by dragging.
                          *
                          * The field registry leaves `widthTyped` off for these, so a measured
                          * value renders as the read-out the other engine shows.
@@ -140,7 +140,7 @@ export function createMapLibrePropertiesSource(
             );
             // A rebuild can fail the same way the first build could — a generator that
             // refuses the new amplifiers. Leaving the old graphic up is better than
-            // removing it, since the user has just been told the edit applied.
+            // removing it, since the operator has just been told the edit applied.
             // **Through `carryPaintFlags`.** A rebuild reads the portable bag, so anything
             // living on the paint features — `hideAmplifiers`, the label's drawing
             // resolution — is dropped unless it is carried. Pressing OK after switching

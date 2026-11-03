@@ -7,7 +7,7 @@
  *
  * This is a different question from the two the codebase already answers. `GRAPHIC_FIELDS`
  * says which inputs a graphic *offers*; the paint functions say which it *draws*. Neither
- * says whether a particular filled-in graphic is doctrinally complete, which is what a user
+ * says whether a particular filled-in graphic is doctrinally complete, which is what an operator
  * about to publish an overlay actually wants to know.
  *
  * ## Sparse on purpose
@@ -41,7 +41,7 @@ export enum DoctrinalIssueKind {
     format = 'format',
 }
 
-/** One thing wrong with a graphic, in terms a user can act on. */
+/** One thing wrong with a graphic, in terms an operator can act on. */
 export interface DoctrinalIssue {
     /** The property at fault, as named in {@link TacticalGraphicProperties}. */
     field: keyof TacticalGraphicProperties;

@@ -8,6 +8,30 @@ import geometryService from "../core/GeometryService";
 import {Coordinate} from "../core/type";
 import {Position} from "geojson";
 import {parallelRailAnchors, parallelRailFrame} from "../core/anchors";
+import * as turf from "../core/turf";
+
+/** Each gap between a bar's three dashes, as a share of one dash. */
+const FORD_GAP_TO_DASH = 0.25;
+
+/**
+ * A ford bar as the three long dashes 271500's Template draws, whatever its length.
+ *
+ * **A count, not a pattern**, which is why this is geometry rather than a stroke dash:
+ * APP-06, FM 1-02.2 Table 5-16 and MIL-STD-2525E Table L-XVI all draw three dashes per bar,
+ * and a pattern sized on screen draws however many fit (it was about twelve). Three
+ * dashes are a share of the bar, so they scale with it as the bar itself does.
+ */
+function threeDashes(bar: Position[]): Position[][] {
+    const line = turf.lineString(bar);
+    const total = turf.length(line, {units: 'meters'});
+    if (!(total > 0)) return [bar];
+    const dash = total / (3 + 2 * FORD_GAP_TO_DASH);
+    const gap = dash * FORD_GAP_TO_DASH;
+    return [0, 1, 2].map(i => {
+        const start = i * (dash + gap);
+        return turf.lineSliceAlong(line, start, Math.min(total, start + dash), {units: 'meters'}).geometry.coordinates;
+    });
+}
 
 /**
  * The preview gap in metres, from the half-width the holder sized against the screen.
@@ -51,8 +75,8 @@ export class Ford extends TacticalGraphicsBase {
 
         const leftArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, radius);
         const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, -radius);
-        // Both bars whole; they are dashed when painted. @see DASHED_PARTS
-        return this.asMultiLineStringFeature([leftArrowBase, rightArrowBase]);
+        // [upper bar's three dashes, lower bar's three dashes]. @see threeDashes
+        return this.asMultiLineStringFeature([...threeDashes(leftArrowBase), ...threeDashes(rightArrowBase)]);
     }
 
     /** A grip on each of the three points 271500's Template letters. @see parallelRailAnchors */
@@ -83,8 +107,8 @@ export class FordHard extends TacticalGraphicsBase {
         const rightArrowBase: Coordinate[] = geometryService.computeParallelLineString(centre, -radius);
 
         let zigzag = geometryService.generateZigZag(centre, 10, radius / 2.5, 5);
-        // Both bars whole; they are dashed when painted. @see DASHED_PARTS
-        return this.asMultiLineStringFeature([leftArrowBase, rightArrowBase, zigzag]);
+        // [upper bar's three dashes, lower bar's three dashes, zigzag]. @see threeDashes
+        return this.asMultiLineStringFeature([...threeDashes(leftArrowBase), ...threeDashes(rightArrowBase), zigzag]);
     }
 
     /** A grip on each of the three points 271500's Template letters. @see parallelRailAnchors */

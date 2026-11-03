@@ -16,16 +16,34 @@ import {
     RATIO_LOCKED_LABEL_FONT,
     RATIO_LOCKED_LABEL_FONT_PX,
     configuredLabelScale,
+    fontStyle,
     getLabelHaloColor,
 } from '../core/symbology';
+import {TacticalGraphicName} from '../core/type';
 import {textWidth, uprightRotation} from './decorations';
-import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {letterGapClearance, letterInGapScale} from './labelFit';
 
 /** Clearance either side of the letter within its gap, in screen pixels. */
 const GAP_PADDING_PX = 4;
 /** Where along the first segment the gap is centered. */
 const GAP_POSITION = 0.5;
+
+/**
+ * The retrograde tasks whose plate boxes a `W` above the straight run.
+ *
+ * MIL-STD-2525E 340800 sets `W` over the `D` of delay; APP-06 344100 and 344200 box it above
+ * the line between the `P(F)` / `P(R)` and the arrowhead. The rest of the family letter no
+ * date, so a `startDate` arriving on an imported withdraw is not drawn.
+ */
+export const RETROGRADE_DATED_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Delay,
+    TacticalGraphicName.ForwardPassageOfLines,
+    TacticalGraphicName.RearwardPassageOfLines,
+]);
+
+/** Clearance between the letter's top and the date above it, in screen pixels. */
+const DATE_CLEARANCE_PX = 4;
 
 /**
  * The scale a retrograde task's letter is drawn at, or `0` for no letter and no gap, once
@@ -56,9 +74,10 @@ function retrogradeLetterScale(feature: PaintFeature, context: PaintContext, lab
  *
  * The label lies along the segment whose gap holds it. `uprightRotation` flips it
  * through 180 degrees when that segment points left, so it never renders upside
- * down however the user drew the route.
+ * down however the operator drew the route.
  */
-export function retrogradeTaskPaint(label: string): (f: PaintFeature, c: PaintContext) => Paint[] {
+export function retrogradeTaskPaint(label: string, name?: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
+    const dated = name !== undefined && RETROGRADE_DATED_GRAPHICS.has(name);
     return (feature, context) => {
         const geometry = feature.geometry;
         if (geometry.type !== 'MultiLineString') return [];
@@ -109,6 +128,37 @@ export function retrogradeTaskPaint(label: string): (f: PaintFeature, c: PaintCo
                     scale,
                 },
             });
+
+            // W above the letter, on the screen-up side of the run and laid along it.
+            const date = dated ? amplifierText(feature, (feature.properties.startDate ?? '').trim()) : '';
+            if (date) {
+                const dateScale = scaleOf(feature, context);
+                const liftPx = (RATIO_LOCKED_LABEL_FONT_PX * scale) / 2 + DATE_CLEARANCE_PX + (16 * dateScale) / 2;
+                let nx = -dy / segLen;
+                let ny = dx / segLen;
+                if (ny < 0) {
+                    nx = -nx;
+                    ny = -ny;
+                }
+                const mid: ProjectedPosition = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
+                paints.push({
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [mid[0] + nx * liftPx * context.resolution, mid[1] + ny * liftPx * context.resolution],
+                    },
+                    text: {
+                        text: date,
+                        kind: 'amplifier',
+                        font: fontStyle,
+                        fill: labelColorOf(feature),
+                        halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                        rotation: uprightRotation(p1, p2),
+                        align: 'center',
+                        baseline: 'middle',
+                        scale: dateScale,
+                    },
+                });
+            }
         }
 
         paints.push({

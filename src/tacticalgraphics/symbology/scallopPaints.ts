@@ -82,11 +82,16 @@ const LC_LABEL_PAD_PX = 10;
  * balanced when a host recolors the library.
  *
  * Which side is which is a property of the map, not of the drawing gesture. The
- * enemy-side wave takes the upper side of the line however the user drew it.
+ * enemy-side wave takes the upper side of the line however the operator drew it.
+ *
+ * **The scallops bulge toward each other**, which is why the amplitude goes in negated:
+ * each wave sits on its own side and bows back across the gap, so its open side faces
+ * its own unit. FM 1-02.2 Table 5-8 and MIL-STD-2525E Table L-VII ("the open side of the
+ * arc reflects the reported unit") both draw it so. Until both bowed away.
  *
  * One scale drives the waves *and* their separation, so the symbol keeps its
  * proportions and simply gets smaller. This was exempt from `decorationScale`
- * until 2026-08-04, on the grounds that the separation is what the graphic says.
+ * on the grounds that the separation is what the graphic says.
  * What that produced was a 117 px line still wearing 8 px waves 16 px apart — two
  * separate squiggles rather than one symbol. The separation has its own floor
  * below which the waves are dropped: a shared scale of 0 would put the two lines
@@ -132,11 +137,11 @@ export function lineOfContactPaint(): LinePaint {
 
         return [
             {
-                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, amplitudeMap, enemySign, offsetMap)},
+                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, -amplitudeMap, enemySign, offsetMap)},
                 stroke: {color: getColorByHostility(TacticalGraphicHostility.hostileFaker), widthPx: LINE_WIDTH()},
             },
             {
-                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, amplitudeMap, -enemySign, offsetMap)},
+                geometry: {type: 'LineString', coordinates: wavePath(coords, wavelengthMap, -amplitudeMap, -enemySign, offsetMap)},
                 // **The friendly identity's colour, not the unaffiliated default.** This
                 // wave *is* the friendly side of the symbol — the graphic draws both
                 // identities at once — so painting it in the fallback line colour said
@@ -159,10 +164,14 @@ export function lineOfContactPaint(): LinePaint {
  * the collection is line work.
  *
  * `label` is the doctrinal letter: "F" for the mission task, empty for the table
- * 5-19 obstacle effect, which is the same zigzag with no glyph. **Unlike the block
+ * 5-19 obstacle effect, which is the same zigzag with no glyph.
+ *
+ * `openHead` strokes the head's two barbs instead of filling it. Fix and the tactical fix
+ * take it: APP-06 270503 / 341100 and MIL-STD-2525E Tables L-XVI and L-XXI all draw their
+ * head open (FM 1-02.2 alone fills it). Ferry crossing keeps its solid head. **Unlike the block
  * family this cuts no gap for it**, so an empty label simply draws nothing.
  */
-export function arrowheadedLinePaint(label = ''): LinePaint {
+export function arrowheadedLinePaint(label = '', {openHead = false}: {openHead?: boolean} = {}): LinePaint {
     return (feature, context) => {
         const color = lineColorOf(feature);
         const dashPx = amplifierDash(feature);
@@ -180,7 +189,11 @@ export function arrowheadedLinePaint(label = ''): LinePaint {
                 // a full-size head on a symbol half that wide. Ferry crossing's line is
                 // straight and reads the same either way. @see screenSizedArrowHead
                 const head = screenSizedArrowHead(member.coordinates[0], linePath, context.resolution, 'reach');
-                if (head) {
+                if (head && openHead) {
+                    // The two barbs alone, meeting at the tip the zigzag runs into.
+                    const [tip, left, right] = head;
+                    paints.push({geometry: {type: 'LineString', coordinates: [left, tip, right]}, stroke: {color, widthPx: LINE_WIDTH(), dashPx}});
+                } else if (head) {
                     paints.push({
                         geometry: {type: 'Polygon', coordinates: [head]},
                         fill: {color},
@@ -203,7 +216,7 @@ export function arrowheadedLinePaint(label = ''): LinePaint {
         const anchor: ProjectedPosition = [(segStart[0] + segEnd[0]) / 2, (segStart[1] + segEnd[1]) / 2];
 
         // Rotation and scale come from the *full* line, so the letter is upright with
-        // the graphic and its size tracks the user-drawn length.
+        // the graphic and its size tracks the operator-drawn length.
         const start = linePath[0];
         const end = linePath[linePath.length - 1];
         const len = Math.hypot(end[0] - start[0], end[1] - start[1]);

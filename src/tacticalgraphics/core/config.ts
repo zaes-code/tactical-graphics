@@ -33,7 +33,7 @@ export const BASE_FONT_SIZE_PX = 16;
 /**
  * Default stroke width in px for every graphic's line work.
  *
- * Came down from 4 to 2 on 2026-08-04. 4px reads as heavy at the zooms these graphics
+ * Came down from 4 to 2. 4px reads as heavy at the zooms these graphics
  * are actually used at — the line work crowds its own labels and the inner detail of
  * the denser symbols (obstacle teeth, crenellations, fortified decoration) runs
  * together. 2px is the weight the doctrinal plates read at.
@@ -48,10 +48,10 @@ export const MAX_LINE_WIDTH = 8;
  * Readable bounds for the label-size setting, mirroring the line-width pair so the two
  * behave identically wherever they are surfaced together.
  *
- * Was `Math.max(1, size)` before 2026-08-02 — an upper bound was missing and the lower
+ * Was `Math.max(1, size)` — an upper bound was missing and the lower
  * one admitted sizes no one can read. A label under 8px is illegible at any zoom, and
  * past the upper bound it swamps the graphic it belongs to. That ceiling came down from
- * 48 to 26 on 2026-08-03: 48 was picked to mirror the line-width pair rather than from
+ * 48 to 26: 48 was picked to mirror the line-width pair rather than from
  * looking at the map, and labels well short of it already overran their graphics.
  */
 export const MIN_LABEL_SIZE = 8;
@@ -63,7 +63,7 @@ export const MAX_LABEL_SIZE = 26;
  *
  * Lower than `MIN_LABEL_SIZE`, which bounds the label-size *setting*: a host asks for labels of
  * at least 8 px, while a label that shrank with its graphic stays readable a little smaller.
- * Started at 8 and was hiding labels too soon (user, 2026-10-23).
+ * Started at 8 and was hiding labels too soon.
  */
 export const MIN_LEGIBLE_TEXT_PX = 6;
 
@@ -188,7 +188,7 @@ export interface TacticalGraphicsConfigOptions {
      * `#00FF00` — pure, unmixed, and what this defaulted to through 4.1.1. Sampled off a
      * raster it is exact; rendered as line work over a map it is the brightest colour a
      * screen can make, and it reads as a highlight rather than as a symbol. `#00AC00` is the
-     * same hue at about two thirds the value (user's call, 2026-09-13).
+     * same hue at about two thirds the value.
      *
      * The rule it serves is unchanged: 8.1.4.3 says obstacles are **green**, and names no
      * value. A host that wants the plate's literal green sets it back here.
@@ -202,11 +202,11 @@ export interface TacticalGraphicsConfigOptions {
     altitudeUnit?: AltitudeUnit;
 
     /**
-     * Draw every graphic the user traces as a free path with its corners rounded. Default `false`.
+     * Draw every graphic the operator traces as a free path with its corners rounded. Default `false`.
      *
      * Lines, areas and multi-point arrows: `SMOOTHED_GRAPHICS` lists them and `smoothingKindOf`
      * says how each is treated. The curve rounds the corners (Chaikin corner cutting) rather than
-     * passing through them. Only the line work changes: the points the user placed are what is
+     * passing through them. Only the line work changes: the points the operator placed are what is
      * saved, edited and exported, and a selected graphic shows them as a dashed line. An arrow
      * keeps its last segment straight, so its head is drawn as on a hard line.
      *
@@ -215,8 +215,19 @@ export interface TacticalGraphicsConfigOptions {
      */
     smoothLines?: boolean;
 
+    /**
+     * Write `ENY` on hostile graphics as well as drawing them in the hostile color. Default
+     * `true`; set it `false` to identify hostile graphics by their red line work alone.
+     *
+     * APP-06 8.1.4 and FM 1-02.2 field N add `ENY` so a hostile graphic still reads as one
+     * where color is not available, which is why it is on unless a host opts out. It covers every
+     * place the library writes `ENY`: the ends of lines, the arrows, the areas and the
+     * obstacles. Paint only, so `refreshStyles()` is enough to apply a change.
+     */
+    enemyLabels?: boolean;
+
     // ── Editor chrome ────────────────────────────────────────────────────────
-    // Not part of any symbol: these color the affordances a renderer draws so a user
+    // Not part of any symbol: these color the affordances a renderer draws so an operator
     // can edit a graphic. They say "you can drag this", and that meaning must not shift
     // with a graphic's affiliation — which is why they are their own fields rather than
     // derived from the palette above. A renderer without a given affordance ignores its
@@ -254,6 +265,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly labelHaloColor?: string;
     readonly altitudeUnit?: AltitudeUnit;
     readonly smoothLines?: boolean;
+    readonly enemyLabels?: boolean;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -273,6 +285,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
         if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
         if (options.smoothLines !== undefined) this.smoothLines = options.smoothLines;
+        if (options.enemyLabels !== undefined) this.enemyLabels = options.enemyLabels;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -304,6 +317,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             obstacleColor: overrides.obstacleColor ?? this.obstacleColor,
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
             smoothLines: overrides.smoothLines ?? this.smoothLines,
+            enemyLabels: overrides.enemyLabels ?? this.enemyLabels,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -379,6 +393,11 @@ export function resetTacticalGraphicsConfig(): void {
 /** Whether free-drawn lines, areas and arrows are drawn smooth. @see TacticalGraphicsConfigOptions.smoothLines */
 export function getSmoothLines(): boolean {
     return _config.smoothLines ?? false;
+}
+
+/** Whether hostile graphics write `ENY` as well as drawing in the hostile color. @see TacticalGraphicsConfigOptions.enemyLabels */
+export function getEnemyLabels(): boolean {
+    return _config.enemyLabels ?? true;
 }
 
 /**

@@ -7,19 +7,18 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * designed to stop tanks and armor fighting vehicles around a fortified position".
  *
  * A drawn route carrying triangular teeth, in the wire obstacles' mold rather than the
- * point-dropped explosives': the user draws the ditch's line and the teeth repeat along it
+ * point-dropped explosives': the operator draws the ditch's line and the teeth repeat along it
  * at a constant screen size. One symbol in three states:
  *
  * ```
  * under construction   teeth outlined
  * completed            teeth filled
- * reinforced           teeth filled, with a mine nested in each notch between them
+ * reinforced           teeth filled and spaced, with a mine in each gap
  * ```
  *
- * **The teeth touch.** Their bases run edge to edge along the route, so consecutive teeth
- * share a base corner and the notch between two of them is what a mine sits in. That is
- * also why the run always begins and ends with a tooth - a mine has no notch to sit in
- * unless there is a tooth either side of it.
+ * **The plain ditches' teeth touch**: their bases run edge to edge along the route. The
+ * mined ditch spaces them apart and puts a mine in each gap, tooth first from PT 1, as
+ * 2525E 290203 draws it.
  *
  * The teeth are *not* in the geometry: they are a screen-space decoration, so
  * `antiTankDitchStyleFunc` synthesizes them through `decorationScale` exactly as the wire
@@ -32,14 +31,24 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
 export interface AntiTankDitchStyle {
     /** Are the teeth solid? Only "under construction" is not. */
     filled: boolean;
-    /** Does a mine sit in the notch between each pair of teeth? */
+    /** Does a mine sit in the gap after each tooth? */
     mines: boolean;
+    /**
+     * Which side of PT 1 -> PT 2 the teeth (and mines) hang on.
+     *
+     * MIL-STD-2525E Table L-XVI draws 290201 and 290202 with PT 1 at the top, PT 2 below and
+     * the teeth to the image's right, which is the **left** of travel; APP-06 agrees. Its
+     * 290203 runs PT 1 to PT 2 left to right with the teeth below, the **right** of travel,
+     * where APP-06 has them on the left. 2525E decides, so the mined ditch differs from the
+     * other two.
+     */
+    side: 'left' | 'right';
 }
 
 export const ANTI_TANK_DITCH_STYLES: Partial<Record<TacticalGraphicName, AntiTankDitchStyle>> = {
-    [TacticalGraphicName.AntiTankDitchUnderConstruction]: {filled: false, mines: false},
-    [TacticalGraphicName.AntiTankDitchCompleted]: {filled: true, mines: false},
-    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: {filled: true, mines: true},
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: {filled: false, mines: false, side: 'left'},
+    [TacticalGraphicName.AntiTankDitchCompleted]: {filled: true, mines: false, side: 'left'},
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: {filled: true, mines: true, side: 'right'},
 };
 
 /**

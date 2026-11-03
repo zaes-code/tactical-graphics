@@ -101,7 +101,7 @@ export type SmoothingKind = 'line' | 'area' | 'arrow' | 'arrowFixedTail' | 'corr
 /**
  * **Every graphic smooth lines applies to, and how.** One statement read by every engine.
  *
- * The rule is the base, not the look: a graphic is here when the user draws it as a free path
+ * The rule is the base, not the look: a graphic is here when the operator draws it as a free path
  * of any number of points (a route, an outline). A graphic whose points are anchors with fixed
  * meanings (the mission tasks, the two- and three-point symbols, the rectangles) is absent.
  * So are the free paths that mark every vertex: the air corridor family draws a circle at each
@@ -230,7 +230,8 @@ export const SMOOTHED_GRAPHICS: Readonly<Partial<Record<N, SmoothingKind>>> = Ob
     [N.RegimentalSupportArea]: 'area',
     [N.DropZone]: 'area',
     [N.LandingZone]: 'area',
-    [N.KillZone]: 'area',
+    // 242800 kill zone is absent: MIL-STD-2525E, "anchor points are to be connected with
+    // straight lines".
     [N.PickupZone]: 'area',
     [N.AirfieldZone]: 'area',
     [N.RadiationDoseRateContourLine]: 'area',
@@ -298,7 +299,7 @@ export function smoothingKindOf(name: N | string): SmoothingKind | undefined {
  * `smoothLines` on and `name` in {@link SMOOTHED_GRAPHICS}, a smoothed copy of it.
  *
  * Only the line work. Handles and labels keep the drawn points, and so does everything that
- * is saved, so editing still moves what the user placed and a file says nothing about the
+ * is saved, so editing still moves what the operator placed and a file says nothing about the
  * setting. `drawn` is in generator order, so an arrow's tip is its last vertex.
  */
 export function smoothedForGenerator(name: N | string, drawn: Feature): Feature {

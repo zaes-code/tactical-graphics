@@ -198,7 +198,7 @@ export const DECORATION_MIN_PX = 3;
  *
  * The rule is deliberately about the *shape*, not the zoom. A graphic 120 px
  * across needs the same treatment whether it got that way by being drawn small or
- * by the user zooming out, and a resolution threshold would only catch the second.
+ * by the operator zooming out, and a resolution threshold would only catch the second.
  */
 export function decorationScale(
     path: ProjectedPosition[],
@@ -221,7 +221,7 @@ export function decorationScale(
     // how crowded a shape looks. Height alone under-caps anything wider than it is tall: the
     // fortified merlon stands 11 px proud and is 15 wide, so a cap read off its height let
     // it stay full size on a shape half as big as it should have, and it looked huge however
-    // far the map zoomed out. (Reported 2026-09-07.)
+    // far the map zoomed out.
     //
     // The **item**, not the whole repeat. Capping on merlon-plus-crenel was tried and is too
     // strict — the crenel is empty space, so counting it shrank the merlons until a
@@ -238,7 +238,7 @@ export function decorationScale(
     // 15 px wide, still readable as a square notch at a height a 10 px triangle would have
     // vanished at. Capping the fortified family on its width made it disappear at a shape
     // of 41 px where it used to hold to 30, and the shrinking was wanted but the vanishing
-    // was too early. (Reported 2026-09-07.) Everything else keeps the default.
+    // was too early. Everything else keeps the default.
     return heightPx * scale < minPx ? 0 : scale;
 }
 
@@ -330,11 +330,22 @@ export function obstacleToothSize(path: ProjectedPosition[], closed: boolean, re
 }
 
 /**
- * Encirclement's tooth is the obstacle tooth with a narrower base — the 0.75 : 1
- * base-to-height ratio the generator used to bake, and the proportion the symbol
- * is read at.
+ * How many teeth an encirclement wears round its ring, at the size the plate draws them.
+ *
+ * APP-06 151800, FM 1-02.2 Table 5-5 and MIL-STD-2525E Table L-VII all draw about ten large,
+ * separate open triangles. It used to wear the obstacle belt's 10 px tooth with a 10 px gap,
+ * which on any real ring is forty-odd small teeth fused into a sawtooth.
  */
-export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.75;
+export const ENCIRCLEMENT_TOOTH_COUNT = 10;
+/** A tooth's base, as a share of its period round the ring; the rest is the gap. */
+export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.4;
+/** A tooth's height against its base: near-equilateral, as drawn. */
+const ENCIRCLEMENT_TOOTH_HEIGHT_SHARE = 0.9;
+/**
+ * The widest base a tooth takes on screen. A ring zoomed to fill the screen keeps teeth
+ * this size and wears more of them, rather than ten triangles the size of a hand.
+ */
+export const ENCIRCLEMENT_TOOTH_MAX_BASE_PX = 60;
 
 /**
  * An encirclement's tooth size, in projected meters, at the current resolution.
@@ -344,13 +355,19 @@ export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.75;
  * amplifiers, and sizing each segment against its own length would give one ring
  * several different tooth sizes and make the hostile symbol disagree with the
  * friendly one drawn over the same area.
+ *
+ * Sized so the ring carries `ENCIRCLEMENT_TOOTH_COUNT` of them, capped at
+ * `ENCIRCLEMENT_TOOTH_MAX_BASE_PX`, and dropped below `DECORATION_MIN_PX`.
  */
 export function encirclementToothSize(ring: ProjectedPosition[], resolution: number) {
-    const scale = decorationScale(ring, true, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
+    const perimeterPx = pathLength(ring) / resolution;
+    const basePx = Math.min(ENCIRCLEMENT_TOOTH_MAX_BASE_PX, (perimeterPx / ENCIRCLEMENT_TOOTH_COUNT) * ENCIRCLEMENT_TOOTH_BASE_SHARE);
+    const shown = basePx >= DECORATION_MIN_PX ? basePx : 0;
+    const gapPx = (shown * (1 - ENCIRCLEMENT_TOOTH_BASE_SHARE)) / ENCIRCLEMENT_TOOTH_BASE_SHARE;
     return {
-        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
-        baseMap: OBSTACLE_TOOTH_BASE_PX * ENCIRCLEMENT_TOOTH_BASE_SHARE * scale * resolution,
-        gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
+        heightMap: shown * ENCIRCLEMENT_TOOTH_HEIGHT_SHARE * resolution,
+        baseMap: shown * resolution,
+        gapMap: gapPx * resolution,
     };
 }
 
@@ -578,8 +595,7 @@ export function centredRun(total: number, itemLength: number, gap: number): numb
  * produces a polyline that walks forward to the last item and then jumps back to the run's
  * second vertex to retrace it — a straight chord across the curve, which on a fortified line
  * drawn round a bend showed as a bare line cutting the corner. Measured on a quarter-circle
- * of 48 chords: a 412-unit jump where the longest real chord was 9.8. (Reported 2026-09-07,
- * after an edit added the vertices that made a run more than one chord long.)
+ * of 48 chords: a 412-unit jump where the longest real chord was 9.8.
  *
  * Vertices falling *inside* an item's span are dropped, because the item's own two feet
  * already carry the baseline across it.
@@ -713,15 +729,22 @@ export function cutArcAtLabel(
  */
 export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition): number {
     let rotation = -Math.atan2(to[1] - from[1], to[0] - from[0]);
-    if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
+    if (uprightFlipped(from, to)) rotation += Math.PI;
     if (rotation > Math.PI) rotation -= 2 * Math.PI;
     return rotation;
 }
 
-/** Whether {@link uprightRotation} turned the text through half a turn to keep it readable. */
+/**
+ * Whether {@link uprightRotation} turned the text through half a turn to keep it readable.
+ *
+ * **An exactly vertical segment reads bottom to top whichever way it was drawn**, so its
+ * half-turn is taken at `+π/2` and not at `-π/2`. Without that tie the two ends of one vertical
+ * line read in opposite directions, and one of them sat on the line, because
+ * {@link offsetAbove} can only match one of them. Two clicks in the same pixel column draw it.
+ */
 export function uprightFlipped(from: ProjectedPosition, to: ProjectedPosition): boolean {
     const raw = -Math.atan2(to[1] - from[1], to[0] - from[0]);
-    return raw > Math.PI / 2 || raw < -Math.PI / 2;
+    return raw >= Math.PI / 2 || raw < -Math.PI / 2;
 }
 
 /**
@@ -757,7 +780,8 @@ export function alignAlong(
  * "Up" is normalized against the map's north rather than taken from the
  * segment's direction of travel: a counter-clockwise perpendicular flips when the
  * same line is drawn right-to-left, which put every label below the line instead
- * of above it. A vertical segment has no up side, so the tie breaks east.
+ * of above it. A vertical segment has no up side, so the tie breaks west: that is where the
+ * top of the text is, since {@link uprightRotation} reads a vertical segment bottom to top.
  *
  * The offset is `px × resolution`, so it is a constant screen distance at every
  * zoom — the house rule for anything that has to clear a glyph.
@@ -776,7 +800,7 @@ export function offsetAbove(
 
     let nx = -dy / len;
     let ny = dx / len;
-    if (ny < 0 || (ny === 0 && nx < 0)) {
+    if (ny < 0 || (ny === 0 && nx > 0)) {
         nx = -nx;
         ny = -ny;
     }
@@ -875,7 +899,6 @@ export const FORTIFIED_MIN_PX = 1.5;
  * A whole number centred on each segment settles the seam too — every segment is
  * self-contained, so there is no pattern left running when the ring closes — and it keeps
  * the merlon the size it is meant to be. A segment too short for one draws bare.
- * (User's call, 2026-09-07, extending the obstacle teeth decision to this family.)
  */
 export function castellatedPath(
     path: ProjectedPosition[],
@@ -1152,7 +1175,7 @@ export function screenSizedArrowHead(
      * the traversal let its head reach the 15 px ceiling on a symbol only 50 px across —
      * a triangle a third the width of the graphic, which is what the sweep showed. Ferry
      * crossing was always right and looks unchanged here, because its line is straight and
-     * the two measures are the same number for it. (User's call, 2026-09-03.)
+     * the two measures are the same number for it.
      */
     const span = measure === 'reach' && path.length >= 2
         ? Math.hypot(path[path.length - 1][0] - path[0][0], path[path.length - 1][1] - path[0][1])

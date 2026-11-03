@@ -905,6 +905,8 @@ function emitPaints(paints, toPx) {
     let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
     /** Every emitted label's box, for the collision check in buildSvg. */
     const textBoxes = [];
+    let glyphRunId = 0;
+    let lastGlyph = false;
     const grow = (x0, y0, x1, y1) => {
         if (x0 < bx0) bx0 = x0;
         if (y0 < by0) by0 = y0;
@@ -970,6 +972,12 @@ function emitPaints(paints, toPx) {
         }
 
         // ── Text ──
+        // A label laid along a path is one glyph per paint, each with a transparent-fill halo
+        // copy at the same spot. The copies are not labels, and the glyphs of one run are one
+        // label: neither may count as an overlap. @see textAlongPath
+        const glyphRun = p.text && p.text.glyph ? (lastGlyph ? glyphRunId : ++glyphRunId) : null;
+        lastGlyph = !!(p.text && p.text.glyph);
+        const haloCopy = !!(p.text && p.text.glyph && p.text.fill === 'rgba(0,0,0,0)');
         if (p.text && p.text.text) {
             const pts = g.type === 'Point' ? [g.coordinates] : g.type === 'MultiPoint' ? g.coordinates : [g.coordinates && g.coordinates[0]];
             for (const pos of pts) {
@@ -1008,15 +1016,26 @@ function emitPaints(paints, toPx) {
                 const tx = x + dx;
                 const ty = y + dy;
                 if (rot) {
-                    // Rotated: bound by the diagonal rather than modelling the box.
-                    const r = Math.hypot(widest, tall) / 2;
-                    growPoint(tx, ty, r);
-                    textBoxes.push({x0: tx - r, y0: ty - r, x1: tx + r, y1: ty + r});
+                    // Rotated: the box turned about its anchor, bounded by its four corners. A
+                    // circle on the diagonal made every glyph of a near-level run reach its
+                    // neighbor's letters and read as an overlap.
+                    const left = anchor === 'start' ? 0 : anchor === 'end' ? -widest : -widest / 2;
+                    const top = baseline === 'hanging' ? 0 : baseline === 'alphabetic' ? -tall : -tall / 2;
+                    const t = (rot * Math.PI) / 180;
+                    const [c, sn] = [Math.cos(t), Math.sin(t)];
+                    const xs = [], ys = [];
+                    for (const [u, v] of [[left, top], [left + widest, top], [left, top + tall], [left + widest, top + tall]]) {
+                        xs.push(tx + u * c - v * sn);
+                        ys.push(ty + u * sn + v * c);
+                    }
+                    const box = {x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys)};
+                    grow(box.x0, box.y0, box.x1, box.y1);
+                    if (!haloCopy) textBoxes.push({...box, run: glyphRun});
                 } else {
                     const left = anchor === 'start' ? tx : anchor === 'end' ? tx - widest : tx - widest / 2;
                     const top = baseline === 'hanging' ? ty : baseline === 'alphabetic' ? ty - tall : ty - tall / 2;
                     grow(left, top, left + widest, top + tall);
-                    textBoxes.push({x0: left, y0: top, x1: left + widest, y1: top + tall});
+                    if (!haloCopy) textBoxes.push({x0: left, y0: top, x1: left + widest, y1: top + tall, run: glyphRun});
                 }
                 if (lines.length === 1) {
                     body.push(`<text ${a.join(' ')}>${esc(p.text.text)}</text>`);
@@ -1050,6 +1069,7 @@ function textOverlap(boxes) {
     for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
             const a = boxes[i], b = boxes[j];
+            if (a.run != null && a.run === b.run) continue;
             const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
             const h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
             if (w <= 0 || h <= 0) continue;

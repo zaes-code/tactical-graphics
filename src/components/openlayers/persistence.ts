@@ -6,7 +6,7 @@
  *
  * A graphic's rendered line work is derived: the generator produces it from a base
  * geometry plus a handful of inputs. Persisting the derivation rather than the result
- * means a restored graphic is the same object the user drew, not a picture of it —
+ * means a restored graphic is the same object the operator drew, not a picture of it —
  * it rotates, resizes and modifies exactly as before. So a snapshot holds **only the
  * base feature**.
  *
@@ -39,7 +39,7 @@
  *
  * There is no exception left. The security operations were one — they held a constant
  * on-screen size, so restore re-anchored them to the live view resolution — and APP-06's
- * four anchor points made them ordinary two-point graphics on 2026-08-29.
+ * four anchor points made them ordinary two-point graphics.
  *
  * Pass `includeDerived` to additionally emit the rendered `graphic` and `label`
  * features. Restore ignores them; they are there for consumers that only want to draw
@@ -69,7 +69,8 @@ import type {Feature as GeoJSONFeature, FeatureCollection, Position} from 'geojs
 import {
     applyAmplifierAliases,
     migrateRetiredGraphic,
-    upgradeAxisBase,
+    upgradeSavedLine,
+    declaredSnapshotVersion,
     completeDemolitionBase,
     carriesWidthPointInBase,
     axisFromRectangleRing,
@@ -133,7 +134,7 @@ const GEOJSON_PROJECTION = 'EPSG:4326';
  * Where a restored graphic keeps **the description it arrived with**.
  *
  * A save walks the holders and asks each what it knows, which is the right question for a
- * graphic the user drew here and the wrong one for a file someone else wrote: a holder that
+ * graphic the operator drew here and the wrong one for a file someone else wrote: a holder that
  * owns no `decorationSize` answers nothing, and the figure the file stated is gone on the
  * first re-save. Measured against MapLibre's own output, that is `decorationSize` on 146 of
  * the 318 — every one of them a screen-sized default spent at the zoom the graphic was drawn
@@ -142,13 +143,12 @@ const GEOJSON_PROJECTION = 'EPSG:4326';
  *
  * So the incoming bag is kept beside the holder and a save reads *under* it. Anything the
  * holder states wins, on every key, which is what keeps this from resurrecting an amplifier
- * the user cleared — `writeGraphicProperties` replaces the bag wholesale, so a field the
+ * the operator cleared — `writeGraphicProperties` replaces the bag wholesale, so a field the
  * holder manages is always present in its answer, blank or not. Only a key no holder has an
  * opinion about falls through.
  *
  * It is the mirror of `descriptionOf` on the MapLibre side, and the two together are what
  * make a file mean the same thing whichever engine last wrote it. @see describedProperties,
- * ai/conventions.md "A file carries the description, not the render input"
  */
 const FILED_DESCRIPTION_KEY = 'filedDescription';
 
@@ -185,9 +185,9 @@ export interface RestoreReport {
     restored: number;
     failed: RestoreFailure[];
     /**
-     * The version the file declared, or {@link SNAPSHOT_VERSION} where it declared none.
+     * The version the file declared, or `LEGACY_SNAPSHOT_VERSION` where it declared none.
      *
-     * **A missing version is not an invalid file.** Every MapLibre export up to 2026-09-04
+     * **A missing version is not an invalid file.** Every MapLibre export up to
      * carried none — the stamp lived in this module, which MapLibre cannot import — and a
      * host assembling a collection by hand from the documented property carries none
      * either. Both are structurally identical to what this engine writes, so they are read,
@@ -298,7 +298,7 @@ function describedBy(name: TacticalGraphicName, bag: Record<string, unknown>): R
  * Assembled from the handler rather than trusted off the base feature, because not
  * every holder stamps everything everywhere: `drawingResolution` in particular lives
  * on whichever feature its holder happened to choose, and the block and exfiltrate
- * families never write a `tacticalGraphic` bag at all unless the user opens the
+ * families never write a `tacticalGraphic` bag at all unless the operator opens the
  * properties dialog.
  */
 function collectProperties(handler: TacticalGraphicHandler): Record<string, unknown> | undefined {
@@ -379,7 +379,7 @@ function restoreLatitude(feature: GeoJSONFeature): number {
  *
  * `MissionTaskGraphicBase.writeBase` refuses to file `radius`, `rotation` and `mirrored` for
  * the graphics whose anchor points carry them — *"stamping them as well is a second copy of
- * the geometry"*, decided 2026-09-06 after the demolition block and 200700 each shipped one.
+ * the geometry"*, decided after the demolition block and 200700 each shipped one.
  * The restore was filing exactly those three anyway, straight out of the saved bag, and
  * `writeGraphicProperties` merges, so the figure stuck: 151204 contain rebuilt its shape from
  * the points and went on reporting the file's 40 km beside a symbol drawn at 29.8.
@@ -523,7 +523,7 @@ export function applyRestoredGeometry(
      * **A rectangular zone saved as the box it was drawn as.**
      *
      * APP-06 defines these as two anchor points and a width, and that is what the base
-     * carries as of 2026-08-27 — but every file written before it holds the drawn ring.
+     * carries — but every file written before it holds the drawn ring.
      * Read the axis and the width back out: the same rectangle returns, and it returns
      * with a width the operator can drag. @see axisFromRectangleRing
      */
@@ -544,7 +544,7 @@ export function applyRestoredGeometry(
      *
      * The shim below does this for the frame-editing holders, and it is keyed on
      * `MissionTaskController` — so a graphic that leaves that family takes its own legacy
-     * files with it. 344000 pursuit did exactly that on 2026-09-06, when it was made to edit
+     * files with it. 344000 pursuit did exactly that, when it was made to edit
      * as the cane arrow it draws: every pursuit saved before then is a `Point` plus a radius
      * and a rotation, and it silently stopped upgrading.
      *
@@ -575,7 +575,7 @@ export function applyRestoredGeometry(
         // to restore: the anchored form is handed straight to `setBaseFeature`, which
         // reads the frame back out of the points; the old form keeps going through
         // `updateGeom` with the center, radius and rotation it was saved with, and the
-        // holder writes the anchor points out on the next update. Nothing a user saved
+        // holder writes the anchor points out on the next update. Nothing an operator saved
         // stops loading, and it upgrades in place. @see core/anchors.ts
         const geometry = base.getGeometry();
         if (geometry instanceof LineString && usesDrawnAnchors(handler.graphic.name)) {
@@ -653,7 +653,7 @@ export function applyRestoredGeometry(
     if (handler instanceof LineGraphicController) {
         // Minimum-length floors modify base geometry against a screen-pixel constant.
         // Correct while drawing, wrong here: this geometry is already final, so
-        // re-applying a larger floor lengthens the line the user drew. Suspended for the
+        // re-applying a larger floor lengthens the line the operator drew. Suspended for the
         // rebuild only, so draw and modify keep the protection.
         //
         // Duck-typed rather than instanceof: `LineGraphicBase` and `Block` both carry
@@ -763,7 +763,7 @@ export function applyRestoredGeometry(
  * `clearAllGraphics(manager)` first for a load-over-the-top.
  *
  * A graphic that fails is rolled back feature-by-feature and reported rather than
- * aborting the load, so one unreadable record cannot cost the user the other fifty.
+ * aborting the load, so one unreadable record cannot cost the operator the other fifty.
  */
 export function restoreTacticalGraphics(
     manager: TacticalGraphicsManager,
@@ -871,19 +871,20 @@ export function restoreTacticalGraphics(
                 /*
                  * **A version 1 base is upgraded before anything else reads it.**
                  *
-                 * The eleven axis arrows filed their width as an amplifier until 2026-09-10 and
+                 * The eleven axis arrows filed their width as an amplifier and
                  * carry it as their last coordinate now, so an older file is two coordinates and
                  * a `width` where a current one is three and no width at all. The conversion has
                  * to happen here rather than in `normalizeDrawnBase`, because it spends a number
                  * that lives beside the geometry and the normalizer only ever sees the geometry.
                  *
-                 * A file that declares no version is read as version 1, which is what every
-                 * unversioned collection actually is. @see upgradeAxisBase, snapshotVersionOf
+                 * A file that declares no version is read as version 1, except that each axis
+                 * arrow's geometry says whether it already ends in its width point. The same
+                 * call reverses a direction-of-attack arrow saved before version 3.
+                 * @see upgradeSavedLine, snapshotVersionOf
                  */
                 const stored = geometry.getCoordinates().map(c => toLonLat(c)) as Position[];
-                const upgraded = report.version < SNAPSHOT_VERSION
-                    ? upgradeAxisBase(name, stored, state.width, defaultWidthMetres(resolution))
-                    : stored;
+                const declared = declaredSnapshotVersion(snapshot) !== undefined;
+                const upgraded = upgradeSavedLine(report.version, declared, name, stored, state.width, defaultWidthMetres(resolution)).coordinates;
                 // And a demolition obstacle saved with two points gets its third, whatever the
                 // version: the draw that allowed it was current. @see completeDemolitionBase
                 const tidied = normalizeDrawnBase(name, completeDemolitionBase(name, upgraded));

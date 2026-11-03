@@ -77,9 +77,24 @@ describe('wireObstacleStyleFunc', () => {
             const rail = styles.map(s => s.getGeometry()).find(g => g instanceof LineString) as LineString;
             return rail.getCoordinates()[0][1];
         };
-        expect(railY(TacticalGraphicName.WireLowWireFence)).toBeLessThan(0);
+        // Drawn east, so PT 1 is on the left: the plate turned half round, rail above.
+        expect(railY(TacticalGraphicName.WireLowWireFence)).toBeGreaterThan(0);
         expect(railY(TacticalGraphicName.WireDoubleApronFence)).toBe(0);
     });
+
+    // 2525E Table L-XVI and APP-06 290305, 290307, 290308: PT 2 left, PT 1 right, the marks
+    // above the rail. So the marks stand on the right of PT 1 -> PT 2 and the rail on its left.
+    it.each([TacticalGraphicName.WireLowWireFence, TacticalGraphicName.WireSingleConcertina, TacticalGraphicName.WireDoubleStrandConcertina])(
+        'puts the %s marks on the right of PT 1 -> PT 2, as the plate draws them',
+        name => {
+            const west = new MultiLineString([[[8000, 0], [0, 0]]]);
+            const rails = (styleOf(name, west, 1).map(s => s.getGeometry()).filter(g => g instanceof LineString) as LineString[])
+                .map(g => g.getCoordinates()[0][1]);
+            // Travelling west the plate's own way up: the lowest rail is below the marks.
+            expect(Math.min(...rails)).toBeLessThan(0);
+            expect(Math.max(...rails)).toBeLessThanOrEqual(0);
+        },
+    );
 
     // High wire fence is low wire fence plus an overline, so it carries two wires - one
     // under the marks and one over - where low wire fence carries only the lower.

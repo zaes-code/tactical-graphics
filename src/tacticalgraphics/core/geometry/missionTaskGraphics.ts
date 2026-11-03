@@ -23,7 +23,7 @@ const FIRE_POSITION_ARROWHEAD_RATIO = 0.52;
  * it lands (as a fraction of the bar's half-height).
  *
  * Both are half what they first shipped as (1.0 / 0.56 — the arrows reached exactly
- * as far as the user dragged), on the user's call 2026-07-29. Halving *both* is what
+ * as far as the operator dragged). Halving *both* is what
  * halves the arrow's length without changing the angle it diverges at. The
  * construct puts an arrow at 0.90 x barHalf; these values give 1.15, so short is
  * also the more doctrinal direction.
@@ -88,7 +88,7 @@ export function getAttackByFireSymbol(base: Position[], barHalf: number): Featur
  * diverging from the *ends* of the bar instead of one shaft from its middle.
  * Each arrow reaches `FIRE_POSITION_ARROW_REACH_RATIO` of the way along the
  * shaft and lands `FIRE_POSITION_ARROW_SPREAD_RATIO` past the bar, so it stops
- * short of the point the user dragged to — see those constants.
+ * short of the point the operator dragged to — see those constants.
  *
  * Returned MultiLineString segments (in order):
  *   0: position bracket  (feather → bar → feather, 4 points)
@@ -106,7 +106,7 @@ export function getSupportByFireSymbol(base: Position[], barHalf: number): Featu
     const barBottom = bracket[2];
 
     // Forward reach measured along the shaft, so the arrows shorten and lengthen
-    // with the line the user drew rather than with the bar alone.
+    // with the line the operator drew rather than with the bar alone.
     const shaftLength = turf.distance(turf.point(start), turf.point(end), {units: 'meters'});
     const reach = turf.destination(start, shaftLength * FIRE_POSITION_ARROW_REACH_RATIO, bearing, {units: 'meters'});
     const tipOffset = barHalf * (1 + FIRE_POSITION_ARROW_SPREAD_RATIO);
@@ -123,11 +123,17 @@ export function getSupportByFireSymbol(base: Position[], barHalf: number): Featu
     ]);
 }
 
-export function getBreachArrow(base: Position[], size: number, topBearingBuffer: number, bottomBearingBuffer: number): Feature<MultiLineString> {
+export function getBreachArrow(
+    base: Position[],
+    size: number,
+    topBearingBuffer: number,
+    bottomBearingBuffer: number,
+    tickShare = 0.75,
+): Feature<MultiLineString> {
     let offsetBase = computeParallelLineString(base, size);
     let bearing = turf.bearing(offsetBase[0], offsetBase[1]);
-    let top = turf.destination(offsetBase[1], size * .75, bearing + topBearingBuffer, {units: 'meters'})
-    let bottom = turf.destination(offsetBase[1], size * .75, bearing + bottomBearingBuffer, {units: 'meters'})
+    let top = turf.destination(offsetBase[1], size * tickShare, bearing + topBearingBuffer, {units: 'meters'})
+    let bottom = turf.destination(offsetBase[1], size * tickShare, bearing + bottomBearingBuffer, {units: 'meters'})
     return turf.multiLineString([offsetBase, [top.geometry.coordinates, bottom.geometry.coordinates]]);
 }
 
@@ -146,7 +152,7 @@ export function getBypassArrow(base: Position[], size: number): Feature<MultiLin
  * proportional" to it. Passing it lets the caller honour both.
  *
  * Omitted, the front line overhangs the outer arrows by `0.75 * size`, which is what this
- * drew before 2026-09-06 and what a legacy two-point base still gets. 340500's own
+ * drew and what a legacy two-point base still gets. 340500's own
  * Template puts that overhang at 0.39 of the spacing, not 0.75. @see Clear
  */
 export function getClearGraphic(base: Position[], size: number, halfHeight?: number): Feature<MultiLineString> {
@@ -211,8 +217,8 @@ export function getDisruptGraphic(base: Position[], size: number): Feature<Multi
     ];
 
     // The trident's two outer prongs are a long/short pair straddling the
-    // middle one, and which side gets which was swapped on 2026-07-31 at
-    // the user's request: the prong on the `-px` side (screen-*upper* for a
+    // middle one, and which side gets which was swapped at
+    // review: the prong on the `-px` side (screen-*upper* for a
     // left-to-right base, despite the `top`/`bottom` variable names, which
     // are named for the perpendicular's sign) is now the long one.
     //

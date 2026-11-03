@@ -56,7 +56,7 @@ const RADIANS = Math.PI / 180;
  * Returns `undefined` rather than guessing for a base of fewer than three points — mid-draw
  * the interaction hands over a one- or two-point sketch on every pointer move, and a legacy
  * two-point save is a different description entirely. Callers fall back to their own
- * pre-2026-09-06 reading in both cases.
+ * pre- reading in both cases.
  */
 export function frontEdgeFromAnchors(coords: Position[] | undefined): FrontEdgeFrame | undefined {
     if (!coords || coords.length < 3) return undefined;
@@ -91,7 +91,7 @@ export function frontEdgeFromAnchors(coords: Position[] | undefined): FrontEdgeF
  * The frame to draw with: the three placed points where there are three, and the old
  * two-points-and-a-size reading where there are not.
  *
- * **The legacy branch is what keeps saved graphics rendering.** Before 2026-09-06 these
+ * **The legacy branch is what keeps saved graphics rendering.** Before these
  * symbols stored a two-point axis and took their half-height from a `size` the holder
  * derived — a ratio of the base length, which is precisely the aspect lock the plate's two
  * independent dimensions rule out. A file written that way still draws exactly as it did.
@@ -113,7 +113,7 @@ export function frontEdgeFrame(base: Feature<LineString>, size: number): FrontEd
 /**
  * A legacy two-point base, turned rear-to-front for the drawing helpers.
  *
- * These four were in `TIP_FIRST_GRAPHICS` until 2026-09-06: their rules number the front
+ * These four were in `TIP_FIRST_GRAPHICS`: their rules number the front
  * feature first, the generators build the front at the *last* vertex, and the reversal on the
  * way in reconciled the two. Removing them from that list — which a three-point base requires,
  * or the reader is handed points 3 and 2 as its front edge — takes the flip away from the
@@ -123,3 +123,14 @@ export function frontEdgeFrame(base: Feature<LineString>, size: number): FrontEd
 export function legacyAxis(coords: Position[]): Position[] {
     return [coords[coords.length - 1], coords[0]];
 }
+
+/**
+ * How far each end tick on breach and canalize runs either side of its arm's end, as a share
+ * of the half-opening.
+ *
+ * MIL-STD-2525E Table L-XXI (340200, 340400) and APP-06 draw a short tick about a letter tall
+ * across each arm's end: measured off 2525E's Template, about 0.2 of the half-opening each
+ * side. It was 0.75, which drew each tick longer than a short arm. A legacy
+ * two-point base keeps 0.75, because its width grip sits on the tick's end.
+ */
+export const END_TICK_SHARE = 0.2;

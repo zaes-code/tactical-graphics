@@ -126,13 +126,13 @@ export interface TacticalGraphicHandler {
      *
      * **A floor that exists to make a half-drawn graphic legible must not also decide how
      * small a finished one may be.** `Block.MIN_BASE_PX` says so in its own comment —
-     * "from the moment the user *starts drawing*, even if the cursor hasn't moved far
+     * "from the moment the operator *starts drawing*, even if the cursor hasn't moved far
      * from the first click" — and `LineGraphicBase`'s guards say the same. Left in place
      * during a resize they stop seven of the block family shrinking below the size they
      * happened to be drawn at, which reads as a handle that gives up.
      *
      * The curves used to carry a second, readability floor of their own. It was deleted
-     * on 2026-09-10, so what this lifts is the length floors on the block and line
+     * so what this lifts is the length floors on the block and line
      * families. @see decorationSizes.ts, "There is no floor"
      */
     suspendSizeFloor?(active: boolean): void;
@@ -283,7 +283,7 @@ class OpenlayersAdapter {
      * The same feature scaled about its edit pivot, **in projected metres**.
      *
      * `turf.transformScale` moves every vertex a geodesic distance from the pivot, which
-     * is not what a resize gesture asks for: the user drags a corner on screen. At 60
+     * is not what a resize gesture asks for: the operator drags a corner on screen. At 60
      * degrees north a drag asking for exactly 2x grew a zone's longitude span by 2.029
      * while MapLibre, which scales in projected space, grew it by 2.000.
      * @see translateFeature, which had the same fault an order of magnitude larger

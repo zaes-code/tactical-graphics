@@ -41,7 +41,7 @@ export class Block extends TacticalGraphicsBase<PointGraphicOptions> {
      * the same in the same words, which is why the mission task and the table 8-17 obstacle
      * effect share this generator as they always have.
      *
-     * **It was a two-point graphic until 2026-09-06**, and the two it had were the *stem* —
+     * **It was a two-point graphic**, and the two it had were the *stem* —
      * so the bar was not placed at all: it was derived from `size`, a screen constant, and
      * the operator could state neither its length nor where along the stem it sat. The three
      * points invert that: the bar is placed and the stem is derived from point 3.
@@ -57,7 +57,7 @@ export class Block extends TacticalGraphicsBase<PointGraphicOptions> {
          *
          * Anything saved before the third point existed describes the stem alone, with the
          * bar rebuilt across one end at `size`. Which end took some care: `getBlockArrow`
-         * puts the bar on its *last* coordinate, and until 2026-09-06 block was in
+         * puts the bar on its *last* coordinate, and block was in
          * `TIP_FIRST_GRAPHICS` — so a stored `[bar end, stem end]` arrived here reversed and
          * the bar came out on the stored *first* point. Block left that list when its bar
          * became points 1 and 2, because the generator now reads the plate's order straight;

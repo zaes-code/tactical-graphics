@@ -18,7 +18,7 @@ import {paintLineWork} from '../core/paint';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, getLabel} from '../core/type';
-import {DECORATION_MIN_PX, textWidth, uprightRotation} from './decorations';
+import {DECORATION_MIN_PX, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {amplifierDash, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {letterInGapScale} from './labelFit';
 
@@ -35,7 +35,7 @@ type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * one for months. `maritimeLinePaints.test.ts` asserts the two cannot come out the same.
  *
  * Exported because it is a symbology fact, not a rendering one: both engines read it here
- * rather than each deciding. @see ai/conventions.md, "A symbology fact never lives in a
+ * rather than each deciding. @, "A symbology fact never lives in a
  * holder"
  */
 export const BEARING_LINE_DASHED: readonly TacticalGraphicName[] = [
@@ -52,7 +52,7 @@ const BEARING_DASH_PX = [14, 9];
  * from the glyph, the way the arc mission tasks cut theirs, rather than being a fixed slice
  * of the run: `EW` and `RDF` are two and three characters against `B`'s one, and a hole
  * sized for the widest would gape around the narrowest. @see arcMissionTaskPaint, which
- * makes the same argument for a circle. (User's call, 2026-09-04.)
+ * makes the same argument for a circle.
  */
 const LETTER_PADDING_PX = 5;
 
@@ -103,9 +103,10 @@ function beside(
  * APP-06 220100–220108 — a bearing line: a plain run, its type letter beside the midpoint,
  * and field `H` beside point 2.
  *
- * The letter is **upright**, not laid along the run. `uprightRotation` keeps it readable
- * whichever way the bearing was taken, which matters more here than on most lines: a
- * bearing is drawn toward a contact and points in every direction of the compass by design.
+ * The letter and `H` are **upright on screen**, not laid along the run: every one of the
+ * nine Templates and Examples sets them level whichever way the bearing points. A bearing
+ * is drawn toward a contact and points in every direction of the compass by design, so text
+ * turned to the run read at every angle.
  */
 export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
     const letter = getLabel(name);
@@ -118,7 +119,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
 
         const color = lineColorOf(feature);
         const scale = scaleOf(feature, context);
-        const rotation = uprightRotation(from, to);
+        const rotation = 0;
         const stroke = {color, widthPx: LINE_WIDTH(),
             // A planned or suspected line is dashed too; the two patterns do not stack, and
             // the doctrinal one wins because it is what names the symbol.
@@ -138,9 +139,14 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
          * you draw it small is worse than one whose letter crowds its line.
          */
         const letterScale = letter ? letterInGapScale(scale, textWidth(context, letter, fontStyle, 1), BASE_FONT_SIZE_PX, length / context.resolution) : 0;
+        // An upright glyph meets the run across its width on a level line and across its
+        // height on a vertical one, so the gap is its extent along the run.
+        const [ux, uy] = length > 0 ? [Math.abs(dx / length), Math.abs(dy / length)] : [1, 0];
         const halfGap = letterScale
             ? Math.min(
-                  (textWidth(context, letter, fontStyle, letterScale) / 2 + LETTER_PADDING_PX * letterScale) * context.resolution,
+                  (ux * (textWidth(context, letter, fontStyle, letterScale) / 2)
+                      + uy * (BASE_FONT_SIZE_PX / 2) * letterScale
+                      + LETTER_PADDING_PX * letterScale) * context.resolution,
                   (length * MAX_GAP_SHARE) / 2,
               )
             : 0;
@@ -157,7 +163,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
             paints.push({geometry: {type: 'LineString', coordinates: [from, to]}, stroke});
         }
 
-        const text = (at: ProjectedPosition, value: string, align: 'center' | 'right', kind?: 'amplifier', markScale = scale): Paint => ({
+        const text = (at: ProjectedPosition, value: string, align: 'center' | 'left' | 'right', kind?: 'amplifier', markScale = scale): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: value,
@@ -197,11 +203,31 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
          */
         const info = feature.properties.additionalInfo;
         const infoAt = info && beside(from, to, 1, -INFO_OFFSET_PX * scale, context.resolution);
-        if (info && infoAt) paints.push(text(infoAt, String(info), 'right', 'amplifier'));
+        // Ending at point 2 means right-justified on a run drawn east and left-justified on one
+        // drawn west, now that the text no longer turns with the run.
+        // **Upright text has to grow away from the line**, not along it. On a steep or diagonal
+        // run the end-justified H crossed the line's end, so once the side it sits on leans east or west
+        // it grows that way, and up or down with it.
+        if (info && infoAt) {
+            const [nx, ny] = [infoAt[0] - to[0], infoAt[1] - to[1]];
+            const n = Math.hypot(nx, ny) || 1;
+            const steep = Math.abs(nx / n) > LEANS;
+            const align = steep ? (nx > 0 ? 'left' : 'right') : !uprightFlipped(from, to) ? 'right' : 'left';
+            const mark = text(infoAt, String(info), align, 'amplifier');
+            if (steep && Math.abs(ny / n) > LEANS) mark.text!.baseline = ny > 0 ? 'bottom' : 'top';
+            // On a near-vertical run the text sits level with point 2 and hangs back along the
+            // line from it, so it stays within the line's length rather than standing half
+            // above its end.
+            else if (steep) mark.text!.baseline = to[1] > from[1] ? 'top' : 'bottom';
+            paints.push(mark);
+        }
 
         return paints;
     };
 }
+
+/** How far a side must lean off the vertical (sin 22.5 degrees) to count as east, west, up or down. */
+const LEANS = Math.sin(Math.PI / 8);
 
 /**
  * The navigational line's tick, as a fraction of the run it sits on -- **measured, then
@@ -226,8 +252,8 @@ const NAVIGATIONAL_TICK_ANGLE_DEG = 40;
  * do state both lengths at two sizes, and the ratios agree to within six per cent, so a
  * share is a defensible reading of the drawing -- but it makes the ticks grow every time the
  * user lengthens the bar, and *"the symbol varies only in length"* is precisely the sentence
- * that says they should not. Dragging the red handle is the user lengthening the line; only
- * the resize gesture changes the furniture. (User's call, 2026-09-04.)
+ * that says they should not. Dragging the red handle is the operator lengthening the line; only
+ * the resize gesture changes the furniture.
  *
  * Which is what `decorationSize` is for: the holder stamps this size in metres, a vertex
  * drag leaves it alone, and a resize multiplies it. @see DECORATION_PX, followTaskPaints
@@ -311,8 +337,8 @@ const BOX_CLEARANCE_PX = 3;
  * How far an **upright** box of half-size `halfW` x `halfH` reaches from its own centre in
  * the direction `(nx, ny)` — its support function.
  *
- * This exists because the box does not turn with the line. The plate fixes it upright ("T
- * ... should be oriented upright"), so as the run rotates, the part of the box facing the
+ * This exists because the box does not turn with the line. The plate fixes it upright ("T.
+ * should be oriented upright"), so as the run rotates, the part of the box facing the
  * line changes from an edge to a corner and back, and how far it reaches changes with it: a
  * box 30 x 13 reaches 13 toward a horizontal line and over 32 toward a diagonal one. A
  * single perpendicular offset is therefore only ever right at one bearing, and the box

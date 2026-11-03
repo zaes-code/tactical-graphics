@@ -9,7 +9,6 @@
  * All three size the gap from the **rendered** glyph. The labels are zoom-clamped
  * while the geometry is not, so a gap baked in meters drifts against the letter
  * it makes room for — wider zoomed in, tighter zoomed out.
- * @see conventions.md, "a gap follows what it makes room for"
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -212,7 +211,8 @@ export function reliefInPlacePaint(label: string): TaskPaint {
 
 /**
  * Exfiltrate: the whole drawn route with a gap in the middle of its **first**
- * segment for the "EX", plus the arrowhead on the far end.
+ * segment for the "EX" (or the first one long enough to hold it), plus the arrowhead on
+ * the far end.
  *
  * Geometry from `Exfiltrate.generateGraphics`: `[0]` is the route, `[1]` the
  * arrowhead. Only the first segment is split; everything past the first bend
@@ -234,22 +234,36 @@ export function exfiltratePaint(label: string): TaskPaint {
         // Everything after the route renders untouched — that is the arrowhead.
         const outline: ProjectedPosition[][] = lines.slice(1);
 
-        const p1 = route[0];
-        const p2 = route[1];
+        /*
+         * **The first segment that can hold the letters.** The plate sets EX in a break in the
+         * straight run from point 1, and that is the first segment whenever it is long enough.
+         * Drawn with point 2 close to point 1 it is not, and the letters used to sit tilted over
+         * the end of the line with no break at all; they now move on to the next segment that
+         * holds them, and only a route with none is drawn unbroken.
+         */
+        const fit = (i: number) => {
+            const [a, b] = [route[i], route[i + 1]];
+            const segLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            const scale = routedLetterScale(feature, context, label, segLen);
+            const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + routedLetterClearance(scale);
+            const gapRatio = scale > 0 && segLen > 0 ? (halfGapPx * context.resolution) / segLen : 0;
+            return {i, a, b, scale, gapRatio};
+        };
+        const candidates = route.slice(1).map((_, i) => fit(i));
+        // Never the last segment of a bent route, which the arrowhead sits on: zoomed out, when
+        // nothing nearer the tail held the letters, they went there and over the head.
+        const searched = candidates.length > 1 ? candidates.slice(0, -1) : candidates;
+        const chosen = searched.find(c => c.gapRatio > 0 && c.gapRatio < 0.5) ?? candidates[0];
+        const {i, a: p1, b: p2, scale, gapRatio} = chosen;
         const dx = p2[0] - p1[0];
         const dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        const scale = routedLetterScale(feature, context, label, segLen);
-        const halfGapPx = textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2 + routedLetterClearance(scale);
-        const gapRatio = scale > 0 && segLen > 0 ? (halfGapPx * context.resolution) / segLen : 0;
 
         if (gapRatio > 0 && gapRatio < 0.5) {
             const at = (t: number): ProjectedPosition => [p1[0] + dx * t, p1[1] + dy * t];
-            outline.push([p1, at(0.5 - gapRatio)]);
+            outline.push([...route.slice(0, i + 1), at(0.5 - gapRatio)]);
             // The far side of the gap runs on through every remaining vertex, so a
             // bent route stays connected.
-            outline.push([at(0.5 + gapRatio), ...route.slice(1)]);
+            outline.push([at(0.5 + gapRatio), ...route.slice(i + 1)]);
         } else {
             outline.push(route);
         }

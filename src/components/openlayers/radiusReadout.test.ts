@@ -49,6 +49,15 @@ describe('the radius read-out', () => {
         expect(measureAfterResizeGesture(TacticalGraphicName.FreeFireAreaCircular)).toBeDefined();
     });
 
+    it.each([
+        TacticalGraphicName.TargetBuildUpAreaCircular,
+        TacticalGraphicName.TargetValueAreaCircular,
+        TacticalGraphicName.ZoneOfResponsibilityCircular,
+    ])('offers the radius on %s, whose plate letters AM along a RADIUS (M) arrow', name => {
+        // 241703, 241803, 241903: the other seven circular target-acquisition zones had it.
+        expect(getGraphicFields(name).radius).toBe(true);
+    });
+
     it('is off for advance to contact, which is amplified by T and W/W1 instead', () => {
         expect(hasRadiusReadout(TacticalGraphicName.AdvanceToContact)).toBe(false);
         const fields = getGraphicFields(TacticalGraphicName.AdvanceToContact);

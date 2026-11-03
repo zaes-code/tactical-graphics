@@ -7,11 +7,11 @@ import * as turf from './turf';
  * APP-06 defines most of the maneuver symbols from **drawn points**: "point 1 defines
  * the beginning of the straight line, point 2 the end, point 3 the diameter". This
  * library grew them the other way round — a dropped center plus a `size` and a
- * `rotation` — so the symbols are right but the user cannot set their proportions.
+ * `rotation` — so the symbols are right but the operator cannot set their proportions.
  *
  * Rather than rewrite eight pieces of geometry, this converts between the two. A
  * generator keeps the shape maths it already has and asks for its frame here; the
- * frame is derived from what the user drew instead of from a center and a scalar.
+ * frame is derived from what the operator drew instead of from a center and a scalar.
  *
  * **The angle convention is the generators', not turf's.** `angle` is planar radians
  * counter-clockwise from **east**, which is what `geometryService.translateCoordinates`
@@ -33,7 +33,7 @@ function meters(a: Position, b: Position): number {
 }
 
 /**
- * What a point-anchored generator needs, recovered from the points the user drew.
+ * What a point-anchored generator needs, recovered from the points the operator drew.
  *
  * `size` is the **half**-length of the straight run, because that is what the
  * generators mean by it: they lay their axis from `-size` to `+size` about the center.
@@ -49,7 +49,7 @@ export interface DrawnFrame {
      * Perpendicular distance from the axis to the *next* anchor point, in meters.
      *
      * APP-06 calls this the diameter on Envelopment and Pursuit and the width on the
-     * demolition bars. Undefined when the user drew only two points, in which case the
+     * demolition bars. Undefined when the operator drew only two points, in which case the
      * generator keeps whatever default it had.
      */
     offset?: number;
@@ -63,10 +63,10 @@ export interface DrawnFrame {
  * **So a symbol under a meter across draws nothing, on purpose, where its generator reads
  * only a frame.** Ambush (chord of points 2 and 3) and Pursuit (diameter of points 2 and 3)
  * are the two: neither has a dropped fallback for a drawn base, because a click must not
- * park a default-sized symbol (2026-09-06), so an unreadable frame is an empty
+ * park a default-sized symbol, so an unreadable frame is an empty
  * MultiLineString, which is still valid GeoJSON. No operator draws either at that size; the
  * case exists only in a synthetic sweep or a file from elsewhere. Found by the NVG add-on's
- * round-trip fixtures, 2026-09-24. @see subMeterFrames.test.ts
+ * round-trip fixtures. @see subMeterFrames.test.ts
  */
 const MIN_SIZE_M = 1;
 
@@ -75,7 +75,7 @@ const MIN_SIZE_M = 1;
  *
  * Takes the **first and last** vertices as the straight run so a multi-vertex sketch
  * still resolves — APP-06 allows "N anchor points, where N is between 3 and 50" on
- * some of these, and a user who drew a kinked path still means the run to span it.
+ * some of these, and an operator who drew a kinked path still means the run to span it.
  * The perpendicular reference is the vertex *before* the last, when there is one.
  */
 export function frameFromAnchors(coords: Position[] | undefined): DrawnFrame | undefined {
@@ -169,7 +169,7 @@ export function anchorsFromFrame(
  * So points 2 and 3 are the **feet of the semicircle** — the ends of its diameter — and
  * the remaining point says which side of the run it bulges to. Both feet lie on the
  * run's own continuation, which is why the arrowhead lands on the axis by construction
- * rather than by the user lining it up.
+ * rather than by the operator lining it up.
  *
  * `radius` is half that diameter, because every arc in this library is drawn from one.
  */
@@ -199,7 +199,7 @@ function localOf(center: Position, angle: number, p: Position): {u: number; v: n
 }
 
 /**
- * Read a run-and-arc frame off the points the user drew.
+ * Read a run-and-arc frame off the points the operator drew.
  *
  * Point 3 is **projected onto the run's axis** rather than taken where it fell. The
  * diameter lies along the approach in APP-06's own template — both feet sit on the
@@ -485,7 +485,7 @@ export function anchorsForBow(center: Position, size: number, rotationDegrees = 
  * whole reason this reader exists rather than a centre-and-edge pair.
  *
  * Point 1 is honored as an actual tip rather than only a direction, so the arrow's
- * reach is a proportion the user sets. The dropped form fixed it at two radii.
+ * reach is a proportion the operator sets. The dropped form fixed it at two radii.
  */
 export interface ArcAndArrowFrame {
     /** Center of the circle the arc is cut from. */
@@ -513,7 +513,6 @@ export interface ArcAndArrowFrame {
  * yields: it is read for the one thing the symbol can express, **how far the arrow reaches
  * from the middle**, and its component along the back line is dropped rather than stored and
  * ignored. Both sentences then hold by construction rather than by the operator's aim.
- * (User's call, 2026-09-06.)
  *
  * The same arithmetic `sideAnchors` performs for the bracket tasks and the obstacle bypasses,
  * about a midpoint instead of an edge's end.
@@ -567,8 +566,7 @@ export function squareOntoBisector(tip: Position, one: Position, two: Position):
  *
  * Enforced in the reading rather than in the drawing, which is what makes it hold for an edit
  * as well as a draw: both engines drag a base vertex straight to the pointer, and every
- * render goes back through here. (User's call, 2026-09-06: "don't ever let the arrow tip fall
- * into the arch during drawing or editing".)
+ * render goes back through here.
  */
 export const ARC_ARROW_MIN_REACH = 1.25;
 
@@ -620,8 +618,7 @@ export function arcAndArrowAnchorsFromClicks(clicks: Position[] | undefined): Po
          * are not independent of each other however freely they are placed. Handing back the
          * raw clicks let the *stored* pair drift away from the pair the generator draws: a
          * drag of point 3 tilted the axis, the drawn arc moved to stay symmetric about it, and
-         * the grip stayed behind on a coordinate that was no longer on the symbol. (User's
-         * report, 2026-09-06: "point 3 handle falls out of the graphic during editing".)
+         * the grip stayed behind on a coordinate that was no longer on the symbol.
          *
          * Re-deriving them is what makes the base and the drawing one description. It is also
          * idempotent by construction — frame to points to frame is the identity — so a base
@@ -799,7 +796,7 @@ export function anchorsForParallelLegs(
  * up. Every figure either Template *draws* is still reachable, because both draw the
  * straights parallel and equal; what is no longer reachable is a splayed or lopsided
  * hairpin, which is the shape the freehand version drifted into and which neither plate
- * shows. (User's call, 2026-09-06: "the lines MUST be parallel to each other".)
+ * shows.
  *
  * Geodesically, not by adding degrees: the displacement is taken as a distance and a bearing
  * off point 2 and replayed from point 3, so the second straight is the same length as the
@@ -834,10 +831,9 @@ export const SUPPORT_BY_FIRE_PREVIEW_REACH = 2 / 3;
  * So the operator places the firing position's back line and then each limit of coverage, and
  * a preview between those clicks has to be **the symbol they are drawing** rather than a
  * differently-shaped stand-in. It was the stand-in: below four points the generator fell back
- * to the pre-2026-09-06 description — a shaft with the bar derived as a ratio of it — which
+ * to the pre- description — a shaft with the bar derived as a ratio of it — which
  * reads the placed points as something else entirely, so the half-drawn figure neither
- * matched the clicks nor followed the cursor. (User's report, 2026-09-06: "the drawing
- * preview needs to follow the correct points/handles".)
+ * matched the clicks nor followed the cursor.
  *
  * What each count means:
  *
@@ -927,7 +923,7 @@ export function hairpinAnchors(points: Position[]): Position[] | undefined {
  * the arrowheads — bulging back between the legs draws a flattened Z, not a U. Both
  * generators passed a hardcoded `true`, which is right for exactly one handedness: point 3
  * on one side of the first leg. Drag it across to the other side and the same flag puts the
- * arc on the inside, which is the shape the user reported on 2026-09-06 ("demonstration is
+ * arc on the inside, which is the shape the operator reported ("demonstration is
  * turning the arch inwards when dragged across").
  *
  * `createSemicircle` offsets to `chord - 90` by default and `chord + 90` when flipped, so
@@ -977,8 +973,7 @@ export const PURSUIT_PREVIEW_HOOK_SHARE = 0.25;
  * sketch, failed to read a hook from one point, and fell through to the *dropped* form — a
  * default-sized symbol parked on click 1, appearing whole the instant the map was clicked.
  * The seven cane arrows show nothing there, because their fallback is driven by the line the
- * operator drew rather than by a size. (User's report, 2026-09-06: "can we stop adding the
- * previous full graphic on click 1? Do the same we do for other cane graphics".)
+ * operator drew rather than by a size.
  */
 export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[] | undefined {
     if (!clicks || clicks.length < 2) return undefined;
@@ -1017,8 +1012,7 @@ export function hookAnchorsFromClicks(clicks: Position[] | undefined): Position[
  * and the third click sets it. A *screen* size rather than a share of the bar, because the
  * preview's job is to be legible while it is being dragged — a share grows with the bar, so
  * a long crossing previewed as a wide corridor and a short one as a hairline, and neither
- * told the operator anything about the symbol. (User's call, 2026-09-06: "while drawing can
- * we lock the parallel line to a distance of 50px between click 1 and 2".)
+ * told the operator anything about the symbol.
  *
  * The caller supplies it as metres, because only a renderer knows what a pixel is worth
  * here. @see parallelRailAnchors
@@ -1034,6 +1028,17 @@ export const RAIL_PREVIEW_GAP_PX = 50;
 const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
 
 /**
+ * The far rail's point that sits beside point 2: the third click, or a stored base's point
+ * across from point 2. That is point 4 for a four-point base in plate order and point 3 in the
+ * order stored, so the nearer of the two to point 2 is taken.
+ */
+function farPointBesideTwo(coords: Position[]): Position {
+    if (coords.length < 4) return coords[2];
+    const two = coords[1];
+    return meters(two, coords[3]) <= meters(two, coords[2]) ? coords[3] : coords[2];
+}
+
+/**
  * The anchor points of a **two-rail crossing**, from the clicks that place them.
  *
  * APP-06 271500 ford easy and 271600 ford difficult letter `PT 1` and `PT 2` at the ends of
@@ -1045,9 +1050,7 @@ const RAIL_PREVIEW_GAP_SHARE = 1 / 3;
  * other rail sits, and on which side**. Its component along the rail is discarded, the way
  * `sideAnchors` discards the same thing for the bracket tasks: two parallel rails of one
  * length have no way to draw an along-rail offset, so storing it would keep a number the
- * symbol cannot show and leave the grip off the bar it belongs to. (User's call, 2026-09-06:
- * "points 1, 2 for length and point 3 to determine the parallel line […] put point 3 right
- * across from point 2".)
+ * symbol cannot show and leave the grip off the bar it belongs to.
  *
  * @param stored how many points the graphic's base holds — four for the two that number a
  * fourth, three for the fords, whose plate letters only three. The fourth is `p3` displaced
@@ -1077,16 +1080,14 @@ export function parallelRailAnchors(
      * This is what the operator has between the second and third clicks, and points 1 and 2
      * are *"one side of the gap"* — so the bar is drawn on the line they are dragging along.
      * Read as a centreline instead, the two bars straddled the cursor and the symbol was
-     * drawn through a line that is not part of it. (User's report, 2026-09-06: "when drawing
-     * it, it seems we're actually drawing via the invisible middle line. The drawing cursor
-     * should be along points 1, 2".)
+     * drawn through a line that is not part of it.
      *
      * The gap is a **preview default and nothing more** — no plate here states one, and the
      * third click replaces it with a measured value.
      */
     const across = clicks.length >= 3
         ? (() => {
-              const click = clicks[2];
+              const click = farPointBesideTwo(clicks);
               const reach = meters(two, click);
               if (!isFinite(reach) || reach <= 0) return 0;
               const toClick = turf.bearing(turf.point(two), turf.point(click));
@@ -1096,24 +1097,30 @@ export function parallelRailAnchors(
         // negative across turns to the *left* of travel — north for a west-to-east drag — which
         // puts the previewed bar above the one being dragged. The Templates letter `PT 1` and
         // `PT 2` on the bottom bar and `PT 3` on the top, so drawing left to right that way
-        // round is what the plate draws. (User's report, 2026-09-06: "when drawing left to
-        // right, line 1,2 has to be the bottom one per the template".) The third click still
+        // round is what the plate draws. The third click still
         // chooses the side outright; this is only where the preview starts.
         : -(previewGapMetres !== undefined && previewGapMetres > 0
               ? previewGapMetres
               : bar * RAIL_PREVIEW_GAP_SHARE);
     if (!isFinite(across) || across === 0) return undefined;
 
-    // Square across from point 2, which is where the plate's own PT 3 leader lands.
-    const three = turf.destination(turf.point(two), Math.abs(across), along + Math.sign(across) * 90, {
+    // Square across from point 2: the click lands there, and a ford's PT 3 is on that end.
+    const acrossTwo = turf.destination(turf.point(two), Math.abs(across), along + Math.sign(across) * 90, {
         units: 'meters',
     }).geometry.coordinates as Position;
-    if (stored < 4) return [one, two, three];
+    if (stored < 4) return [one, two, acrossTwo];
 
     const rail = meters(one, two);
-    const four = turf.destination(turf.point(three), rail, along + 180, {units: 'meters'}).geometry
+    const acrossOne = turf.destination(turf.point(acrossTwo), rail, along + 180, {units: 'meters'}).geometry
         .coordinates as Position;
-    return [one, two, three, four];
+    /*
+     * **Point 3 across from point 1, point 4 across from point 2**, as 271100 and 271300 number
+     * them on APP-06 and 2525E alike (PT 3 at the top of the far rail, PT 4 at its bottom). The
+     * third click still squares across from point 2, which is where an operator puts it, and is
+     * stored as point 4. Until the two were swapped. A base stored that way reads
+     * the same rails, since only the far rail's offset is read, and settles into this order.
+     */
+    return [one, two, acrossOne, acrossTwo];
 }
 
 /**
@@ -1128,7 +1135,8 @@ export function parallelRailFrame(
     coords: Position[] | undefined,
 ): {centre: Position[]; half: number} | undefined {
     if (!coords || coords.length < 3) return undefined;
-    const [one, two, three] = coords;
+    const [one, two] = coords;
+    const three = farPointBesideTwo(coords);
 
     const along = turf.bearing(turf.point(one), turf.point(two));
     const reach = meters(two, three);
@@ -1177,16 +1185,16 @@ export function parallelLegsFromAnchors(
  * > sides of the rectangle. […] The anchor points determine the length of the rectangle.
  * > The width, defined in metres, will determine the width of the rectangle. (240202)
  *
- * So the axis is the user's two clicks and the width is an amplifier — the length and the
+ * So the axis is the operator's two clicks and the width is an amplifier — the length and the
  * orientation come from the points, and nothing about the shape is a corner the operator
  * places. Eighteen rectangular zones say it in those words and FM 1-02.2 table 5-24 draws
  * the same `AM` / "Width (m)" arrow down the edge.
  *
- * **This library used to let the user drag a box instead.** That produces the same
+ * **This library used to let the operator drag a box instead.** That produces the same
  * picture, and three things followed from it: the width was derived from the ring rather
  * than set, so it could be read but not dragged; the rectangle could not be turned,
  * because every dimension came off the projected bounding box; and the two points APP-06
- * numbers existed nowhere. (User's call, 2026-08-27.)
+ * numbers existed nowhere.
  *
  * `halfWidth` rather than the full figure, because that is what the generators take —
  * `toGraphicOptions` halves the public `width` on the way in, and this is the one place
@@ -1248,7 +1256,7 @@ export function axisFromRectangleRing(
  * **Wider than the library's generic 20 px drawn offset**, and deliberately its own
  * number: a corridor's 20 px is a rail standing off a route, where this is half of a
  * whole area — at 20 px the zone came out a letterbox and the width handle sat almost on
- * the axis. (User's call, 2026-08-27.)
+ * the axis.
  *
  * Here rather than in a holder because both engines seed it, and a zone drawn with the
  * identical two clicks has to come out the identical size on either. They disagreed by a
@@ -1290,12 +1298,10 @@ export function rectangleDefaultHalfWidth(axisLengthMeters: number): number {
  *
  * The visible cost was a sample sweep whose eighteen rectangular zones drew as slivers ten
  * times as long as they were deep, with their amplifiers — which stack *inside* the box —
- * crushed into a slot a tenth the height of the text. (User's report, 2026-09-07: "on the
- * sweep, don't make the rectangle so small.")
+ * crushed into a slot a tenth the height of the text.
  *
  * **The share is now stated as an aspect, not derived from a drag.** An unsized zone is
- * half as deep as it is long. (User's call, 2026-09-07: "make the vertical size 1/2 the
- * horizontal".)
+ * half as deep as it is long.
  *
  * A quarter of the axis is a little *deeper* than any real drag produces — the deepest
  * measured, a 240 px one, gives 0.229 — and that is deliberate rather than an oversight. The
@@ -1335,7 +1341,7 @@ const DEGREE_METRES = 111_320;
  * centres of the two opposing sides, so moving one is how an operator makes the zone
  * longer or shorter — and letting the same drag swing the rectangle round meant there was
  * no way to change the length *without* risking a turn. Rotating is the rotate gesture's
- * job, and it still turns the whole symbol freely. (User's call, 2026-08-27.)
+ * job, and it still turns the whole symbol freely.
  *
  * So the moved point is projected back onto the axis the rectangle already had, measured
  * from the point that did not move.
@@ -1390,9 +1396,9 @@ export function constrainRectangleAxis(previous: Position[] | undefined, next: P
  *
  * **Nothing calls this any more, and that is the point of saying so here.** Both renderers
  * used it on the draw, so a zone clicked out at an angle came out level and had to be turned
- * by a separate gesture (user's call, 2026-08-27) — while the rectangular target, whose drag
+ * by a separate gesture — while the rectangular target, whose drag
  * sets `rotation` directly, never behaved that way. One family of rectangles took its
- * orientation from the draw and the other nineteen refused to. **Reversed on 2026-09-04**:
+ * orientation from the draw and the other nineteen refused to. **Reversed**:
  * the drawn axis is the rectangle's axis, on both engines and for all twenty.
  *
  * Kept exported because it is a correct, tested utility and removing an export is a breaking
