@@ -15,6 +15,62 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
+four directions on every engine, with the user's review of the results.
+
+### Added
+
+- **`enemyLabels`** in `TacticalGraphicsConfigOptions` (default `true`), read with
+  `getEnemyLabels()`. Hostile graphics write `ENY` where the standards put field N: both ends of
+  every hostile line, the four direction of attack arrows, outside an axis's rails, the hostile
+  areas and obstacles. Set it `false` to rely on the hostile color alone.
+- **The zone of fire's boundary can be switched off** (APP-06 242600 note 2): a saved
+  `hideBoundary` boolean, offered by the dialog as "Hide boundary". `zoneOfFirePaint` is exported.
+- **Rectangular target attitude in mils:** `targetAttitudeDegrees`, `targetAttitudeMils` and
+  `MILS_PER_TURN`.
+- **Saved-file helpers:** `upgradeSavedLine`, `endsInWidthPoint`, `declaredSnapshotVersion` and
+  `TIP_FIRST_SINCE_SNAPSHOT_3`; `maxAreaVertices(name)` for the irregular zones' vertex cap.
+- `W` on delay, the passages of lines and the mined area; `T` and `W - W1` on frontal attack,
+  turning movement and bridge; the radius on the three circular target-acquisition zones that
+  lacked it.
+
+### Changed
+
+- **The four direction of attack arrows store their tip first** (`SNAPSHOT_VERSION` 3), as
+  APP-06 140601-140605 and 2525E number them. A file older than version 3, or one with no
+  version, is reversed on read. A base built in code for these four must now list the arrowhead
+  point first, or carry `tacticalGraphicsVersion` below 3.
+- **Point order and sides follow the plates.** Bridge and assault crossing number their points as
+  the plates do (point 3 across from point 1, point 4 across from point 2), and a base saved the
+  old way settles into this order with the same rails. The capture family's arc leaves the circle
+  at point 2; antitank ditch teeth and wire marks hang on the side 2525E draws; escort's point 1
+  stays on the middle of the bar.
+- **A versionless file is read base by base:** an axis arrow that already carries its width point
+  is no longer given a second one.
+- The irregular zones take up to 100 vertices; every engine closes the draw at the cap.
+
+### Fixed
+
+- **Shapes as 2525E draws them:** destroy, suppress and neutralize; the fix head; deny; the
+  obstacle disrupt's arrowheads; encirclement's teeth; isolate, cordon and retain; the line of
+  contact scallops; ford bars; the coordinated fire line and 271202 dashes; frontal attack,
+  turning movement and advance to contact proportions; breach and canalize ticks; the fields of
+  fire blade; the aviation axes' twist; avenue of approach's head.
+- **Labels where the plates put them:** axis T, dates and ENY; the crossings' dates against the
+  point 2 flares; area literals stacked over T; IFF lines; GRID and ATIZ text; route
+  identifiers; passage lane and munition flight path dates; engineer work line repeats; radar
+  search T; safe lane or gap's column on the left of point 1 to point 2, centered; avenue of
+  approach's H level and clear of the rail; frontal attack's A and turning movement's T in the
+  head, capped in size; a battle position's echelon on its south edge.
+- **Labels in every direction:** an exactly vertical line reads the same way at both ends; text
+  overlap is measured on the turned boxes, so dates under a diagonal line are no longer dropped;
+  labels stay clear of their line on every heading; arrow labels stay off the head and follow a
+  bent route; a vertical bearing line keeps H within the line.
+- **Mission task letters** are sized from the symbol on every engine, and the MapLibre label halo
+  scales with the label.
+- Kill zone stays straight with smooth lines on, and bridge, gap and assault crossing no longer
+  draw a hashed construction line while editing.
+
 ## [4.6.3] — 2026-10-25
 
 ### Fixed
