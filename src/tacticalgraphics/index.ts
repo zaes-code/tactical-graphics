@@ -592,6 +592,7 @@ export {
     DEFAULT_OFFSET_PX,
     descriptionOf,
     paintGraphic,
+    placeAreaLabel,
     projectToMercator,
     rebuildPaintedGraphic,
     withDrawingResolution,

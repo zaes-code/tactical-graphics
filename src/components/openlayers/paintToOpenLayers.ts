@@ -10,6 +10,7 @@ import {
     addGraphicLines,
     emptyLabelSpace,
     hatchTileSegments,
+    placeAreaLabel,
     takeLabels,
     withClearance,
     withFadedPaints,
@@ -420,7 +421,10 @@ export function asStyleFunction(
         const context = inFrame
             ? withClearance({...paintContext(resolution), view: inFrame.view}, spaceOf(inFrame), paintFeature.graphicId ?? '')
             : paintContext(resolution);
-        const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers)), context), context);
+        // OpenLayers styles an area's label as a feature of its own, so it is placed here, as the
+        // other engines place it while painting the whole graphic. A no-op for any other feature.
+        const placed = inFrame ? placeAreaLabel(paintFeature, context) : paintFeature;
+        const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(placed, context), paintFeature.hideAmplifiers)), context), context);
         if (inFrame) takeLabels(spaceOf(inFrame), paints, context);
         return paintToOlStyles(withFadedPaints(paints, graphicOpacityOf(feature)));
     };

@@ -10,6 +10,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {dateRangeLabel} from './midLabelLinePaints';
 import {passageLanePaint} from './mobilityPaints';
+import {midSegmentInView} from './viewFollow';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -229,8 +230,10 @@ export function safeLaneOrGapPaint(): LinePaint {
             }
         }
         const offset = reach + SAFE_LANE_LABEL_GAP_PX * context.resolution;
-        // Centred on the lane, as the plate draws the column between the two points.
-        const middle: ProjectedPosition = [(entry[0] + exit[0]) / 2, (entry[1] + exit[1]) / 2];
+        // Centred on the lane, as the plate draws the column between the two points; on the
+        // middle of the part in view when the lane's own middle is off screen. @see midSegmentInView
+        const {t} = midSegmentInView([entry, exit], {index: 0, t: 0.5}, context);
+        const middle: ProjectedPosition = [entry[0] + (exit[0] - entry[0]) * t, entry[1] + (exit[1] - entry[1]) * t];
         const at: ProjectedPosition = [middle[0] + rightX * offset, middle[1] + rightY * offset];
 
         /*

@@ -68,7 +68,7 @@ import {
     uprightRotation,
 } from './decorations';
 import {distanceAlongPath} from './curvedText';
-import {inView, insetView, isTaken, pointAlong, visibleStretch} from './viewFollow';
+import {endAnchorInView, inView, insetView, isTaken, midSegmentInView, pointAlong, visibleStretch} from './viewFollow';
 
 /**
  * Blanks one amplifier line when the graphic is hiding them.
@@ -1417,11 +1417,6 @@ export function defaultLinePaint(
         const gap = DEFAULT_LINE_LABEL_GAP_PX;
         const res = context.resolution;
 
-        const startAlign: 'left' | 'right' = !uprightFlipped(start, afterStart) ? 'left' : 'right';
-        const endAlign: 'left' | 'right' = !uprightFlipped(beforeEnd, end) ? 'right' : 'left';
-        const startRotation = uprightRotation(start, afterStart);
-        const endRotation = uprightRotation(end, beforeEnd);
-
         const label = (
             at: ProjectedPosition,
             text: string,
@@ -1464,10 +1459,27 @@ export function defaultLinePaint(
             shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0,
             dateLabel ? textWidth(context, dateLabel, fontStyle, scale) : 0,
         );
-        if (endLabelsCollide(start, end, widestPx, res)) {
-            const i = centerSegmentIndex(coords);
+        /*
+         * **An end off screen takes its labels to where the line comes into the view**, slid on
+         * inward past anything already there; they stay over and under the line as at the end.
+         * @see endAnchorInView
+         */
+        const footprint = {alongPx: widestPx / 2, acrossPx: gap + BASE_FONT_SIZE_PX * scale};
+        const movedStart = endAnchorInView(coords, 'start', footprint, context);
+        const movedEnd = endAnchorInView(coords, 'end', footprint, context);
+        const [startAt, startFrom, startTo] = movedStart ? [movedStart.at, movedStart.from, movedStart.to] : [start, start, afterStart];
+        const [endAt, endFrom, endTo] = movedEnd ? [movedEnd.at, movedEnd.from, movedEnd.to] : [end, beforeEnd, end];
+
+        const startAlign: 'left' | 'right' = !uprightFlipped(startFrom, startTo) ? 'left' : 'right';
+        const endAlign: 'left' | 'right' = !uprightFlipped(endFrom, endTo) ? 'right' : 'left';
+        const startRotation = uprightRotation(startFrom, startTo);
+        const endRotation = uprightRotation(endTo, endFrom);
+
+        if (endLabelsCollide(startAt, endAt, widestPx, res)) {
+            // The middle of what is in view, when the line's own middle is off it. @see midSegmentInView
+            const {index: i, t} = midSegmentInView(coords, {index: centerSegmentIndex(coords), t: 0.5}, context, footprint);
             const [a, b] = [coords[i], coords[i + 1]];
-            const middle: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const middle: ProjectedPosition = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
             const rotation = uprightRotation(a, b);
             const centered = (paint: Paint): Paint => ({...paint, text: {...paint.text!, align: 'center'}});
             return [
@@ -1479,10 +1491,10 @@ export function defaultLinePaint(
 
         return [
             // A label aligned left runs inward from its end, so its first word is the outer one.
-            label(offsetAbove(start, start, afterStart, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
-            label(offsetAbove(end, beforeEnd, end, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
-            asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
-            asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+            label(offsetAbove(startAt, startFrom, startTo, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(endAt, endFrom, endTo, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
+            asAmplifier(label(offsetBelow(startAt, startFrom, startTo, res, gap), dateLabel, startRotation, startAlign, 'top')),
+            asAmplifier(label(offsetBelow(endAt, endFrom, endTo, res, gap), dateLabel, endRotation, endAlign, 'top')),
             stroke,
         ];
     };

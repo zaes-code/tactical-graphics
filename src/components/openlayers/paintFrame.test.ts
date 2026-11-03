@@ -9,11 +9,11 @@
  */
 
 import {Feature} from 'ol';
-import {LineString} from 'ol/geom';
+import {LineString, Point} from 'ol/geom';
 import type {Style} from 'ol/style';
 import {TACTICAL_GRAPHIC_KEY, TacticalGraphicName} from '@zaes/tactical-graphics';
 import {beginPaintFrame, endPaintFrame, toPaintFeature} from './paintToOpenLayers';
-import {phaseLineStyleFunc} from './openlayerStyles';
+import {getAreaLabelStylesFn, phaseLineStyleFunc} from './openlayerStyles';
 
 const RESOLUTION = 100;
 
@@ -80,5 +80,38 @@ describe('the OpenLayers paint frame', () => {
         const plain = textAt(style(line, RESOLUTION) as Style[]);
         beginPaintFrame(view, RESOLUTION * 2, () => [{id: 'a', feature: toPaintFeature(line)!}]);
         expect(textAt(style(line, RESOLUTION) as Style[])).toEqual(plain);
+    });
+});
+
+describe('an area label in the OpenLayers paint frame', () => {
+    // An objective far wider than the view, whose centered name is off to the west of it.
+    const ring = [
+        [-200_000, -100_000],
+        [200_000, -100_000],
+        [200_000, 100_000],
+        [-200_000, 100_000],
+        [-200_000, -100_000],
+    ];
+    const label = () =>
+        new Feature({
+            geometry: new Point([0, 0]),
+            symbolId: 'obj',
+            role: 'label',
+            polygonRing: ring,
+            [TACTICAL_GRAPHIC_KEY]: {name: TacticalGraphicName.ObjectiveArea, designation: 'SWORD'},
+        });
+    const view = {minX: 100_000, minY: -40_000, maxX: 180_000, maxY: 40_000};
+    const areaStyle = getAreaLabelStylesFn(TacticalGraphicName.ObjectiveArea);
+
+    it('moves into the visible part of the area, as the other engines move it', () => {
+        const feature = label();
+        const outside = textAt(areaStyle(feature, RESOLUTION) as Style[]);
+        expect(outside.length).toBeGreaterThan(0);
+        expect(outside.every(([x]) => x < view.minX)).toBe(true);
+
+        beginPaintFrame(view, RESOLUTION, () => []);
+        const inside = textAt(areaStyle(feature, RESOLUTION) as Style[]);
+        expect(inside.length).toBeGreaterThan(0);
+        expect(inside.every(([x, y]) => x >= view.minX && x <= view.maxX && y >= view.minY && y <= view.maxY)).toBe(true);
     });
 });

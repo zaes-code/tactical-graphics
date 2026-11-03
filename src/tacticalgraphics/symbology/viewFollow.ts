@@ -138,6 +138,52 @@ export function pointAlong(path: ProjectedPosition[], s: number): {at: Projected
     return {at: path[0], from: path[0], to: path[path.length - 1]};
 }
 
+/** How many steps of its own length an end label moved onto the view may slide on inward. */
+const END_LABEL_SLIDES = 6;
+
+/**
+ * Where a label that runs inward from one end of a line anchors, when that end is off screen:
+ * where the line comes into the view, slid on inward past places other labels or lines hold.
+ * `from`→`to` is the segment it lies on, in the line's own direction. `undefined` when the end
+ * and the label running from it are both on screen and clear, or when none of the line is.
+ *
+ * For a label set beside its line, over or under it, which needs no gap cut: the anchor is on
+ * the line and the label is offset from it as it would be at the end itself. `footprint.alongPx`
+ * is half the label's length and `acrossPx` how far it reaches from the line.
+ */
+export function endAnchorInView(
+    coords: ProjectedPosition[],
+    which: 'start' | 'end',
+    footprint: LabelFootprint,
+    context: PaintContext,
+): {at: ProjectedPosition; from: ProjectedPosition; to: ProjectedPosition} | undefined {
+    const view = insetView(context);
+    if (!view || coords.length < 2) return undefined;
+    // Walked from the end the label belongs to, so inward is always forward.
+    const path = which === 'start' ? coords : coords.slice().reverse();
+    const length = 2 * footprint.alongPx * context.resolution;
+    const centerAt = (s: number) => pointAlong(path, s + length / 2);
+    const clear = (s: number) => {
+        const {at, from, to} = centerAt(s);
+        return !isTaken(at, footprint, to[0] - from[0], to[1] - from[1], context);
+    };
+    if (inView(path[0], view) && inView(pointAlong(path, length).at, view) && clear(0)) return undefined;
+
+    const stretch = visibleStretch(path, view);
+    if (!stretch) return undefined;
+    const first = distanceAlongPath(path, stretch[0]);
+    const last = distanceAlongPath(path, stretch[stretch.length - 1]);
+    let s = first;
+    for (let k = 1; k <= END_LABEL_SLIDES && !clear(s); k++) {
+        const next = first + k * length;
+        if (next + length > last) break;
+        s = next;
+    }
+    if (!clear(s)) s = first;
+    const {at, from, to} = pointAlong(path, s);
+    return which === 'start' ? {at, from, to} : {at, from: to, to: from};
+}
+
 /** Whether `p` lies inside the polygon `ring` (even-odd rule). */
 export function inRing(p: ProjectedPosition, ring: ProjectedPosition[]): boolean {
     let inside = false;

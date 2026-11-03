@@ -1065,19 +1065,29 @@ export function paintGraphic(graphic: PaintedGraphic, context: PaintContext): Pa
     // graphic and its labels as two features and cannot see both at once. @see withFittedDashes
     const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.graphic(graphic.graphic, context), graphic.graphic.hideAmplifiers)), context), context);
     if (painters.label && graphic.labels) {
-        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(areaLabelInView(graphic.labels, context, areaLabelFootprint(graphic, context)), context), graphic.labels.hideAmplifiers)), context), context));
+        paints.push(...withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(painters.label(placeAreaLabel(graphic.labels, context), context), graphic.labels.hideAmplifiers)), context), context));
     }
     return paints;
+}
+
+/**
+ * An area's label feature moved into the visible part of the area and clear of other labels, as
+ * every engine places it before painting it: here for the engines that paint a whole graphic, and
+ * in OpenLayers' style function for the label feature it styles on its own. Unchanged without a
+ * view, or for a label that does not sit inside its area. @see areaLabelInView
+ */
+export function placeAreaLabel(labels: PaintFeature, context: PaintContext): PaintFeature {
+    return areaLabelInView(labels, context, areaLabelFootprint(labels, context));
 }
 
 /**
  * How far an area's centred name reaches, for sliding it clear of other labels and lines; only
  * worked out when the context names something to avoid. @see PaintContext.avoid
  */
-function areaLabelFootprint(graphic: PaintedGraphic, context: PaintContext): LabelFootprint | undefined {
+function areaLabelFootprint(labels: PaintFeature, context: PaintContext): LabelFootprint | undefined {
     if (!context.avoid?.length && !context.avoidLines?.length) return undefined;
     const scale = configuredLabelScale();
-    const text = getFullLabel(graphic.name, graphic.properties.designation ?? '');
+    const text = getFullLabel(labels.properties.name, labels.properties.designation ?? '');
     return {alongPx: (context.measureText(text, fontStyle) * scale) / 2, acrossPx: BASE_FONT_SIZE_PX * scale};
 }
 
