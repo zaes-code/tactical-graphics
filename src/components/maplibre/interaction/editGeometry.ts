@@ -285,7 +285,7 @@ export function resize(description: GraphicDescription, from: Position, to: Posi
         // distances in metres, beside the vertices rather than in them, so scaling only
         // the vertices made the graphic longer while its rails and its chevrons stayed
         // where they were: an air corridor resized 1.5x came out 420 x 40 px here against
-        // OpenLayers' 431 x 51. "Resize the whole graphic as is" is the user's rule, and
+        // OpenLayers' 431 x 51. "Resize the whole graphic as is" is review, and
         // the OpenLayers controller states it in the same words.
         // @see LineGraphicController.handleResize
         properties: scaleDrawnSizes(description.geometry, description.properties, ratio),
@@ -406,7 +406,7 @@ export function moveVertex(description: GraphicDescription, index: number, to: P
  * **A ring's closing vertex is not an insertion point.** A polygon repeats its first
  * position last; inserting at 0 or at the end would put a vertex outside the ring's
  * closure and open the shape. Those two indices are refused, and every segment between
- * them is available — which is every segment a user can actually see.
+ * them is available — which is every segment an operator can actually see.
  *
  * **One past the end appends, on a line.** That is the edge back from the last point to the
  * first on a base that is a ring stored as a line, which the caller only offers where
@@ -557,7 +557,7 @@ export function setOffset(
     /*
      * **For the eleven axis arrows the answer is a coordinate, not an amplifier.**
      *
-     * Their width lives at the end of the base as of 2026-09-10, so a `width` written here would
+     * Their width lives at the end of the base, so a `width` written here would
      * be a second copy that the generator ignores and a save carries anyway. The same number is
      * spent by moving the stored point instead, which is where `halfWidthFromBase` reads it back
      * from — and `mirrored` goes with it, because these arrows have no side to fall on and the
@@ -572,7 +572,7 @@ export function setOffset(
 
     // **Negative, not positive.** The axis above is the left normal and an
     // unmirrored graphic already hangs on that side, so reading a positive
-    // perpendicular as "mirrored" flips it the moment the user drags along the side
+    // perpendicular as "mirrored" flips it the moment the operator drags along the side
     // it is already on.
     /*
      * **The side changes only on a crossing**: the cursor has to end on the other side of the
@@ -615,7 +615,7 @@ function setOffsetFromPoint(description: GraphicDescription, cursor: Position): 
  *
  * **Negative is the mirrored side**, matching `setOffset`: the axis is the segment's
  * left normal and an unmirrored symbol already hangs on that side, so treating a
- * positive perpendicular as mirrored would flip it the moment the user dragged along
+ * positive perpendicular as mirrored would flip it the moment the operator dragged along
  * the side it was already on.
  *
  * The threshold is the same one, and for the same reason — crossing the line is easy to
@@ -742,7 +742,7 @@ export function setBend(
  * while this pins the far end and lengthens the symbol from it.
  *
  * 270504's point 2 is the rear of the arrow, and grabbing the back of an arrow to make it
- * longer should not also drag its head backwards. (User's call, 2026-09-05.)
+ * longer should not also drag its head backwards.
  *
  * Rebuilt through `drawnAnchorFrame` rather than by hand, so the centre, the half-length and
  * the bearing are the same three numbers the library would read back off the new chord —
@@ -829,7 +829,7 @@ export function setReach(description: GraphicDescription, cursor: Position): Gra
  *
  * A fan with no user-entered bands is rendering the fallback single band derived
  * from `radius`, so the drag drives `radius` and leaves the amplifiers alone
- * rather than inventing a band the user never typed.
+ * rather than inventing a band the operator never typed.
  */
 /**
  * Opens or closes a sector **symmetrically about its axis** — 200700's stop relative bearing.
@@ -848,14 +848,14 @@ export function setReach(description: GraphicDescription, cursor: Position): Gra
 export function setSectorOpening(description: GraphicDescription, cursor: Position): GraphicDescription {
     const norm = (deg: number): number => ((deg % 360) + 360) % 360;
     // The stated axis, with the legacy `rotation` as the fallback a snapshot written before
-    // 2026-09-05 still needs. @see RadarSearchDoctrine.frame
+    // still needs. @see RadarSearchDoctrine.frame
     const axis = norm(description.properties.searchAxisAzimuthDeg ?? 90 - (description.properties.rotation ?? 0));
     const edges = radarSectorOpening(pivotOf(description), axis, [cursor[0], cursor[1]]);
     if (!edges) return description;
 
     /*
-     * **Written as the stop relative bearing**, which is the field 200700 is described by
-     * since 2026-09-05. The pair of absolute band azimuths this used to write was a range
+     * **Written as the stop relative bearing**, which is the field 200700 is described by.
+     * The pair of absolute band azimuths this used to write was a range
      * fan's way of saying the same thing, and it left the plate's own value out of the file
      * entirely. The pair comes back symmetric about the axis, so either edge states the angle.
      * @see TacticalGraphicProperties.stopRelativeBearingDeg
@@ -905,7 +905,7 @@ export function setBandRange(description: GraphicDescription, index: number, cur
      * (`RangeFanGraphicBase.isRadarSearch`). The graphic builder filled `startRange` and
      * `stopRange` in from a radius, and a weapon fan that had been through it looked like a
      * 200700 here: its band grips wrote two fields it never draws from, and the rings stayed
-     * put. The user found the grips dead on MapLibre and ArcGIS, live on OpenLayers.
+     * put. The operator found the grips dead on MapLibre and ArcGIS, live on OpenLayers.
      */
     if (description.properties.name === TacticalGraphicName.RadarSearchDoctrine) {
         return setRadarRange(description, index, cursor);

@@ -127,7 +127,7 @@ export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBase
         const options = optionsFromWidthPoint(this.name, continuous, opts);
         /*
          * **Smooth lines shape the line work and nothing else.** The handles and labels are
-         * built from the drawn points, so editing still moves what the user placed, and an
+         * built from the drawn points, so editing still moves what the operator placed, and an
          * arrow keeps the segment its head is built on. @see smoothedForGenerator
          */
         const shaped = smoothedForGenerator(this.name, drawn);

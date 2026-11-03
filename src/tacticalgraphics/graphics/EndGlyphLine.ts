@@ -2,7 +2,7 @@
  * # The lines whose ends carry a fixed glyph
  *
  * Decision line (APP-06 110500) and mobility corridor (142100). Both put **nothing** in
- * the geometry beyond the line the user drew: the star and the fork are a fixed screen
+ * the geometry beyond the line the operator drew: the star and the fork are a fixed screen
  * size, so they are built in the paint layer where both renderers reach them.
  * @see endGlyphLinePaints.ts
  */

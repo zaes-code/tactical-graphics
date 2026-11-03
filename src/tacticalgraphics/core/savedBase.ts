@@ -23,11 +23,11 @@ export interface UpgradedLine {
  * Whether an axis arrow's base already ends in its width point.
  *
  * The question a **versionless** file forces. Its axis arrows can be either shape: an old
- * MapLibre export or a hand-built file from before 2026-09-10 holds the route and a `width`,
+ * MapLibre export or a hand-built file from holds the route and a `width`,
  * while a file a host assembled from a current export (or one whose stamp was dropped on the
  * way) holds the route plus the width point. Reading the second as the first appended a
  * second width point, which drew a broken arrow on every engine and then moved it on every
- * import and export (measured 2026-10-31: about 40 to 80 m per hop, 366 m after seven).
+ * import and export.
  *
  * The geometry answers it. The width point sits at the back corner of the arrowhead, a head's
  * length from the tip, while a legacy base's last coordinate is the rear of the route. So the

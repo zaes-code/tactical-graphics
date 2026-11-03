@@ -16,7 +16,7 @@ const OPENING_QUARTER_TURN = 90;
 /**
  * How many radial tics 151204 draws: **ten full length plus one short beside the `C`**.
  *
- * Counted off the Template by the user (2026-09-04). @see Contain.tics for why the count is
+ * Counted off the Template by the operator. @see Contain.tics for why the count is
  * a reading rather than a measurement.
  */
 const CONTAIN_TIC_COUNT = 11;
@@ -134,8 +134,8 @@ export class Control extends MissionTask {
  * MIL-STD-2525E Tables L-XXI draws all three (and APP-06 341500): small isosceles teeth,
  * evenly spaced round both arcs, four on each, each about a fifth of the radius tall.
  *
- * They were seven teeth 0.4 of the radius tall, packed so close they read as a sawtooth
- * until 2026-10-31. Each arc is `[from, to, count, gap]` in degrees from the rotation axis;
+ * They were seven teeth 0.4 of the radius tall, packed so close they read as a sawtooth.
+ * Each arc is `[from, to, count, gap]` in degrees from the rotation axis;
  * a tooth's base spans 12 degrees and its centres sit 35 apart.
  */
 const RING_TEETH_HEIGHT = 0.2;
@@ -176,7 +176,7 @@ export class CordonAndSearch extends MissionTask {
  * > friendly side of the graphic.
  *
  * Neither FM 1-02.2 nor MIL-STD-2525E defines Deny, so the APP-06 plate decides. It drew an
- * open head with the `D` at three o'clock until 2026-10-31. @see DENY_LABEL_DEGREES
+ * open head with the `D` at three o'clock. @see DENY_LABEL_DEGREES
  */
 /**
  * Where Deny's `D` sits, in degrees from the rotation axis: in a break low on the rim at
@@ -250,7 +250,7 @@ export class Isolate extends MissionTask {
  * Where Retain's tics run, in degrees from the rotation axis: round both arcs from just
  * clear of the `R` to just short of each free end. APP-06 151205 and MIL-STD-2525E Table
  * L-VIII draw them continuously, up to the start point, up to the arrowhead and either side
- * of the letter. They stopped at 30-160 and 240-340 until 2026-10-31, leaving bare rim.
+ * of the letter. They stopped at 30-160 and 240-340, leaving bare rim.
  *
  * Each range is the arc the tics are spread over, and every tic sits mid-way along its
  * share of it, so the first and last land half a step in: at about 20 and 170, 215 and 340.
@@ -302,7 +302,7 @@ export class Contain extends MissionTask {
      * the graphic and point 2 defines the graphic's start point and radius", which is
      * the centre-and-edge pair this library already draws. Contain names the arc's two
      * *ends* instead, so it is the only one of the seven that had to move.
-     * @see core/anchors.ts, ai/app-6.md "F3"
+     * @see core/anchors.ts
      */
     type: string = 'LineString';
 
@@ -348,10 +348,9 @@ export class Contain extends MissionTask {
      * `generateRadialLineStrings` was drawing these across 75 to 285 degrees — fifteen
      * degrees past each end of an arc that runs 90 to 270 — so two tics hung off the open
      * side with no rim behind them. It also derived the count from the letter-height
-     * spacing rule, which produced a few too many. (User's count off the Template,
-     * 2026-09-04.)
+     * spacing rule, which produced a few too many.
      *
-     * **The count is the user's reading, not a measurement**, and deliberately so: a tic
+     * **The count is review, not a measurement**, and deliberately so: a tic
      * census taken off the Template at 500 dpi could not be made to agree with itself —
      * fitting the arc's centre moved by enough to split single tics into three runs and to
      * report sixteen. An admitted count from someone reading the plate is worth more than a
@@ -384,12 +383,12 @@ export class Contain extends MissionTask {
      *
      * 151204's Template annotates `PT. 1` against the upper end of the opening and `PT. 2`
      * against the lower one. Those two are the whole of what the plate marks: there is no
-     * annotation on the centre, because the centre is not a point the user places — it is
+     * annotation on the centre, because the centre is not a point the operator places — it is
      * the midpoint of the two that are.
      *
      * This published `[point 2, centre]`, so one of the two marked points had a grip, the
      * other had none, and the graphic offered a handle on a place the plate does not name.
-     * (User's report, 2026-09-04.) Before that it sat at 205 degrees, which on a half
+     * Before that it sat at 205 degrees, which on a half
      * circle running 90 to 270 is neither end of the opening nor anywhere at all.
      *
      * A base that is still a bare point — a save written before the anchor-point

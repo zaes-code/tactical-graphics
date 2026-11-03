@@ -34,7 +34,7 @@
  *
  * > **The last coordinate is the width point, and a base holding exactly two has none.**
  *
- * Two coordinates is a save written before 2026-09-10, when the width was an amplifier. That
+ * Two coordinates is a save written, when the width was an amplifier. That
  * is the whole of the legacy shape, and {@link upgradeAxisBase} is where it is repaired — at
  * a restore, which is the only door that can see both the coordinates and the `width` beside
  * them. A *bent* legacy axis is the one case the rule reads wrong on its own, which is why
@@ -47,8 +47,7 @@
  * axis at the tip end however it was dragged, so the along-axis component of a gesture is
  * discarded and dragging it through the axis gives the same width rather than a mirror.
  * `squareWidthPoint` is that rule, and it runs on every build through `normalizeDrawnBase`,
- * so a vertex drag on the point settles the same way a grip drag does. (User's call,
- * 2026-09-10.)
+ * so a vertex drag on the point settles the same way a grip drag does.
  */
 import type {Feature, LineString, Position} from 'geojson';
 import * as turf from './turf';
@@ -128,7 +127,7 @@ export const DEFAULT_TIP_OVERHANG = 1.5;
  * ink is not.
  *
  * The default is what every solid-head arrow in this family draws, and the body is built on the
- * user's line minus the overhang so the point lands exactly on the user's own last vertex. That
+ * operator's line minus the overhang so the point lands exactly on the operator's own last vertex. That
  * vertex is the only thing a renderer's vertex-editing tool can grab, so a head drawn past it
  * leaves the tip handle floating over nothing.
  *
@@ -139,7 +138,7 @@ export const DEFAULT_TIP_OVERHANG = 1.5;
  */
 const TIP_OVERHANG: Partial<Record<TacticalGraphicName, number>> = {
     // `computeFeintOutline` puts the dashed chevron's apex at 2.25 half-widths; trimming by
-    // that much lands the apex on the user's last vertex rather than the solid head.
+    // that much lands the apex on the operator's last vertex rather than the solid head.
     [TacticalGraphicName.MainAxisOfAdvanceFeint]: 2.25,
     // @see BY_FIRE_STANDOFF, and `CounterattackByFire` for the plate reading behind the sum.
     [TacticalGraphicName.CounterattackByFire]: DEFAULT_TIP_OVERHANG + BY_FIRE_STANDOFF + BY_FIRE_SHAFT,
@@ -184,7 +183,7 @@ export function widthPointOf(name: TacticalGraphicName | string | undefined, coo
  * drawn shorter than its own arrowhead.
  *
  * Sign is dropped deliberately. Dragging the grip through the axis gives the same width rather
- * than a mirror — these arrows have no side to fall on. (User's call, 2026-09-10.)
+ * than a mirror — these arrows have no side to fall on.
  */
 export function halfWidthFromBase(name: TacticalGraphicName | string | undefined, coords: Position[] | undefined): number | undefined {
     const point = widthPointOf(name, coords);
@@ -316,7 +315,7 @@ export function axisWithWidthPoint(name: TacticalGraphicName | string | undefine
 }
 
 /**
- * The base to store for a run of clicks a user has just drawn, with a half-width to start from.
+ * The base to store for a run of clicks an operator has just drawn, with a half-width to start from.
  *
  * **Called by the draw paths and by nothing else**, which is the same division
  * `normalizeDrawnBase` already keeps for levelling a rectangle: a rule that fires on a draw

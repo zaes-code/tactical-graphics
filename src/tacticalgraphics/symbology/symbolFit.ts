@@ -4,7 +4,7 @@
  * Several APP-06 areas carry a glyph in the middle — the airfield's crossed runways,
  * the CBRN triangle — and the glyph has a fixed shape while the area does not. So the
  * question is always the same: how far must this symbol shrink to sit inside the ring
- * the user actually drew?
+ * the operator actually drew?
  *
  * Answering it from the bounding box alone is not enough. A concave notch is inside the
  * box and outside the ring, so a glyph that clears the box can still cross the outline.

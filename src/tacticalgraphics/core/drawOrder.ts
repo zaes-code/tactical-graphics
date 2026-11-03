@@ -14,7 +14,7 @@ import {FIELD_OF_FIRE_GRAPHICS} from './fieldOfFire';
  * > symbol. Point N defines the back of the arrowhead.
  *
  * The library drew them the other way round: the generators build their heads at
- * `coordinates[coordinates.length - 1]`, so the arrow landed on the user's *last* click
+ * `coordinates[coordinates.length - 1]`, so the arrow landed on the operator's *last* click
  * and the stored base ran rear to tip. Nothing rendered wrong -- an arrow points where it
  * was aimed either way -- but the saved point list was the reverse of the one the standard
  * describes, and the app contradicted itself: the graphics converted to drawn anchors
@@ -29,7 +29,7 @@ import {FIELD_OF_FIRE_GRAPHICS} from './fieldOfFire';
  *
  * ## What this module does, and does not, change
  *
- * The **stored** base -- what the user drew, what persistence saves, what an exchange
+ * The **stored** base -- what the operator drew, what persistence saves, what an exchange
  * format would carry -- is APP-06's order for the graphics listed here. That is the tip
  * for almost all of them; for the two blocks it is the vertical bar and for fields of fire
  * the vertex, because those are the ends *their* rules number first. The list is "the
@@ -45,7 +45,6 @@ import {FIELD_OF_FIRE_GRAPHICS} from './fieldOfFire';
  * Exfiltrate and Infiltrate (343700 / 343800) put it at point 3, the swept-arc tasks at
  * point 4 -- are conformant as they stand and are **not** listed here.
  *
- * @see ai/app-6.md, "the eight point-anchored conversions"
  * @see drawnAnchors.ts, which is the same rule for the seven graphics that store anchors
  */
 
@@ -66,7 +65,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.AviationAxisOfAdvance,            // 151401 Airborne/Aviation
     TacticalGraphicName.AttackHelicopterAxisOfAdvance,    // 151402 Attack Helicopter
     // Registered without an enum member -- the axis family's fifth variant, reachable
-    // through the registry but not through the UI. @see ai/context.md, "Counts"
+    // through the registry but not through the UI.
     TacticalGraphicName.FollowAndAssume,
     TacticalGraphicName.FollowAndSupport,
     TacticalGraphicName.Counterattack,                    // 340600 Counter-Attack
@@ -76,7 +75,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.TurningMovement,                  // 152900
     TacticalGraphicName.MobileDefense,                    // 152800 "Point 1 defines the tip of the arrowhead"
 
-    // -- The direction-of-attack arrows, since snapshot version 3 (2026-10-31) --
+    // -- The direction-of-attack arrows, since snapshot version 3 --
     // Each Template letters PT 1 at the arrowhead and PT 2 at the rear. They were drawn rear
     // first until then, so a file older than version 3 is reversed on read. @see upgradeSavedLine
     TacticalGraphicName.AviationDirectionOfAttack,        // 140601 Aviation
@@ -95,8 +94,8 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.ForwardPassageOfLines,            // 344100
     TacticalGraphicName.RearwardPassageOfLines,           // 344200
     /*
-     * **343100 exploit left on 2026-09-10**, for the reason the four brackets and the two
-     * blocks left on 2026-09-06. It was here because its rule numbers the arrowhead's tip
+     * **343100 exploit left**, for the reason the four brackets and the two
+     * blocks left. It was here because its rule numbers the arrowhead's tip
      * point 1 while the old two-point generator built that head at the *last* vertex, so the
      * line had to be turned around on the way in. Its base carries all three of the points its
      * plate letters now, in the plate's own order, and a reversal would hand the reader points
@@ -111,7 +110,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     TacticalGraphicName.Fix,                              // 270503 obstacle effect
     TacticalGraphicName.TacticalFix,                      // 341100 mission task
     /*
-     * **Bypass, canalize, clear and breach left on 2026-09-06**, when they stopped carrying
+     * **Bypass, canalize, clear and breach left**, when they stopped carrying
      * the front's width as an amplifier and started storing the three anchor points their
      * rules name. The reversal existed for the two-point base: the rule numbers the front
      * feature first and the rear last, while the generators build the front at the *last*
@@ -122,7 +121,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
      * `frontEdgeFrame`, which is the one place that can tell the two shapes apart.
      * @see frontEdgeFrame
      */
-    // **The two blocks left on 2026-09-06.** They were here because 270501 and 340100 number
+    // **The two blocks left.** They were here because 270501 and 340100 number
     // the bar first -- "Points 1 and 2 define the endpoints of the symbol's vertical line" --
     // while the old two-point generator drew that bar on the *last* vertex, so the stored
     // order had to be reversed on the way in. The bar is points 1 and 2 now and the generator
@@ -130,11 +129,11 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // point 1]` and build the T inside out. Disrupt was never here, for the matching reason:
     // 270502 numbers the longest arrow's tip third, which is where ours already was.
     // @see Block, blockAnchors
-    // **341800 left on 2026-09-06**, with the four brackets and for their reason: a
+    // **341800 left**, with the four brackets and for their reason: a
     // three-point base hands the reader points 3 and 2 as its front edge if it is reversed
     // on the way in. A two-point save still needs the flip and gets it in `legacyAxis`,
     // which is the one place that can tell the two base shapes apart. @see frontEdgeFrame
-    // **341900 left on 2026-09-06**, for the same reason the two blocks did. It was here
+    // **341900 left**, for the same reason the two blocks did. It was here
     // because the standard numbers the first arrowhead's tip as point 1 while the old
     // two-point generator drew that arrow on the *last* vertex. The base carries all four
     // points in the standard's own order now, so a reversal hands the generator
@@ -144,7 +143,7 @@ export const TIP_FIRST_GRAPHICS: readonly string[] = [
     // shapes apart. @see ReliefInPlace
     //
     // 343300 demonstration was never here: its point 1 is an arrowhead tip too, but its
-    // four points were derived rather than placed until 2026-09-06 and no reversal applied.
+    // four points were derived rather than placed and no reversal applied.
 
     // -- The V --
     // 140500 is the one that does not read "tip first": "Point 1 defines the **vertex**
@@ -186,7 +185,7 @@ export const TIP_FIRST_SINCE_SNAPSHOT_3: readonly string[] = [
  * Fields of fire and the search area, and only because each one's apex is the **middle**
  * vertex of a three-point base: `[end, apex, end]` is what the generator reads, `[apex, end, end]` is
  * APP-06's numbering, and swapping the first two carries one into the other -- for the
- * two-point sketch a user has drawn halfway through, as well as for the finished V.
+ * two-point sketch an operator has drawn halfway through, as well as for the finished V.
  *
  * Swapping two elements is its own inverse, exactly as reversal is, so the same function
  * serves both directions here too.
@@ -226,7 +225,7 @@ export function generatorOrder(name: TacticalGraphicName | string | undefined, c
 /**
  * The coordinates a **base** carries: APP-06's order, tip first.
  *
- * For turning a rear-to-tip path into a base a user could have drawn -- the sample
+ * For turning a rear-to-tip path into a base an operator could have drawn -- the sample
  * galleries build their bases that way, and so does anything replaying legacy geometry.
  */
 export function storedOrder(name: TacticalGraphicName | string | undefined, coords: Position[]): Position[] {

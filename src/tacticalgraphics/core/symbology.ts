@@ -158,7 +158,7 @@ export function getLabelHaloColor(): string {
 /**
  * ## Editor chrome
  *
- * The affordances a user edits a graphic with — handle dots, the inert center, the draw
+ * The affordances an operator edits a graphic with — handle dots, the inert center, the draw
  * marker. Not part of any symbol: they say "you can drag this", and that meaning must
  * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
  * graphic's handles the same red as its own strokes, so they stopped reading as handles
@@ -229,7 +229,7 @@ const TEXT_RESOLUTION_FALLBACK = 3000;
 
 /**
  * Readability clamp on the zoom multiplier. Without the cap a graphic drawn from
- * high altitude grows its label without bound as the user zooms in past the
+ * high altitude grows its label without bound as the operator zooms in past the
  * drawing zoom; without the floor the label shrinks to nothing zoomed out.
  */
 const MIN_LABEL_ZOOM_MULTIPLIER = 0.3;
@@ -267,7 +267,6 @@ export function maxGraphicLabelScale(): number {
  * What kept the label from swamping a small graphic was that same clamp, and
  * `capLabelToGraphic` does that job properly now — against the graphic itself rather than
  * against a moment in time. So the size is the configured one, capped by the symbol.
- * (User's call, 2026-08-29.)
  *
  * Divided by `BASE_FONT_SIZE_PX` rather than by the font a family happens to render with,
  * which keeps every graphic at exactly the size it draws today at its own drawing zoom.
@@ -334,7 +333,7 @@ export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
 ];
 
 /**
- * A distance for a user to read, from meters.
+ * A distance for an operator to read, from meters.
  *
  * Meters below a kilometer — a 400 m radius shown as "0.4 km" is both harder to read
  * and less precise than the number it came from. Above that, kilometers: one decimal
@@ -342,7 +341,7 @@ export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
  * 10 km where it is noise.
  *
  * **In the core, because every renderer's measure read-out has to agree with every
- * other and with the properties dialog** — they report the same quantity and a user
+ * other and with the properties dialog** — they report the same quantity and an operator
  * compares them. It was in `openlayerStyles.ts`, which is why MapLibre had no
  * read-out to be consistent with.
  */
@@ -353,7 +352,7 @@ export const formatDistance = (meters: number): string => {
 };
 
 /**
- * An angle for a user to read, from degrees.
+ * An angle for an operator to read, from degrees.
  *
  * Three digits and a degree sign, which is how a bearing is written on a map and in every
  * order that carries one: `043°`, not `43 deg`. Normalized into [0, 360) first, so a
@@ -361,7 +360,7 @@ export const formatDistance = (meters: number): string => {
  * negative.
  *
  * **In the core for the same reason as {@link formatDistance}**: a read-out, a dialog field
- * and a label all state the same quantity, and a user compares them.
+ * and a label all state the same quantity, and an operator compares them.
  */
 export const formatBearing = (degrees: number): string => {
     const normalized = ((Math.round(degrees) % 360) + 360) % 360;
@@ -375,7 +374,7 @@ export const formatBearing = (degrees: number): string => {
  * bearing — shortened to what fits beside a grip being dragged. Here rather than in either
  * renderer because both print them, and both printing "Start" by writing the word twice is
  * how the two came to disagree about everything else.
- * @see measureReadout, ai/conventions.md "A symbology fact never lives in a holder"
+ * @see measureReadout
  */
 export const RADAR_READOUT_CAPTIONS = {
     azimuth: 'Azimuth',
@@ -443,7 +442,7 @@ const MEASURE_READOUT_SHARE = 0.95;
  * along its geometry and drops it when the glyphs run past the ends, so the radar search
  * doctrine's label — 201 px wide with an azimuth and a range in it — appeared only once the
  * drag passed 201 px. Everything before that was blind, which is the opposite of what a
- * read-out is for. (User's report, 2026-09-10.)
+ * read-out is for.
  *
  * So the text shrinks to the room it has, down to {@link MEASURE_READOUT_MIN_SCALE}. Below
  * that a caller should stop laying it along the line and place it at the midpoint instead:
@@ -456,7 +455,7 @@ export function measureReadoutScale(naturalWidthPx: number, linePx: number, desi
 }
 
 /**
- * An altitude or height for a label, from whatever the user typed.
+ * An altitude or height for a label, from whatever the operator typed.
  *
  * The number is written in the configured {@link AltitudeUnit} and the unit is appended,
  * which is what FM 1-02.2 asks for — fields X and X1 say "measurement units shall be
@@ -488,7 +487,7 @@ export const formatAltitude = (value: string | number | undefined, datum?: Altit
 };
 
 /**
- * Graphics that carry a radius a user can read: the circular areas, the arc mission
+ * Graphics that carry a radius an operator can read: the circular areas, the arc mission
  * tasks, the range fans.
  *
  * Drives both the properties dialog's read-out and the measure line drawn while the
@@ -548,7 +547,7 @@ export function hasRadiusReadout(name: TacticalGraphicName): boolean {
  *
  * Seven, not ten: `TargetReferencePoint`, `PointTarget` and `FireSupportStation` also
  * route through the circular family but are commented out of the controller registry,
- * so they are not drawable. @see ai/excluded-graphics.md
+ * so they are not drawable.
  *
  * ## Why the two lists came apart
  *
@@ -557,7 +556,7 @@ export function hasRadiusReadout(name: TacticalGraphicName): boolean {
  * in one place and not the other reads as a bug.
  *
  * But the coupling ran the wrong way for a third of the family. These ten are drawn as
- * circles and sized by dragging, and the number the user is dragging *to* is the whole
+ * circles and sized by dragging, and the number the operator is dragging *to* is the whole
  * point of showing it — while the dialog deliberately does not offer a radius field,
  * because the amplifier is not one the symbol carries. So they resized blind: the
  * neighbouring zone showed a distance and they showed nothing, for a reason no operator
@@ -572,8 +571,8 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Deny,
     TacticalGraphicName.Locate,
     TacticalGraphicName.PsyOpsZoneCircular,
-    // The target build-up, target value and zone of responsibility circles left this list
-    // on 2026-10-31: their plates letter AM along a RADIUS (M) arrow, so the radius is an
+    // The target build-up, target value and zone of responsibility circles left this list:
+    // their plates letter AM along a RADIUS (M) arrow, so the radius is an
     // amplifier and they are in RADIUS_GRAPHICS with the rest of their family.
     /*
      * Not a circle, but sized by the same gesture. The rectangular target became
@@ -598,7 +597,7 @@ const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.ShipAreaOfInterestEllipse,
     TacticalGraphicName.CuedAcquisitionDoctrine,
     /*
-     * **200700 is back on 2026-09-05.** It left on 2026-09-04 with the note "no longer
+     * **200700 is back.** It left with the note "no longer
      * sized by a rim drag -- it is three placed points -- so there is no radius under the
      * cursor to report", which was true of that day's contract and is not of this one: the
      * plate gives it one anchor point and typed ranges, so it is dropped and dragged out
@@ -666,7 +665,7 @@ export const RATIO_LOCKED_MISSION_TASKS: ReadonlySet<TacticalGraphicName> = new 
     TacticalGraphicName.Occupy,
     TacticalGraphicName.Retain,
     TacticalGraphicName.Secure,
-    // **And the last five, 2026-08-26.** The same reasoning had been applied twice and
+    // **And the last five.** The same reasoning had been applied twice and
     // stopped short both times: these are built from the identical two arcs and carry the
     // identical rim letter, so leaving them zoom-anchored meant a `LOC` or a `C/S` held
     // its screen size while the circle around it shrank — at a far zoom the letter is the
@@ -799,7 +798,7 @@ const MOBILITY_FUNCTION_SYMBOLS = new Set<TacticalGraphicName>([
  * The yellow was already fixed for that reason, on the reading that "the outline still
  * carries the affiliation". That half is gone: a hostile contaminated area drew red line
  * work around a hazard whose whole point is that it does not care who is standing in it,
- * and the field offered an identity the plate has no form for. (User's call, 2026-08-26.)
+ * and the field offered an identity the plate has no form for.
  */
 const HAZARD_AREAS = new Set<TacticalGraphicName>([
     TacticalGraphicName.BiologicalContaminatedArea,
@@ -823,8 +822,8 @@ const HAZARD_AREAS = new Set<TacticalGraphicName>([
  * - 200700's Note states its dark cyan outright, border and fill.
  *
  * Same ruling as the hazard areas, one step further along: there the colour was doctrinal
- * and the outline was argued to still carry the affiliation, and that half was withdrawn
- * on 2026-08-26. Here there is no outline separate from the colour to argue about.
+ * and the outline was argued to still carry the affiliation, and that half was withdrawn.
+ * Here there is no outline separate from the colour to argue about.
  *
  * **200600 is deliberately not here.** Its plate names a *fill*, and its border is stated
  * as white -- which this library draws in the affiliation colour instead, because a white
@@ -835,8 +834,8 @@ const COLOUR_NAMED_AREAS = new Set<TacticalGraphicName>([
     TacticalGraphicName.ActiveManeuverArea,
     TacticalGraphicName.RadarSearchDoctrine,
     /*
-     * Four more on 2026-09-04, when the plates' stated colours were applied to the
-     * **outline** as well as the fill (user's call). While only the fill was the plate's
+     * Four more, when the plates' stated colours were applied to the
+     * **outline** as well as the fill. While only the fill was the plate's
      * these kept their identity, because the rim still carried it; with the rim orange, grey
      * or white there is no line work left for an affiliation to colour, and a hostile launch
      * area drawn red would be a symbol the standard does not have.
@@ -860,8 +859,7 @@ const COLOUR_NAMED_AREAS = new Set<TacticalGraphicName>([
  * marsh, dense woodland -- and the answer is the same whoever is trying to cross it. Their
  * Templates carry a Sector 1 modifier, a Sector 2 modifier and field H, and nothing else:
  * no `T`, no `N`, no status form. So the identity had nowhere to go but the outline, where
- * it turned a statement about the ground into a claim about a side. (User's call,
- * 2026-08-26.) @see sectorModifierPaints
+ * it turned a statement about the ground into a claim about a side. @see sectorModifierPaints
  *
  * **The limited access area is deliberately not here.** Its FM 1-02.2 Template offers a
  * date-time group, so it is a restriction someone imposes for a while rather than a
@@ -877,7 +875,7 @@ const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
  *
  * The category rule below switches hostility off for every tactical mission task, on FM
  * 1-02.2's line that they "do not use modifiers or amplifiers". The exfiltration and the
- * infiltration are the exception the user asked for (2026-08-27), and there is a reading
+ * infiltration are the exception the operator asked for, and there is a reading
  * behind it: these two are told apart by *whose* forces the arrow points toward — APP-06
  * 343700 says "the direction of friendly forces" and 343800 "the direction of enemy forces"
  * — so an identity is the one amplifier that means something on them.
@@ -899,7 +897,7 @@ const HOSTILE_CAPABLE_MISSION_TASKS = new Set<TacticalGraphicName>([
  * symbol**: the escort in the break in its bar, the follow tasks where field T would go.
  * An entity symbol's frame *is* its standard identity. Offering no affiliation left the
  * symbol stuck on `pending`, so the one amplifier that decides what the drawn symbol looks
- * like was the one the operator could not set. (User's call, 2026-08-28.)
+ * like was the one the operator could not set.
  *
  * Read from {@link CENTER_SYMBOL_GRAPHICS} rather than listed again, so a graphic that
  * gains a centre symbol later cannot gain it without the identity that frames it.
@@ -923,7 +921,7 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  * size outright and would simply ignore the number.
  *
  * It reads as doctrine rather than as UI: refusing a gesture is how the symbol
- * says "this dimension is not yours to set". A renderer that let the user drag it
+ * says "this dimension is not yours to set". A renderer that let the operator drag it
  * anyway would store a number the generator throws away, which looks like a
  * gesture that silently does nothing.
  *
@@ -933,21 +931,21 @@ export function supportsHostility(name: TacticalGraphicName): boolean {
  *
  * There was a third case here, `SecurityOperationsController`, which no-opped resize
  * and kept rotate for cover, guard and screen. Those three stopped being fixed-size
- * badges on 2026-08-29 and the controller was deleted with them; they are ordinary
+ * badges and the controller was deleted with them; they are ordinary
  * two-point line graphics now and take every gesture.
  */
 export interface AllowedGestures {
     translate: boolean;
     rotate: boolean;
     resize: boolean;
-    /** Whether the base has vertices a user can drag. A point never does. */
+    /** Whether the base has vertices an operator can drag. A point never does. */
     modify: boolean;
 }
 
 /**
  * The point-anchored symbols that turn but do not resize.
  *
- * **Empty since 2026-08-29**, when cover, guard and screen — the only members — stopped
+ * **Empty**, when cover, guard and screen — the only members — stopped
  * being badges. They are drawn from two points now, so they turn by being drawn along a
  * different axis and resize by being drawn longer; neither is a gesture on a dropped
  * symbol any more. Kept rather than deleted because the *category* is real: a symbol whose
@@ -964,17 +962,16 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
  * applies to — but each has a single doctrinal orientation, so `PointDropController`
  * no-ops the rotate.
  *
- * **All four crossed tasks are here as of 2026-08-17.** They were fixed-size badges,
+ * **All four crossed tasks are here.** They were fixed-size badges,
  * pinned to a constant 100 px so a stored size was divided straight back out. The
  * security operations were the same kind of thing and were the last of them: APP-06's
- * four anchor points made them two-point drawn graphics on 2026-08-29, so nothing in
+ * four anchor points made them two-point drawn graphics, so nothing in
  * the library is a fixed-size badge any more and `ROTATE_ONLY_SYMBOLS` is empty.
  *
  * **Neither was listed here, and only OpenLayers refused the rotate.** The refusal lived
  * in the controller, which MapLibre does not have, so a rotate drag turned a graphic on
  * one engine and did nothing on the other. That is the standing failure mode for anything
  * decided in a holder: the table is portable, the controller is not.
- * @see ai/conventions.md — "A symbology fact never lives in a holder"
  */
 /**
  * The graphics whose base points are **derived from the drop, not placed by the operator**.
@@ -993,7 +990,7 @@ const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
  * `PointDropController`, where only OpenLayers could see it. @see allowedGestures
  */
 /**
- * **Empty as of 2026-09-06**, and kept because the category is real.
+ * **Empty**, and kept because the category is real.
  *
  * The demonstration was its only member and left when its four points became placed rather
  * than laid out from one centre. A graphic whose points are derived is still a thing this
@@ -1018,7 +1015,7 @@ export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
  *
  * So the affordance is not offered, and the two ways left are the two that mean something:
  * type a range into the dialog's band editor, or drag that band's own rim handle, which
- * moves one ring and writes the metres it landed on. (User's call, 2026-09-01.)
+ * moves one ring and writes the metres it landed on.
  *
  * **This is not `ROTATE_ONLY_SYMBOLS`.** That set is for symbols with no size input at all;
  * these have several, and the point is which control reaches them.
@@ -1030,7 +1027,7 @@ const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
 
 const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Airfield,
-    // **Roadblock complete left on 2026-09-05.** It refused rotation because it was
+    // **Roadblock complete left.** It refused rotation because it was
     // dropped whole at a fixed 45-degree bearing, so turning it meant turning a symbol
     // that had no orientation of its own. It is drawn from a centreline now, and its
     // bearing is that line's. @see RoadblockComplete
@@ -1061,7 +1058,7 @@ const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
  * a symbol the standard describes by its middle showed its live grip off to one side, with
  * a dead-looking dot where the anchor is. Now the generator emits the centre alone, nothing
  * is off-centre to promote, and `publishHandles` publishes the centre as the live handle.
- * @see MissionTaskGraphicBase.publishHandles (User's call, 2026-09-03.)
+ * @see MissionTaskGraphicBase.publishHandles
  */
 const ANCHOR_ONLY_HANDLE_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.Defeat,
@@ -1097,7 +1094,7 @@ export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
  * The graphics whose drawn base is a **centreline the symbol never draws**, so the editor
  * hashes it between the anchor points while the graphic is selected.
  *
- * Reported by the user, 2026-09-06: *"all graphics with parallel lines like gap/bridge/
+ * Reported by the operator, *"all graphics with parallel lines like gap/bridge/
  * assault crossing, convoy graphics, explosives graphics need a hashed line between
  * vertices like corridors and main axis of advance (family)"*.
  *
@@ -1106,7 +1103,7 @@ export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
  * symbol is drawn there is nothing on screen saying where the anchor points went. The
  * corridors and the axis-of-advance family had the mark already, but by accident rather
  * than by statement: their controllers set no vertex cap, so OpenLayers' `Modify` was
- * installed over their bases and un-hid them. Every family the user named is capped at the
+ * installed over their bases and un-hid them. Every family the operator named is capped at the
  * number of points its plate gives it, which switched the same base off — the two
  * questions had become one switch. @see LineGraphicController, `base.set('base', false)`
  *
@@ -1118,13 +1115,13 @@ export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
  * hostility colour at 35% opacity, which is the half-way answer that is wrong both ways:
  * too faint to read as symbology, too tinted to read as chrome. FM 1-02.2's colour rule is
  * about a control measure's *lines*; a construction line is not one.
- * @see getInertHandleColor, ai/decisions.md — the hostility colour rule
+ * @see getInertHandleColor
  *
  * **Both renderers read this**, which is the reason it is here rather than in a holder: on
  * OpenLayers it decides which base features un-hide, on MapLibre it decides which graphics
  * put a line in the connector source. MapLibre drew no base at all before this.
  *
- * Deliberately **not** every graphic whose base is hidden. Three groups the user named
+ * Deliberately **not** every graphic whose base is hidden. Three groups the operator named
  * turned out not to qualify and are left off rather than forced in:
  *
  * - **Passage lane and safe lane or gap** lay their splayed arms either side of a run they
@@ -1133,7 +1130,7 @@ export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
  * - **Ferry crossing** is a plain line with an end mark; its base is the symbol.
  * - **Bridge, gap and assault crossing** place their points on the rails themselves since the
  *   plate numbering pass, so there is no hidden centreline left to mark.
- * - **Roadblock complete (executed)** is switched off. @see ai/excluded-graphics.md
+ * - **Roadblock complete (executed)** is switched off.
  */
 const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
     // The eight air-coordinating corridors: rails tangent to a circle at every turning
@@ -1149,7 +1146,7 @@ const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
 
     // The axis-of-advance family and the two casings drawn the same way. The infiltration
     // lane is the one of these that had *lost* the mark: it takes three placed points as
-    // of 2026-09-05, which capped its controller and switched its base off.
+    // of which capped its controller and switched its base off.
     TacticalGraphicName.MainAxisOfAdvance,
     TacticalGraphicName.MainAxisOfAdvanceFeint,
     TacticalGraphicName.SupportingAxisOfAdvance,
@@ -1161,8 +1158,8 @@ const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
     TacticalGraphicName.InfiltrationLane,
 
     // The two fords: dashed rails offset from the drawn line. Bridge, gap and assault crossing
-    // left this list on 2026-11-02: their points are now the rails' own ends, two per side,
-    // so the line ran along one rail and then diagonally across the gap (user's call).
+    // left this list: their points are now the rails' own ends, two per side,
+    // so the line ran along one rail and then diagonally across the gap.
     TacticalGraphicName.FordEasy,
     TacticalGraphicName.FordDifficult,
 
@@ -1189,7 +1186,7 @@ export function drawsAnchorConnector(name: TacticalGraphicName): boolean {
  * The connector follows the centreline, so it has to stop at point 2. Drawing the stored
  * base whole would hash a spur out to the width handle, which is not a run between anchor
  * points and is not what any of these symbols is laid along. These are exactly the names
- * `anchorsFromClicks` routes to `sideAnchors`. @see ai/app-6.md, 271201's draw rule
+ * `anchorsFromClicks` routes to `sideAnchors`. @, 271201's draw rule
  */
 const SIDE_POINT_AFTER_RUN = new Set<TacticalGraphicName>([
     TacticalGraphicName.InfiltrationLane,
@@ -1302,7 +1299,7 @@ const SECURITY_OPERATION_REACH_PX =
  * **It is not an amplifier**, and it is no longer how these three are sized either. It
  * was the half-extent of a fixed-size badge — 163.35, so 326.7 px across at every zoom —
  * back when the symbol's dimensions were this constant times the live resolution. Since
- * 2026-08-29 cover, guard and screen are drawn from two anchor points and the generator
+ * cover, guard and screen are drawn from two anchor points and the generator
  * builds the arms from the *base*, ignoring `radius` entirely; a renderer that forces
  * this number in gets byte-identical geometry for its trouble.
  *
@@ -1318,7 +1315,7 @@ const SECURITY_OPERATION_REACH_PX =
  *
  * **A save and a restore at a different zoom will not agree on it, by design.** The figure
  * is pixels times a resolution and a snapshot carries no viewport state
- * (`ai/context.md`), so restoring two zooms out files four times the metres for the same
+ * so restoring two zooms out files four times the metres for the same
  * 410 px symbol. That is the pinning working, and `fullRoundTrip` exempts it for that
  * reason.
  *
@@ -1358,12 +1355,12 @@ const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.Neutralize]: 50,
     [TacticalGraphicName.Suppress]: 50,
     [TacticalGraphicName.Airfield]: 34,
-    // **The demonstration is not dropped either, as of 2026-09-06.** Its leg used to be this
+    // **The demonstration is not dropped either.** Its leg used to be this
     // one number, from which the U's opening and both other points followed — so the whole
     // symbol was fixed and the operator placed only its position. 343300 names four anchor
     // points and each is placed now, so the draw takes four clicks and finishes on the last.
     // @see Demonstration, BASE_VERTEX_COUNT
-    // The security operations are **not dropped** as of 2026-08-29: the operator draws one
+    // The security operations are **not dropped**: the operator draws one
     // arrow and the other is derived, so there is no one-click size to state. Removing
     // them from here is what tells a renderer to wait for the second point instead of
     // finishing on the first. @see SecurityOperation, BASE_VERTEX_COUNT
@@ -1392,7 +1389,7 @@ export function dropSizePx(name: TacticalGraphicName): number | undefined {
  * which ends itself on the second click — and their bases are `LineString`s too. So on
  * MapLibre the draw waited for a double-click that the panel's own hint ("2 points (center
  * → edge)") tells nobody to make: **two clicks left the sketch open and nothing on the
- * map**. Found by drawing `Contain` on both engines side by side, 2026-09-04.
+ * map**. Found by drawing `Contain` on both engines side by side.
  *
  * **It lives here rather than beside `usesDrawnAnchors`** because `handles.ts` cannot
  * import this module: `symbology.ts` reaches `render.ts` for `baseGeometryFor`, and
@@ -1421,13 +1418,12 @@ export function drawsCentreToEdge(name: TacticalGraphicName): boolean {
  * endpoints of the semicircle's opening"* and *"Points 1 and 2 determine the diameter of the
  * semicircle"*. Its Template letters `PT. 1` against the upper end of the opening and
  * `PT. 2` against the lower one — there is no annotation on the centre at all, because the
- * centre is not a point the user places.
+ * centre is not a point the operator places.
  *
  * It was drawn centre-to-edge like the other five, which is self-consistent — the anchors
  * stored were still the two opening ends — but it is not the gesture the standard describes,
- * and a user following the Draw Rules clicks the two ends and gets a symbol twice the size
- * they asked for, turned a quarter circle from where they aimed it. (User's report,
- * 2026-09-04.)
+ * and an operator following the Draw Rules clicks the two ends and gets a symbol twice the size
+ * they asked for, turned a quarter circle from where they aimed it.
  *
  * **The other five are deliberately not here**, and are not an oversight: this was raised for
  * contain and each of the others needs its own plate read before it moves. Ambush is the one
@@ -1443,11 +1439,11 @@ export function drawsEndToEnd(name: TacticalGraphicName): boolean {
  * The anchor graphics an operator places **point by point**, rather than by dragging a
  * frame out from a centre.
  *
- * Contain left the centre-to-edge model on 2026-09-04 because a user following the Draw
+ * Contain left the centre-to-edge model because an operator following the Draw
  * Rules clicked the two points the plate marks and got a symbol twice the size they asked
  * for, turned a quarter circle. The note here recorded that the other five each needed
- * their own plate read before they followed. **Four of them followed on 2026-09-05**
- * (user's call), leaving Contain — which is end-to-end, a different two-click meaning —
+ * their own plate read before they followed. **Four of them followed**
+ * leaving Contain — which is end-to-end, a different two-click meaning —
  * and nothing else on the centre-to-edge draw.
  *
  * What each takes is its plate's own numbering, and how many clicks that is depends on how
@@ -1487,7 +1483,7 @@ export function drawsByAnchorClicks(name: TacticalGraphicName): boolean {
  */
 const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
     /*
-     * **141700 places all three**, as of 2026-09-06. Points 2 and 3 are the curved back's own
+     * **141700 places all three**. Points 2 and 3 are the curved back's own
      * endpoints — *"Points 2 and 3 define the endpoints of the curved line"* — so both are
      * the operator's, and the arc's radius follows from the chord they make. Point 1 gives
      * way instead, squared onto their bisector. The two-click form survives as the preview.
@@ -1505,8 +1501,7 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * straights must stay parallel and the same length, so point 4 is wherever that puts it.
      * Asking for it is asking the operator to hit a point that is already determined, and
      * letting them miss it is how the legs came out splayed. Derived instead, exactly as
-     * 343500 envelopment derives its fourth. (User's call, 2026-09-06: "let the user pick 3
-     * points. The 4 point will be auto-generated".) @see hairpinAnchors
+     * 343500 envelopment derives its fourth. @see hairpinAnchors
      */
     [TacticalGraphicName.Demonstration]: 3,
     [TacticalGraphicName.ReliefInPlace]: 3,
@@ -1522,7 +1517,7 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * them. What gives way instead is point 1, which is read for its reach from the middle
      * and squared onto the perpendicular bisector — so the plate's other two sentences hold
      * by construction. The two-click form survives as the preview.
-     * (User's call, 2026-09-06.) @see firePositionAnchors
+     * @see firePositionAnchors
      */
     [TacticalGraphicName.AttackByFire]: 3,
     /*
@@ -1536,8 +1531,7 @@ const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
      * **Three clicks for every two-rail crossing**, whether it stores three points or four.
      * One rail is placed end to end and the third click sets how far the other sits across
      * it; a fourth point, where the plate numbers one, is wherever "parallel and the same
-     * length" puts it and is not worth asking for. (User's call, 2026-09-06: "just have the
-     * 4th point be auto-calculated".) @see parallelRailAnchors
+     * length" puts it and is not worth asking for. @see parallelRailAnchors
      */
     [TacticalGraphicName.Bridge]: 3,
     [TacticalGraphicName.Gap]: 3,
@@ -1615,7 +1609,7 @@ export function drawClickCount(name: TacticalGraphicName): number | undefined {
  * which was using it to close the sketch — went back to waiting for a double-click and put
  * nothing on the map. OpenLayers was unaffected, because its `Circle` interaction ends
  * itself, so the symbol drew on one engine and not the other. Found by drawing the six
- * review items on both engines, 2026-09-04.
+ * review items on both engines.
  *
  * Derived from the other two, so a graphic that joins either list is covered here without a
  * further edit — which is the property the conflated version only appeared to have.
@@ -1643,7 +1637,6 @@ export function drawsInTwoClicks(name: TacticalGraphicName): boolean {
  * **This is here rather than in either renderer** for the reason the whole module exists: how
  * a symbol's clicks become its frame decides what the symbol looks like, so it is a symbology
  * fact. Stated in an OpenLayers controller, MapLibre would have gone on drawing the old one.
- * @see ai/conventions.md, "A symbology fact never lives in a holder"
  */
 export interface DragFrame {
     /** How far the frame's centre sits from the first click, in metres. */

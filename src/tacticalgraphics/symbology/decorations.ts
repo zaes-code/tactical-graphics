@@ -198,7 +198,7 @@ export const DECORATION_MIN_PX = 3;
  *
  * The rule is deliberately about the *shape*, not the zoom. A graphic 120 px
  * across needs the same treatment whether it got that way by being drawn small or
- * by the user zooming out, and a resolution threshold would only catch the second.
+ * by the operator zooming out, and a resolution threshold would only catch the second.
  */
 export function decorationScale(
     path: ProjectedPosition[],
@@ -221,7 +221,7 @@ export function decorationScale(
     // how crowded a shape looks. Height alone under-caps anything wider than it is tall: the
     // fortified merlon stands 11 px proud and is 15 wide, so a cap read off its height let
     // it stay full size on a shape half as big as it should have, and it looked huge however
-    // far the map zoomed out. (Reported 2026-09-07.)
+    // far the map zoomed out.
     //
     // The **item**, not the whole repeat. Capping on merlon-plus-crenel was tried and is too
     // strict — the crenel is empty space, so counting it shrank the merlons until a
@@ -238,7 +238,7 @@ export function decorationScale(
     // 15 px wide, still readable as a square notch at a height a 10 px triangle would have
     // vanished at. Capping the fortified family on its width made it disappear at a shape
     // of 41 px where it used to hold to 30, and the shrinking was wanted but the vanishing
-    // was too early. (Reported 2026-09-07.) Everything else keeps the default.
+    // was too early. Everything else keeps the default.
     return heightPx * scale < minPx ? 0 : scale;
 }
 
@@ -595,8 +595,7 @@ export function centredRun(total: number, itemLength: number, gap: number): numb
  * produces a polyline that walks forward to the last item and then jumps back to the run's
  * second vertex to retrace it — a straight chord across the curve, which on a fortified line
  * drawn round a bend showed as a bare line cutting the corner. Measured on a quarter-circle
- * of 48 chords: a 412-unit jump where the longest real chord was 9.8. (Reported 2026-09-07,
- * after an edit added the vertices that made a run more than one chord long.)
+ * of 48 chords: a 412-unit jump where the longest real chord was 9.8.
  *
  * Vertices falling *inside* an item's span are dropped, because the item's own two feet
  * already carry the baseline across it.
@@ -900,7 +899,6 @@ export const FORTIFIED_MIN_PX = 1.5;
  * A whole number centred on each segment settles the seam too — every segment is
  * self-contained, so there is no pattern left running when the ring closes — and it keeps
  * the merlon the size it is meant to be. A segment too short for one draws bare.
- * (User's call, 2026-09-07, extending the obstacle teeth decision to this family.)
  */
 export function castellatedPath(
     path: ProjectedPosition[],
@@ -1177,7 +1175,7 @@ export function screenSizedArrowHead(
      * the traversal let its head reach the 15 px ceiling on a symbol only 50 px across —
      * a triangle a third the width of the graphic, which is what the sweep showed. Ferry
      * crossing was always right and looks unchanged here, because its line is straight and
-     * the two measures are the same number for it. (User's call, 2026-09-03.)
+     * the two measures are the same number for it.
      */
     const span = measure === 'reach' && path.length >= 2
         ? Math.hypot(path[path.length - 1][0] - path[0][0], path[path.length - 1][1] - path[0][1])

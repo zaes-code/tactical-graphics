@@ -122,7 +122,6 @@ export function strokedExtentPx(paints: readonly Paint[], resolution: number): n
  * dash: a 6/4 pattern at 2 px drew as 8/2, and once the fit shrank it to 3/2 the caps closed
  * the gaps and a dashed line read as solid, just where a small graphic most needs to be told
  * apart. Stated here rather than in either renderer, so both engines draw the same dash.
- * (User's call, 2026-09-26, after the ArcGIS engine drew them square and they stayed legible.)
  */
 export function withFittedDashes(paints: Paint[], context: PaintContext): Paint[] {
     if (!paints.some(paint => paint.stroke?.dashPx?.length)) return paints;

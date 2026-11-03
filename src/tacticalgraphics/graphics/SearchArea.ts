@@ -60,7 +60,7 @@ export const SEARCH_AREA_ARM: readonly (readonly [number, number])[] = [
 ];
 
 /**
- * The V, whatever the user drew — the same synthesis {@link asVee} performs for fields of
+ * The V, whatever the operator drew — the same synthesis {@link asVee} performs for fields of
  * fire, and for the same reason: two of the three anchor points do not make this symbol.
  *
  * Kept separate rather than shared because the two open to different defaults; a search

@@ -150,7 +150,7 @@ export function getSecuritySymbolSize(): number {
  *
  * This used to be what set the escort apart from cover, guard and screen — badges whose
  * every dimension was a screen constant, where a constant symbol stayed in proportion at any
- * zoom. They are drawn from two points as of 2026-08-29 and take a share of the gap between
+ * zoom. They are drawn from two points and take a share of the gap between
  * their arms, so all four now size from the graphic and stop at `MAX_SYMBOL_SIZE_PX`.
  * `setSecuritySymbolSize` no longer governs any of them; it remains the size for a symbol a
  * host places itself.

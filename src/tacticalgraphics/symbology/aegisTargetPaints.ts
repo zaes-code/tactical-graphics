@@ -65,9 +65,7 @@ const SAMPLES: readonly ProjectedPosition[] = sampleSegments(ARMS);
  *   - **zoom out** — the fitted metric size falls below the ceiling and takes over, so the
  *     cross shrinks with its rectangle rather than swelling to fill it
  *
- * 35 px is the measured 44 px half-arm less 20%. (User's call, 2026-09-04: "a bit big …
- * make it just 20% smaller … make sure it doesn't get bigger than that on zoom-in. It can
- * get smaller with zoom outs though.")
+ * 35 px is the measured 44 px half-arm less 20%.
  */
 export const CROSS_MAX_HALF_PX = 35;
 
@@ -133,7 +131,7 @@ function fitLabelInQuadrant(
  * The designation is drawn **bare and to the right**, which is what the Example column
  * shows (`NSFS002`). The Template puts a boxed `T` there instead — that box names the
  * field rather than belonging to the symbol, the same notation the bearing lines use for
- * their `H`. @see ai/app-6.md, "the Template names the fields, the Example draws the
+ * their `H`. @, "the Template names the fields, the Example draws the
  * symbol".
  */
 export function aegisSingleTargetPaint(): AreaPaint {

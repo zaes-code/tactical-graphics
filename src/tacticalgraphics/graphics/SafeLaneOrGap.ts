@@ -23,7 +23,7 @@ import geometryService from '../core/GeometryService';
  * entity code hung on `PassageLane`: the two offer different fields, and
  * `GRAPHIC_FIELDS` is per graphic.
  *
- * Neither of them is APP-06's *gap*. @see ai/decisions.md, "The FM's `gap` is not APP-06's
+ * Neither of them is APP-06's *gap*. @, "The FM's `gap` is not APP-06's
  * safe lane or gap"
  *
  * The line work is `passageLineGraphic`'s, unchanged — the same construction cannot be

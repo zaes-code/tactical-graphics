@@ -2,7 +2,7 @@
  * # Seize, capture, evacuate and recover
  *
  * The paint half of APP-06 342300 / 343000 / 344500 / 344600. @see SweptArcTask.ts for the
- * circle and the arc, which are geometry — the user places all four points, so both scale
+ * circle and the arc, which are geometry — the operator places all four points, so both scale
  * with the graphic and survive a zoom.
  *
  * What is left here is what does *not* scale: the arrowhead at the end of the sweep, and

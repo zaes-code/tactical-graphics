@@ -9,7 +9,7 @@ import * as turf from '../core/turf';
  * Half the separation between the rails, in metres, off the base's own third point.
  *
  * **From the coordinates, not from an amplifier.** 271201 gives point 3 the job — *"point
- * 3 determines its width"* — and it is a stored vertex as of 2026-09-05, so the distance
+ * 3 determines its width"* — and it is a stored vertex, so the distance
  * is measured rather than replayed. `radius` is still honoured for a graphic saved before
  * that, whose base holds two points and whose width sat beside it.
  */
@@ -28,8 +28,6 @@ export function halfWidthFromSide(coords: Position[], opts?: MovementGraphicOpti
  * moving point 1 or 2 moves the centreline's midpoint and turns its perpendicular, and a
  * stored coordinate cannot follow. Reading only the across component is what lets the
  * width survive that, and `sidePoint` is what puts the handle back on the rail.
- * (User's report, 2026-09-05: "when dragging point 1 & 2, the middle red handle falls off
- * the side line".)
  */
 function sideOffset(coords: Position[]): {across: number; middle: Position; axis: number} | undefined {
     if (coords.length < 3) return undefined;
@@ -85,7 +83,7 @@ export function sidePoint(coords: Position[], opts?: MovementGraphicOptions, hal
  *
  * FM 1-02.2's plate agrees: its examples lay the pair across a road at whatever angle
  * and length the road needs. **This used to be point-anchored at a fixed 45° bearing**,
- * so it could not be laid across a road running any other way. @see ai/app-6.md, "F2"
+ * so it could not be laid across a road running any other way.
  *
  * All three are the same construction and differ only in how the two rails are stroked:
  *
@@ -97,8 +95,8 @@ export function sidePoint(coords: Position[], opts?: MovementGraphicOptions, hal
  *
  * **Roadblock complete is the fourth member**, in its own class because it draws four bars
  * rather than two: this pair, from the same centreline and side point, and the same pair
- * turned a quarter-turn about the midpoint. It was point-anchored at a fixed lean until
- * 2026-09-21. @see RoadblockComplete
+ * turned a quarter-turn about the midpoint. It used to be point-anchored at a fixed lean.
+ * @see RoadblockComplete
  *
  * The dashing is a stroke property and a MultiLineString cannot say "this part dashed,
  * that one not", so the geometry is emitted here in a fixed order — **point 3's rail
@@ -128,7 +126,7 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOpt
         const right = geometryService.computeParallelLineString(ends, half) as Position[];
         const left = geometryService.computeParallelLineString(ends, -half) as Position[];
         // Point 3's rail first: 271202's plate points PT 3 at its dashed rail, and
-        // `BAR_SYMBOL_DASHES` dashes the first bar. (2026-10-31; it was always the right.)
+        // `BAR_SYMBOL_DASHES` dashes the first bar.
         // `across` is positive when point 3 is on the right.
         return (sideOffset(coords)?.across ?? 1) > 0 ? [right, left] : [left, right];
     }
@@ -142,7 +140,7 @@ export class ExplosivesReadiness extends TacticalGraphicsBase<MovementGraphicOpt
 
     /**
      * `[start, end, width]` — the movement family's contract, because this is now a
-     * movement-shaped graphic: two vertices the user drew plus one handle that sets how
+     * movement-shaped graphic: two vertices the operator drew plus one handle that sets how
      * far apart the rails sit. The width handle rides the end of the left rail, so the
      * thing being dragged is on the symbol rather than out in space.
      */

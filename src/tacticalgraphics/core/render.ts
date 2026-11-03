@@ -229,7 +229,7 @@ export interface TacticalGraphicProperties {
      *
      * Set once, when the line is drawn, so the tooth starts out pointing north whichever way
      * the line ran (`drawnSide`); after that it turns with the line, and no gesture flips it.
-     * Files saved before 2026-09-06 also carry it for the cane arrows and Mobile
+     * Files saved also carry it for the cane arrows and Mobile
      * Defense, which state their side with a third point now; those still draw as saved.
      */
     mirrored?: boolean;
@@ -291,8 +291,7 @@ export interface TacticalGraphicProperties {
      * as `rotation`, the opening as a pair of absolute band azimuths — and the saved file
      * then described a symbol in terms of a different symbol's amplifiers, with two of the
      * four numbers not appearing under their own names at all. A consumer reading the GeoJSON
-     * could not find the search axis azimuth or the stop relative bearing. (User's report,
-     * 2026-09-05.)
+     * could not find the search axis azimuth or the stop relative bearing.
      *
      * A graphic saved in the old shape still reads: `RadarSearchDoctrine.frame` falls back to
      * the bands, the rotation and the drawn size when these are absent.
@@ -308,7 +307,7 @@ export interface TacticalGraphicProperties {
 }
 
 /**
- * The amplifiers a user can put on a graphic — what a properties dialog edits, and
+ * The amplifiers an operator can put on a graphic — what a properties dialog edits, and
  * what the style and paint functions read back.
  *
  * Kept separate from {@link TacticalGraphicProperties} rather than aliased to it:
@@ -432,7 +431,7 @@ export function listTacticalGraphicNames(): string[] {
  * identical figure beside the same trench line, in the same order, with the same note about
  * facing the enemy. Two identical pictures with two captions are one control measure, so the
  * survivor is displayed under **both** names and is recorded as being in both publications;
- * a user searching for "fighting position" finds it.
+ * an operator searching for "fighting position" finds it.
  *
  * What does not survive on its own is the *draw model*. The retired graphic was dropped on a
  * point and locked at 2:1 — a centre, a size and a rotation — where 291000's plate specifies
@@ -691,7 +690,7 @@ function withDashedParts(feature: Feature, name: TacticalGraphicName | string): 
  * Renders a tactical graphic from a GeoJSON feature. GeoJSON in, GeoJSON out.
  *
  * The feature's `properties.tacticalGraphic.name` selects the graphic; its
- * geometry supplies the control points the user drew. Coordinates are treated
+ * geometry supplies the control points the operator drew. Coordinates are treated
  * as **EPSG:4326** (`[lon, lat]`), and the output is in the same projection.
  *
  * Every returned feature carries the original `properties.tacticalGraphic`

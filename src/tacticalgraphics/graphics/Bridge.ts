@@ -88,7 +88,7 @@ export class Bridge extends TacticalGraphicsBase {
         // The date starts at the flare tips, which run half a gap-width out at 45 degrees from the
         // end of each rail; the paint adds a few pixels and grows it away from the end. It used to
         // start `size` further out, which left it standing well clear of the symbol the plate
-        // boxes it against (user, 2026-11-02). @see bridgeLabelPaint
+        // boxes it against. @see bridgeLabelPaint
         const {centre, half} = this.rails(base, opts);
         // `getExtendedPoint` stretches what it is given by half again, so ask for two thirds.
         return this.asMultiPointFeature(geometryService.getBridgeLabelPoints(centre, (FLARE_REACH * half) / 1.5));

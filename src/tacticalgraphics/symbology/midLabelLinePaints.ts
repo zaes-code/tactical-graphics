@@ -128,7 +128,7 @@ export function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition
  *
  * The two labels straddle the line, `LABEL_OFFSET_PX` either side of it, and both
  * ride the same "above is north" perpendicular — so which one reads on top does
- * not depend on which end the user started drawing from.
+ * not depend on which end the operator started drawing from.
  */
 export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
     return (feature, context) => {
@@ -140,7 +140,6 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const rotation = uprightRotation(p1, p2);
         // `T2 ( AS )` on the plate: the designation carries its country code in
         // brackets, as the rest of the fire-support family does.
-        // (User's call, 2026-09-01.)
         const full = getFullLabel(name, formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode));
         // Too small to read, the name goes and `CFL` stays. The dates keep `scale`. @see legibleDesignation
         const shown = legibleDesignation(full, getLabel(name), scale, fontStyle, context, pathLength(coords) / context.resolution);
@@ -316,8 +315,7 @@ export function munitionFlightPathPaint(): LinePaint {
         return [
             ...(letterScale ? [textMark(feature, center, 'MFP', letterScale, uprightRotation(p1, p2), 'center', 'middle')] : []),
             // APP-06 260600 note 3: the DTG is "displayed one time mid-way between Point 1 and
-            // midpoint of the graphic", below the line (the user asked for the plate's place back,
-            // 2026-11-02, for consistency). Below means the "up is north" rule the rest of this file
+            // midpoint of the graphic", below the line. Below means the "up is north" rule the rest of this file
             // uses, taken on the segment the DTG's centre lands on; the run then follows the path
             // on a line offset below it, so it never leaves the line where it turns. @see textOnPath
             ...(() => {

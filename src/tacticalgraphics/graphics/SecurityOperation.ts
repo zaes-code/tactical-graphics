@@ -13,12 +13,11 @@ import * as turf from '../core/turf';
  * > 4 define the ends of their respective arrowheads.
  * > Size/Shape. Points 1 and 2 and Points 3 and 4 determine the length of the arrows.
  *
- * They were drawn from a single anchor at a fixed screen size until 2026-08-29 — a badge
+ * They were drawn from a single anchor at a fixed screen size — a badge
  * rather than a measure, marking a point on the display instead of a span of ground. The
  * operator now draws **one arrow**, point 1 at the arrowhead and point 2 at its inner end,
  * and the other arrow is derived: the standard's own symmetry, so the pair always agree in
  * length and lie on one axis, which four hand-placed points cannot be relied on to do.
- * (User's call, 2026-08-29.)
  *
  * Everything is a ratio of the drawn arm, so a resize scales the whole symbol and the gap
  * that carries the letters and the unit symbol keeps its proportion. The ratios are the
@@ -67,7 +66,7 @@ const ARM_PX = 3 * ARROW_LENGTH_PX - ARROW_DEPTH_PX - CENTER_PADDING_PX;
  * (150,0) (130,-20) (205,-20)` — less the 70 of centre padding and over the 135 the arm
  * spans.
  *
- * Straightened once on 2026-08-29 and restored the same day at the user's direction, then
+ * Straightened once and restored the same day at the operator's direction, then
  * squared back to these numbers after a version measured off the Template ran the diagonal
  * outward instead of folding. The fold is the symbol; keep it. What did change is where the
  * arms start, which is `HALF_GAP_RATIO`.
@@ -75,7 +74,7 @@ const ARM_PX = 3 * ARROW_LENGTH_PX - ARROW_DEPTH_PX - CENTER_PADDING_PX;
  * **The lateral runs positive, which puts the arrowhead below the letters.** The segment
  * leaving the letter sits on the axis, the fold drops, and the barbed segment runs lower —
  * "the lines going away from the symbol sit higher than the line with the arrowhead", which
- * is the plate and the user's own description of it. It was negative for two commits, which
+ * is the plate and the operator's own description of it. It was negative for two commits, which
  * stood the arrowheads above the axis instead. Check it as a number: each arm's tip should
  * measure *south* of its inner end on an east-west graphic.
  */
@@ -93,8 +92,7 @@ const ARM_PROFILE: readonly [number, number][] = [
  * `centerPadding` from the centre — 70 px against a 135 px arm, so the hole between the
  * arms was as wide as an arm was long. APP-06 342201's Template sets the two letters and
  * the unit box in a gap about 0.42 of one arm, which is what this is: the lines come in
- * close to what they surround. (User's call, 2026-08-29: "make the lines closer to the
- * center graphics".)
+ * close to what they surround.
  */
 const HALF_GAP_RATIO = 0.21;
 
@@ -129,12 +127,10 @@ export const SECURITY_OPERATION_GRAPHICS: readonly TacticalGraphicName[] = [
  * > Size/Shape. Points 1 and 2 and Points 3 and 4 determine the length of the arrows. **The
  * > length and orientation of the arrows can vary independently.**
  *
- * Four placed points as of 2026-09-06. The operator drew *one* arm before that and the other
+ * Four placed points. The operator drew *one* arm before that and the other
  * was mirrored from it, so the two always agreed in length and lay on one axis — which the
  * Size/Shape cell explicitly does not ask for. A screen whose two arms face different
  * distances along different bearings is the ordinary case, and it could not be drawn.
- * (User's call: "the draw rules say that line 1,2 length and line 3,4 can vary in length and
- * direction […] we need to let them pick the 4 points".)
  *
  * **A shorter base is the old form, and upgrades in place.** Two points are point 1 and
  * point 2; the other arm is laid out as the mirror this used to derive, so every saved
@@ -162,9 +158,7 @@ export function securityOperationAnchors(coords: readonly Position[] | undefined
      *
      * Without this the third click read through the two-point branch below, which takes the
      * *last* point as arm 1's inner end — so the cursor dragged point 2 around and point 3
-     * never appeared until the click landed. (User's report, 2026-09-06: "click 3 is still
-     * dragging on point 2 location [...] after click 2 the active handle should go to point
-     * 3 location".)
+     * never appeared until the click landed.
      */
     if (coords.length === 3) {
         const otherInner = coords[2];
@@ -175,7 +169,7 @@ export function securityOperationAnchors(coords: readonly Position[] | undefined
 
     /*
      * **Two points is one arm, and the other is its mirror** — the shape this graphic was
-     * until 2026-09-06, so it is what an old save holds and what the second click previews.
+     * so it is what an old save holds and what the second click previews.
      */
     const inward = turf.bearing(turf.point(tip), turf.point(inner));
     const otherInner = at(inner, inward, arm * 2 * HALF_GAP_RATIO, 0);
@@ -189,7 +183,7 @@ export function securityOperationAnchors(coords: readonly Position[] | undefined
  *
  * The plate says it outright, and it is the one construction that always has an answer. The
  * two arms' axes *extended* meet at the same place whenever the arms are symmetric, which is
- * the only shape this graphic could take until 2026-09-06 — but with the arms independent
+ * the only shape this graphic could take — but with the arms independent
  * that intersection is undefined for parallel arms and runs away to infinity as they
  * approach parallel, which is a centre that leaves the graphic. The midpoint does not.
  *
@@ -224,8 +218,7 @@ export function securityOperationBaseCentre(coords: readonly Position[] | undefi
  *
  * Before this the profile was laid along the *chord* and the drawn tip came out a step
  * beside point 1 — about 15% of an arm — so the handle an operator grabs to move an
- * arrowhead did not sit on the arrowhead. (User's call, 2026-09-06: "point 1 and point 4
- * should be where the arrow tip is and where the handles should be".)
+ * arrowhead did not sit on the arrowhead.
  */
 const FOLD_DEPTH_RATIO = ARROW_DEPTH_PX / ARM_PX;
 const FOLD_ANGLE_DEG = (Math.atan(FOLD_DEPTH_RATIO) * 180) / Math.PI;
@@ -358,8 +351,8 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
          * The shipped badge did the former: `reflectAcrossYAxis` mirrored x and kept y, and
          * the catalog tile still shows both arms ending at the same lower y — right
          * `(168,77) (212,77) (201,88) (242,88)`, left `(92,77) (48,77) (59,88) (18,88)`.
-         * Drawn at the size an operator chooses, the user picked the mirrored fold instead
-         * (2026-08-29, having been shown both). So this is a deliberate departure from what
+         * Drawn at the size an operator chooses, the operator picked the mirrored fold instead.
+         * So this is a deliberate departure from what
          * shipped, not a reproduction of it, and it is recorded as one.
          */
         return this.asMultiLineStringFeature([
@@ -371,7 +364,7 @@ export class SecurityOperation extends TacticalGraphicsBase<SecurityOperationOpt
     /**
      * **A grip on each of the four anchor points**, which is what makes the arms independent.
      *
-     * It published none until 2026-09-06: the second arm was mirrored from the first, so
+     * It published none: the second arm was mirrored from the first, so
      * dragging any one point alone would have broken the symmetry the symbol was built on,
      * and the operator moved and resized it whole instead. 342201 asks for the opposite —
      * *"the length and orientation of the arrows can vary independently"* — so each end of

@@ -73,7 +73,7 @@ export class AirCorridor extends MovementGraphicBase {
      */
     setLabel = (labels: GraphicLabels) => {
         // A width typed into the dialog resizes the corridor. Full width in, half-width
-        // offset out — the factor of two is the library's business, not the user's.
+        // offset out — the factor of two is the library's business, not the operator's.
         const requested = labels.width;
         if (requested !== undefined && Number.isFinite(requested) && requested > 0 && requested !== this.offset * 2) {
             this.offset = requested / 2;
@@ -82,7 +82,7 @@ export class AirCorridor extends MovementGraphicBase {
         }
         this.graphicLabels = labels;
         // Carry the geometry state through. `writeGraphicProperties` replaces the bag
-        // wholesale, so a write that omits `width` erases the width the user dragged —
+        // wholesale, so a write that omits `width` erases the width the operator dragged —
         // and nothing recomputes it until the next `updateGeometry`, so a save taken
         // straight after editing an amplifier would lose it.
         writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});

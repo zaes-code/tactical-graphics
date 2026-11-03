@@ -29,7 +29,7 @@ import {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from './me
  * It is markedly shorter than the OpenLayers adapter, for a reason worth recording:
  * **the reprojection does not disappear, it moves.**
  *
- * `ai/maplibre-renderer.md` predicted the 4326 → 3857 hop would go away because
+ * It was expected that the 4326 → 3857 hop would go away because
  * MapLibre consumes lon/lat directly. It does not. Every screen-pixel decoration
  * in this library is `pixels × resolution` in *projected meters*, and every
  * distance and angle in the ported paint functions is planar — so the paint layer
@@ -102,7 +102,7 @@ export interface PaintedGraphic {
     id: string;
     name: TacticalGraphicName;
     properties: TacticalGraphicProperties;
-    /** The base the user drew, in lon/lat — the only thing worth persisting. */
+    /** The base the operator drew, in lon/lat — the only thing worth persisting. */
     base: GeoJSONFeature;
     /** The line work. */
     graphic: PaintFeature;
@@ -149,7 +149,7 @@ export function withDrawingResolution(
  * There were two such fields and only one was being carried. `drawingResolution` had its own
  * helper and a paragraph explaining why forgetting it is silent; `hideAmplifiers` had
  * neither, so the "name only" toggle hid the labels and the next rebuild put them straight
- * back. Reported as *"briefly hide the labels but then they reappear"* (user, 2026-09-04).
+ * back. Reported as *"briefly hide the labels but then they reappear"*.
  *
  * **One function for the class, rather than a second special case.** A third flag added to a
  * paint feature and not to this is the same defect again, so the fix is a place for them to
@@ -203,7 +203,7 @@ export function rebuildPaintedGraphic<T extends PaintedGraphic>(graphic: T): T {
 let nextId = 0;
 
 /**
- * Builds a paint-ready graphic from a base feature the user drew.
+ * Builds a paint-ready graphic from a base feature the operator drew.
  *
  * `size` and `rotation` reach the generator through `properties.tacticalGraphic`
  * (`radius`, `rotation`) rather than as separate arguments, because that bag is
@@ -215,8 +215,8 @@ let nextId = 0;
  * The zoom-anchored label scale reads it: at the resolution a graphic was created
  * at, its label renders at exactly the configured size, and it shrinks from there
  * as you zoom out. It is **live view state, not part of the symbol**, so the
- * saved bag deliberately does not carry it (`ai/context.md`, "No viewport state
- * travels with it") — which means every renderer has to supply it independently.
+ * saved bag deliberately does not carry it (no viewport state
+ * travels with it) — which means every renderer has to supply it independently.
  *
  * Omit it and `labelScale` falls back to a `sqrt` curve. Nothing throws; the
  * labels just come out a different size from the other renderer's. This spike
@@ -263,7 +263,7 @@ export const DEFAULT_OFFSET_PX = 20;
  * **The underlying library gap is real and is not fixed here.** A consumer calling
  * `renderTacticalGraphic` with only a center still gets 20 m rails. Closing that
  * means changing what those 41 graphics draw in OpenLayers, which is a decision
- * about the shipped renderer rather than a bug fix. @see ai/current-task.md
+ * about the shipped renderer rather than a bug fix.
  */
 function sizeDefaults(
     name: TacticalGraphicName,
@@ -278,7 +278,7 @@ function sizeDefaults(
     //
     // The base's own length is the fallback, for a restore that carries no
     // resolution — a snapshot deliberately holds no viewport state, so there is
-    // nothing else to measure against. @see ai/context.md, "No viewport state travels"
+    // nothing else to measure against.
     const meters = drawingResolution
         ? drawingResolution * DEFAULT_OFFSET_PX
         : baseLengthMeters(geometry) * DEFAULT_SIZE_FRACTION;
@@ -364,7 +364,6 @@ function sizeDefaults(
     // did with the same bag. Inventing a width beside it made the two engines draw
     // different corridors from one saved description — 6.3% of the frame, the largest
     // single disagreement left in the sweep. A supplied `width` still wins over both.
-    // @see ai/context.md, "A saved graphic carries one object"
     const halfWidth = supplied.radius !== undefined && supplied.radius > 0 ? supplied.radius : meters;
 
     /*
@@ -402,7 +401,7 @@ function sizeDefaults(
      * only thing filing one ever did was put a figure nobody typed into a saved file. That
      * is the whole of the 259-graphic bag difference the two engines' sample sheets reported:
      * this side echoed the number, OpenLayers rebuilt its bag from a holder that owns no such
-     * number. @see ai/current-task.md, shapedByWidth
+     * number. @, shapedByWidth
      *
      * **Reading a width is not the same as wanting one invented.** The multiple-strike zone
      * is shaped by its width and still takes no default: for that one graphic the *absence*
@@ -479,7 +478,7 @@ function bakedDecorationSize(
  *
  * Cover, Guard and Screen needed it while they were placed from a single anchor: their
  * generator emitted arms and label anchors as offsets from `[0, 0]` and never looked at
- * the base, so whatever consumed it had to do the placing. Since 2026-08-29 they are
+ * the base, so whatever consumed it had to do the placing. Since they are
  * drawn from a two-point base and the generator returns coordinates already in place,
  * so the ordinary path serves them and the OpenLayers half of this arithmetic is gone.
  *
@@ -491,7 +490,7 @@ function bakedDecorationSize(
  * way out. OpenLayers adds them in projected meters instead, and is self-consistent
  * because its holder passes the five dimensions already in projected meters; the two
  * renderers therefore feed the same generator different units. That is the open item
- * in `ai/decisions.md` about `size` meaning meters-per-pixel, and it is not resolved
+ * about `size` meaning meters-per-pixel, and it is not resolved
  * here — this only puts the arms where the graphic is.
  *
  * A rotation turns the arms about the center, as the holder's does. Everything else
@@ -630,7 +629,7 @@ function ratioLockedSize(
  * `SECURITY_OPERATION_HALF_EXTENT_PX * drawingResolution` for cover, guard and screen,
  * correctly, while those three were fixed-size badges pinned to a screen constant.
  *
- * They stopped being badges on 2026-08-29 — APP-06 gives them four anchor points, so
+ * They stopped being badges — APP-06 gives them four anchor points, so
  * they are drawn from two and the generator builds the arms from the *base*, ignoring
  * `radius` entirely. Measured: rendering a cover with the override applied and without
  * gives byte-identical geometry.
@@ -647,7 +646,7 @@ function ratioLockedSize(
  * for all four crossed mission tasks, correctly, while all four were fixed-size badges
  * pinned to a screen constant.
  *
- * They all carry a real size as of 2026-08-17, and the override is why unpinning them did
+ * They all carry a real size, and the override is why unpinning them did
  * not work the first time: the paint, the controller, the handles and the gesture table
  * were all changed and the symbols still came out the same width, because the number was
  * replaced on the way in. **The size was stored, the handle moved, and nothing looked
@@ -819,7 +818,7 @@ export function buildPaintedGraphic(
      * **A rectangular zone drawn as a box, from before the conversion.**
      *
      * APP-06 defines these as two anchor points and a width, and that is what the base
-     * carries now — but every snapshot written before 2026-08-27 holds the drawn ring,
+     * carries now — but every snapshot written holds the drawn ring,
      * and so does anything that still hands one in. Read the axis and the width back out
      * of it: the same rectangle comes back, and it comes back editable.
      * @see axisFromRectangleRing, RectangularArea
@@ -865,7 +864,7 @@ export function buildPaintedGraphic(
          * **A rectangle's width is what its own ring measures.**
          *
          * APP-06 defines these as "two anchor points and a width, defined in metres", and
-         * the user draws the box — so the shape is the input and the amplifier describes
+         * the operator draws the box — so the shape is the input and the amplifier describes
          * it. It was derived only *during a drag*, so a freshly drawn zone carried the
          * generic 20 px default instead: a box drawn 160 px tall at zoom 6 reported 98 km
          * where OpenLayers reported 391. Doing it here rather than in the draw handler
@@ -900,7 +899,7 @@ export function buildPaintedGraphic(
      * The screen-sized defaults are deliberately **not** in this list: `sizeDefaults` and
      * `arrowheadDefault` spend the drawing resolution, and a snapshot carries no viewport,
      * so the metre value they produce is the only record of that size there will ever be.
-     * @see describedProperties, ai/conventions.md "A base is the library's reading of it"
+     * @see describedProperties
      */
     const derivedFromGeometry: (keyof TacticalGraphicProperties)[] = [
         ...(getPaintFunction(name)?.label ? (['labelGapDegrees'] as const) : []),

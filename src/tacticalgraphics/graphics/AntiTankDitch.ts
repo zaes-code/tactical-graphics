@@ -7,7 +7,7 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  * designed to stop tanks and armor fighting vehicles around a fortified position".
  *
  * A drawn route carrying triangular teeth, in the wire obstacles' mold rather than the
- * point-dropped explosives': the user draws the ditch's line and the teeth repeat along it
+ * point-dropped explosives': the operator draws the ditch's line and the teeth repeat along it
  * at a constant screen size. One symbol in three states:
  *
  * ```
@@ -18,8 +18,7 @@ import {Feature, LineString, MultiLineString, MultiPoint} from 'geojson';
  *
  * **The plain ditches' teeth touch**: their bases run edge to edge along the route. The
  * mined ditch spaces them apart and puts a mine in each gap, tooth first from PT 1, as
- * 2525E 290203 draws it (2026-10-31; the mines used to nest in the notches between touching
- * teeth).
+ * 2525E 290203 draws it.
  *
  * The teeth are *not* in the geometry: they are a screen-space decoration, so
  * `antiTankDitchStyleFunc` synthesizes them through `decorationScale` exactly as the wire
@@ -41,7 +40,7 @@ export interface AntiTankDitchStyle {
      * the teeth to the image's right, which is the **left** of travel; APP-06 agrees. Its
      * 290203 runs PT 1 to PT 2 left to right with the teeth below, the **right** of travel,
      * where APP-06 has them on the left. 2525E decides, so the mined ditch differs from the
-     * other two. (2026-10-31; before then all three hung right.)
+     * other two.
      */
     side: 'left' | 'right';
 }

@@ -45,7 +45,6 @@
  * Working here means the ported math is character-for-character the math that
  * ships today, which is the only way a port can be checked against the original.
  *
- * @see ai/maplibre-renderer.md — why the 128 in-style constructions, not the 69
  *      style functions, are what sets the price of a second renderer.
  */
 
@@ -362,8 +361,8 @@ export interface PaintFeature {
      * should survive into a file that another operator opens. So it is a renderer input
      * like `graphicSize` and `bounds` rather than a field on the portable description, and
      * a host keeps it wherever its other view state lives — a store, a URL, local storage.
-     * It was on the bag until 2026-08-30, which meant saving a graphic saved a preference
-     * with it. (User's call.)
+     * It was on the bag, which meant saving a graphic saved a preference
+     * with it.
      *
      * The symbol never goes. @see TextKind, `withHiddenAmplifiers`
      */
@@ -603,7 +602,6 @@ export function mapPaintGeometry<T extends ProjectedGeometry>(geometry: T, fn: (
  * graphic" and computed a `getExtent()` for area holders only — a *base polygon's*
  * extent, where MapLibre measured the *rendered* geometry. Those are different boxes,
  * and edit chrome drawn from them would sit in a different place on each engine.
- * @see ai/conventions.md — "A symbology fact never lives in a holder"
  */
 export function boundsOf(geometry: ProjectedInputGeometry | undefined): PaintFeature['bounds'] {
     if (!geometry) return undefined;

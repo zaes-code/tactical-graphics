@@ -168,7 +168,7 @@ and compare. See [Configuring colors and sizes](/guide/colors-and-sizes).
 coords)` picks the side from the drawing direction so the tooth starts out pointing north
 (west on a line drawn due north or south), and that choice is stored as `mirrored`. After
 that it turns with the line when the graphic is rotated, and no grip flips it. Files saved
-before 2026-09-06 may also carry `mirrored` on the seven cane arrows (delay, withdraw,
+before 4.0.0 may also carry `mirrored` on the seven cane arrows (delay, withdraw,
 withdraw under pressure, disengage, retirement, forward and rearward passage of lines) and
 mobile defense. Those graphics now state their side with a third anchor point, and the old
 files still draw as they were saved.

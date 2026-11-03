@@ -70,7 +70,7 @@ import {
  * {@link realize}. A `line` layer renders what its source holds, and an obstacle
  * line's teeth are not in the source — they are a function of the current
  * resolution. So the geometry has to be rebuilt and re-uploaded **every time the
- * zoom changes**, which is the cost `ai/maplibre-renderer.md` lists as risk 1 and
+ * zoom changes**, which is a known cost of this approach and
  * says the spike must measure rather than estimate. {@link lastRealizeMs} and
  * {@link lastFeatureCount} are that measurement.
  *
@@ -176,7 +176,7 @@ const ZOOM_REALIZE_THRESHOLD = 0.34;
  *
  * It only ever *delays* a rebuild — `zoomend` and `moveend` are unthrottled, so
  * the gesture always finishes with the geometry correct for where it landed. What
- * a user can see is that a decoration keeps the size it had a fraction of a second
+ * an operator can see is that a decoration keeps the size it had a fraction of a second
  * ago while the wheel is still spinning.
  */
 const MID_GESTURE_MIN_INTERVAL_MS = 120;
@@ -395,7 +395,7 @@ export class NativeLayerRenderer {
      * `ctx.measureText` against a *browser* font, while MapLibre renders the label
      * from an SDF glyph set that is a different font at a different rasterisation.
      * The two agree closely for a common sans-serif and are not guaranteed to. This
-     * is risk 3 from `ai/maplibre-renderer.md` — the gap and the glyph measured by
+     * is the known weakness of this approach — the gap and the glyph measured by
      * different rulers — and it is inherent to the approach rather than a bug to fix.
      */
     private readonly measureText = (text: string, font: string): number => {
@@ -657,7 +657,7 @@ export class NativeLayerRenderer {
      * Rebuilding all of them cost the same whether one was on screen or two hundred,
      * because every graphic was painted, converted to lon/lat and uploaded on every
      * zoom step. Zoomed in far enough that only a handful are visible, that is almost
-     * entirely wasted work — and zoomed in is exactly where a user spends their time.
+     * entirely wasted work — and zoomed in is exactly where an operator spends their time.
      *
      * The padding is a full viewport on each side. It has to cover two things the
      * bounds do not: a graphic's screen-pixel decorations, which reach beyond the
@@ -682,7 +682,7 @@ export class NativeLayerRenderer {
         const maxY = Math.max(sw[1], ne[1]) + padY;
 
         // The draw preview rides along: it is under the cursor by construction, and it
-        // is the one graphic the user is actively looking at. @see setPreview
+        // is the one graphic the operator is actively looking at. @see setPreview
         const candidates = this.preview ? this.graphics.concat(this.preview) : this.graphics;
         return candidates.filter(graphic => {
             const box = graphic.graphic.bounds;
@@ -716,7 +716,7 @@ export class NativeLayerRenderer {
      * circular graphic is sized — the same chrome as OpenLayers' measure feature, and
      * deliberately the same words: both call `formatDistance`, so the read-out, the
      * other renderer's read-out and the properties dialog cannot disagree about a
-     * number the user is comparing.
+     * number the operator is comparing.
      *
      * Editor chrome, so it lives in its own source rather than in the paint buckets:
      * it must never reach `snapshot`, a sample sweep or a restored map.
@@ -903,7 +903,6 @@ export class NativeLayerRenderer {
             // on painting the dots red, which promises a drag that is then declined — and
             // the color is the only thing telling the operator which dots answer. 271204 is
             // the case: OpenLayers draws its three anchors gray and this drew them red.
-            // (User's rule, 2026-09-13: red markers must do something, gray ones need not.)
             const allInert = handlesAreInert(graphic.name);
             // **The grip on the first anchor is not drawn on the graphics that only
             // stretch**, which is the rule OpenLayers stated privately as
@@ -1029,7 +1028,7 @@ export class NativeLayerRenderer {
      * a picture of the one the next click would create — so it must not appear in a
      * `snapshot`, in `count`, or under a hit test, all of which read `graphics`. Passing
      * it through `add`/`remove` would have put it in all three, and a save taken
-     * mid-gesture would have persisted a symbol the user never committed to.
+     * mid-gesture would have persisted a symbol the operator never committed to.
      *
      * @see MapLibreInteractions.previewDraw
      */
@@ -1058,7 +1057,7 @@ export class NativeLayerRenderer {
      * The graphic under a screen point, or undefined.
      *
      * `radiusPx` widens the query into a box, because most of these symbols are line
-     * work: a one-pixel query against a two-pixel line asks the user to be more
+     * work: a one-pixel query against a two-pixel line asks the operator to be more
      * accurate than the symbol is wide.
      */
     hitTest(point: {x: number; y: number}, radiusPx = 5): MapLibreTacticalGraphic | undefined {
@@ -1105,7 +1104,7 @@ export class NativeLayerRenderer {
         // Searched across **every** graphic wearing handles, not just the selected one.
         // OpenLayers has no selection in these modes — the pointer finds whichever
         // handle is under it and drags that — so a MapLibre that only answered for the
-        // selected graphic would draw handles the user could not grab.
+        // selected graphic would draw handles the operator could not grab.
         const candidates = this.handleBearers();
         const searched = candidates.length ? candidates : this.selectedHandleBearer();
 
@@ -1221,7 +1220,7 @@ const lineSourceId = (key: string): string => `tg-line-${key.replace(/[^a-z0-9]/
  * The label is not laid along the line, and that is the whole point of this function.
  * MapLibre's line placements — `line` and `line-center` alike — refuse a label that
  * does not fit within the geometry's own length, so the read-out silently vanished on
- * exactly the radii a user most wants it for: measured on a fresh map, "30 km",
+ * exactly the radii an operator most wants it for: measured on a fresh map, "30 km",
  * "120 km" and "400 km" all failed to render and only a 1200 km radius appeared. Plain
  * `line` was worse still, spacing labels every 250 px from a half-spacing offset, which
  * put the one label near the rim instead of the middle.

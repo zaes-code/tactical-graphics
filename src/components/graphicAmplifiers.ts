@@ -20,7 +20,7 @@
 import type {GraphicLabels, TacticalGraphicProperties} from '@zaes/tactical-graphics';
 
 /**
- * The amplifiers a user can put on a graphic — what the Feature Properties dialog
+ * The amplifiers an operator can put on a graphic — what the Feature Properties dialog
  * edits, and what the style and paint functions read back.
  *
  * Kept separate from `TacticalGraphicProperties` rather than aliased to it: that

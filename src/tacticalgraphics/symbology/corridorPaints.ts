@@ -72,7 +72,7 @@ const LEG_LABEL_HEIGHT_SHARE = 0.7;
  * There used to be a floor here too, the assumed-circle fit, kept so a narrow corridor stayed
  * labeled at all. It let the label overrun a circle a few pixels across, and at a low zoom
  * its fit went **negative**, which MapLibre drew as an "ACP" the size of the world. A label
- * leaving its graphic is now the worse of the two (user, 2026-10-23). @see withLegibleText
+ * leaving its graphic is now the worse of the two. @see withLegibleText
  *
  * Pass `circleRadiusPx` / `proportionalScale` only when the graphic stamps a size.
  */
@@ -110,7 +110,7 @@ export function acpLabelScale(
  * or specific distance (range, radius, width, or length) **in meters or feet**", capped
  * at 7 characters, and table 5-23's plates render it `1200FT` / `300FT`. Kilometers are
  * not one of the two units it admits — the manual reaches for "km" once in the whole
- * document, in the *speed* amplifier's "kph". Readability won that trade on the user's
+ * document, in the *speed* amplifier's "kph". Readability won that trade on the operator's
  * call: a 391 km corridor written as `391358M` is a number nobody can take in at a
  * glance, and the quantity is unambiguous either way.
  */
@@ -185,8 +185,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * block is held to it and the block is drawn first. The block sits *outside* the
          * graphic and the designation sits *on* it, so the designation is the one a reader
          * measures everything else against — an amplifier larger than the symbol's own
-         * name reads as the more important of the two, which it is not. (User's call,
-         * 2026-08-29.)
+         * name reads as the more important of the two, which it is not.
          *
          * **One size for the whole corridor, and only on the legs that can hold it.**
          *
@@ -200,7 +199,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          * held to the corridor's width. A leg that cannot hold the label at that size is
          * **skipped**, the way a road name appears only where the road has room for it.
          * Sizing to the *shortest* leg instead would be worse -- one stub would shrink
-         * the name along the whole corridor. (User's call, 2026-08-30.)
+         * the name along the whole corridor.
          *
          * At least one leg always draws: the size is capped by the widest leg's own
          * allowance, so that leg passes the test by construction.
@@ -247,7 +246,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
          *
          * So the width is counted as a *supporting* line: printed whenever the block is
          * drawn, never the cause of it. Enter a name, an altitude or a DTG and the block
-         * appears with the width alongside. (User's call, 2026-08-30.)
+         * appears with the width alongside.
          */
         const corridorName = props.designation?.trim();
         /** The lines somebody typed. One of these is what makes the block worth drawing. */
@@ -284,7 +283,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
              * level with the north-west-most turning point. Outside for any shape at any
              * zoom, and still beside the vertex it belongs to, which is what was asked for.
              * `align: 'right'` because the text then has to grow away from the corridor
-             * rather than back into it. (User's call, 2026-08-29.)
+             * rather than back into it.
              */
             let minX = Infinity;
             let maxY = -Infinity;
@@ -321,7 +320,7 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 baseline: 'middle',
                 // The whole block, `NAME:` line included: the corridor already carries its
                 // designation along each leg, so hiding the block loses nothing but the
-                // reference detail. (User's call, 2026-08-29.)
+                // reference detail.
                 kind: 'amplifier',
             }));
         }

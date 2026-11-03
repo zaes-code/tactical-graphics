@@ -47,7 +47,7 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
      * against 0.131 on MapLibre.
      *
      * MapLibre has read the portable anchor since it was written; this is OpenLayers
-     * joining it. @see ai/conventions.md, "A symbology fact never lives in a holder"
+     * joining it.
      *
      * Converted through lon/lat because that is the space the anchor rule is defined in —
      * Mercator's y is not linear in latitude, so an extent midpoint taken in projected
@@ -66,7 +66,7 @@ export class PolygonGraphicController implements TacticalGraphicHandler {
      * sketch outline until the last click and only then became a symbol: no hatching, no
      * fill, no designation, no obstacle marks. The line family has rebuilt itself from
      * the sketch on every pointer move since the beginning — `LineGraphicController` does
-     * exactly this — and there is no reason an area should be the one thing a user has
+     * exactly this — and there is no reason an area should be the one thing an operator has
      * to commit to before they can see it.
      *
      * Guarded, because the generators are asked for shapes that are not yet shapes: a

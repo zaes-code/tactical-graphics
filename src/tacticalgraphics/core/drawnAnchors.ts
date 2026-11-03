@@ -39,7 +39,6 @@ import {clampEnvelopmentBend, ENVELOPMENT_DEFAULT_BEND} from '../graphics/FormsO
  * reader in `core/anchors.ts` (`bowFromAnchors`, `hookFromAnchors`, …), which both engines
  * already share; this is the direction that was missing.
  *
- * @see ai/conventions.md, "A symbology fact never lives in a holder"
  */
 export interface DrawnAnchorFrame {
     /** The symbol's centre, in lon/lat. */

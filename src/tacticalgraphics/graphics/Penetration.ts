@@ -41,8 +41,7 @@ export class Penetration extends TacticalGraphicsBase<PointGraphicOptions> {
      *
      * That is 340500 clear's rule word for word, so this graphic takes clear's contract:
      * three placed points, every one grabbable, and no derived width handle — the height it
-     * used to size from a `size` amplifier is two of its own anchor points. (User's call,
-     * 2026-09-06: "penetration should be the same behaviour as clear with its 3 points".)
+     * used to size from a `size` amplifier is two of its own anchor points.
      *
      * ## What this replaced
      *
