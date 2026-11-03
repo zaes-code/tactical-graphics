@@ -100,6 +100,7 @@ const objective = (id: string, designation: string) => ({
 
 const inView = ([lon, lat]: number[]) => lon >= VIEW.west && lon <= VIEW.east && lat >= VIEW.south && lat <= VIEW.north;
 
+beforeEach(() => configureTacticalGraphics({autoPlaceLabels: true}));
 afterEach(() => resetTacticalGraphicsConfig());
 
 describe('the native layers', () => {

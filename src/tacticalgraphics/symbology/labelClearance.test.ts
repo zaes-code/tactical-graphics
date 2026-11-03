@@ -3,12 +3,16 @@
  */
 
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {configureTacticalGraphics, resetTacticalGraphicsConfig} from '../core/config';
 import {buildPaintedGraphic, paintGraphic, type PaintedGraphic} from '../core/paintedGraphic';
 import type {Paint, PaintContext, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {addGraphicLines, emptyLabelSpace, paintWithClearance, textBounds, withClearance} from './labelClearance';
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// Label moving is off by default; these pin what it does when a host turns it on.
+beforeEach(() => {
+    resetTacticalGraphicsConfig();
+    configureTacticalGraphics({autoPlaceLabels: true});
+});
 
 const ring = [
     [0, 0],

@@ -350,7 +350,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <ToggleSetting
                 label="Auto-place Labels"
                 hint="Slide labels onto the screen and clear of each other"
-                checked={settings.autoPlaceLabels !== false}
+                checked={settings.autoPlaceLabels === true}
                 onChange={autoPlaceLabels => onChange({autoPlaceLabels})}
             />
 

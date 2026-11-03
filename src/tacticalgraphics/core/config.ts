@@ -227,11 +227,11 @@ export interface TacticalGraphicsConfigOptions {
     enemyLabels?: boolean;
 
     /**
-     * Move labels to stay on screen and clear of each other. Default `true`.
+     * Move labels to stay on screen and clear of each other. Default `false`.
      *
-     * With it on, a label whose usual place is off the map slides into the visible part of its
-     * graphic, and labels step aside from other labels and line work. Set it `false` to draw
-     * every label at its doctrinal place whatever the view. Paint only, so `refreshStyles()` is
+     * Turned on, a label whose usual place is off the map slides into the visible part of its
+     * graphic, and labels step aside from other labels and line work. Off, every label is drawn
+     * at its doctrinal place whatever the view. Paint only, so `refreshStyles()` is
      * enough to apply a change. @see PaintContext.view, PaintContext.avoid
      */
     autoPlaceLabels?: boolean;
@@ -434,7 +434,7 @@ export function getEnemyLabels(): boolean {
 
 /** Whether labels move to stay on screen and clear of each other. @see TacticalGraphicsConfigOptions.autoPlaceLabels */
 export function getAutoPlaceLabels(): boolean {
-    return _config.autoPlaceLabels ?? true;
+    return _config.autoPlaceLabels ?? false;
 }
 
 /**

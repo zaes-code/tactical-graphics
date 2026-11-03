@@ -1,5 +1,5 @@
 /**
- * # `autoPlaceLabels: false` leaves every label at its doctrinal place
+ * # Label moving is off by default, and off leaves every label at its doctrinal place
  *
  * Every graphic the sample gallery draws, painted with a view on part of it and boxes to keep
  * clear of, gives exactly what it gives with neither once the host turns the moving off. Through
@@ -37,13 +37,14 @@ function crowded(bounds: ProjectedBounds): PaintContext {
     return {...plain, view, avoid: [{minX: cx - w / 4, maxX: cx + w / 4, minY: cy - h / 4, maxY: cy + h / 4}]};
 }
 
-it('is on unless a host turns it off', () => {
-    expect(getAutoPlaceLabels()).toBe(true);
-    configureTacticalGraphics({autoPlaceLabels: false});
+it('is off unless a host turns it on', () => {
     expect(getAutoPlaceLabels()).toBe(false);
+    configureTacticalGraphics({autoPlaceLabels: true});
+    expect(getAutoPlaceLabels()).toBe(true);
 });
 
 it('moves labels when on, so the comparison below can tell', () => {
+    configureTacticalGraphics({autoPlaceLabels: true});
     const moved = graphics.filter(({graphic}) => {
         const bounds = graphic.graphic.bounds;
         if (!bounds) return false;

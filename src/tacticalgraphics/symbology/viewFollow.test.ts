@@ -5,7 +5,7 @@
  */
 
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {configureTacticalGraphics, resetTacticalGraphicsConfig} from '../core/config';
 import {buildPaintedGraphic, paintGraphic} from '../core/paintedGraphic';
 import type {Paint, PaintContext, PaintFeature, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {phaseLinePaint} from './paintFunctions';
@@ -28,7 +28,11 @@ const labels = (paints: Paint[]): ProjectedPosition[] =>
 
 const VIEW: ProjectedBounds = {minX: 0, minY: -50_000, maxX: 100_000, maxY: 50_000};
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// Label moving is off by default; these pin what it does when a host turns it on.
+beforeEach(() => {
+    resetTacticalGraphicsConfig();
+    configureTacticalGraphics({autoPlaceLabels: true});
+});
 
 describe('visibleStretch', () => {
     it('cuts a line at the edges of the view', () => {

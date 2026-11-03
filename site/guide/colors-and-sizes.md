@@ -21,7 +21,7 @@ configureTacticalGraphics({
     obstacleColor: '#00AC00',      // the green itself
     smoothLines: false,            // default false — see below
     enemyLabels: true,             // default true — see below
-    autoPlaceLabels: true,         // default true — see below
+    autoPlaceLabels: false,        // default false — see below
 });
 
 graphics.refreshStyles();   // repaint what is already drawn
@@ -45,9 +45,9 @@ applies it.
 
 ## Label placement
 
-By default a label whose usual place is off screen slides onto the visible part of its graphic,
-and labels step aside from other labels and from other graphics' lines. Set
-`autoPlaceLabels: false` to draw every label at its doctrinal place whatever the view. It
+By default every label is drawn at its doctrinal place whatever the view. Set
+`autoPlaceLabels: true` and a label whose usual place is off screen slides onto the visible part
+of its graphic, and labels step aside from other labels and from other graphics' lines. It
 changes paint only, so `refreshStyles()` applies it, on every renderer.
 
 ## Smooth lines

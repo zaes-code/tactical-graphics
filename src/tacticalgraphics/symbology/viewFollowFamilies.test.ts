@@ -9,12 +9,16 @@
  */
 
 import {TacticalGraphicName} from '../core/type';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {configureTacticalGraphics, resetTacticalGraphicsConfig} from '../core/config';
 import {buildPaintedGraphic, paintGraphic} from '../core/paintedGraphic';
 import type {Paint, PaintContext, ProjectedBounds, ProjectedPosition} from '../core/paint';
 import {pointAlong} from './viewFollow';
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// Label moving is off by default; these pin what it does when a host turns it on.
+beforeEach(() => {
+    resetTacticalGraphicsConfig();
+    configureTacticalGraphics({autoPlaceLabels: true});
+});
 
 const measureText = (text: string, font: string) => text.length * parseFloat(/(\d+)px/.exec(font)?.[1] ?? '16') * 0.6;
 

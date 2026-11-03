@@ -37,6 +37,7 @@ const textAt = (styles: Style[]) =>
 
 const style = phaseLineStyleFunc(TacticalGraphicName.PhaseLine);
 
+beforeEach(() => configureTacticalGraphics({autoPlaceLabels: true}));
 afterEach(() => {
     endPaintFrame();
     resetTacticalGraphicsConfig();
