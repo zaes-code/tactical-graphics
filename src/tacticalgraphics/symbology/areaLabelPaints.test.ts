@@ -7,7 +7,7 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {TacticalGraphicName} from '../core/type';
+import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
 import {actionAreaLabelPaint, areaDefaultLabelPaint, areaLabelStackPaint, zoneLabelPaint} from './areaLabelPaints';
 
@@ -88,5 +88,51 @@ describe.each([
 
     it('draws nothing once the area is smaller than about twice the prefix', () => {
         expect(legible(paintOf()(area(name, 12, designation), context))).toEqual([]);
+    });
+});
+
+/*
+ * ENY at the area's own scale ignored the cap that fits the name inside the outline, so on
+ * a small hostile area it stood several times the size of the name. (User, 2026-11-03.)
+ */
+describe('ENY on a hostile area is no larger than its name', () => {
+    const hostile = (name: TacticalGraphicName, sidePx: number): PaintFeature => {
+        const feature = area(name, sidePx, 'ALPHA');
+        feature.properties.hostility = TacticalGraphicHostility.hostileFaker;
+        return feature;
+    };
+    const cases: [TacticalGraphicName, (f: PaintFeature, c: PaintContext) => Paint[]][] = [
+        [TacticalGraphicName.AreaGeneric, actionAreaLabelPaint(TacticalGraphicName.AreaGeneric, {withAdditionalInfo: true})],
+        [TacticalGraphicName.JointTacticalActionArea, actionAreaLabelPaint(TacticalGraphicName.JointTacticalActionArea)],
+        [TacticalGraphicName.SubmarineActionArea, actionAreaLabelPaint(TacticalGraphicName.SubmarineActionArea)],
+        [TacticalGraphicName.SubmarineGeneratedActionArea, actionAreaLabelPaint(TacticalGraphicName.SubmarineGeneratedActionArea)],
+        [TacticalGraphicName.CorpsSupportArea, areaDefaultLabelPaint(TacticalGraphicName.CorpsSupportArea, true, true)],
+    ];
+
+    for (const [name, paint] of cases) {
+        for (const sidePx of [60, 250]) {
+            it(`${name}, ${sidePx} px across`, () => {
+                const paints = paint(hostile(name, sidePx), context);
+                const eny = paints.filter(p => p.text?.text === 'ENY').map(p => p.text!.scale ?? 1);
+                expect(eny).toHaveLength(2);
+                // The name may have gone; ENY then holds the size the name was fitted to.
+                const named = paints.find(p => p.text?.text && p.text.text !== 'ENY');
+                const nameScale = named?.text?.scale ?? 1;
+                for (const scale of eny) expect(scale).toBeLessThanOrEqual(named ? nameScale : 0.5);
+            });
+        }
+    }
+});
+
+describe('ENY on an unnamed hostile generic area', () => {
+    const paint = actionAreaLabelPaint(TacticalGraphicName.AreaGeneric, {withAdditionalInfo: true});
+    const enyScale = (sidePx: number): number => {
+        const feature = area(TacticalGraphicName.AreaGeneric, sidePx, '');
+        feature.properties.hostility = TacticalGraphicHostility.hostileFaker;
+        return paint(feature, context).find(p => p.text?.text === 'ENY')!.text!.scale ?? 1;
+    };
+
+    it('shrinks with the area, with no name to follow', () => {
+        expect(enyScale(30)).toBeLessThan(enyScale(400));
     });
 });
