@@ -69,9 +69,9 @@ export class Defeat extends TacticalGraphicsBase<PointGraphicOptions> {
      * built and compared at 0, 45, 60 and 75 degrees north, and the ground half-width of
      * the shaft holds to three parts in a million either way at this symbol's scale — the
      * arrow is about a kilometre wide and the offset is a rounding error against the
-     * curvature. `conventions.md` records geodesic steps not commuting because it has cost
-     * real time, but the cases that bit were a 77 km run and a bearing taken from the wrong
-     * end, not a perpendicular this short.
+     * curvature. Geodesic steps that do not commute have cost real time before, but the
+     * cases that bit were a 77 km run and a bearing taken from the wrong end, not a
+     * perpendicular this short.
      *
      * It is polar because it is *exact by construction* and needs no such argument: the
      * corner is defined by an angle from the centre, so that is what is asked for. One call
