@@ -163,7 +163,7 @@ function layout(feature: PaintFeature, context: PaintContext) {
     /*
      * **The body and the head are sized by `decorationSize` and by nothing else.**
      *
-     * Not by the run between the points. Dragging the vertex handle is the user lengthening
+     * Not by the run between the points. Dragging the vertex handle is the operator lengthening
      * the *line*, and it must leave the fish tail and the arrowhead the size they were —
      * only the resize gesture changes those, by scaling `decorationSize`.
      *
@@ -185,8 +185,8 @@ function layout(feature: PaintFeature, context: PaintContext) {
      *
      * The host supplies it through the same provider the security operations and the escort
      * use; nothing here imports milsymbol, and a host that registers nothing gets the
-     * designation the user typed. The symbol wins when both are available — a picture of the
-     * unit says more than its name, which is the user's rule for this pair.
+     * designation the operator typed. The symbol wins when both are available — a picture of the
+     * unit says more than its name, which is review for this pair.
      *
      * Asked in the renderer's order, the renderer's own provider included
      * (`context.centerSymbolProvider`): the body is laid out for whatever the renderer

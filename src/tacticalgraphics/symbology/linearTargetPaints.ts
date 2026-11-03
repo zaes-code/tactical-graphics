@@ -129,7 +129,7 @@ export function linearSmokeTargetPaint(name: TacticalGraphicName): (f: PaintFeat
  *
  * The prefix placement is the one thing that distinguishes it from its two
  * siblings: `getLabel` returns "FPF", but the plate puts that word in the stack
- * below rather than beside the name, so the top line is the user's text only.
+ * below rather than beside the name, so the top line is the operator's text only.
  */
 export function finalProtectiveFirePaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
     return (feature, context) => {
@@ -138,7 +138,7 @@ export function finalProtectiveFirePaint(): (f: PaintFeature, c: PaintContext) =
         // an annotation on both, so only it goes when the graphic is showing its name only.
         const belowLines = ['FPF', secondDesignation ?? '', amplifierText(feature, weapon ?? '')].filter(s => s.length > 0);
         // Not trimmed: matching the original exactly, so the port cannot change what
-        // a user's trailing space does.
+        // an operator's trailing space does.
         return linearTargetPaints(feature, context, designation ?? '', belowLines);
     };
 }

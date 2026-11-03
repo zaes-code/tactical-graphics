@@ -24,7 +24,7 @@
  * *"May be depicted as"* is an option a host exercises, and this library takes colours from
  * the host rather than deciding for it — so the four optional fills are recorded here and
  * left to `configureTacticalGraphics`. *"Has"* is the symbol, and is honoured, on the same
- * footing as `HAZARD_YELLOW` on the contaminated areas. @see ai/decisions.md
+ * footing as `HAZARD_YELLOW` on the contaminated areas.
  *
  * **The one deliberate departure is 200600's white border.** A white stroke is invisible on
  * every basemap this library's default palette is drawn for — the plate's own Note 2 says
@@ -64,7 +64,7 @@ type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  * Neither plate letters anything, neither has a second arc or a tick, and neither carries a
  * fill — so a 200500 drawn in the ordinary line colour would be a circle indistinguishable
  * from any other, which is the failure mode that let the mined anti-tank ditch render as
- * the unmined one. @see ai/conventions.md, "compare every symbol against its own plate"
+ * the unmined one.
  */
 export const ACTIVE_MANEUVER_AMBER = '#FFC000';
 
@@ -73,10 +73,10 @@ export const ACTIVE_MANEUVER_AMBER = '#FFC000';
  *
  * **These are the "may be depicted as" colours, and they are applied.** The first version
  * of this file left them to the host on the reading that an optional colour is a host
- * choice; the user's call (2026-09-04) is to draw what the plate shows.
+ * choice; a deliberate choice is to draw what the plate shows.
  *
  * The colour reached the fill alone at first, on the same reasoning 200600 still follows:
- * fill from the plate, outline from the affiliation. **The user's correction is that the
+ * fill from the plate, outline from the affiliation. **The operator's correction is that the
  * outline is the plate's too** — the Examples draw an orange ellipse with an orange rim and
  * a grey one with a grey rim, not a black rim round a tinted middle.
  *
@@ -100,7 +100,7 @@ export const CUED_ACQUISITION_FILL = 'rgba(85,119,136,0.25)';
  * This was the affiliation's colour first, on the argument that a white stroke is invisible
  * on the basemaps the default palette is built for, and that the plate's own Note 2 — *"Gray
  * background is used to show white border and is not part of the symbol"* — admits the
- * border cannot be seen without help. The user's call (2026-09-04) is that the plate says
+ * border cannot be seen without help. the choice is that the plate says
  * white and the symbol is white; a host that needs it visible has a palette and a basemap to
  * arrange, and this library's job is to draw the symbol.
  *
@@ -200,7 +200,7 @@ const AXIS_BLOCK_GAP_PX = 10;
  * library's reading is a plate asking for a field; the Examples then print the values as a
  * caption under the symbol (`AM = 60 Metres`, `AM1 = 112 Metres`, `AN = +30 degrees`).
  * The first version offered the three as dialog inputs and drew none of them. Drawing them
- * is the user's call (2026-09-04), and the Example's own layout is what says where.
+ * is a deliberate choice, and the Example's own layout is what says where.
  *
  * ## The mapping, and it is **not the same on every plate that letters these three**
  *
@@ -230,7 +230,7 @@ const AXIS_BLOCK_GAP_PX = 10;
  * and have no such convention, so they are written as the plate writes them.
  *
  * **The whole block is one `amplifier` mark**, so "name only" drops it entire — which is
- * what the user asked for, and is right: none of the three names the symbol.
+ * what the operator asked for, and is right: none of the three names the symbol.
  */
 /** How one plate letters its axes: whether `AM` / `AM1` are halves, and what `AN` is in. */
 interface AxisAmplifierReading {
@@ -345,7 +345,7 @@ export function radarSearchDoctrinePaint(): AreaPaint {
  *
  * **Laid along the axis, kept upright.** The plate's own words are "aligned with the search
  * axis", so the text turns with it; `axisRotation` flips it end for end rather than let it
- * read upside down through half the compass. It was drawn level until 2026-10-31.
+ * read upside down through half the compass. It was drawn level.
  */
 export function radarSearchLabelPaint(): AreaPaint {
     return (feature, context) => {

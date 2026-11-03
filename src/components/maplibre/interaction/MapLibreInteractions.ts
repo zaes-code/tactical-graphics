@@ -13,7 +13,7 @@
  * bag. @see editGeometry.ts
  *
  * That turns out to be the better shape rather than a concession. A gesture edits
- * the *portable description*, the generator redraws from it, and what the user
+ * the *portable description*, the generator redraws from it, and what the operator
  * manipulates is exactly what gets saved.
  *
  * ## Modes, and why the map has to be told to stop
@@ -87,7 +87,7 @@ const SEGMENT_GRAB_PX = 8;
  * How close two consecutive draw clicks have to be to count as one.
  *
  * Small, because it only has to catch a double-click — which lands on the same pixel
- * or within a hand-tremor of it — without refusing two deliberate vertices a user
+ * or within a hand-tremor of it — without refusing two deliberate vertices an operator
  * placed close together. @see addSketchVertex
  */
 const DUPLICATE_CLICK_PX = 4;
@@ -126,7 +126,7 @@ const MIN_DRAWN_RADIUS_M = 1;
 export interface InteractionCallbacks {
     /** A graphic was added, edited or removed — the host may want to save. */
     onChange?(): void;
-    /** Selection moved. Null when the user clicked empty map. */
+    /** Selection moved. Null when the operator clicked empty map. */
     onSelect?(graphic: MapLibreTacticalGraphic | null): void;
     /** A draw finished or was canceled, so a host can un-arm its button. */
     onDrawEnd?(): void;
@@ -155,7 +155,7 @@ function roleOfHandle(graphic: MapLibreTacticalGraphic, index: number) {
     return handleRole(graphic.name, index, vertexCountOf(graphic));
 }
 
-/** How many points the user drew — the length of the base's own coordinate list. */
+/** How many points the operator drew — the length of the base's own coordinate list. */
 function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
     const coordinates = (graphic.base.geometry as {coordinates?: unknown}).coordinates;
     if (!Array.isArray(coordinates)) return 0;
@@ -175,7 +175,7 @@ function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
  * **Its own position, not a rescale to `properties.radius`.** That field is in *ground*
  * metres while the handles and the drawn circle are in projected metres, and the two
  * differ by 22% at this latitude: rescaling put the end of the line nowhere near the rim
- * the user was dragging. The handle *is* the rim, so use it.
+ * the operator was dragging. The handle *is* the rim, so use it.
  */
 /** A band's stated range, or undefined when the graphic has no such band. */
 function bandRangeOf(graphic: MapLibreTacticalGraphic, index: number): number | undefined {
@@ -366,7 +366,7 @@ function withAnchorFrame(name: TacticalGraphicName, description: GraphicDescript
  * as OpenLayers' holders adopt it: their `radius` and `rotation` describe the points, and a bag
  * can lack them or hold stale ones (a file, a sample). The bend grip then had no size to divide
  * by and returned the graphic unchanged, so Turn's apex grip did nothing on MapLibre and ArcGIS
- * while it bowed the turn on OpenLayers (all-engine grip sweep, 2026-09-26). @see withAnchorFrame
+ * while it bowed the turn on OpenLayers. @see withAnchorFrame
  */
 function dragStartOf(graphic: MapLibreTacticalGraphic): GraphicDescription {
     const start = {geometry: graphic.base.geometry, properties: descriptionOf(graphic)};
@@ -447,7 +447,7 @@ export class MapLibreInteractions {
          * intermediate readings then compose and the width lands 6.4% narrower than the same
          * drag delivered in one step — measured, 6,582 m against OpenLayers' 7,007. That
          * engine squares once, at `modifyend`, which is why its answer does not depend on the
-         * path. @see ai/decisions.md, "Idempotent is not the same as path-independent"
+         * path.
          *
          * Re-set once, and only once, when a drag on a segment turns into a vertex.
          */
@@ -742,7 +742,7 @@ export class MapLibreInteractions {
             return;
         }
         // A click that ended a drag is not a selection: the pointer went down on the
-        // graphic that is already selected and the user was moving it, not picking it.
+        // graphic that is already selected and the operator was moving it, not picking it.
         if (this.dragging?.started) return;
 
         const graphic = this.renderer.hitTest(event.point);
@@ -787,7 +787,7 @@ export class MapLibreInteractions {
          * edge)". Two clicks put nothing on the map at all.
          *
          * **It asks `drawsInTwoClicks`, not `drawsCentreToEdge`**, and the difference is not
-         * cosmetic: contain moved to an end-to-end draw on 2026-09-04, left the
+         * cosmetic: contain moved to an end-to-end draw, left the
          * centre-to-edge list, and immediately stopped drawing here while OpenLayers went on
          * drawing it — because what this branch needs to know is *how long the draw runs*,
          * and that predicate had been answering *what the clicks mean*. @see drawsInTwoClicks
@@ -832,7 +832,7 @@ export class MapLibreInteractions {
         // land on the same pixel — so double-clicking the apex of a fields-of-fire
         // pushed that apex twice, hit the three-vertex count, and finished the draw with
         // a leg of zero length. The V had nothing to open, and the tip handle sat
-        // exactly on the apex handle, so the user grabbed the apex whichever they aimed
+        // exactly on the apex handle, so the operator grabbed the apex whichever they aimed
         // for. That is the "V angle cannot be modified" this fixes.
         //
         // Measured in screen pixels rather than degrees: whether two clicks are the same
@@ -881,7 +881,7 @@ export class MapLibreInteractions {
         let interactive: boolean;
         if (HANDLE_MODES.includes(this.mode)) {
             // Only a handle that would move. The center dot is inert except in translate,
-            // where it is the one place a user naturally reaches to drag a symbol bodily.
+            // where it is the one place an operator naturally reaches to drag a symbol bodily.
             const grabbed = this.renderer.hitTestHandle(point);
             interactive = !!grabbed
                 && (grabbed.index !== this.renderer.centerHandleOf(grabbed.graphic) || this.mode === 'translate');
@@ -1103,10 +1103,10 @@ export class MapLibreInteractions {
         if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties, drawn.geometry), resolutionOf(this.map));
 
         const wants = baseGeometryFor(name);
-        // What the user clicked becomes what is stored — repeated clicks dropped, and an
+        // What the operator clicked becomes what is stored — repeated clicks dropped, and an
         // implied vertex made real so it gets a handle. @see normalizeDrawnBase
-        // What the user clicked becomes what is stored, for a rectangle too: the drawn
-        // axis is the rectangle's axis as of 2026-09-04, the way the rectangular target has
+        // What the operator clicked becomes what is stored, for a rectangle too: the drawn
+        // axis is the rectangle's axis, the way the rectangular target has
         // always behaved. They used to be squared up here and turned by a later gesture.
         // `previewDraw` and the commit both come through this function, so the preview
         // cannot disagree with what the last click produces.
@@ -1160,8 +1160,8 @@ export class MapLibreInteractions {
         /*
          * **A ground length, at the graphic's first point**, as OpenLayers seeds it: a pixel size
          * times the bare resolution is a projected length and comes out 1/cos(latitude) too
-         * large. The same draw at 40 degrees north seeded 57.6 km here and 44.4 km there
-         * (all-engine draw sweep, 2026-09-27). @see LineGraphicBase.standoff
+         * large. The same draw at 40 degrees north seeded 57.6 km here and 44.4 km there.
+         * @see LineGraphicBase.standoff
          */
         const first = (geometry as {coordinates?: unknown}).coordinates;
         const firstPoint = Array.isArray(first) && Array.isArray(first[0]) ? (first[0] as number[]) : undefined;
@@ -1205,7 +1205,7 @@ export class MapLibreInteractions {
      * axis and the near range together, the third settles the far one. So the label names
      * the azimuth throughout and adds whichever range is under the cursor — where before
      * the axis had no read-out at all, because a measure line reports its own length and an
-     * azimuth is not one. (User's call, 2026-09-10.)
+     * azimuth is not one.
      *
      * `undefined` for every other draw, which keeps the plain distance it already showed.
      * @see RangeFanGraphicBase.applyRadarSearchFrame, the same statement on the other engine
@@ -1240,7 +1240,7 @@ export class MapLibreInteractions {
                  * **The four the plate names, and nothing else.** This wrote a `rotation`, a
                  * `radius` and a pair of `rangeFan` bands — a range fan's description of a
                  * different symbol, in which two of 200700's four values did not appear under
-                 * their own names at all. (User's report, 2026-09-05.) The OpenLayers holder
+                 * their own names at all. The OpenLayers holder
                  * writes exactly these, so a graphic drawn on either engine saves identically.
                  * @see TacticalGraphicProperties.searchAxisAzimuthDeg
                  */
@@ -1261,7 +1261,7 @@ export class MapLibreInteractions {
         /*
          * **The four placed point by point never come through here.** `anchorDraw` reads a
          * two-click drag as a centre and a rim; ambush, turn, envelopment and pursuit are
-         * drawn by clicking the plate's own anchor points as of 2026-09-05, so they take
+         * drawn by clicking the plate's own anchor points, so they take
          * the ordinary vertex path and `normalizeDrawnBase` turns those clicks into the
          * stored anchors — the same function OpenLayers runs at its own door.
          * @see drawsByAnchorClicks, anchorsFromClicks
@@ -1321,8 +1321,8 @@ export class MapLibreInteractions {
     /**
      * Turns the collected vertices into a graphic.
      *
-     * A ring is closed here rather than by the user: a polygon whose last vertex is
-     * not its first is not a polygon, and asking a user to click the start point
+     * A ring is closed here rather than by the operator: a polygon whose last vertex is
+     * not its first is not a polygon, and asking an operator to click the start point
      * again — accurately — is a worse interaction than assuming it.
      */
     private finishDraw(vertices: Position[]): void {
@@ -1347,7 +1347,7 @@ export class MapLibreInteractions {
 
         // **The handle decides which graphic is being edited**, not the selection.
         // In a handle mode every graphic wears its handles, exactly as OpenLayers does,
-        // so the one under the pointer is the one the user means — requiring them to
+        // so the one under the pointer is the one the operator means — requiring them to
         // select it first would make the same button behave differently in the two
         // engines. Falls back to the selection when nothing is grabbed, which is what
         // a body drag needs.
@@ -1366,7 +1366,7 @@ export class MapLibreInteractions {
         if (grabbed !== undefined && handlesAreInert(graphic.name)) return;
 
         // A handle carrying a role of its own works in **view** mode too: its meaning
-        // comes from the handle, not from a mode button, so requiring the user to pick
+        // comes from the handle, not from a mode button, so requiring the operator to pick
         // one first would be asking them to answer a question the handle has already
         // answered.
         // **The gray center dot is a grip in translate only.** Under any other mode it is
@@ -1382,7 +1382,7 @@ export class MapLibreInteractions {
         if (this.mode === 'view' && !roleDrag) return;
 
         // The drag has to start *on* the graphic, or on one of its handles. Starting
-        // it anywhere on the map would mean a user who wanted to pan instead resized
+        // it anywhere on the map would mean an operator who wanted to pan instead resized
         // whatever happened to be selected.
         const handle = grabbed?.index ?? -1;
         const onHandle = handle >= 0;
@@ -1492,7 +1492,7 @@ export class MapLibreInteractions {
     /**
      * Whether the grab landed on the point a rotate or a resize turns about.
      *
-     * Measured in **screen pixels**, because "did the user grab the pivot" is a
+     * Measured in **screen pixels**, because "did the operator grab the pivot" is a
      * question about the cursor, not about the ground: the same few meters is a hit at
      * one zoom and a miss at another.
      */
@@ -1527,7 +1527,7 @@ export class MapLibreInteractions {
 
         // The same construction the next click will commit, not a second one that happens
         // to agree — a preview that disagreed with the commit would make the symbol jump
-        // at the moment the user stopped being able to change it. @see graphicFrom
+        // at the moment the operator stopped being able to change it. @see graphicFrom
         const built = this.graphicFrom(name, vertices);
         // A generator that cannot draw this yet simply shows nothing, rather than leaving
         // the last shape it accepted standing under a cursor that has moved on.
@@ -1544,7 +1544,7 @@ export class MapLibreInteractions {
 
     private readonly onPointerMove = (event: MapMouseEvent): void => {
         if (this.drawing) {
-            // A rubber band to the cursor, so the user can see the segment they are
+            // A rubber band to the cursor, so the operator can see the segment they are
             // about to commit rather than only the ones they already have.
             if (this.sketch.length) {
                 const center = toMercator([this.sketch[0][0], this.sketch[0][1]]);
@@ -1613,12 +1613,11 @@ export class MapLibreInteractions {
          * rotate reads "did the grab land on the pivot" from the position it is measuring
          * from, and a resize reads its refusal off the same one — both answered yes on the
          * first move and no on every move after it, because the cursor had left by then.
-         * @see ai/decisions.md, "Idempotent is not the same as path-independent"
          */
         let before = drag.start;
 
         // The drag began on a segment: add the vertex now that it is a drag, then carry
-        // on as though the user had grabbed it. Done once — `insertAt` is cleared — so
+        // on as though the operator had grabbed it. Done once — `insertAt` is cleared — so
         // the rest of the gesture moves the new vertex instead of sowing a trail of them.
         // The insertion belongs to the starting shape, since that is what every later move
         // is applied to.
@@ -1645,7 +1644,7 @@ export class MapLibreInteractions {
         );
         // A generator that refuses the edited description — a line dragged onto itself,
         // a radius driven to nothing — leaves the graphic as it was. Dropping it
-        // mid-drag would delete what the user is holding.
+        // mid-drag would delete what the operator is holding.
         if (!rebuilt) return;
 
         // **The "name only" choice rides along.** The rebuild reads the portable bag, which
@@ -1668,13 +1667,13 @@ export class MapLibreInteractions {
         // when the radius moves, not when a pointer goes down. Arming on pointer-down
         // instead put the read-out on screen for a plain move, where it measures a radius
         // nobody is changing. The read-out then follows the drag, reporting the radius
-        // the user is dragging *to*, which is the whole point of showing it.
+        // the operator is dragging *to*, which is the whole point of showing it.
         if (after.properties.radius !== before.properties.radius) this.showMeasure(next);
         /*
          * **A band drag changes a range, and that is a size too.** The test above is
          * `radius`, which for a fan is the *outermost* range — so dragging 200700's start
          * arc changed a number the read-out was not watching and reported nothing at all,
-         * while the stop arc reported. (User's report, 2026-09-05.) OpenLayers arms its own
+         * while the stop arc reported. OpenLayers arms its own
          * on the same gesture. @see RangeFanGraphicBase.setBandRange
          */
         const moved = changedBand(before, after);
@@ -1695,8 +1694,7 @@ export class MapLibreInteractions {
      * **A grip dragged well past a point-anchored graphic's own axis flips it**, as OpenLayers'
      * `mirrorIfDraggedPastAxis` does on every shape-grip drag in edit and resize: that is how a
      * hook or an envelopment changes flanks. MapLibre applied the rule only to the dedicated
-     * mirror grip, so the same drag flipped a graphic on one engine and not the other (found
-     * by the all-engine grip sweep on the circular areas, 2026-09-26).
+     * mirror grip, so the same drag flipped a graphic on one engine and not the other.
      *
      * Not for a drag started from the selection box, which says only "bigger" or "turn", and
      * not for a grip with a role of its own (width, band, mirror), which OpenLayers routes
@@ -1732,7 +1730,7 @@ export class MapLibreInteractions {
      * The gesture the current mode means, applied to the description.
      *
      * **A graphic that refuses a gesture is left alone**, rather than the mode being
-     * blocked. Refusing at the point of application means the user can still select
+     * blocked. Refusing at the point of application means the operator can still select
      * it, still move it, and still see why nothing happened — a mode that switched
      * itself off would look like a broken button. @see allowedGestures
      */
@@ -1805,7 +1803,7 @@ export class MapLibreInteractions {
                 // the point-anchored symbols, where OpenLayers does nothing at all.
                 if (!allowed.modify) return before;
                 // The anchor vertex is inert under a reshape — dragging it would bend the
-                // graphic about the point the user thinks of as its origin. Moving is
+                // graphic about the point the operator thinks of as its origin. Moving is
                 // what translate mode is for. @see anchorVertex
                 if (drag.vertex >= 0 && drag.vertex === anchorVertex(drag.graphic.name)) return before;
                 /*
@@ -1899,7 +1897,7 @@ export class MapLibreInteractions {
      * The radius read-out, for a graphic that reports one.
      *
      * Shown for the whole gesture, as OpenLayers' `showMeasure` is: from the pivot to
-     * the rim, so the user can read the number they are dragging to.
+     * the rim, so the operator can read the number they are dragging to.
      * `showsSizeReadout` — **not** the dialog's field list, which is a different
      * question: a read-out is feedback on a gesture, an amplifier is what the symbol
      * carries. Seven circle graphics have the first without the second. The OpenLayers
@@ -1924,7 +1922,7 @@ export class MapLibreInteractions {
          *
          * This used to run due east on the grounds that the direction carries no meaning.
          * It carries one thing that matters: it says *which* dimension the number belongs
-         * to. Pointing it away from the handle the user has hold of leaves a line ending
+         * to. Pointing it away from the handle the operator has hold of leaves a line ending
          * in open water while the dot they are dragging sits somewhere else entirely —
          * which is what "the measurement line stops halfway" turned out to be.
          *
@@ -1948,7 +1946,7 @@ export class MapLibreInteractions {
      * and the stop relative bearing — so the grips that set those had no read-out at all:
      * a measure line reports its own length, and an angle is not one. The line still runs
      * centre to rim, because it says which symbol is being edited; the label states the
-     * angle. (User's call, 2026-09-10.)
+     * angle.
      * @see RangeFanGraphicBase.measureParts, the same statement on the other engine
      */
     private showAngleMeasure(graphic: MapLibreTacticalGraphic, caption: string, degrees: number | undefined): void {
@@ -1966,9 +1964,9 @@ export class MapLibreInteractions {
 
     /** The base vertex under a screen point, or -1. */
     /**
-     * Where a vertex would go if the user dragged the segment under the pointer, or -1.
+     * Where a vertex would go if the operator dragged the segment under the pointer, or -1.
      *
-     * **Only for a base the user may add vertices to.** A graphic with a fixed vertex
+     * **Only for a base the operator may add vertices to.** A graphic with a fixed vertex
      * count is defined by exactly those points — a fields-of-fire is two legs and an
      * apex, and a fourth vertex makes it a different symbol — and one that stretches on
      * an edit drag has already given that gesture another meaning. Measured against
@@ -2045,7 +2043,7 @@ export class MapLibreInteractions {
      *
      * OpenLayers' Modify draws one by default — a blue dot that slides along the
      * geometry under the cursor — and it is the only thing that says the gesture is
-     * available at all. Without it a user has to discover that dragging a line adds a
+     * available at all. Without it an operator has to discover that dragging a line adds a
      * point by trying it, which is how MapLibre felt: the capability existed and
      * nothing announced it.
      *
@@ -2094,10 +2092,10 @@ export class MapLibreInteractions {
  * The ring of an axis-aligned box through two opposite corners.
  *
  * What OpenLayers gets from `createBox()`, which is why its rectangles are rectangles:
- * the user gives two corners and the other two are derived, so there is never a moment
+ * the operator gives two corners and the other two are derived, so there is never a moment
  * at which the shape could be anything else. MapLibre was collecting these as ordinary
  * polygons — click a ring out by hand — so a "rectangular" kill box was whatever
- * quadrilateral the user happened to click, and every later complaint about corners
+ * quadrilateral the operator happened to click, and every later complaint about corners
  * moving and vertices appearing followed from that.
  */
 function buildBox([a, b]: Position[]): Geometry {

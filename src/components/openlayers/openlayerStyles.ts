@@ -253,7 +253,7 @@ const OBSTACLE_LABEL_GAP_PX = 8;
  * A host that wants different line work on a dark basemap supplies it through
  * `configureTacticalGraphics`. The library has no mode of its own to consult: only the
  * host knows what its basemap looks like and which state it is in, so a library-side
- * second palette could only guess. `ai/decisions.md` has the history — there was once a
+ * second palette could only guess. There was once a
  * dark set, and it was the measured output of a CSS filter rather than anything anyone
  * designed.
  */
@@ -544,7 +544,7 @@ function setOpacity(rgba: string, opacity: number): string {
 }
 
 /**
- * The underlying geometry for each tactical graphic — what the user drew, and what the
+ * The underlying geometry for each tactical graphic — what the operator drew, and what the
  * `Modify` interaction edits.
  *
  * **It is a construction line, and it draws in the inert-handle color.** On the families
@@ -552,9 +552,9 @@ function setOpacity(rgba: string, opacity: number): string {
  * the convoys, the demolition bar symbols — it is the only thing on screen saying where the
  * anchor points went, which makes it the same class of chrome as a handle dot or the radius
  * read-out. So it must stay legible *as* chrome: it took the hostility color at 35% opacity
- * until 2026-09-06, and a hostile graphic then drew a pale red construction line straight
+ * and a hostile graphic then drew a pale red construction line straight
  * along its own red casing. FM 1-02.2's color rule reddens a control measure's *lines*;
- * this is not one of them. (User's call.) @see drawsAnchorConnector, getInertHandleColor
+ * this is not one of them. @see drawsAnchorConnector, getInertHandleColor
  *
  * The mark follows `anchorConnectorRun`, so the demolition family hashes its centreline
  * rather than running a spur out to the width point stored beyond it.
@@ -621,9 +621,9 @@ export const createCenterBaseFeature = (): Feature<Point> => {
  */
 export const HANDLE_Z_INDEX = 1000;
 
-// used for adding markers to a tactical graphics to let a user know where they can drag the graphic to modify
+// used for adding markers to a tactical graphics to let an operator know where they can drag the graphic to modify
 /**
- * A distance for a user to read, from meters.
+ * A distance for an operator to read, from meters.
  *
  * Meters below a kilometer — a 400 m radius shown as "0.4 km" is both harder to read and
  * less precise than the number it came from. Above that, kilometers: one decimal while
@@ -631,7 +631,7 @@ export const HANDLE_Z_INDEX = 1000;
  * it is noise.
  *
  * Exported so the measure line and the properties dialog cannot drift apart; they are
- * reporting the same quantity and a user will compare them.
+ * reporting the same quantity and an operator will compare them.
  */
 
 
@@ -697,7 +697,7 @@ export const createMeasureFeature = () => {
          * passed 201 px, and every shorter gesture was blind. The text now fits itself to
          * the line down to `MEASURE_READOUT_MIN_SCALE`; below that it stops riding the line
          * and sits at the midpoint instead, turned to the line's own angle, which is the one
-         * placement that cannot be dropped for want of room. (User's report, 2026-09-10.)
+         * placement that cannot be dropped for want of room.
          */
         const linePx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
         const naturalPx = getTextWidth(text, fontStyle, 1);
@@ -1478,7 +1478,7 @@ const OBSTACLE_TOOTH_GAP_PX = 10;
 /**
  * The fortified line and area wear square merlons; the forward line of own troops and
  * each half of the line of contact wear a scalloped wave. Both were baked into geometry
- * at the drawing resolution until 2026-08-03, for the same reason and with the same
+ * at the drawing resolution, for the same reason and with the same
  * result as the obstacle teeth. `LINE_OF_CONTACT_OFFSET_PX` is what holds the enemy-side
  * and friendly-side waves apart — in pixels, so the pair keeps its spacing at any zoom.
  */
@@ -1525,7 +1525,7 @@ function decorationScale(path: Coordinate[], closed: boolean, resolution: number
  * The share of a shape's own on-screen size its decoration may occupy before it starts
  * shrinking.
  *
- * These came down from 0.25 and 0.12 on 2026-08-04, which were loose enough that the cap
+ * These came down from 0.25 and 0.12, which were loose enough that the cap
  * effectively never engaged: at 0.12 an open path had to fall under 83 px before a 10 px
  * tooth was touched, so an obstacle line zoomed out to 117 px still carried six full-size
  * teeth and read as a zigzag rather than as a line.
@@ -1796,7 +1796,7 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
 /**
  * TacticalFix — same fill/stroke treatment as `ferryCrossingStyleFunc`, plus
  * an "F" label rendered 15px past the line start in screen pixels, oriented
- * with the line and kept upright. Label scale tracks the user-drawn line
+ * with the line and kept upright. Label scale tracks the operator-drawn line
  * length so it grows/shrinks with the graphic and matches the block-family
  * label size at the 100px minimum.
  */
@@ -2364,7 +2364,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone:
         case TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone:
         case TacticalGraphicName.WeaponEngagementZone:
-        // **171400 was missing from this list until 2026-08-26**, so the fighter
+        // **171400 was missing from this list**, so the fighter
         // engagement zone alone among the eleven fell through to `default:` and drew the
         // ordinary area block — `FEZ ALPHA` over a date range, with the altitudes its own
         // dialog collects rendered nowhere. MapLibre had it right the whole time, because
@@ -2461,7 +2461,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular:
         case TacticalGraphicName.CriticalFriendlyZoneRectangular:
         case TacticalGraphicName.CriticalFriendlyZoneCircular:
-        // **Six more that were missing from this list until 2026-08-26**, found by the
+        // **Six more that were missing from this list**, found by the
         // routing comparison the fighter engagement zone prompted. @see areaLabelRouting.test.ts
         case TacticalGraphicName.TargetBuildUpAreaRectangular:
         case TacticalGraphicName.TargetBuildUpAreaCircular:
@@ -2510,7 +2510,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
         case TacticalGraphicName.RestrictiveFireAreaIrregular:
         case TacticalGraphicName.RestrictiveFireAreaRectangular:
             return asStyleFunction(areaLabelStackPaint(name), name);
-        // **Ported 2026-08-17.** This branch is where ~60 area graphics land, and it used to
+        // **Ported.** This branch is where ~60 area graphics land, and it used to
         // call `getAreaLabelFn`, an OpenLayers-only pair of `Text` styles. MapLibre had been
         // reading `areaDefaultLabelPaint` all along, so the two engines were drawing the same
         // label through two implementations — and only one of them could be given the cap
@@ -3282,7 +3282,7 @@ export function getStyle(name: TacticalGraphicName, feature: FeatureLike, resolu
 }
 
 function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, feature: FeatureLike, resolution: number) {
-    // Cover, guard and screen. They were placed rather than drawn until 2026-08-29 and had
+    // Cover, guard and screen. They were placed rather than drawn and had
     // no entry here at all, so a host calling `getStyle` for one got nothing back and had
     // to reach past this function. They are ordinary drawn graphics now, and this is where
     // a caller looks. @see securityOperationStyleFunc
@@ -3336,8 +3336,8 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
         return asStyleFunction(activeManeuverAreaPaint(), name)(feature, resolution);
     }
     /*
-     * 200101 in orange, 200201 and 200202 in grey -- the "may be depicted as" colours, drawn
-     * since 2026-09-04. **The second of the two edits, caught by `paintParity` for the sixth
+     * 200101 in orange, 200201 and 200202 in grey -- the "may be depicted as" colours, drawn.
+     * **The second of the two edits, caught by `paintParity` for the sixth
      * time:** registered in `symbology/registry.ts` they fill on MapLibre, in the thumbnails
      * and in the catalog, and fall through to the plain affiliation outline here. The guard
      * names the graphic and which side is wrong, which is why this took one run to find.

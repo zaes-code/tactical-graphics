@@ -33,7 +33,7 @@ import {asStyleFunction} from '../paintToOpenLayers';
  * inherited `leftArrowHeadBase` sits.
  */
 const OFFSET_SCALE: Partial<Record<TacticalGraphicName, number>> = {
-    // Empty since 2026-09-05, when 140800 — its only entry — stopped deriving a width
+    // Empty, when 140800 — its only entry — stopped deriving a width
     // handle and started storing point 3 as a vertex. Kept because the mechanism is real:
     // a graphic that draws its offset handle N widths out needs 1/N of the drag, and the
     // next one to do so belongs here. @see handles.ts OFFSET_SCALE, the portable twin
@@ -131,7 +131,7 @@ export class MovementGraphicBase implements LineGraphic {
         // The demolition obstacles moved here from the mission-task holder when they
         // became centerline-plus-width graphics, and their dashing came with them:
         // which of the two rails is hashed is what separates planned from safe from
-        // armed. @see BAR_SYMBOL_DASHES, ai/app-6.md "F2"
+        // armed. @see BAR_SYMBOL_DASHES
         if (BAR_SYMBOL_GRAPHIC_NAMES.includes(name)) {
             this.graphic.setStyle(barSymbolStyleFunc(name));
         }
@@ -179,10 +179,10 @@ export class MovementGraphicBase implements LineGraphic {
      *
      * The movement family carries a width as an amplifier because the base is a centreline
      * and nothing in it says how far the rails sit apart. The demolition block is not like
-     * that as of 2026-09-05: 271201 gives point 3 the job, it is a stored vertex, and the
+     * that: 271201 gives point 3 the job, it is a stored vertex, and the
      * generator measures the distance. Stamping a `width` as well would be a second copy of
      * a number the coordinates already carry — which is how the two drift.
-     * (User's call.) @see halfWidthFromSide
+     * @see halfWidthFromSide
      */
     private get separationIsInTheBase(): boolean {
         return carriesSeparationInBase(this.graphicName);
@@ -205,7 +205,7 @@ export class MovementGraphicBase implements LineGraphic {
      * Where this graphic sits, in degrees, for anything sized in screen pixels.
      *
      * The first vertex, and zero before one exists — the holder is built when the tool is
-     * picked and only learns its place when the user clicks. @see LineGraphicBase.latitude
+     * picked and only learns its place when the operator clicks. @see LineGraphicBase.latitude
      */
     private get latitude(): number {
         const first = this.base.getGeometry()?.getCoordinates()?.[0];
@@ -233,8 +233,8 @@ export class MovementGraphicBase implements LineGraphic {
         this.graphic.setGeometry(graphic);
         /*
          * **As many path handles as the base has vertices**, which is two for the movement
-         * family and three for the demolition block, whose point 3 became a placed vertex
-         * on 2026-09-05. A fixed `slice(0, 2)` published the first two and left the third
+         * family and three for the demolition block, whose point 3 became a placed vertex.
+         * A fixed `slice(0, 2)` published the first two and left the third
          * to the offset handle below — right while that point was derived, and wrong once
          * it is one of the points the operator placed. @see BASE_VERTEX_COUNT
          */
@@ -253,7 +253,7 @@ export class MovementGraphicBase implements LineGraphic {
 
         this.labels.setGeometry(labels);
 
-        // `offset` is the one thing here the user can change that the base geometry does
+        // `offset` is the one thing here the operator can change that the base geometry does
         // not describe — the width drag. Everything else rebuilds from the base plus the
         // drawing resolution. Published after the offset-handle test above so the write
         // covers the feature set that actually exists.
@@ -261,12 +261,12 @@ export class MovementGraphicBase implements LineGraphic {
             /*
              * **Neither the width nor the side, where the base's third point states both.**
              *
-             * `width` came off on 2026-09-05; `mirrored` stayed and should not have. The three
+             * `width` came off; `mirrored` stayed and should not have. The three
              * point graphics — the demolition block, the infiltration lane and 152800 — all
              * ignore it: rendering each with `mirrored` true and false gives byte-identical
              * geometry, because which side the symbol falls on *is* where point 3 was placed.
              * A stamped flag beside it is a second copy of the same fact, and the pair drift.
-             * (User's call, 2026-09-06.) @see separationIsInTheBase
+             * @see separationIsInTheBase
              */
             ...(this.separationIsInTheBase
                 ? {}
@@ -320,7 +320,7 @@ export class MovementGraphicBase implements LineGraphic {
      *
      * **Only while a gesture is authoring the shape**, and at the resolution the screen is at
      * now: a restore replays a stored base and must not have it stretched, and a pixel rule
-     * spent at the draw-time resolution is a rule about a zoom the user has left.
+     * spent at the draw-time resolution is a rule about a zoom the operator has left.
      * @see LineGraphicBase.setBaseFeature, gestureResolution
      */
     private flooredFirstSegment(geometry: LineString | undefined): LineString | undefined {

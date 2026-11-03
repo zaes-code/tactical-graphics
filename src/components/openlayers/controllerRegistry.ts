@@ -103,10 +103,10 @@ const movement = (maxPts = 0) => (name: TacticalGraphicName, res: number, sizing
  *
  * `movement()` alone leaves `dragsVertices` off, which is right while a movement graphic's
  * handles are a start, an end and a *derived* offset — the offset is not a vertex, so there
- * is nothing to drag. Point 3 is a vertex here as of 2026-09-05, and the two ends have to
+ * is nothing to drag. Point 3 is a vertex here, and the two ends have to
  * move too: dragging an end should lengthen the symbol and dragging the side should widen
  * it, each without disturbing the other. Without this the end handles did nothing an
- * operator wanted and the side handle scaled the whole graphic. (User's report.)
+ * operator wanted and the side handle scaled the whole graphic.
  *
  * `enableVertexDragging` also clears `hidesStartHandle`, which the two-point constructor
  * sets — "a point you can move needs something to grab". @see LineGraphicController
@@ -151,7 +151,7 @@ const block = (name: TacticalGraphicName, res: number, sizing: number) =>
 /**
  * The four bracket mission tasks: three placed points, every one of them grabbable.
  *
- * Capped at two until 2026-09-06, with the opening's height derived as a locked 0.3 of the
+ * Capped at two, with the opening's height derived as a locked 0.3 of the
  * drawn length — so the third anchor point APP-06 gives them could not be placed, and the
  * height and the length their plates state *separately* were one number. Same holder as
  * `block`, which draws them; only the draw and the grips change.
@@ -163,7 +163,7 @@ const bracket = (name: TacticalGraphicName, res: number, sizing: number) =>
 /**
  * Block and disrupt: three placed points, every one of them grabbable.
  *
- * Capped at two until 2026-09-06, and the two were the *stem* — block's crossbar was a screen
+ * Capped at two, and the two were the *stem* — block's crossbar was a screen
  * constant laid across the far end, disrupt's vertical line the same. Both plates place that
  * line instead: "Points 1 and 2 define the endpoints of the symbol's vertical line."
  * Same holder as `block`, which draws them; only the draw and the grips change.
@@ -175,7 +175,7 @@ const barAndStem = (name: TacticalGraphicName, res: number, sizing: number) =>
 /**
  * 152100 support by fire: **four** placed points — the bar's two ends and both arrow tips.
  *
- * The only four-point member of this family, and the one the user's three-point list turned
+ * The only four-point member of this family, and the one the operator's three-point list turned
  * out not to cover: its plate asks for four outright. It was two, off which the bar, both
  * arrows and their spread were computed by ratio, so the "left and right limits of coverage"
  * its arrowheads indicate were limits nobody had stated. @see supportByFireFromAnchors
@@ -193,7 +193,7 @@ const attackByFire = (name: TacticalGraphicName, res: number, sizing: number) =>
 /**
  * 343100 exploit: three placed points, every one of them grabbable.
  *
- * Capped at two until 2026-09-10, with the length of the four angled lines carried as a `size`
+ * Capped at two, with the length of the four angled lines carried as a `size`
  * amplifier and dragged by a grip hung off an arrowhead wing — so the third anchor point
  * APP-06 gives it could not be placed, and the two dimensions its Size/Shape cell states
  * separately were a length and a number filed beside it. Same holder as `block`, which draws
@@ -208,14 +208,14 @@ const firePosition = (name: TacticalGraphicName, res: number, sizing: number) =>
 /**
  * The seven cane arrows: three placed points, every one of them grabbable.
  *
- * Capped at two until 2026-09-06, with the arc's diameter carried as a `size` amplifier and
+ * Capped at two, with the arc's diameter carried as a `size` amplifier and
  * its side as a `mirrored` flag - so the third anchor point APP-06 gives them could not be
  * placed and the draw ended a click early. @see RetrogradeTask, mobileDefense
  */
 const retrograde = (name: TacticalGraphicName, res: number, sizing: number) =>
     new LineGraphicController(new RetrogradeTask(name, sizing * 20, res), 3, name).enableVertexDragging(3);
 
-// No maxPoints: an exfiltration route bends, so the user draws as many vertices as
+// No maxPoints: an exfiltration route bends, so the operator draws as many vertices as
 // the route needs and every one of them keeps an edit handle.
 const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
     /*
@@ -234,8 +234,7 @@ const exfiltrate = (name: TacticalGraphicName, res: number, sizing: number) =>
 /*
  * **Four placed points, as 341900 names them** — the two arrowhead tips and the two arrow
  * ends. It was a two-point line plus a `size` amplifier that set the U's height, which
- * forced the arrows parallel and equal and left points 3 and 4 nowhere. (User's call,
- * 2026-09-06.)
+ * forced the arrows parallel and equal and left points 3 and 4 nowhere.
  *
  * It keeps its own holder rather than moving to `vertexLine`: the `RIP` break is cut by a
  * style this holder attaches, and a generic line holder does not know to. @see ReliefInPlace
@@ -285,8 +284,8 @@ const missionTask = (name: TacticalGraphicName, res: number) => {
 /*
  * **Three clicks: the tip, the rear, then the bend.** 270504's Template letters PT 1,
  * PT 2 and PT 3 whatever its "requires two anchor points" sentence says, and point 3
- * "indicates on which side of the line the arc is placed". It was drawn centre-to-edge
- * until 2026-09-05. @see AnchorClickController, anchorsFromClicks
+ * "indicates on which side of the line the arc is placed". It was drawn centre-to-edge.
+ * @see AnchorClickController, anchorsFromClicks
  */
 const turn = (name: TacticalGraphicName, res: number) => {
     const controller = new AnchorClickController(new TurnGraphicBase(name, res, res), drawClickCount(name) ?? 3);
@@ -320,9 +319,7 @@ const envelopment = (name: TacticalGraphicName, res: number) => {
  * routes every edit drag through `handleCircleDrag` — a scale about the centre. So the arrow
  * tip could not be lengthened on its own: grabbing it resized the whole symbol, arc and all.
  * The frame carries the arrow's reach as a number of its own, so nothing about the geometry
- * required that; it was the gesture. (User's call, 2026-09-06: "allow the user to drag point
- * 1 to lengthen the arrow line w/o resizing wholesomely. Only the resize icon should resize
- * wholesomely.")
+ * required that; it was the gesture.
  *
  * A vertex drag on point 1 now moves point 1: `normalizeDrawnBase` squares it back onto the
  * bisector and the reader reads a longer reach off it, leaving the chord — and therefore the
@@ -354,11 +351,11 @@ const contain = (name: TacticalGraphicName, res: number) => {
  * perpendicular to the line", so the third click is taken for its distance across the run
  * and its side, and put on that perpendicular. @see pursuitAnchors
  *
- * It was an `AnchorClickController` over `PursuitGraphicBase` until 2026-09-06, which
+ * It was an `AnchorClickController` over `PursuitGraphicBase`, which
  * decomposed every drag into centre / size / rotation / mirrored / lineRatio and laid all
  * three points back out from them — so dragging one point moved the other two, and the grip
  * on the arc's end *flipped* the hook instead of moving it. The seven siblings drag their
- * vertices. (User's report: "I'm trying to have consistency across similar graphics".)
+ * vertices.
  * @see RetrogradeTask, carriesSeparationInBase
  */
 const pursuit = (name: TacticalGraphicName, res: number, sizing: number) =>
@@ -447,11 +444,11 @@ const radarSearch = (name: TacticalGraphicName, res: number) => {
 /**
  * Cover, guard and screen: **four clicks, and a grip on each.**
  *
- * They were placed on one anchor at a fixed screen size until 2026-08-29, then drawn as one
+ * They were placed on one anchor at a fixed screen size, then drawn as one
  * arm with the second mirrored from it. APP-06 342201 gives them four anchor points, two per
  * arrow, and says the two arrows *"can vary independently"* in length and orientation — which
- * a mirrored pair cannot do. Every point is placed and every point is draggable as of
- * 2026-09-06. @see SecurityOperation, securityOperationAnchors
+ * a mirrored pair cannot do. Every point is placed and every point is draggable.
+ * @see SecurityOperation, securityOperationAnchors
  */
 const securityOp = vertexLine(4, 4);
 
@@ -607,7 +604,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      *
      * **How it is drawn is a separate question, and the answer is three clicks**: the radar,
      * then each arc, with a bare arc on the map in between. It was briefly a drop-and-drag,
-     * which can only state one of the two ranges. (User's report, 2026-09-05.)
+     * which can only state one of the two ranges.
      * @see RangeClickController, radarSearchFromClicks, RangeFanGraphicBase
      */
     [TacticalGraphicName.RadarSearchDoctrine]:                   radarSearch,
@@ -627,7 +624,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * **Three placed points, exactly like the demolition block.** 140800: *"This symbol
      * requires three anchor points. Points 1 and 2 define the endpoints of the infiltration
      * lane and point 3 defines one side of the lane."* That is 271201's rule in the same
-     * words, so it takes the same factory. (User's call, 2026-09-05.)
+     * words, so it takes the same factory.
      *
      * It was `movement(2)`: the draw closed on the second click and the rails appeared at a
      * seeded width for a *derived* offset handle to drag afterwards, with the number filed
@@ -688,7 +685,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * `line(2)` gave it no vertex handles at all, so every drag went through the stretch
      * path and scaled the whole symbol -- the ticks with it. Its plate says the symbol
      * "varies only in length", which is exactly the gesture that had no way to happen.
-     * (User's call, 2026-09-04.) The follow tasks have been `vertexLine(2, 2)` for the same
+     * The follow tasks have been `vertexLine(2, 2)` for the same
      * reason, and `editStretches` still lets a drag on the *body* resize.
      */
     [TacticalGraphicName.NavigationalLine]: vertexLine(2, 2),
@@ -743,7 +740,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * **Four placed points, each with a grip.** 343300 names four anchor points and this was
      * a one-click drop that laid all four out from a single centre, so the operator stated
      * position and nothing else. `vertexLine(4, 4)` is the same contract Capture and Seize
-     * take. (User's call, 2026-09-06.) @see Demonstration
+     * take. @see Demonstration
      */
     // Three clicks; the fourth point is derived and inert. @see hairpinAnchors, ANCHOR_VERTEX
     [TacticalGraphicName.Demonstration]:                    vertexLine(3, 3),
@@ -759,17 +756,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     /*
      * **Three anchor points, and every one of them reshapes.**
      *
-     * Point 3 was declared the anchor here until 2026-09-06 — "the one that moves the whole
+     * Point 3 was declared the anchor here — "the one that moves the whole
      * shape" — which made it *inert* under a reshape, because the manager refuses the anchor
      * rather than letting it scale. So the one grip APP-06 270601 gives the symbol's length,
      * *"point 3 determines its length"*, was the one grip that could not change it. Moving
-     * the whole graphic is what translate mode is for. (User's report, 2026-09-06: "it is not
-     * letting the user drag to lengthen the graphic".)
+     * the whole graphic is what translate mode is for.
      *
      * It was also a renderer-local answer to a question the library owns: `anchorVertex` has
      * never listed these three, so MapLibre let point 3 lengthen the symbol all along and the
      * two engines disagreed. Saying nothing here is what makes them agree.
-     * @see ANCHOR_VERTEX, ai/conventions.md "A symbology fact never lives in a holder"
+     * @see ANCHOR_VERTEX
      */
     [TacticalGraphicName.ObstacleBypassEasy]:               vertexLine(3, 3),
     [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3),
@@ -826,18 +822,18 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
 
     // ── Retrograde tasks (max 2 pts) ───────────────────────────────────────
     /*
-     * Abatis takes a drawn route with as many vertices as the road needs. @see ai/app-6.md "F1"
+     * Abatis takes a drawn route with as many vertices as the road needs.
      *
      * **Uncapped, because 280100 says so outright**: *"This symbol requires at least two
      * anchor points, points 1 and 2, to define the line. Additional points can be defined
      * to extend the line."* Fifty-two rules carry that sentence and this was the only
      * graphic in the library that capped it — its own family (both anti-tank ditches, all
      * nine wire obstacles, the fortified line) has always been uncapped. The comment here
-     * already said "`line()` with no vertex cap" while the code said two. (2026-09-05.)
+     * already said "`line()` with no vertex cap" while the code said two.
      *
      * **Still `vertexLine`, not `line()`**, because the rest of the note below is about the
      * grip and remains true: the end handle moves that vertex; the resize icon scales the
-     * whole obstacle. Its points are the run, and lengthening the run is what a user means
+     * whole obstacle. Its points are the run, and lengthening the run is what an operator means
      * by dragging its end — the chevron is a decoration with its own size, not something
      * the drag should be stretching. Scaling everything together is the affordance's job.
      * `0` is the "no maximum" argument. @see vertexLine
@@ -845,16 +841,16 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.Abatis]:                 vertexLine(0, 2),
     /*
      * The demolition family is a drawn centreline with a width. **All three of its points
-     * are placed as of 2026-09-05**: 271201 names them, and the third — which sets how far
+     * are placed**: 271201 names them, and the third — which sets how far
      * apart the rails sit — was a derived offset handle with the separation carried beside
      * the base as a `width`. It is a stored vertex now, so the rails separate and contract
-     * live as the third click is aimed. @see sideAnchors, ai/app-6.md "F2"
+     * live as the third click is aimed. @see sideAnchors
      */
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: demolition,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: demolition,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: demolition,
     /*
-     * **Roadblock complete joins them, as of 2026-09-05.** It was point-dropped on the
+     * **Roadblock complete joins them.** It was point-dropped on the
      * reading that "no centerline-and-width rule in APP-06 describes" two overlapping X's.
      * The plate says otherwise: 271204's Template letters **PT 1, PT 2 and PT 3** on the
      * crosses, and its own Draw Rules cell is *empty* — the row inherits 271201's rule,
@@ -863,8 +859,8 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
      * is the same defect that moved the three readiness states off a fixed 45 degrees.
      * @see RoadblockComplete for how the three points are read.
      */
-    // Drawn and edited as the three readiness states are, since 2026-09-21: three clicks, a
-    // centreline and a side point, every one a grip. (User's call.) @see RoadblockComplete
+    // Drawn and edited as the three readiness states are: three clicks, a
+    // centreline and a side point, every one a grip. @see RoadblockComplete
     [TacticalGraphicName.RoadblockCompleteExecuted]: demolition,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: line(),
     [TacticalGraphicName.AntiTankDitchCompleted]: line(),
@@ -940,7 +936,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     /*
      * APP-06 152200 -- fields of fire's controller exactly: three vertices, each of which
      * means something, and the apex inert so a reshape drag cannot bend the symbol about
-     * its own origin. The holder and controller it used before 2026-09-04 are gone with the
+     * its own origin. The holder and controller it used are gone with the
      * SVG badge they drove. @see anchorVertex
      */
     [TacticalGraphicName.SearchArea]:                       vertexLine(3, 3),
@@ -975,7 +971,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     // Two clicks, three placed points, every one grabbable. @see firePositionAnchors
     [TacticalGraphicName.AttackByFire]:     attackByFire,
     [TacticalGraphicName.SupportByFire]:    firePosition,
-    // Excluded — see ai/excluded-graphics.md
+    // Excluded on purpose.
     // [TacticalGraphicName.FollowAndAssume]:  block,
     // [TacticalGraphicName.FollowAndSupport]: block,
 
@@ -999,7 +995,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.LinearTarget]:        line(2),
     [TacticalGraphicName.FinalProtectiveFire]: line(2),
     [TacticalGraphicName.LinearSmokeTarget]:   line(2),
-    // Excluded — see ai/excluded-graphics.md
+    // Excluded on purpose.
     /*
      * The convoys: `line(2)`, capped, because both plates define the symbol by exactly two
      * anchor points and say it "varies only in length" -- ferry crossing's family, not the

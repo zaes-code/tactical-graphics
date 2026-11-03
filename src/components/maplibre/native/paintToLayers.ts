@@ -631,7 +631,7 @@ export function mergeBuckets(all: LayerBuckets[]): LayerBuckets {
  * The radius read-out's text, laid **along** the measure line.
  *
  * `symbol-placement: 'line'` is what OpenLayers' `placement: 'line'` does: the text
- * takes the line's own angle and stays upright relative to it as the user swings the
+ * takes the line's own angle and stays upright relative to it as the operator swings the
  * handle round, with no rotation to compute and none to keep in step.
  */
 export function measureLabelLayer(id: string, source: string, fontStack: FontStack): LayerSpecification {

@@ -12,7 +12,7 @@ import {readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
  *
  * Its own holder rather than a branch in `RetrogradeTask` because the two agree
  * on nothing that matters: Exfiltrate has no cane arc to size, so it publishes no
- * offset handle, and it keeps every vertex the user drew rather than exactly two.
+ * offset handle, and it keeps every vertex the operator drew rather than exactly two.
  * What is left is the plain line-graphic contract, plus the arrowhead size the
  * generator needs.
  *

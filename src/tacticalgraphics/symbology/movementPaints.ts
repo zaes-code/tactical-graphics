@@ -16,7 +16,7 @@
  * The one-letter forms of maneuver (IN, E, MD, T, A, CATK) use the ordinary
  * zoom-anchored scale instead: they are a fixed mark on the symbol rather than
  * text that has to fit a space. Mixing the two makes a letter either vanish on a
- * short arrow or swamp a long one. @see ai/conventions.md, "Pick the right
+ * short arrow or swamp a long one. @, "Pick the right
  * label-scale function"
  */
 
@@ -58,7 +58,7 @@ function anchors(feature: PaintFeature): ProjectedPosition[] {
  * family and the aviation axis divide it by `BASE_FONT_SIZE_PX`, which is **16**.
  * Both render with `fontStyle`, so the two produce visibly different sizes for the
  * same span — a 1.5x difference. This is the `BASE_FONT_SIZE_PX` vs 24 px literal
- * trap `ai/conventions.md` documents, preserved rather than unified because
+ * known trap, preserved rather than unified because
  * unifying it would resize a dozen graphics.
  *
  * `0.7` is the share of the span the text may occupy, and is the same either way.
@@ -154,7 +154,7 @@ function onArrow(context: PaintContext, coords: ProjectedPosition[], pathFrom: n
  * span.
  *
  * Used by the forms of maneuver whose plate carries a specific letter — the
- * user's own label is deliberately ignored, because the letter *is* the symbol.
+ * operator's own label is deliberately ignored, because the letter *is* the symbol.
  *
  * `atMidpoint` puts it between the two anchors rather than on the first, and
  * `upright` forces horizontal regardless of the graphic's rotation — mobile
@@ -235,7 +235,7 @@ export const envelopmentLabelPaint = (): MovementPaint =>
  *
  * At `coords[0]` — the p0 vertex, in the gap the two arcs leave open — not the
  * midpoint. The amplifier belongs at the *start* of the graphic; it was briefly
- * centered and reverted at the user's direction. @see ai/decisions.md
+ * centered and reverted at the operator's direction.
  */
 export const mobileDefenseLabelPaint = (): MovementPaint =>
     fixedLetterPaint('MD', {upright: true, align: 'center'});
@@ -270,17 +270,17 @@ const HEAD_LETTER_CAP = 1.5;
  * Frontal attack's A and turning movement's T, **set in the arrowhead and sized from it**.
  *
  * They used to start at the head's base at the ordinary label size, so on a wide arrow the
- * letter was small and sat against the dates behind it (user, 2026-11-02). Centred near the
+ * letter was small and sat against the dates behind it. Centred near the
  * triangle's centroid and sized from the head's length, it fills the head at every zoom and
  * stays larger than the name and dates, which are capped.
  */
 function headLetter(feature: PaintFeature, context: PaintContext, letter: string, base: ProjectedPosition, tip: ProjectedPosition): Paint {
     const headPx = Math.hypot(tip[0] - base[0], tip[1] - base[1]) / context.resolution;
     // Capped like every other movement label, at a little more than their ceiling so the
-    // letter still reads as the larger mark; uncapped it grew without bound on zoom-in
-    // (user, 2026-11-02). @see maxGraphicLabelScale
+    // letter still reads as the larger mark; uncapped it grew without bound on zoom-in.
+    // @see maxGraphicLabelScale
     // Sized from the head alone, with no plain-label floor: on a narrow arrow the floor made the
-    // letter taller than the head and it crossed the outline (catalog, 2026-11-02).
+    // letter taller than the head and it crossed the outline.
     const scale = Math.min((headPx * HEAD_LETTER_SIZE) / BASE_FONT_SIZE_PX, maxGraphicLabelScale() * HEAD_LETTER_CAP);
     const at: ProjectedPosition = [base[0] + (tip[0] - base[0]) * HEAD_LETTER_AT, base[1] + (tip[1] - base[1]) * HEAD_LETTER_AT];
     return text(feature, at, letter, scale, {rotation: uprightRotation(base, tip), align: 'center'});
@@ -293,12 +293,12 @@ export const turningMovementLabelPaint = (): MovementPaint => letterWithNameAndD
 export const frontalAttackLabelPaint = (): MovementPaint => letterWithNameAndDate('A');
 
 /**
- * Counterattack: "CATK", with the user's designation appended after it.
+ * Counterattack: "CATK", with the operator's designation appended after it.
  *
- * The only fixed-letter member that still shows the user's text — "CATK" is the task and
+ * The only fixed-letter member that still shows the operator's text — "CATK" is the task and
  * the name identifies which one.
  *
- * **Placed and sized like an avenue of approach** as of 2026-08-27, at the user's call: set
+ * **Placed and sized like an avenue of approach**: set
  * just behind the arrowhead rather than at the midpoint of the last segment, and scaled to
  * the published span — which is the arrow's width — rather than to the zoom. The
  * zoom-anchored scale it used before does not shrink with the arrow, so a small
@@ -386,7 +386,7 @@ const AXIS_ENY_GAP_PX = 12;
  * (APP-06 8.1.4). `halfWidth` is the arrow's half-width in projected meters, which is the
  * length of the span every generator in this family publishes. `behindHead` is more of the
  * body, in the same meters, that the date stays out of: the two aviation axes' twist, which
- * the dates ran through on every heading (found turning each line graphic, 2026-11-01).
+ * the dates ran through on every heading.
  */
 function axisAmplifiers(
     feature: PaintFeature,
@@ -502,7 +502,7 @@ const AVENUE_ADDITIONAL_INFO_GAP_PX = 12;
  * draws the pair as `ENY`. Field N is the hostile marker and appears for a hostile graphic
  * and for no other -- the same reading the areas already take. The text stays in the label
  * colour: hostile *line work* goes red, hostile text amplifiers do not.
- * @see ai/decisions.md, the hostility colour rule
+ * @, the hostility colour rule
  *
  * The two anchors are the last two the generator publishes. A symbol drawn before this was
  * added -- or restored from a save -- carries only the head span, so anything short of four
@@ -570,7 +570,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             /*
              * **Level, whatever the arrow's heading.** 152300's Template boxes H level beside
              * a climbing arrow and its Example prints "STEEP-SIDED WADIS" level too; it used to
-             * turn with the rear segment (user, 2026-11-02). Level text grows away from the
+             * turn with the rear segment. Level text grows away from the
              * rail the way the crossings' dates do: its nearest corner is the anchor.
              */
             const [ox, oy] = [at[0] - rear[0], at[1] - rear[1]];
@@ -579,7 +579,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             const baseline = oy / on > LEANS_OFF_AXIS ? 'bottom' : oy / on < -LEANS_OFF_AXIS ? 'top' : 'middle';
             /*
              * **Never touching the rail.** Level text beside a climbing rail met it at the far
-             * end of the label (user, 2026-11-02), so the label steps further out along the same
+             * end of the label, so the label steps further out along the same
              * line until its whole box, widened by the gap, is clear of the upper rail. The rail is
              * the centre line moved out by the half-width, on the side H sits.
              */
@@ -701,7 +701,7 @@ export function attackHelicopterAxisLabelPaint(): MovementPaint {
         // differ only for a feature carrying an affiliation in its amplifier bag but
         // no stamped color — which is what restore produces — and there the old
         // form drew the symbol black on a hostile graphic. Same fix `readHostility`
-        // made everywhere else. @see ai/context.md, "Reading a graphic's affiliation"
+        // made everywhere else.
         const color = lineColorOf(feature);
         const stroke = {color, widthPx: LINE_WIDTH()};
 

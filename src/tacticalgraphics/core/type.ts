@@ -86,7 +86,7 @@ export interface RouteOptions extends BaseGraphicOptions {
  * **Every dimension is optional**, because they are fixed ratios of one another and of
  * `size`. Pass `size` alone and the proportions follow.
  *
- * These were badges until 2026-08-29 — not resized, describing no ground extent, sized
+ * These were badges — not resized, describing no ground extent, sized
  * by a screen constant times the live map resolution. APP-06 gives them four anchor
  * points, so they are drawn from two now and the generator builds the arms from the
  * **base**: a two-point `LineString` of `[the arrowhead, that arm's inner end]`. Given
@@ -144,8 +144,7 @@ export interface RangeFanBand {
      *
      * The earlier note here defended kilometers on the grounds that an envelope is quoted
      * that way and metres would put three zeroes on every ring. The label answers that by
-     * grouping thousands (`5,000`) rather than by changing the unit. (User's call,
-     * 2026-08-31.)
+     * grouping thousands (`5,000`) rather than by changing the unit.
      *
      * **There is no migration.** A fan saved before 3.2.0 carries a kilometer number and
      * will render a thousand times too small; that break was taken deliberately rather
@@ -730,7 +729,7 @@ export function getLabel(name: TacticalGraphicName) {
             return 'EX';
         /*
          * Follow and assume / follow and support take no case. Both were revived on
-         * 2026-08-28 and their letter sits INSIDE the rear box, which is a screen size
+         * and their letter sits INSIDE the rear box, which is a screen size
          * this layer does not know -- so `followTaskPaint` places the text itself and
          * `getLabel` returning '' is correct. @see FollowTask.ts
          */
@@ -801,11 +800,10 @@ export enum TacticalGraphicName {
      * `FieldsOfFire` (140500) is, and it is listed beside it in {@link SWAP_FIRST_TWO} for
      * the same reason: the vertex is the *middle* vertex of the stored base.
      *
-     * **Restored on 2026-09-04, and not as it was.** The 2026-04 implementation was a fixed
+     * **Restored, and not as it was.** The 2026-04 implementation was a fixed
      * SVG path scaled and rotated about one anchor point -- one click, no independent arms,
      * a hollow arrowhead where the plate draws a solid one -- and it was the one graphic
      * excluded the *hard* way, with its enum member deleted rather than commented out.
-     * @see ai/excluded-graphics.md
      */
     SearchArea = 'SearchArea',                    // APP-06 152200 Search Area/Reconnaissance Area
     Counterattack = 'Counterattack',
@@ -1079,11 +1077,11 @@ export enum TacticalGraphicName {
     ExplosivesPlannedStateOfReadiness = 'ExplosivesPlannedStateOfReadiness',
     ExplosivesStateOfReadiness1Safe = 'ExplosivesStateOfReadiness1Safe',
     ExplosivesStateOfReadiness2ArmedButPassable = 'ExplosivesStateOfReadiness2ArmedButPassable',
-    // Excluded — see ai/excluded-graphics.md. APP-06 271204's Draw Rules cell is empty and
+    // Excluded — APP-06 271204's Draw Rules cell is empty and
     // the row inherits 271201's, so the Template is the only statement of how its three
     // points lay four strokes out — and three readings of it produced three different
     // pictures. Switched off until the construction is settled rather than shipping a
-    // symbol we are guessing at. (User's call, 2026-09-05.)
+    // symbol we are guessing at.
     RoadblockCompleteExecuted = 'RoadblockCompleteExecuted',
     AntiTankDitchUnderConstruction = 'AntiTankDitchUnderConstruction',
     AntiTankDitchCompleted = 'AntiTankDitchCompleted',
@@ -1172,7 +1170,7 @@ export enum TacticalGraphicName {
      * behind a header here. **200400 is the one to check twice** -- it *does* carry its own
      * Anchor Points block, the shape that made mined area a real omission, but its
      * Size/Shape reads "Static" and its Template is a bare fixed-size circle, which is a
-     * console icon rather than a drawn area. @see ai/app-6.md
+     * console icon rather than a drawn area.
      */
     LaunchAreaEllipse = 'LaunchAreaEllipse',                            // APP-06 200101 Launch Area, Ellipse/Circle
     DefendedAreaEllipse = 'DefendedAreaEllipse',                        // APP-06 200201 Defended Area, Ellipse/Circle
@@ -1253,7 +1251,7 @@ export enum TacticalGraphicName {
     /*
      * Convoy -- APP-06 §8.16 Table 8-21 and FM 1-02.2 table 5-18, so **both** publications.
      *
-     * Revived 2026-09-04. Both were switched off in 2026-08-02 as scope, on a note saying
+     * Revived. Both were switched off as scope, on a note saying
      * nothing was wrong with them because each "rendered as a `Phaseline`, which is the
      * right shape". Reading the plates says otherwise: a moving convoy is a block arrow --
      * a rectangular body flaring into a solid head -- and a halted one is that body with a
@@ -1344,7 +1342,6 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
      * lower-cased -- **with the exception of `manoeuvre`**, which is spelled the US way
      * everywhere in this library and matches `artillery maneuver area` beside it. The
      * plate is quoted in the doc comments; a display name is this library's own text.
-     * @see ai/conventions.md
      */
     [TacticalGraphicName.LaunchAreaEllipse]: 'launch area, ellipse/circle',
     [TacticalGraphicName.DefendedAreaEllipse]: 'defended area, ellipse/circle',
@@ -1375,7 +1372,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
      * Table 8-18 calls 291000 a *fortified position*; FM 1-02.2 Table 5-22 calls the same
      * bracket a *fighting position*, and draws it identically -- flat front edge, two legs,
      * "typically faces enemy forces" in both. An operator trained on one manual should find
-     * it under the word they know. (User's call, 2026-09-05.)
+     * it under the word they know.
      */
     [TacticalGraphicName.FortifiedPosition]: 'fortified/fighting position',
     [TacticalGraphicName.LineGeneric]: 'line, generic',
@@ -1395,7 +1392,6 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.AntiTankDitchCompleted]: 'Anti-Tank Ditch, Completed',
     [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: 'Anti-Tank Ditch Reinforced, with Anti-Tank Mines',
     [TacticalGraphicName.AntiTankWall]: 'Anti-Tank Wall',
-    // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]: 'Roadblock Complete (Executed)',
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: 'Explosives, Planned State of Readiness',
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: 'Explosives, State of Readiness 1 (Safe)',

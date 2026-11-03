@@ -14,7 +14,7 @@
  * > symbol vertical line and the lines ending with points 1 and 2.
  *
  * **"The opening typically faces the applicable obstacle."** Which is orientation advice
- * for the user rather than something to enforce: the arrows point wherever points 1 and 2
+ * for the operator rather than something to enforce: the arrows point wherever points 1 and 2
  * were placed.
  *
  * The style table lives here, in the map-agnostic half, because it says what a symbol

@@ -105,7 +105,7 @@ export class EllipticalArea extends TacticalGraphicsBase<RectangularTargetOption
              * Both are correct on a sphere to well inside a pixel at these distances; this
              * one is preferred because it is the construction `rectangleFromAxis` uses for
              * the rectangles beside it, so the two families cannot disagree about what
-             * "rotated by AN" means. @see ai/current-task.md, where the same choice was
+             * "rotated by AN" means. @, where the same choice was
              * control-run for `Defeat` and the two agreed to three parts in a million.
              */
             const onAxis = along(center, major * Math.cos(t), attitude);
@@ -168,7 +168,7 @@ export const RSD_DEFAULT_START_SHARE = 0.4;
  * the first version took that literally: a two-click centre-and-radius drag that set the
  * stop range and defaulted the start. That draws the symbol *from the radar to the far
  * arc*, which is not its shape — the near arc is where the search begins, and it is a
- * placement rather than a default. (User's call, 2026-09-04.)
+ * placement rather than a default.
  *
  * So point 1 is the radar, point 2 is on the start arc and point 3 is on the stop arc. Two
  * ranges and the search axis all come off those three, which leaves the **stop relative
@@ -212,9 +212,9 @@ export interface RadarSearchFrame {
  * is **stored**, and that is not in question.
  *
  * How those numbers are first *given* is a separate question, and the answer is three
- * clicks — the radar, then each arc. It was that until 2026-09-05, when moving the storage
+ * clicks — the radar, then each arc. It was that, when moving the storage
  * to one point took the gesture with it and left a drop-and-drag that can only state one
- * range; the user asked for the clicks back. The distinction is the one this repo has paid
+ * range; the operator asked for the clicks back. The distinction is the one this repo has paid
  * for twice already: **how long a draw runs is not what shape the base is.**
  * @see centreToEdgeDrawParity, drawClickCount
  *
@@ -286,7 +286,7 @@ export const RSD_MIN_OPENING_DEG = 5;
  * back any other way does not round-trip. MapLibre's editor works in planar Mercator and its
  * `atan2` would have answered a few degrees out on a large sector away from the equator, so
  * the wedge would have jumped the moment it was grabbed on one engine and not the other.
- * One reading, called from both. @see ai/conventions.md, "A symbology fact never lives in a
+ * One reading, called from both. @, "A symbology fact never lives in a
  * holder"
  *
  * The half-angle is taken either way round the axis, so the grip may be dragged past it and
@@ -318,13 +318,13 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
      * values, a search axis azimuth, a start range, a stop range, and a stop relative
      * bearing."*
      *
-     * It was three anchor points from 2026-09-04 to 2026-09-05 — the radar, a point on the
+     * It was three anchor points to — the radar, a point on the
      * start arc and a point on the stop arc, all on the axis. That encoded exactly the same
      * four numbers, but as geometry, and it is not what the plate describes: a base that
      * carries a start range as a *coordinate* cannot be typed, only dragged. The four values
      * now live where the standard puts them, on `rangeFan` — which already carried them,
      * because the field registry has offered this symbol the range-fan editor with two fixed
-     * bands since it was built. (User's call, 2026-09-05.)
+     * bands since it was built.
      */
     type: string = 'Point';
 
@@ -349,7 +349,7 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
      *
      * ## ...then the legacy shape
      *
-     * A 200700 saved before 2026-09-05 describes itself as a two-band range fan — the ranges
+     * A 200700 saved describes itself as a two-band range fan — the ranges
      * as `rangeFan.bands`, the axis as `rotation` (degrees counter-clockwise from east, hence
      * `resolveCenterAzimuth`), the opening as a pair of absolute band azimuths. Those still
      * render, and so does a symbol carrying neither: a sample, a thumbnail or a host drop has
@@ -407,8 +407,7 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
         };
 
         /*
-         * **One range known: draw the arc, and only the arc.** (User's call, 2026-09-04,
-         * restored 2026-09-05 with the three-click draw it belongs to.)
+         * **One range known: draw the arc, and only the arc.**
          *
          * Between the second click and the third the symbol holds the radar, an axis and one
          * distance, and which of the plate's two ranges that distance *is* has not been
@@ -455,7 +454,7 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
      * Field `T`'s point: on the search axis, midway between the two arcs.
      *
      * Takes the axis rather than the two edges. It bisected them here as well until
-     * 2026-09-05, which is a second copy of the frame's own statement — and the copy is
+     * which is a second copy of the frame's own statement — and the copy is
      * what let the label sit on a different bearing from the wedge. @see frame
      */
     private labelAnchor(center: Position, start: number, stop: number, axis: number): Point {
@@ -496,7 +495,7 @@ export class RadarSearchDoctrine extends TacticalGraphicsBase<RangeFanOptions> {
          * is: dragging it swings both edges an equal angle off the axis, which is the plate's
          * *"equal angle either side of the search axis"* and is why one grip states a pair of
          * bearings. The axis itself moves with the rotate gesture rather than with a grip.
-         * (User's call, 2026-09-05.) @see setRadarHalfAngle
+         * @see setRadarHalfAngle
          */
         return this.asMultiPointFeature([
             center,

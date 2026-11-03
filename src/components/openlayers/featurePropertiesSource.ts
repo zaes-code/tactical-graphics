@@ -27,7 +27,7 @@ import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
  *
  * Enough for `drawend` to finish. Without it the click that completes a drawing
  * immediately re-selects the graphic it just made and opens the dialog on top of
- * the map the user is still working in.
+ * the map the operator is still working in.
  */
 const HIT_TEST_DELAY_MS = 50;
 

@@ -9,7 +9,6 @@
  * the rest would cost and whether a declarative renderer could take them at all. The
  * port is done: `isPaintable` is true for **291 of the 292 registered names**, and both
  * shipping renderers paint through here rather than owning any symbology of their own.
- * `ai/maplibre-renderer.md` has the original estimate and how it turned out.
  *
  * **Everything exported here is a renderer contract.** `/openlayers` and `/maplibre`
  * are separately published entry points that consume it by package name, so removing

@@ -184,7 +184,7 @@ function slimFilledHead(head: ProjectedPosition[]): ProjectedPosition[] | undefi
  *
  * `t` is where along that prong the letter sits — 0.6 for Clear, 0.75 for Disrupt,
  * which is what centers the "D" on the middle prong given that it spans 0.5 to 1.0
- * of the user's drawn base.
+ * of the operator's drawn base.
  */
 export function clearPaint(label: string, t = 0.6, filledHeads: readonly number[] = []): BlockPaint {
     return (feature, context) => {

@@ -133,7 +133,7 @@ export interface EngineCapabilities {
 export interface EngineCallbacks {
     /** A graphic was drawn, edited or removed — a host may want to save. */
     onChange?(): void;
-    /** The selection moved. `null` when the user clicked empty map. */
+    /** The selection moved. `null` when the operator clicked empty map. */
     onSelect?(graphic: SelectedGraphic | null): void;
     /** A draw finished or was canceled, so a host can un-arm its button. */
     onDrawEnd?(): void;

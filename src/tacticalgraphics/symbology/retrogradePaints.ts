@@ -74,7 +74,7 @@ function retrogradeLetterScale(feature: PaintFeature, context: PaintContext, lab
  *
  * The label lies along the segment whose gap holds it. `uprightRotation` flips it
  * through 180 degrees when that segment points left, so it never renders upside
- * down however the user drew the route.
+ * down however the operator drew the route.
  */
 export function retrogradeTaskPaint(label: string, name?: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
     const dated = name !== undefined && RETROGRADE_DATED_GRAPHICS.has(name);

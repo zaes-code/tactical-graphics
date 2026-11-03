@@ -37,7 +37,7 @@ const PASSAGE_LANE_LABEL_GAP_PX = 8;
  *
  * The DTG used to read across the lane, with its own upright pass to keep it from
  * turning over. FM 1-02.2 Table 5-16 sets it level, so it is drawn upright on screen
- * and its clearance is measured along the lane instead (2026-10-31).
+ * and its clearance is measured along the lane instead.
  */
 export function passageLanePaint(showDates = true): LinePaint {
     return (feature, context) => {
@@ -119,7 +119,7 @@ export function passageLanePaint(showDates = true): LinePaint {
  * Where along its leg the solid bar starts and ends, from the leg's tip: 80% of the leg,
  * centred. MIL-STD-2525E Change 1 140501: "The length of the 'blade' shall be 80% of the
  * length of point 1 and point 2, centered and connected to the inside of the line." It ran
- * 0.2 to 0.7, half the leg and off centre, until 2026-10-31.
+ * 0.2 to 0.7, half the leg and off centre.
  */
 const FIELD_OF_FIRE_BAR_FROM = 0.1;
 const FIELD_OF_FIRE_BAR_TO = 0.9;
@@ -134,7 +134,7 @@ const FIELD_OF_FIRE_BAR_WIDTH_PX = 12;
  * at the sizes a field of fire is usually drawn and wrong below them — the leg shrinks with
  * the zoom and the bar does not, so a symbol drawn small or zoomed away from wears a slab
  * down one side. The same shape-relative rule the obstacle teeth and the merlons take.
- * (User's report, 2026-09-10.) @see decorationScale for the repeating-decoration twin
+ * @see decorationScale for the repeating-decoration twin
  */
 const FIELD_OF_FIRE_BAR_SHARE = 0.057;
 

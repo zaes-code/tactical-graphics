@@ -64,11 +64,11 @@ const BOX_SAMPLES: readonly [number, number][] = [
  * `share x sizePx` produces text exactly `share` as tall as the graphic — so this number is
  * not a knob, it is the answer to "how big should a label look next to its symbol". 0.25 is
  * what the avenue of approach and the counterattack already measure at (0.23), which are
- * the two the user named as correct; the graphics complained about measured 0.34 to 0.80.
+ * the two the operator named as correct; the graphics complained about measured 0.34 to 0.80.
  *
  * It is a different number from {@link LABEL_SPAN_SHARE} because it is measured against a
  * different thing — the whole graphic rather than one span inside it — and conflating the
- * two is how a cap ends up never biting. (User's call, 2026-08-29.)
+ * two is how a cap ends up never biting.
  */
 export const LABEL_GRAPHIC_SHARE = 0.25;
 
@@ -103,7 +103,7 @@ const CAP_MAX_ASPECT = 2;
  * this library renders two: `BASE_FONT_SIZE_PX` for most labels and 24 px for the
  * ratio-locked families, which is the documented trap here. The relief in
  * place draws at 24 and was capped as though it drew at 16, so its cap sat half again too
- * high and never bit — the graphic the user reported.
+ * high and never bit — the graphic the operator reported.
  *
  * A cap, never a raise. @see capLabelToSpan for the same bargain against one span.
  */
@@ -130,7 +130,7 @@ export function capLabelToGraphic(
  * Share of a graphic's own on-screen size a label may span before it is shrunk.
  *
  * **0.7 is not a new number.** `spanProportionalScale` has used it since the avenue of
- * approach was built, and the counterattack was moved onto it on 2026-08-27 at the user's
+ * approach was built, and the counterattack was moved onto it at the operator's
  * direction, for this exact complaint: *"the zoom-anchored scale does not shrink with the
  * arrow, so a small counterattack carried a full-size designation"*. Measured on the sample
  * sweep, those two hold a text-to-graphic ratio of 0.23 at every zoom while everything on
@@ -281,7 +281,7 @@ export const LETTER_GRAPHIC_RATIO = 2;
  * the line work closes into the bare shape. Holding the letter at the floor instead put a
  * 6 px letter in a circle a few times its size, which read as a copyright mark rather than as
  * the task. The graphic must also measure `LETTER_GRAPHIC_RATIO` times its letter, for the
- * families whose letter follows the zoom rather than the symbol. (User, 2026-10-24.)
+ * families whose letter follows the zoom rather than the symbol.
  *
  * The label half and the line-work half of a symbol must both ask this, with the same inputs:
  * OpenLayers styles them as two features, and neither can see what the other drew.

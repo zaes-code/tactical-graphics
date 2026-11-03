@@ -13,7 +13,7 @@ import {squareOntoBisector, supportByFireAnchors} from '../core/anchors';
  *
  * The doctrinal construct draws the bar at 0.76 of its shaft, but the construct's
  * shaft is a stub pointing at an adjacent objective — at that ratio a symbol
- * dragged across a map stands two and a half times taller than the line the user
+ * dragged across a map stands two and a half times taller than the line the operator
  * drew. 0.45 keeps the footprint roughly square and comparable to the graphic's
  * previous size while still reading as the doctrinal shape.
  */
@@ -37,9 +37,7 @@ const FIRE_POSITION_BAR_RATIO = 0.45;
  * the back line, which three free points cannot all satisfy — so point 1 is read for the one
  * thing the symbol can express: **how far it reaches from the middle**. Its component along
  * the back line is discarded and it is set on the perpendicular bisector, which makes both of
- * the plate's sentences true by construction rather than by the operator's aim. (User's call,
- * 2026-09-06: "let the user pick point 3 as documentation says […] arrowline needs to always
- * be at the middle/center of line 2,3".)
+ * the plate's sentences true by construction rather than by the operator's aim.
  *
  * That is `sideAnchors`' arithmetic, about the midpoint instead of an edge's end — the same
  * projection the bracket tasks and the obstacle bypasses apply to *their* third point, for
@@ -82,7 +80,7 @@ export function firePositionAnchors(clicks: Position[] | undefined): Position[] 
  * Feather length as a share of the bar's half-length, and arrowhead length in the same
  * units — the two proportions 152100's plate leaves to the picture once its four points are
  * placed. Both carried over from `GeometryService`'s FIRE_POSITION_* set, which measured
- * them off the FM 1-02.2 table 6-1 constructs; the anchor points changed on 2026-09-06, the
+ * them off the FM 1-02.2 table 6-1 constructs; the anchor points changed, the
  * decoration did not.
  */
 const SBF_FEATHER_RATIO = 0.95;
@@ -102,7 +100,7 @@ const SBF_ARROWHEAD_RATIO = 0.52;
  * from each of its ends to the tip the operator placed. Nothing is derived but the feathers
  * swept back off the bar's ends and the arrowheads, which are decoration.
  *
- * **It was a two-point graphic until 2026-09-06** — a shaft, off which the bar, both arrows
+ * **It was a two-point graphic** — a shaft, off which the bar, both arrows
  * and their spread were all computed by ratio. The arrowheads "indicate the left and right
  * limits of coverage that the firing position is meant to support", and a limit of coverage
  * derived from a ratio is not a limit anybody stated.
@@ -160,7 +158,7 @@ function supportByFireFromAnchors(coords: Position[]): Position[][] {
  * not block arrows, and now have their own point-anchored generator — see
  * `CrossedMissionTask`. FollowAndAssume and FollowAndSupport were the last two
  * users of the plain block-arrow branch and are currently excluded — see
- * `ai/excluded-graphics.md`. Keep that branch: it is what they come back to.
+ * Keep that branch: it is what they come back to.
  */
 export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
     name: string;
@@ -205,11 +203,9 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
      *
      * `firePositionAnchors` reads two points as *the tip and one end of the back line*, which
      * is what the operator has after the first click, so the preview is the symbol they are
-     * drawing. It read them as the legacy `[bar centre, tip]` shaft until 2026-09-06, and
+     * drawing. It read them as the legacy `[bar centre, tip]` shaft, and
      * that pair runs the other way — so between the two clicks the bar sat on the arrowhead's
      * own point and the arrowhead followed the cursor, which is the symbol backwards.
-     * (User's report, 2026-09-06: "after click one, point 2 needs to get the handle, then
-     * point 3 gets the handle".)
      *
      * A genuinely legacy two-point base is not reached this way in practice: restore and
      * every MapLibre build run it through `normalizeDrawnBase` first and it arrives here as
@@ -245,7 +241,7 @@ export class NamedBlockArrow extends TacticalGraphicsBase<PointGraphicOptions> {
              * **Through the resolver, so a half-drawn symbol is the symbol being drawn.**
              *
              * This used to take the anchor-driven branch only at four points and fall back to
-             * the pre-2026-09-06 description below — a shaft with the bar sized as a ratio of
+             * the pre- description below — a shaft with the bar sized as a ratio of
              * it — for anything shorter. That reading takes the placed points to mean
              * something else, so between the second and fourth clicks the preview was a
              * differently-shaped figure that neither matched the clicks nor followed the

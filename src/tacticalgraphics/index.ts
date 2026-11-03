@@ -256,7 +256,6 @@ export {
  * OpenLayers style functions today, so a raw-GeoJSON consumer gets a skeleton. A paint
  * function returns those marks as plain data that any renderer can paint.
  *
- * @see ai/maplibre-renderer.md
  */
 export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, NAME_TEXT_Z_INDEX, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
 export type {TextKind, 
@@ -280,7 +279,7 @@ export type {TextKind,
  *
  * The renderer-agnostic style layer: what a graphic looks like, as data. `isPaintable`
  * is how a renderer asks whether a graphic has a paint function — true for 215 of the
- * 216 registered names. @see ai/maplibre-renderer.md
+ * 216 registered names.
  *
  * ### Everything below is a renderer contract, not a helper
  *

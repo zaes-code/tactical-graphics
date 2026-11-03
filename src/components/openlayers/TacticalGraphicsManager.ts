@@ -95,7 +95,7 @@ const MIN_RESIZED_SIZE_METERS = 1;
  * Generous, and deliberately more generous than MapLibre's 5 px body test, because the
  * shapes that are hardest to hit are the ones where a click is the *only* way in: a bowed
  * turn's centreline is empty map, and a bridge and a corridor draw nothing at all on the
- * line the user drew. At 6 px those graphics still read as unselectable, which in edit
+ * line the operator drew. At 6 px those graphics still read as unselectable, which in edit
  * mode reads as "the handles stopped working" — there is nothing to drag until something
  * is selected. Only for *selection* — the handle hit test in `handleDownEvent` stays
  * exact, because handles are drawn dots and a tolerance there would let one steal a
@@ -321,7 +321,7 @@ export class TacticalGraphicsManager {
 
     /**
      * Swap in a pointer cursor while hovering something a click or drag would
-     * actually act on, so the affordance is visible before the user commits to
+     * actually act on, so the affordance is visible before the operator commits to
      * a gesture. Mirrors the same hit-testing a real interaction would do:
      * any feature in view mode (matching the dialog's click-to-open check),
      * only a live handle in the modes that drag one.
@@ -367,7 +367,7 @@ export class TacticalGraphicsManager {
         target.style.cursor = interactive ? 'pointer' : '';
     };
 
-    // the interaction modes that display markers on tactical graphics to let the user transform
+    // the interaction modes that display markers on tactical graphics to let the operator transform
     enableHandleModes = (): InteractionType[] => {
         return [
             InteractionType.rotate,
@@ -447,7 +447,7 @@ export class TacticalGraphicsManager {
     /**
      * Which graphic a feature belongs to, for the click that selects.
      *
-     * Handles and labels are as good an answer as line work here — a user clicking a
+     * Handles and labels are as good an answer as line work here — an operator clicking a
      * graphic's own label means that graphic — so this is just the controller lookup.
      */
     selectAtPixel = (pixel: number[]): TacticalGraphicHandler | undefined => {
@@ -462,7 +462,7 @@ export class TacticalGraphicsManager {
             // **A selection click needs a tolerance; OpenLayers defaults to zero.**
             // Line work is 2 px wide, so a pixel-exact hit test made a phase line
             // something you had to aim at rather than click. Worse, several families draw
-            // *nothing* on the line the user drew — a bridge and an air corridor are two
+            // *nothing* on the line the operator drew — a bridge and an air corridor are two
             // rails offset either side of it — so the miss was the common case, not the
             // edge one. MapLibre's `hitTest` has always used a radius; this is the same
             // forgiveness, and it is what makes the two engines answer a click alike.
@@ -472,7 +472,7 @@ export class TacticalGraphicsManager {
     };
 
     /**
-     * Display the markers that let a user drag / resize / modify / rotate a graphic.
+     * Display the markers that let an operator drag / resize / modify / rotate a graphic.
      *
      * **Two visibility rules, because the modes mean two different things.** The four
      * legacy gesture modes are global — the host has said "everything is rotatable now"
@@ -824,7 +824,7 @@ export class TacticalGraphicsManager {
         // Collect everything under the pointer rather than taking the topmost.
         // A label's text is hit-testable and covers a lot of ground — measured,
         // the range fans' per-band label feature wins at *every* one of their rim
-        // handles — so "topmost" would hand the drag to a feature the user was
+        // handles — so "topmost" would hand the drag to a feature the operator was
         // not aiming at. A handle is the interactive affordance; it wins.
         const hits: Feature[] = [];
         this.map?.forEachFeatureAtPixel(evt.pixel, feature => {
@@ -916,7 +916,7 @@ export class TacticalGraphicsManager {
         this.floorSuspendedOn = this.activeController;
         // **And the floor that is stated in pixels gets the resolution it is drawn at.**
         // The holder keeps the draw-time one, which is right for a decoration's size and
-        // wrong for a screen rule the user may have zoomed away from since.
+        // wrong for a screen rule the operator may have zoomed away from since.
         // @see LineGraphicBase.gestureResolution
         this.activeController.setGestureResolution?.(resolution);
 
@@ -1016,8 +1016,8 @@ export class TacticalGraphicsManager {
          * while every point-anchored graphic kept a `Point` base — but the drawn-anchor
          * family stores APP-06's anchor points in a `LineString`, so `getBaseGeometry`
          * hands back an array *of* coordinates and both reads are arrays. The arithmetic
-         * then produces `NaN` and the rotation silently does nothing, which is what a user
-         * reported for ambush on 2026-09-05 once it started being drawn point by point.
+         * then produces `NaN` and the rotation silently does nothing, which is what an operator
+         * reported for ambush once it started being drawn point by point.
          * `getCenter` is the question actually being asked here and every controller
          * answers it with a single coordinate.
          */
@@ -1214,7 +1214,7 @@ export class TacticalGraphicsManager {
 
                 // A graphic whose shape *is* its vertex positions reshapes in **modify**
                 // mode only. Resize keeps its usual meaning — scale the whole graphic
-                // about its center — because a user who picked "resize" asked for that,
+                // about its center — because an operator who picked "resize" asked for that,
                 // not for one corner to move.
                 //
                 // The anchor is skipped here: it moves the graphic, and moving is what
@@ -1362,7 +1362,7 @@ export class TacticalGraphicsManager {
          * do: the crossed tasks and the curves take a `RATIO_LOCKED_MIN_RADIUS_PX` floor,
          * `Block` extends its base to `MIN_BASE_PX`, `LineGraphicBase` enforces a minimum
          * first segment. Once a frame's result is clamped, the holder's next frame
-         * multiplies the *clamped* value, and the shrink the user asked for is gone for
+         * multiplies the *clamped* value, and the shrink the operator asked for is gone for
          * good. Drag in and then back out and the graphic ends up larger than it started:
          * that is the "resize jumps up, and won't shrink again" defect, on every graphic
          * with a floor.
@@ -1389,7 +1389,7 @@ export class TacticalGraphicsManager {
             // Lifting the floor means nothing stops a drag onto the anchor collapsing the
             // geometry to a point, which several generators divide by. This is not that
             // floor returning — it is the degenerate case, orders of magnitude below
-            // anything a user is aiming at.
+            // anything an operator is aiming at.
             const target = Math.max(MIN_RESIZED_SIZE_METERS, startSize * (currentDistance / this.resizeStartDistance));
             this.activeController.handleResize(target / currentSize);
             return;
@@ -1724,7 +1724,7 @@ export class TacticalGraphicsManager {
      * spec'd on MouseEvent and reliably populated there.
      *
      * `lastDrawEndedAt` covers the rest. A Point draw (screen / guard / cover)
-     * ends on its *first* click, so a user who clicks to place the symbol and
+     * ends on its *first* click, so an operator who clicks to place the symbol and
      * then double-clicks out of habit is making a fresh press — which would
      * otherwise re-arm the zoom in time for its own `dblclick`. Holding off until
      * that guard expires reuses the same drawend + 1 s window the properties
@@ -1766,7 +1766,7 @@ export class TacticalGraphicsManager {
     };
 
     /**
-     * Puts the map into draw mode for one graphic: the user clicks out the base
+     * Puts the map into draw mode for one graphic: the operator clicks out the base
      * geometry, and this builds, styles and wires up everything that follows from
      * it. The primary verb of this package.
      *
@@ -1810,7 +1810,7 @@ export class TacticalGraphicsManager {
              * **A double-click ends the draw only once the symbol has its points**, by the rule
              * MapLibre has always applied. Without it OpenLayers ended any line at two, so a
              * demolition obstacle or roadblock drawn with two clicks and a double-click stored
-             * two points and its side grip had no vertex to move. (User's report, 2026-09-21.)
+             * two points and its side grip had no vertex to move.
              *
              * OpenLayers only asks when the click lands on the last placed point, so the
              * sketch's trailing coordinate, the one under the cursor, *is* that point: every
@@ -1874,7 +1874,7 @@ export class TacticalGraphicsManager {
     };
 
     /**
-     * Applies the library's tidy-up to the geometry the user just drew.
+     * Applies the library's tidy-up to the geometry the operator just drew.
      *
      * Runs **before** `onDrawEndFunc`, so the holder builds from the base that will be
      * stored rather than from the raw clicks — otherwise the graphic and its handles
@@ -1906,7 +1906,7 @@ export class TacticalGraphicsManager {
 
         const drawn = geometry.getCoordinates().map(c => toLonLat(c));
         // **The resolution matters now**: the S pair's point 2 is held to a pixel range, and
-        // a normalizer with no view to ask leaves it where the user put it.
+        // a normalizer with no view to ask leaves it where the operator put it.
         const normalized = normalizeDrawnBase(name, drawn as Position[], this.map.getView().getResolution());
         // Compared by *content*, not by length. This used to bail whenever the vertex count
         // was unchanged, which is every case where a vertex moves rather than appears.
@@ -1944,7 +1944,7 @@ export class TacticalGraphicsManager {
         let baseFeatures = this.getRenderedFeaturesByProp('base');
 
         // **In edit mode, only the selected graphic's base.** Handles are already scoped
-        // to the selection there, and a `Modify` over every base would let the user drag
+        // to the selection there, and a `Modify` over every base would let the operator drag
         // a vertex of a graphic wearing no handles at all — an edit with no visible
         // affordance behind it. `modify` mode stays global, as it always was.
         if (this.isEditing()) {
@@ -2023,7 +2023,7 @@ export class TacticalGraphicsManager {
     };
 
     /**
-     * Rebuilds a graphic from a base the user just reshaped: `Modify`'s edits, and a point added on
+     * Rebuilds a graphic from a base the operator just reshaped: `Modify`'s edits, and a point added on
      * a ring's closing edge. One door, so both apply the same floors. @see addModifyInteraction
      */
     private applyEditedBase = (feature: Feature): void => {
@@ -2069,15 +2069,14 @@ export class TacticalGraphicsManager {
     /**
      * Whether `Modify` may turn this pointer position into a new base vertex.
      *
-     * Reported as "abatis should not accept vertices within the triangle opening" (user,
-     * 2026-09-06). The rule is the library's — `acceptsInsertedVertex` — and MapLibre gates
+     * Reported as "abatis should not accept vertices within the triangle opening". The rule is the library's — `acceptsInsertedVertex` — and MapLibre gates
      * its own insertion on the same call; all this does is find which base the cursor is
      * over and hand it screen pixels. @see acceptsInsertedVertex
      *
      * **Every base at once, because that is what `Modify` holds.** The condition is given a
      * pointer event and nothing else, so the feature has to be recovered here; a base
      * further away than `Modify`'s own reach is skipped rather than allowed to answer for a
-     * graphic the user is nowhere near.
+     * graphic the operator is nowhere near.
      *
      * `Modify` also calls this while merely *hovering*, and drops its blue insertion dot
      * when it answers false — so a refusal takes the affordance away with it instead of
@@ -2119,8 +2118,8 @@ export class TacticalGraphicsManager {
      * **Keyed on `role`, not on the `base` boolean.** `base` means "has vertices `Modify`
      * may drag", which is a different question and is false for every graphic capped at
      * the number of points its plate gives it. Reading it for visibility is what made the
-     * mark appear on the uncapped families and on nothing else, and the user asked for the
-     * families that share their shape to look the same. (2026-09-06.)
+     * mark appear on the uncapped families and on nothing else, and the operator asked for the
+     * families that share their shape to look the same.
      * @see drawsAnchorConnector, createBaseFeature
      */
     private showAnchorConnectors = (): void => {

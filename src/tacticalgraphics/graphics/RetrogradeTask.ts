@@ -92,7 +92,7 @@ export class RetrogradeTask extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         const frame = this.frame(base);
-        // A base saved before 2026-09-06 has two points and states its arc as a `size` and a
+        // A base saved has two points and states its arc as a `size` and a
         // `mirrored` flag. It keeps drawing exactly as it did, and grows its third point the
         // first time someone edits it. @see GeometryService.getCaneArrow
         if (!frame) return geometryService.getCaneArrow(base, opts.size, opts.size, opts.mirrored ?? false);
@@ -165,7 +165,7 @@ export class RetrogradeTask extends TacticalGraphicsBase<PointGraphicOptions> {
  * hook is what distinguishes withdraw / delay / retirement from an exfiltration),
  * and a two-point limit, because `getCaneArrow` puts the arrowhead at
  * `baseCoords[1]` rather than at the end of the path. An exfiltration route bends,
- * so every vertex the user drew is kept and the arrowhead follows the last
+ * so every vertex the operator drew is kept and the arrowhead follows the last
  * segment's bearing.
  *
  * Returned MultiLineString segments:
