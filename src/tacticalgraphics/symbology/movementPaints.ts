@@ -272,15 +272,16 @@ const HEAD_LETTER_CAP = 1.5;
  * They used to start at the head's base at the ordinary label size, so on a wide arrow the
  * letter was small and sat against the dates behind it (user, 2026-11-02). Centred near the
  * triangle's centroid and sized from the head's length, it fills the head at every zoom and
- * stays larger than the name and dates, which are capped. Never smaller than a plain label.
+ * stays larger than the name and dates, which are capped.
  */
 function headLetter(feature: PaintFeature, context: PaintContext, letter: string, base: ProjectedPosition, tip: ProjectedPosition): Paint {
     const headPx = Math.hypot(tip[0] - base[0], tip[1] - base[1]) / context.resolution;
     // Capped like every other movement label, at a little more than their ceiling so the
     // letter still reads as the larger mark; uncapped it grew without bound on zoom-in
     // (user, 2026-11-02). @see maxGraphicLabelScale
-    const grown = Math.min((headPx * HEAD_LETTER_SIZE) / BASE_FONT_SIZE_PX, maxGraphicLabelScale() * HEAD_LETTER_CAP);
-    const scale = Math.max(scaleOf(feature, context), grown);
+    // Sized from the head alone, with no plain-label floor: on a narrow arrow the floor made the
+    // letter taller than the head and it crossed the outline (catalog, 2026-11-02).
+    const scale = Math.min((headPx * HEAD_LETTER_SIZE) / BASE_FONT_SIZE_PX, maxGraphicLabelScale() * HEAD_LETTER_CAP);
     const at: ProjectedPosition = [base[0] + (tip[0] - base[0]) * HEAD_LETTER_AT, base[1] + (tip[1] - base[1]) * HEAD_LETTER_AT];
     return text(feature, at, letter, scale, {rotation: uprightRotation(base, tip), align: 'center'});
 }
