@@ -31,7 +31,7 @@ export interface SelectedGraphic {
     labels: GraphicLabels;
     /** Kept outside `labels` because it is stamped outside the bag. @see PaintFeature.echelon */
     echelon: string;
-    /** Read-only geometry inputs in meters — what the user set by dragging. */
+    /** Read-only geometry inputs in meters — what the operator set by dragging. */
     measured: GraphicGeometryState;
     /**
      * The size the graphic was drawn at, in projected meters.

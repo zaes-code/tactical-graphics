@@ -13,7 +13,7 @@
  * six-line block.
  *
  * The two families look alike and are not the same: the zones take the doctrinal
- * prefix over the user's designation and a time-from/time-to block, the coordination
+ * prefix over the operator's designation and a time-from/time-to block, the coordination
  * areas take prefix-and-designation joined on one line over the *second* designation,
  * a grid, one combined effective-time line — and a cap that keeps the block inside
  * the polygon.
@@ -165,7 +165,7 @@ function fitScale(feature: PaintFeature, context: PaintContext, widest: number):
 }
 
 /**
- * The twelve air-coordinating zones: the doctrinal prefix over the user's
+ * The twelve air-coordinating zones: the doctrinal prefix over the operator's
  * designation, a blank line, then whichever of the four altitude and time lines are
  * set.
  */
@@ -188,7 +188,7 @@ export function airCoordinatingAreaLabelPaint(name: TacticalGraphicName): AirPai
         }
 
         /*
-         * **Fitted, as of 2026-08-21.** These twelve are drawn as circles, rectangles and
+         * **Fitted.** These twelve are drawn as circles, rectangles and
          * irregular areas like any other zone, and their block is the longest in the
          * library — a two-line name over four `MIN ALT: / MAX ALT: / TIME FROM: / TIME TO:`
          * columns. Unfitted it ran 4.6x the width of the zone it belongs to at gallery
@@ -233,7 +233,7 @@ export function airspaceCoordinationAreaLabelPaint(name: TacticalGraphicName): A
         // The effective time is the two date-time groups joined, and it **replaces** any
         // `eff` the caller set rather than falling back to it: the OpenLayers dispatcher
         // assigns `labels.eff = dateLabel` before calling the style, so an `eff` typed by
-        // a user never reaches the label. Falling back to it instead added a line to the
+        // an operator never reaches the label. Falling back to it instead added a line to the
         // block on any graphic carrying one, which widened it, which tightened the
         // fit-to-polygon cap — visible in the gallery as an ACA whose designation shrank.
         const effective = dateRange(props.startDate, props.endDate);

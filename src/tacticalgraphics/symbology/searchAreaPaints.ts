@@ -26,8 +26,8 @@ type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  *
  * The first version measured the plate — a 46-degree half-angle and a 20 px reach — and
  * drew something correct against that drawing and unlike every other arrowhead in this
- * library. A broad, stubby head reads as a different family of symbol; the user's call
- * (2026-09-04) is that it should match the ones already in use.
+ * library. A broad, stubby head reads as a different family of symbol; a deliberate choice
+ * is that it should match the ones already in use.
  *
  * So it takes `SOLID_ARROWHEAD_PX` and `ARROWHEAD_MAX_SHARE`, the same two constants
  * `screenSizedArrowHead` applies to Fix, tactical fix and ferry crossing, and the half-angle

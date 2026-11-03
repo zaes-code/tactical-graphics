@@ -9,7 +9,7 @@
  * say the symbol *"varies only in length"*, which is the standard stating in words the
  * rule this library already has — a size that is not proportional to the graphic is a
  * screen size, and a screen size is computed here rather than baked into the geometry at
- * whatever zoom the user drew at.
+ * whatever zoom the operator drew at.
  *
  * The mark size comes from `endMarkScale` rather than `decorationScale`, for the reason
  * given where it is defined: a cap tuned for a pattern repeating twenty times along a line
@@ -162,7 +162,7 @@ function minelineMines(
         centers.push(at.point);
         tangents.push(at.tangent);
         // Cut the line to the glyph's own reach, so a hollow disc reads hollow instead of
-        // wearing the stroke as a diameter. (User's call, 2026-08-27.)
+        // wearing the stroke as a diameter.
         gaps.push({at: along, halfGap: Math.max(extent.left, extent.right) * radius});
     }
     return centers.length ? {centers, tangents, radius, gaps} : undefined;
@@ -175,7 +175,7 @@ function minelineMines(
  * line of beads and its Template sets a `Modifier 1` box between the two `N`s — the same
  * slot the two mine areas fill from Table 8-24, and the only modifier a *pattern* can be
  * based on. So the bead is the Table 8-24 glyph rather than a plain disc, and the middle
- * box is that glyph repeated rather than a caption. (User's call, 2026-08-27.)
+ * box is that glyph repeated rather than a caption.
  *
  * **Table 8-24's mine-type rows are remarked *"Used with minefields & mined areas only"*,
  * and a mineline is a protection line.** Read strictly, the standard does not offer these
@@ -214,7 +214,7 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         // **`N` is a placeholder, not a letter.** The Template's box says *where the
         // hostile marker goes*, the way every other `N` box in the standard does — it is
         // not something to print. So the ends carry `ENY` when the mineline is the
-        // enemy's and nothing at all otherwise. (User's call, 2026-08-27.)
+        // enemy's and nothing at all otherwise.
         if (!showsEny(feature)) return paints;
 
         const start = path[0];
@@ -303,7 +303,7 @@ function domeRing(chord: ProjectedPosition[], dome: ProjectedPosition[], resolut
  *
  * The generic bounding-box ring left a wide gap above the apex and a wider one below the
  * chord, which read as two symbols rather than one; drawn exactly on the dome the two dash
- * patterns interleave into a ragged arc. (User's call, 2026-08-27.)
+ * patterns interleave into a ragged arc.
  */
 export function mineClusterPaint(): ProtectionPaint {
     return (feature, context) => {
@@ -363,8 +363,7 @@ export function tripWirePaint(): ProtectionPaint {
         // crossbar. Sizing the stake as a screen constant instead broke that ratio at
         // every zoom but one — on a long wire the crossbar came out a seventh of it.
         // This symbol is not the "varies only in length" kind; 290500 makes both its
-        // length *and* its proportions the two points' business. (User's call,
-        // 2026-08-27.)
+        // length *and* its proportions the two points' business.
         const size = Math.hypot(path[1][0] - path[0][0], path[1][1] - path[0][1]);
         if (!(size > 0)) return paints;
         const at = ([along, left]: ProjectedPosition): ProjectedPosition => [
@@ -406,8 +405,7 @@ const RAFT_BARB_PX = 30;
  * **The barbs stop at the tip.** They used to run a quarter of their length past it, which
  * put a cross on each end of the shaft — and the template draws a plain Y: two strokes
  * leaving the tip outward, and nothing on the shaft side of it. The overshoot was the only
- * thing making this read as an arrowhead rather than as the open fork it is. (User's call,
- * 2026-08-27.) `RAFT_HALF_ANGLE_DEG` keeps the pair inside the acute angle the draw rule
+ * thing making this read as an arrowhead rather than as the open fork it is. `RAFT_HALF_ANGLE_DEG` keeps the pair inside the acute angle the draw rule
  * calls for.
  */
 export function raftSitePaint(): ProtectionPaint {
@@ -452,7 +450,7 @@ const FORTIFIED_POSITION_LEG_PX = 48;
  * each end — an open bracket, closed on the enemy side.
  *
  * The legs go to the **right of `PT1 → PT2`**, the side the template puts them on, so the
- * note *"the symbol typically faces enemy forces"* becomes a rule the user can act on:
+ * note *"the symbol typically faces enemy forces"* becomes a rule the operator can act on:
  * draw the front left-to-right across the enemy's approach and the back opens behind you.
  */
 export function fortifiedPositionPaint(): ProtectionPaint {

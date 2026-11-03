@@ -82,16 +82,16 @@ const LC_LABEL_PAD_PX = 10;
  * balanced when a host recolors the library.
  *
  * Which side is which is a property of the map, not of the drawing gesture. The
- * enemy-side wave takes the upper side of the line however the user drew it.
+ * enemy-side wave takes the upper side of the line however the operator drew it.
  *
  * **The scallops bulge toward each other**, which is why the amplitude goes in negated:
  * each wave sits on its own side and bows back across the gap, so its open side faces
  * its own unit. FM 1-02.2 Table 5-8 and MIL-STD-2525E Table L-VII ("the open side of the
- * arc reflects the reported unit") both draw it so. Until 2026-10-31 both bowed away.
+ * arc reflects the reported unit") both draw it so. Until both bowed away.
  *
  * One scale drives the waves *and* their separation, so the symbol keeps its
  * proportions and simply gets smaller. This was exempt from `decorationScale`
- * until 2026-08-04, on the grounds that the separation is what the graphic says.
+ * on the grounds that the separation is what the graphic says.
  * What that produced was a 117 px line still wearing 8 px waves 16 px apart — two
  * separate squiggles rather than one symbol. The separation has its own floor
  * below which the waves are dropped: a shared scale of 0 would put the two lines
@@ -216,7 +216,7 @@ export function arrowheadedLinePaint(label = '', {openHead = false}: {openHead?:
         const anchor: ProjectedPosition = [(segStart[0] + segEnd[0]) / 2, (segStart[1] + segEnd[1]) / 2];
 
         // Rotation and scale come from the *full* line, so the letter is upright with
-        // the graphic and its size tracks the user-drawn length.
+        // the graphic and its size tracks the operator-drawn length.
         const start = linePath[0];
         const end = linePath[linePath.length - 1];
         const len = Math.hypot(end[0] - start[0], end[1] - start[1]);

@@ -56,7 +56,7 @@ export const SAME_POINT_EPSILON_M = 1e-3;
  * library projects onto the symbol stayed projected until the operator touched it, and then
  * kept whatever the cursor left behind: drag an obstacle bypass's rear grip sideways and it
  * walked off the middle of the rear bar, where APP-06 270601's PT.3 leader puts it, while
- * the same drag on the other engine held it there. Measured on the running app, 2026-09-06:
+ * the same drag on the other engine held it there. Measured on the running app,
  * 1,454,816 m of along-bar drift here against 0 on MapLibre, for one 150 px drag.
  *
  * The same asymmetry reaches every graphic whose third point is a projection — the bracket
@@ -108,7 +108,7 @@ function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Co
 /**
  * The end of a drawn line an edit turns, scales and stacks its label about.
  *
- * `coords[0]` for an ordinary line -- where the user started drawing -- the **last**
+ * `coords[0]` for an ordinary line -- where the operator started drawing -- the **last**
  * coordinate for the graphics that store their points tip-first, whose first point is the
  * arrowhead, and a named index for the handful that are neither. It is the same physical end
  * in every case; only the index it lives at moved when the bases were renumbered into
@@ -120,7 +120,7 @@ function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Co
  *
  * **The index comes from the library**, not from `drawsTipFirst` read here. The two questions
  * that function answers -- which order the points are stored in, and which end the symbol
- * turns about -- have been parting company one graphic at a time since 2026-09-06, and this
+ * turns about -- have been parting company one graphic at a time, and this
  * engine reading the first to answer the second is how they could disagree with MapLibre,
  * which asks `rotationAnchor`. Same table, two coordinate systems. @see pivotVertexIndex
  */
@@ -164,7 +164,7 @@ export class LineGraphicController implements TacticalGraphicHandler {
     /**
      * Whether an edit-mode drag moves the grabbed vertex rather than scaling the whole
      * graphic. Off by default: the line family is overwhelmingly "a drawn path plus
-     * decorations", where a uniform resize is what a user expects. On for the graphics
+     * decorations", where a uniform resize is what an operator expects. On for the graphics
      * whose shape *is* the arrangement of their vertices — a fields-of-fire V, where the
      * legs' angle and length are the content.
      *
@@ -286,10 +286,8 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * **Asked, not restated.** `rotationAnchor` is the library's whole answer to "what
          * does a gesture turn and scale about", and it carries three decisions this engine
          * was not honouring: 141700 ambush turns about point 2 rather than its centre
-         * (user's call, 2026-09-05), and cover, guard and screen turn and scale about their
-         * middle rather than about the arrowhead their first point sits on (user's call,
-         * 2026-09-06 — *"the axis of rotation and resize [...] need to go off the center of
-         * the graphic where the symbol may or may not be"*). MapLibre has always read it.
+         * and cover, guard and screen turn and scale about their
+         * middle rather than about the arrowhead their first point sits on. MapLibre has always read it.
          *
          * Measured with a three-point base at 40 degrees north, the anchor this returned
          * against the one the library states: the three security operations 336 km out and
@@ -357,7 +355,7 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * metres, independent of the drawn line, so scaling only the base made the
          * graphic longer while its symbol stayed the size it was — an abatis grew a long
          * tail behind an unchanged chevron, which reads as a different obstacle rather
-         * than a bigger one. "Resize the whole graphic as is" is the user's rule.
+         * than a bigger one. "Resize the whole graphic as is" is review.
          *
          * Only the *gesture* scales it. `setOffset` is also how a restore replays a
          * stamped size, and scaling there would compound on every load.
@@ -441,7 +439,7 @@ export class LineGraphicController implements TacticalGraphicHandler {
      * gestures are absolute — applied to the shape the drag started from, so one settle per move
      * gives the same answer as one at the end. This is that guarantee on this side, and it has to
      * be **at the end**: settling each delta would compose, which is the trap `vertexDragStart`
-     * exists for. @see normalizeDrawnBase, ai/decisions.md "Idempotent is not the same as
+     * exists for. @see normalizeDrawnBase
      * path-independent"
      */
     private settleBase(): void {
@@ -534,13 +532,13 @@ export class LineGraphicController implements TacticalGraphicHandler {
             let coords = (geometry as LineString).getCoordinates();
             if (coords.length < 2) return;
 
-            // handle the case when a user just clicks without moving their mouse
+            // handle the case when an operator just clicks without moving their mouse
             if (this.areCoordsEqual(coords[coords.length - 1], coords[coords.length - 2])) {
                 coords.pop();
                 (geometry as LineString).setCoordinates(coords);
             }
             // Which side a decoration takes, from the way the line is being drawn, applied to
-            // the preview on every move so what the user sees while drawing is what they get:
+            // the preview on every move so what the operator sees while drawing is what they get:
             // an abatis tooth faces north. Only a draw sets it, so rotation keeps it.
             // @see drawnSide
             // The field, not `setMirrored`: that redraws at once, and the first move has no base
@@ -607,12 +605,12 @@ export class LineGraphicController implements TacticalGraphicHandler {
          * one segment: show only the handle on the far end" — which is right while the only
          * gesture is a stretch anchored on the near end, because the near handle would then
          * do nothing. It is wrong the moment the graphic drags vertices: the near end is a
-         * point the user can move, and a point you can move needs something to grab.
+         * point the operator can move, and a point you can move needs something to grab.
          *
          * MapLibre publishes both and has all along, so this was a **cross-engine
          * difference on every `vertexLine(2, …)` graphic** — the convoys, the navigational
          * line, `Fix`, the follow tasks. Reported on the convoys: *"maplibre has two red
-         * handles (correct) and openlayers has only 1"* (user, 2026-09-04).
+         * handles (correct) and openlayers has only 1"*.
          *
          * Cleared here rather than in the constructor because this is the builder that
          * decides: a two-point line that does *not* drag vertices keeps the single handle.

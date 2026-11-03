@@ -18,7 +18,7 @@
  * produce still holds and is the reason this layer is a data description rather than a set
  * of MapLibre expressions: none of the three could be expressed as a paint/layout
  * expression, because all three build geometry that is not in the source and two of them
- * size it from a text measurement. `ai/maplibre-renderer.md` has the write-up.
+ * size it from a text measurement.
  *
  * **Coordinates here are projected metres (EPSG:3857), never degrees.** turf and
  * `GeometryService` expect geographic coordinates and will quietly give wrong answers;
@@ -111,7 +111,7 @@ export function asAmplifier(paint: Paint): Paint {
  * Labels sized to their graphic shrink with it, and a label a few pixels tall is a smudge,
  * not an amplifier: zoomed out, every name on the map became a grey dot, and an "ACP"
  * fitted to a circle under a pixel across came out with a negative size, which MapLibre drew
- * across the whole world. Under `MIN_LEGIBLE_TEXT_PX` the text goes. (User, 2026-10-23.)
+ * across the whole world. Under `MIN_LEGIBLE_TEXT_PX` the text goes.
  *
  * Applied where `withHiddenAmplifiers` is, so every engine drops the same text. The size is
  * the font's own pixel size times the mark's scale, as both renderers draw it.
@@ -135,7 +135,7 @@ export function withLegibleText(paints: Paint[]): Paint[] {
  *
  * Main labels are fitted to their graphic and shrink with it; amplifiers hung outside the
  * shape or below a line were not, so zoomed out a zone's dates stood twice the height of the
- * name they belong to, and stayed after the name had gone. (User, 2026-10-24.) The main label
+ * name they belong to, and stayed after the name had gone. The main label
  * is every text in the same set of paints that is not an amplifier, so this is asked once per
  * half, as the legibility floor is: OpenLayers styles a graphic and its labels as two
  * features. A half with no main label is left as it is. Applied by `withLegibleText`, so every
@@ -184,7 +184,7 @@ export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
  * No engine resolves overlapping text here (OpenLayers is not decluttered, MapLibre allows
  * overlap), so text overlaps as laid out, and a mark painted later covers an earlier one with
  * its halo. A zone's dates hang from its upper-left corner, which on a small or pointed shape
- * is inside it, over the name; the dates' halo then hid the name. (User, 2026-10-24.) The
+ * is inside it, over the name; the dates' halo then hid the name. The
  * boxes are measured in screen pixels from the same measurements the engines draw with, and
  * compared within one half, as the other text rules are. @see withProportionateAmplifiers
  */
@@ -229,8 +229,7 @@ function withoutCoveringAmplifiers(paints: Paint[], context: PaintContext): Pain
  *
  * **Turned with the text, not squared to the screen.** An axis-aligned box round a label laid
  * along a diagonal line is half as tall as it is wide, so the dates under such a line always
- * met the name's box over it and were taken away, on every diagonal. (Found turning every line
- * graphic through four directions, 2026-11-01.)
+ * met the name's box over it and were taken away, on every diagonal.
  */
 type TextBox = readonly (readonly [number, number])[];
 
@@ -341,7 +340,7 @@ export function groundPixels(metres: number, feature: PaintFeature, context: Pai
     return projectedLength(metres, featureLatitude(feature)) / context.resolution;
 }
 
-/** A graphic's static prefix joined to the user's free text — "PL", "PL BLUE". */
+/** A graphic's static prefix joined to the operator's free text — "PL", "PL BLUE". */
 export function formatFullLabel(prefix: string, name: string): string {
     return prefix ? `${prefix} ${name}`.trim() : name;
 }
@@ -355,7 +354,7 @@ export function getFullLabel(graphicName: TacticalGraphicName, customName: strin
  * be too small to read, its doctrinal prefix alone (`PL`).
  *
  * The prefix is part of the symbol, the name is the operator's, so when there is no longer room
- * for both the name goes and the prefix stays (user, 2026-10-24): never under
+ * for both the name goes and the prefix stays: never under
  * `MIN_LEGIBLE_TEXT_PX`, and gone only once the graphic is smaller than twice it, by the same
  * rule as a letter in a gap. @see letterInGapScale
  *
@@ -427,13 +426,13 @@ export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
  *
  * FM 1-02.2 gives the Chapter 6 tactical mission tasks no amplifier fields, so a
  * hostile Seize is drawn exactly like any other Seize. The demo enforced that by
- * **hiding the input** — which stops a user picking an identity and does nothing
+ * **hiding the input** — which stops an operator picking an identity and does nothing
  * about one that arrives in an imported file, from a host writing the bag
  * directly, or from a sweep that colors everything. MapLibre's sample sweep did
  * exactly that last thing and drew every mission task red.
  *
  * Hiding a control is a UI convenience; this is the rule. Both halves are kept,
- * because a field a user can set and the renderer then ignores is its own kind of
+ * because a field an operator can set and the renderer then ignores is its own kind of
  * wrong.
  *
  * `hostilityColor` is skipped for the same reason: it is a *resolved* affiliation
@@ -561,7 +560,7 @@ export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: nu
      * the same corridor at the same zoom drew its designation at 1.00 in this library's own
      * app and 0.55 in a consuming one. The anchor is the thing this function was changed to
      * stop using; keeping it as the fallback kept it in use for exactly the consumers who
-     * could not see why. (User's call, 2026-08-30.)
+     * could not see why.
      */
     return capLabelToGraphic(configuredLabelScale(), feature, context, fontPx);
 }
@@ -692,8 +691,8 @@ const LEFT_OF_TRAVEL = 1;
  * two never compete. APP-06 290100's plate draws PT 1 to PT 2 left to right with the
  * teeth up and says orientation "is determined by the order in which the anchor points
  * are entered", so drawing the line the other way puts both on the other side. They
- * used to be pinned to the map's up and down whichever way the line was drawn
- * (2026-08-03); that kept them still and ignored the plate. @see antiTankWallPaint, the
+ * used to be pinned to the map's up and down whichever way the line was drawn;
+ * that kept them still and ignored the plate. @see antiTankWallPaint, the
  * same line with its teeth on the right.
  */
 export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
@@ -806,7 +805,7 @@ function missionTaskLetterFont(ratioLocked: boolean): {font: string; fontPx: num
  * ceiling every size-proportional label stops at. The letter is part of the symbol, so it
  * shrinks as the symbol does and holds once the symbol is large.
  *
- * **No drawing zoom and no `graphicSize` in it** (2026-10-31). The block family and the
+ * **No drawing zoom and no `graphicSize` in it**. The block family and the
  * zoom-anchored tasks used to take their letter from the zoom the task was drawn or restored
  * at, through `graphicSize` when one was stamped. OpenLayers never stamps one for them and
  * MapLibre filed any stored `radius` there, so the same breach drew a 24 px letter on
@@ -895,7 +894,7 @@ export function missionTaskLetterClearance(clearancePx: number, scale: number): 
  * east, the letter's *height* runs along the arc; due north, its width.
  * Projecting the glyph box onto the tangent covers both and everything between.
  *
- * This is risk 3 from `ai/maplibre-renderer.md` in its purest form — the gap is a
+ * This is the known weakness in its purest form — the gap is a
  * function of a text measurement, and MapLibre sizes text through zoom
  * expressions it evaluates itself, so a declarative port would have the hole and
  * the letter drift apart.
@@ -1027,7 +1026,7 @@ const END_LABEL_SEPARATION_PX = 12;
  * Whether a line's two end labels, each set inward from its end, would run into each other.
  *
  * APP-06 puts the name at both ends of a line. Zoomed out far enough the line is shorter than
- * the two names, and each name was drawn over the other at every engine (QA audit, 2026-10-31).
+ * the two names, and each name was drawn over the other at every engine.
  * Measured end to end rather than along the path: the labels sit at the ends, so a line that
  * doubles back brings them together whatever its length.
  */
@@ -1182,7 +1181,7 @@ export interface DefaultLineOptions {
     /**
      * Render the date-time group below the line. Off for graphics whose doctrinal
      * form has no DTG — again ProbableLineOfDeployment, which would otherwise start
-     * showing dates the moment a user filled the field in.
+     * showing dates the moment an operator filled the field in.
      */
     showDates?: boolean;
     /**
@@ -1191,7 +1190,6 @@ export interface DefaultLineOptions {
      * `'parentheses'` is the fire-support family's — APP-06 letters them `T2 ( AS )` and the
      * example reads `FSCL MND(USA)`. `'slash'` is the decision line's, whose plate writes
      * `T/AS`. Absent means the line takes no country code, which is most of them.
-     * (User's call, 2026-09-01.)
      */
     countryCode?: 'parentheses' | 'slash';
 }
@@ -1206,7 +1204,6 @@ export interface DefaultLineOptions {
  * the country code round-tripped through save and restore, the dialog offered it, and one
  * of the two engines simply never painted it. Making it the paint's own default is what
  * stops an engine having an opinion about a symbology fact.
- * @see ai/conventions.md, "A symbology fact never lives in a holder"
  */
 const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parentheses' | 'slash'>> = {
     // `T2 ( AS )` on the plate, `FSCL MND(USA)` in the worked example.

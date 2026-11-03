@@ -11,7 +11,7 @@ import {publishesAnchorHandleOnly} from "../core/symbology";
  * MIL-STD-2525E Table L-XXI draws every one of them wider than tall: Destroy, Suppress and
  * Neutralize as an X of the box's two diagonals (measured off the Template at 300 dpi, 32°
  * either side of horizontal), Interdict as a horizontal plus one diagonal (35°). FM 1-02.2
- * draws Destroy and Suppress square, and the library followed it until 2026-10-31.
+ * draws Destroy and Suppress square, and the library followed it.
  *
  * Interdict's rule text asks for 45° between the arrows while its own Template draws 35°;
  * the drawing, which FM 1-02.2 agrees with, is what this follows.
@@ -62,7 +62,7 @@ const CROSS_ARMS: Partial<Record<TacticalGraphicName, CrossArm[]>> = {
  * hashed, "S"), Neutralize (X with its "/" hashed, "N") and Interdict
  * (horizontal and diagonal lines, both arrowheaded, "I").
  *
- * Point-anchored: the user places a center and the symbol keeps its doctrinal
+ * Point-anchored: the operator places a center and the symbol keeps its doctrinal
  * proportions under resize and rotate. Nothing about it is stretchable, so
  * there are no line vertices to edit — `generateHandles` publishes the center
  * and nothing else.
@@ -108,7 +108,7 @@ export class CrossedMissionTask extends TacticalGraphicsBase<PointGraphicOptions
 
     /**
      * The center, and only the center. A crossed mission task has no dimension
-     * the user may drag independently — an edge handle would suggest one that
+     * the operator may drag independently — an edge handle would suggest one that
      * does not exist. Resize and rotate work off the symbol itself.
      */
     /**

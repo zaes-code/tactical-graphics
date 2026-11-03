@@ -1,5 +1,5 @@
 /**
- * # Tidying up what a user actually drew
+ * # Tidying up what an operator actually drew
  *
  * Between the last click and the stored base there is a step both renderers need and
  * neither owned: turning the raw click sequence into a base the generator and the
@@ -54,7 +54,7 @@ import * as turf from './turf';
  *
  * Degrees rather than pixels, because this runs after the gesture is over and has no
  * view to ask. Small enough to catch only an exactly-repeated click — about a
- * centimeter at the equator — since a user placing two vertices deliberately close
+ * centimeter at the equator — since an operator placing two vertices deliberately close
  * together still means both of them.
  */
 const DUPLICATE_EPSILON_DEG = 1e-7;
@@ -68,8 +68,8 @@ const samePosition = (a: Position, b: Position): boolean =>
  * The S's depth. Below the floor the two 90-degree arcs are too tight to read as an S at
  * all — the symbol degenerates into the straight line the chord already is — and past the
  * ceiling the kink dominates a graphic whose subject is the route. **The side stays the
- * user's**: point 2 above the first segment or below it is a real choice, and only the
- * distance is clamped. (User's call, 2026-08-27.)
+ * operator's**: point 2 above the first segment or below it is a real choice, and only the
+ * distance is clamped.
  */
 export const S_CURVE_MIN_OFFSET_PX = 30;
 export const S_CURVE_MAX_OFFSET_PX = 100;
@@ -81,11 +81,11 @@ const S_CURVE_GRAPHICS = new Set<TacticalGraphicName>([
 ]);
 
 /**
- * Point 2 held to a readable distance from the chord, keeping the side the user chose.
+ * Point 2 held to a readable distance from the chord, keeping the side the operator chose.
  *
  * The one place in this module that **moves** a vertex rather than adding or removing one,
  * which is why it only runs when a renderer supplied a resolution: a pixel range means
- * nothing without one, and a caller that cannot say what the zoom is gets the user's point
+ * nothing without one, and a caller that cannot say what the zoom is gets the operator's point
  * back untouched.
  */
 function clampSCurveAnchor(coordinates: Position[], resolution: number): Position[] {
@@ -121,10 +121,10 @@ function clampSCurveAnchor(coordinates: Position[], resolution: number): Positio
 }
 
 /**
- * The base geometry to store for a graphic the user has just drawn.
+ * The base geometry to store for a graphic the operator has just drawn.
  *
  * Adds meaning that was already implied and removes what was never meant. It moves a
- * vertex the user placed in exactly one case — the S pair's point 2, held to a readable
+ * vertex the operator placed in exactly one case — the S pair's point 2, held to a readable
  * offset — and only when the caller supplies the resolution that makes a pixel range
  * meaningful. A graphic with nothing to tidy comes back unchanged.
  *
@@ -170,7 +170,7 @@ export function normalizeDrawnBase(
      * graphic. Point 2 and Point 3 defines the length", and the Template puts PT 1 under the
      * A box in the middle of the bar. The bar is drawn on points 2 and 3, so point 1 is put
      * on their midpoint, the same one the unit symbol and the E A E break use. Until
-     * 2026-10-31 it was wherever it was clicked, a grip floating off the symbol.
+     * it was wherever it was clicked, a grip floating off the symbol.
      */
     if (name === TacticalGraphicName.Escort && deduped.length >= 3) {
         const [, a, b, ...rest] = deduped;
@@ -223,7 +223,6 @@ export function normalizeDrawnBase(
  * — each of which *builds* for these graphics, so each drew the legacy fallback rather than
  * the shape the plate describes. Thirteen graphics were squat in the sweep, squat in the
  * picker, and asserted against the wrong shape in five round-trip suites, all at once.
- * (User's report, 2026-09-06: "the sweep is still drawing an older format".)
  *
  * Ask `carriesSeparationInBase(name)` whether a graphic wants this. Fields of fire and the
  * search area are not in it and want a vee, which is a different shape and stays theirs.
@@ -298,8 +297,7 @@ export function hairpinBase(center: Position, half: number): Position[] {
  * arrow like the seven retrograde graphics, MapLibre was given an inline
  * `name === Pursuit` to put it on the front edge with them, and the OpenLayers sweep never
  * got the clause at all — so it kept drawing pursuit as a shallow V, unlike every sibling
- * it shares a shape with, through three separate reports. (User, 2026-09-06: "Pursuit, use
- * the same cane base for this 3 point graphic. I've asked for that several times now.")
+ * it shares a shape with, through three separate reports.
  *
  * A renderer must not decide this. `undefined` means "nothing here describes a layout for
  * it" and the caller keeps its own default, which is the ordinary case.
@@ -314,8 +312,7 @@ export function hairpinBase(center: Position, half: number): Position[] {
  *
  * **Two, because the point stands off by the edge's own full length.** The edge spans twice
  * `half`, so a share of 2 puts point 3 exactly that far from the line through points 1 and 2
- * — a square figure rather than a bar with a nub on it. (User's call, 2026-09-07: "point 3
- * distance from line 1,2 needs to be = to the length of 1,2".)
+ * — a square figure rather than a bar with a nub on it.
  *
  * Governs the twenty-two graphics `frontEdgeBase` serves. Not the fords, 152000 or 152100,
  * which are answered earlier by layouts of their own, and not 270603 roadblock, which is
@@ -338,7 +335,7 @@ export function hairpinBase(center: Position, half: number): Position[] {
  * the wrong shape for that: it draws a square where the symbol is a stripe.
  *
  * A fifth of the run, which is the separation the fords are drawn with and near enough what
- * the plate shows. (User's call, 2026-09-07.) Stated as a share of the **half**-run like
+ * the plate shows. Stated as a share of the **half**-run like
  * every ratio here, so a fifth of the edge is two fifths of the half. @see FRONT_EDGE_ACROSS
  */
 const EXPLOSIVES_ACROSS_OF_EDGE = 1 / 5;
@@ -347,13 +344,13 @@ export const EXPLOSIVES_ACROSS = EXPLOSIVES_ACROSS_OF_EDGE * 2;
 /**
  * And laid out on the diagonal, because that is how both the Template and the Example draw
  * it — the band crosses the road it blocks rather than running along it, which is the whole
- * point of the symbol. Axis-aligned, a row of these read as underlines. (User's call.)
+ * point of the symbol. Axis-aligned, a row of these read as underlines.
  */
 export const EXPLOSIVES_ROTATION_DEG = 45;
 
 /**
  * The four that share that plate's wording: the three states of readiness and, since
- * 2026-09-21, 271204 roadblock, which inherits 271201's rule. @see RoadblockComplete
+ * 271204 roadblock, which inherits 271201's rule. @see RoadblockComplete
  */
 const EXPLOSIVES_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
@@ -371,14 +368,14 @@ const REPAIRED_HALF_WIDTH_RATIO = 0.1;
 /**
  * A demolition obstacle's base with its missing point 3 put back, when it was saved with two.
  *
- * **Repairs a file, not a draw.** Until 2026-09-21 OpenLayers ended these draws on a
+ * **Repairs a file, not a draw.** Until OpenLayers ended these draws on a
  * double-click at two points, so a three-point symbol could be saved with two: it drew, from a
  * fallback width, but its side grip had no vertex behind it and did nothing. MapLibre never
  * allowed it. Both engines call this on every restore, whatever the file's version, since a
  * current-version file can carry the defect. Point 3 goes square off the centreline's midpoint
  * at a tenth of its length, on the right of point 1 to point 2, and the roadblock holds it
  * inside its own limits. Any other base comes back as it went in.
- * (User's report, 2026-09-21.) @see drawIsComplete
+ * @see drawIsComplete
  */
 export function completeDemolitionBase(name: TacticalGraphicName, coords: Position[]): Position[] {
     if (!EXPLOSIVES_GRAPHICS.includes(name) || coords.length !== 2) return coords;
@@ -463,7 +460,6 @@ const CIRCLE_AND_ARROW: readonly TacticalGraphicName[] = [
  * along the run, which puts point 2 half a symbol from point 1 and leaves the arrow whatever
  * is left. The result is a circle filling most of the tile with a stub hanging off it — where
  * the plate draws a **small circle and a long arrow**, the circle about a sixth of the reach.
- * (User's report, 2026-09-07, against a drawing of the wanted proportions.)
  *
  * So the circle sits at the near end at that size, the arrow's tip reaches the far end, and
  * the arc's middle sits between them and a little off the axis — which is the swing the plate
@@ -515,8 +511,7 @@ export function supportByFireBase(center: Position, half: number): Position[] {
  * point 3 is a rear or a depth and wrong here — so the sweep drew every crossing as the
  * vertical mirror of a hand-drawn one. Invisible on the bridge and the assault crossing, whose
  * two crowbars are the same mark twice; plain on the fords, where the grips are the only thing
- * telling the bars apart. (User's report, 2026-09-06: "fix the ford graphics on the sweep. The
- * handles seem flipped there".)
+ * telling the bars apart.
  *
  * The two that number four points get a full-width far rail rather than the inset one
  * `frontEdgeBase` draws: the reader makes the second bar parallel **and the same length**, so
@@ -567,13 +562,13 @@ export function axisSampleBase(name: TacticalGraphicName, center: Position, half
  * `carriesSeparationInBase` is the library's own statement of that shape and is now the
  * whole answer. It briefly was not: 344000 pursuit had to be named here, because it drew
  * the cane arrows' picture while reading its own frame rather than a stored separation. It
- * joined that predicate on 2026-09-06 when its editing was made to match its siblings', and
+ * joined that predicate when its editing was made to match its siblings', and
  * the exception went with it. @see synthesizedBase, acrossPointAtEnd
  */
 export function usesFrontEdgeBase(name: TacticalGraphicName): boolean {
     /*
      * **343100 is the one member that is not this shape.** It joined
-     * `carriesSeparationInBase` on 2026-09-10 because the fact that predicate states is true
+     * `carriesSeparationInBase` because the fact that predicate states is true
      * of it — its dimension is a stored coordinate rather than an amplifier beside the base —
      * but its three points are a tip, an end and a 45 degree arm, not a front edge and a point
      * across it. Laid out as one, the sheet read an arm end as an edge end and drew a symbol
@@ -692,7 +687,7 @@ const HAIRPIN_GRAPHICS: readonly TacticalGraphicName[] = [
  * longest arrow is the one at point 2. Handed a mid-edge third point the symbol still draws
  * correctly, because the generator reads only the distance across; but the *grip* is
  * published on the arrowhead the picture actually has, so base and handle sat half a symbol
- * apart in every sample. (User's report, 2026-09-06: "sweep shows handles out of place".)
+ * apart in every sample.
  */
 export function acrossPointAtEnd(name: TacticalGraphicName): boolean {
     return ACROSS_POINT_AT_END.includes(name);
@@ -712,8 +707,7 @@ export function acrossPointAtEnd(name: TacticalGraphicName): boolean {
  * on a point cannot drag it. Measured on the cane arrows: one grip 0.482 off the nearest base
  * point with the mid-edge base, 0 with this one. That is why every sample-drawn cane could
  * not be dragged from point 3 while a hand-drawn one was fine — a hand-drawn base puts the
- * point where the arc is, because that is where the operator clicked. (User's report,
- * 2026-09-06.)
+ * point where the arc is, because that is where the operator clicked.
  */
 const ACROSS_POINT_AT_END: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Disrupt,
@@ -728,7 +722,7 @@ const ACROSS_POINT_AT_END: readonly TacticalGraphicName[] = [
     TacticalGraphicName.Disengage,
     TacticalGraphicName.MobileDefense,
     // Pursuit's own grips are re-derived so it reads correctly either way, but it is the same
-    // symbol as the seven above and a user reading the sheet should not be able to tell which
+    // symbol as the seven above and an operator reading the sheet should not be able to tell which
     // of them was laid out differently. @see Pursuit
     TacticalGraphicName.Pursuit,
 ];
@@ -740,15 +734,15 @@ const degrees = (radians: number): number => (radians * 180) / Math.PI;
  * The anchor points a click sequence describes, for the four graphics an operator places
  * **point by point** rather than by dragging out from a centre.
  *
- * ## Why these four stopped being centre-to-edge (2026-09-05)
+ * ## Why these four stopped being centre-to-edge
  *
  * All four are `DRAWN_ANCHOR_GRAPHICS`: the standard describes them by numbered points,
  * and the base has always stored those points. What it did *not* do was let the operator
  * place them — the draw was two clicks, a centre and a rim, and every anchor was derived
- * from that frame. Contain left that model on 2026-09-04 because a user following the
+ * from that frame. Contain left that model because an operator following the
  * Draw Rules clicked the two ends of the opening and got a symbol twice the size they
  * asked for; `symbology.ts` recorded that the other five each needed their own plate read
- * before they followed. This is that read, for four of them. (User's call.)
+ * before they followed. This is that read, for four of them.
  *
  * ## What is placed and what is derived
  *
@@ -983,7 +977,7 @@ function anchorsFromClicks(
         case TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable:
         // 140800 states the same rule in the same words — *"points 1 and 2 define the
         // endpoints of the infiltration lane and point 3 defines one side of the lane"* —
-        // so it reads its clicks the same way. (User's call, 2026-09-05.)
+        // so it reads its clicks the same way.
         case TacticalGraphicName.InfiltrationLane:
         /*
          * **The four bracket mission tasks read their clicks the same way.** 340200 breach,
@@ -1004,7 +998,7 @@ function anchorsFromClicks(
          * will project perpendicularly from the midpoint of the vertical line."* An
          * along-edge offset in point 3 has nowhere to go in a symbol whose arrow leaves the
          * midpoint square, so it is projected out here rather than stored and ignored.
-         * (User's call, 2026-09-06.) @see BRACKET_GRAPHICS
+         * @see BRACKET_GRAPHICS
          */
         case TacticalGraphicName.Penetration:
         /*
@@ -1021,7 +1015,7 @@ function anchorsFromClicks(
          * how far back the rear sits. An along-edge component in the click cannot reach the
          * picture — `ObstacleBypass.generateGraphics` already drops it with a `cos(skew)` —
          * so storing it only put the grip out beside the symbol instead of on the middle of
-         * the rear bar, where the plate's PT.3 leader lands. (User's report, 2026-09-06:
+         * the rear bar, where the plate's PT.3 leader lands. (review,
          * "obstacle center handle (point 3) [...] is not centered on that line but rather
          * where user clicked".) @see ObstacleBypass
          */
@@ -1035,7 +1029,7 @@ function anchorsFromClicks(
          * back line, with the other end its mirror. Its Size/Shape cell carries 141700
          * ambush's two constraints word for word, so it has ambush's remaining freedom and
          * closes it the same way: the shape is held and the click sets only the size.
-         * (User's call, 2026-09-06.) @see firePositionAnchors
+         * @see firePositionAnchors
          */
         case TacticalGraphicName.AttackByFire:
             return firePositionAnchors(clicks);
@@ -1085,7 +1079,7 @@ function anchorsFromClicks(
 /**
  * 141700's three points, stated once. @see arcAndArrowAnchorsFromClicks
  *
- * The body moved to `core/anchors.ts` on 2026-09-06 so the *generator* could read it too:
+ * The body moved to `core/anchors.ts` so the *generator* could read it too:
  * this runs at draw end, and mid-draw the generator was falling through to the dropped form
  * rather than previewing the symbol being drawn.
  */
@@ -1137,14 +1131,14 @@ function sideAnchors(clicks: Position[]): Position[] | undefined {
  * Written to match `MobileDefense.frame` bearing for bearing, so the point that is stored
  * and the point that is drawn are the same point.
  *
- * **Shared with the seven cane arrows** as of 2026-09-06 — delay, retirement, withdraw,
+ * **Shared with the seven cane arrows** — delay, retirement, withdraw,
  * withdraw under pressure, disengage and the two passages of lines all state this rule in
  * the same words, and `RetrogradeTask.frame` reads its three the same way round. Nothing
  * here is 152800-specific; the name is kept because that is the plate the reading was
  * derived from. @see RetrogradeTask
  *
  * **Three clicks only.** A two-point base is left exactly as it is: the only ones in
- * existence are the ellipses saved before 2026-09-06, and the side their arc fell on is in
+ * existence are the ellipses saved, and the side their arc fell on is in
  * their `mirrored` amplifier, which `normalizeDrawnBase` cannot see. Constructing a third
  * point here put every mirrored one back on the wrong side, silently. Left short, the base
  * reaches the generator, whose own two-point fallback reads `mirrored` and draws the side it
@@ -1244,7 +1238,7 @@ function mobileDefenceAnchors(clicks: Position[]): Position[] | undefined {
 /**
  * 344000's three points, stated once. @see hookAnchorsFromClicks
  *
- * The body moved to `core/anchors.ts` on 2026-09-06 so the *generator* could read it too:
+ * The body moved to `core/anchors.ts` so the *generator* could read it too:
  * this runs at draw end, and mid-draw the generator was inventing a whole symbol from one
  * click rather than drawing nothing.
  */

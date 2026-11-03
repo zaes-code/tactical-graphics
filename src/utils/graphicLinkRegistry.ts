@@ -33,7 +33,7 @@ export type {RangeFanConfig} from '@zaes/tactical-graphics';
  */
 export type {GraphicLabels};
 
-// `SecurityOperationGraphic` was an arm of this union until 2026-08-29: it held
+// `SecurityOperationGraphic` was an arm of this union: it held
 // rotation/scale rather than size/rotation/updateGeom, because a security operation was a
 // badge placed on one anchor. They are drawn two-point lines now and register as
 // `LineGraphic` like every other one. @see SecurityOperation

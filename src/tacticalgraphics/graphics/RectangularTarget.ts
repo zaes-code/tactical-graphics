@@ -30,7 +30,7 @@ export const MILS_PER_TURN = 6400;
  * Example proves it: `AN = 1200 mils` is 67.5 degrees, and it draws the 112 m side on a
  * bearing of about 157 and the 60 m side on about 67. So AN is the bearing of the *width*
  * axis, and the length lies on AN + 90. `rotation` stores the length axis counter-clockwise
- * from east, so AN is simply `-rotation`. Until 2026-10-31 the caption printed the length
+ * from east, so AN is simply `-rotation`. Until the caption printed the length
  * axis's own bearing, 1600 mils off. @see targetAttitudeMils
  */
 export function targetAttitudeDegrees(rotation: number): number {
@@ -48,7 +48,7 @@ export function targetAttitudeMils(rotation: number): number {
  * ## Why this is not `RectangularArea`
  *
  * Every other rectangle in the set is "two anchor points and a width, defined in metres":
- * the user drags a box, the two points give the length and the orientation, and only the
+ * the operator drags a box, the two points give the length and the orientation, and only the
  * width is typed. This one is different, and its plate says so in as many words — it
  * "requires one (1) anchor point", with "the target length (AM1) in metres and target
  * width (AM) in metres" and a target attitude (AN).
@@ -60,7 +60,7 @@ export function targetAttitudeMils(rotation: number): number {
  * **This is a breaking change for saved targets.** A rectangular target stored before 3.2.0
  * carries a two-point `LineString` base and will not restore as the same shape; the anchor
  * count is part of the symbol's definition, so there is no reading of the old geometry that
- * is also correct under the plate. (User's call, 2026-08-31.)
+ * is also correct under the plate.
  *
  * ## Attitude
  *
@@ -114,7 +114,7 @@ export class RectangularTarget extends TacticalGraphicsBase {
      * other point-anchored graphic has one number to drag — a radius — so the convention
      * there is `[edge, centre]`. A rectangle sized entirely by amplifiers has a length and
      * a width, and a single grip can only set one of them; the other would be typed-only,
-     * which is a control the user cannot see.
+     * which is a control the operator cannot see.
      *
      * - **Grip 0** sits at the middle of the leading short side, one half-length out along
      *   the attitude. Dragging it swings the attitude and sets the length together.

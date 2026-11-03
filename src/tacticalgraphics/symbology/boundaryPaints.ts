@@ -106,7 +106,7 @@ export function boundaryPaint(): LinePaint {
          * segment either side of the middle, which is one number for every echelon: a corps
          * XXX overran it while a squad's single dot sat in a hole four times its width. The
          * glyph is measured first — after its own cap — and the line is cut to fit it.
-         * (User's call, 2026-09-10.) @see echelonWidthPx
+         * @see echelonWidthPx
          */
         const glyphHalfPx = echelonWidthPx(dx, dy, context.resolution, echelon, scale) / 2;
         const gapHalfMap = (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution;
@@ -163,7 +163,7 @@ export interface ResolvedRangeFanBand {
     label?: string;
     altitude?: string;
     /**
-     * Absolute compass bearings, already resolved. The user-facing fields on a
+     * Absolute compass bearings, already resolved. The operator-facing fields on a
      * band are deflections from the graphic's center bearing; resolving them is
      * the holder's job so the paint function never re-runs the resolver.
      */
@@ -238,7 +238,7 @@ function formatAzimuth(deg: number): string {
  * - sector: `[center, band1Mid, band1LeftAz, band1RightAz, band2Mid, …]`
  *
  * so the stride is three for a sector and one for a circle. Per band the stack
- * reads: the user's name if there is one, then the range — "MIN RG" on a circle
+ * reads: the operator's name if there is one, then the range — "MIN RG" on a circle
  * and "RG" on a sector — then the altitude if entered. **The range line renders
  * even when nothing is typed**: an unnamed band still has a range, and that is
  * the number the symbol exists to communicate.

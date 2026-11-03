@@ -28,7 +28,7 @@ export function restoreSnapshotGraphics(snapshot: FeatureCollection, resolution:
     /*
      * **The file's own version, because a version 1 axis arrow is a different shape.**
      *
-     * The eleven filed their width as an amplifier until 2026-09-10 and carry it as
+     * The eleven filed their width as an amplifier and carry it as
      * their last coordinate now, so an older record is a run of route points and a
      * `width` where a current one is that run plus a coordinate. A collection that
      * declares no version is read as version 1, except that each axis arrow's own
@@ -65,8 +65,7 @@ function restoreFeature(feature: Feature, version: number, declared: boolean, re
     if (!properties?.name || !geometry) return undefined;
     // The geometry an engine edits, out of the one the file carries. @see filedBaseGeometry
     geometry = editableBaseGeometry(properties.name, geometry, properties);
-    // A demolition obstacle saved with two points (OpenLayers allowed it until
-    // 2026-09-21) gets its third, whatever the version. @see completeDemolitionBase
+    // A demolition obstacle saved with two points gets its third, whatever the version. @see completeDemolitionBase
     if (geometry.type === 'LineString') {
         const completed = completeDemolitionBase(properties.name, geometry.coordinates);
         if (completed !== geometry.coordinates) geometry = {...geometry, coordinates: completed};

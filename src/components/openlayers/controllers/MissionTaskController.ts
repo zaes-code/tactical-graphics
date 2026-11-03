@@ -65,7 +65,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
      *
      * **The range fans set it too**, though `handleResize` now refuses them: this is what
      * claims the drag, and a fan that did not claim it would pan the map out from under
-     * the graphic the user was trying to edit. Their sizes come from the band amplifiers
+     * the graphic the operator was trying to edit. Their sizes come from the band amplifiers
      * and their own rim handles instead. @see allowedGestures, NO_DRAG_RESIZE_SYMBOLS
      */
     editStretches: boolean = false;
@@ -386,7 +386,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
      * **Advancing `rotation` alone turns the symbol about its own frame centre**, whatever
      * `rotationPivot` answers — the holder rebuilds its anchors from `{center, size,
      * rotation}` and the centre is the one thing the gesture never touched. So 271204, whose
-     * pivot is point 3 rather than the middle of its frame (user's call, 2026-09-07), stayed
+     * pivot is point 3 rather than the middle of its frame, stayed
      * where it was while MapLibre — which turns the coordinates themselves — swung the whole
      * figure about that crossing. Measured with a deliberate quarter turn, the two engines
      * agreed on the angle to within a degree and on the size to within 0.1%, and put the
@@ -439,7 +439,7 @@ export class MissionTaskController implements TacticalGraphicHandler {
  *
  * The crossed mission tasks (Destroy / Interdict / Neutralize / Suppress) are
  * badges — they render at a fixed 100 px, never rotate, and have no dimension
- * to drag. A `Circle` draw asked the user for a radius and a bearing that were
+ * to drag. A `Circle` draw asked the operator for a radius and a bearing that were
  * both then discarded, and left a click-move-click gesture where a click would
  * do.
  *
@@ -453,9 +453,9 @@ export class MissionTaskController implements TacticalGraphicHandler {
  *
  * APP-06 describes these by numbered points and the base has always stored those points;
  * what it did not do was let anyone place them. The draw was a `Circle` — a centre and a
- * rim — and every anchor was derived from that frame, which is why a user following the
+ * rim — and every anchor was derived from that frame, which is why an operator following the
  * Draw Rules got a symbol other than the one they aimed at. Contain moved off that model
- * on 2026-09-04 and the other four followed on 2026-09-05. (User's call.)
+ * and the other four followed.
  *
  * **Only the draw changes.** Everything after it — translate, rotate, resize, the
  * per-handle drags, the gesture refusals — is `MissionTaskController`'s and is inherited
@@ -482,7 +482,7 @@ export class AnchorClickController extends MissionTaskController {
      * Setting this to `LineString` sent them down `handleLineStringDrag`, which hands
      * `handleRotate` an angle in **radians** because a line controller rotates geometry;
      * a mission-task holder keeps `rotation` in **degrees**, so a half-radian drag turned
-     * the symbol half a degree and the gesture looked dead. (User's report, 2026-09-05.)
+     * the symbol half a degree and the gesture looked dead.
      */
     geomHandleType: TacticalGraphicShape = 'Circle';
     maxPoints: number;
@@ -505,7 +505,6 @@ export class AnchorClickController extends MissionTaskController {
      * The circle draw updated the holder on every geometry change, so the graphic grew
      * under the cursor; a line draw that only spoke at the end left the operator placing
      * points against an empty map and finding out what they had made afterwards.
-     * (User's report, 2026-09-05.)
      *
      * The sketch carries a floating vertex at the cursor, so what arrives here after the
      * first click is already the two points ambush needs and, after the second, the three
@@ -521,15 +520,14 @@ export class AnchorClickController extends MissionTaskController {
          * `size` while the cursor kept going: measured on a turn, the symbol stood still at
          * 478 km through the first 120 px of drag while the cursor slid from 0.70 to 1.14 of
          * its own bounding box, then lurched into tracking. "The cursor seems to be in the
-         * middle of the graphic making it seem jumpy and not smooth." (User's report,
-         * 2026-09-05.) The floor is gone from both engines now.
+         * middle of the graphic making it seem jumpy and not smooth." The floor is gone from both engines now.
          * @see decorationSizes.ts, "There is no floor"
          */
         /*
          * **And so does the read-out.** The circle draw armed it in its own `onDrawStartFunc`,
          * so every graphic that moved to a click-placed draw silently lost the distance label
          * it used to show while being drawn — the operator was placing points with no measure
-         * of what they were making. (User's report, 2026-09-05.)
+         * of what they were making.
          *
          * Armed for the whole family rather than per graphic: `showMeasure` already asks
          * `showsSizeReadout(name)`, which is the library's own table of which symbols report a
@@ -548,7 +546,7 @@ export class AnchorClickController extends MissionTaskController {
      * already forwards every pointer move to the controller, which is the event the sketch
      * is updated from in the first place, so this reads it at the source. Measured: with
      * the `change` listener the holder was still holding its initial `Point` base after a
-     * click and a 170-pixel drag. (2026-09-05.)
+     * click and a 170-pixel drag.
      */
     protected sketch?: Feature<LineString>;
 
@@ -558,9 +556,8 @@ export class AnchorClickController extends MissionTaskController {
          * what that clearing is for: the manager forwards *every* pointer move to the active
          * controller, including the ones in edit mode long after the draw finished. A
          * controller still holding its finished sketch replays it on each move and stamps the
-         * drawn values back over whatever the user has just edited — which is exactly what a
-         * dragged 200700 grip did, snapping back on the next mouse move. (User's report,
-         * 2026-09-05.) @see RangeClickController.onDrawEndFunc
+         * drawn values back over whatever the operator has just edited — which is exactly what a
+         * dragged 200700 grip did, snapping back on the next mouse move. @see RangeClickController.onDrawEndFunc
          */
         const geometry = this.sketch?.getGeometry();
         if (!(geometry instanceof LineString)) return;
@@ -604,7 +601,7 @@ export class AnchorClickController extends MissionTaskController {
      * by. Ambush is not one: 141700's back "encompasses the ambush position" and its arrow
      * "typically points at the target", so what turns is the aim and what stays put is the
      * position — point 2. Turning about the frame's centre swung the ambush off the ground
-     * it was placed on. (User's call, 2026-09-05.)
+     * it was placed on.
      *
      * Done by compensating rather than by re-deriving: rotate, see how far the pivot moved,
      * and translate it back. `rotationAnchor` picks which point that is, so MapLibre — whose
@@ -663,10 +660,10 @@ export class AnchorClickController extends MissionTaskController {
  *
  * The radar search doctrine stores one anchor point and four values — that is what its
  * plate asks for and it is not in question here. What its plate does *not* say is how those
- * values are first given, and the answer the user asked for is three clicks: the radar, then
+ * values are first given, and the answer the operator asked for is three clicks: the radar, then
  * each arc, with a bare arc on the map between the second click and the third and the sector
  * closing on the third. It had exactly that until the storage moved to a single point on
- * 2026-09-05 and took the gesture with it. (User's report, 2026-09-05.)
+ * and took the gesture with it.
  *
  * So it inherits `AnchorClickController`'s draw — a `LineString` sketch, a click cap, a live
  * preview off `pointermove` — and replaces only what is done with the clicks: they go
@@ -723,7 +720,7 @@ export class PointDropController extends MissionTaskController {
     /**
      * …but drags still route through `handleCircleDrag`, which is where a
      * point-anchored graphic's translate lives. The two shapes are independent:
-     * this one is "what the user draws", the other "how the user edits it".
+     * this one is "what the operator draws", the other "how the operator edits it".
      */
     geomHandleType: TacticalGraphicShape = 'Circle';
 

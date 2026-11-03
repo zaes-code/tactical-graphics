@@ -44,7 +44,7 @@ export const MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX = 48;
  * and for the multiple-strike zone *that absence is the legacy two-ring format*, whose
  * base holds both rings end to end. Seeding a standoff there makes the generator read
  * those points as one traced ring and the symbol comes back as a self-crossing star.
- * Both renderers did exactly that until 2026-09-05. @see usesStandoffWidth
+ * Both renderers did exactly that. @see usesStandoffWidth
  *
  * Both renderers call this rather than each seeding its own number. OpenLayers reached for
  * half a screen inch while MapLibre would have defaulted to its generic 20 px offset, and

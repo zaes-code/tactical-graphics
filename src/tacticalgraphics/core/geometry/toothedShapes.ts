@@ -28,7 +28,7 @@ export function generatePolygonTriangles(
     const allTriangles: Position[][] = [];
 
     // Reconciles the caller's geometric intent with the ring's winding: without it the
-    // triangles sit inside or outside according to the order the user happened to
+    // triangles sit inside or outside according to the order the operator happened to
     // click the corners. @see ringIsCounterClockwise
     const toothSide = outward !== ringIsCounterClockwise(exteriorRing);
 
@@ -517,7 +517,7 @@ export function generateCrenellatedLineGraphic(
  * Teeth are placed with `turf.bearing ± 90`, which is a side of *travel* — left or
  * right of the direction the ring is being walked. Which of those is the outside of
  * the polygon depends entirely on the winding, and nothing normalizes the winding of
- * what a user draws: click the corners of an area clockwise and the teeth point out,
+ * what an operator draws: click the corners of an area clockwise and the teeth point out,
  * click the same corners the other way round and every tooth points in. Callers pass
  * a geometric intent (`outward`), so they need this to turn it into a side.
  *

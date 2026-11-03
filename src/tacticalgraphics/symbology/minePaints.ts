@@ -59,7 +59,7 @@ export const MINE_GLYPH_GAP_PX = 10;
  * left; the antihandling device hangs a stem 2.2 below; the wide-area mine stands on a V.
  * Spacing a row of them at one pitch therefore fits the disc and overlaps everything else
  * — measured, the antipersonnel pair's antennae crossed their neighbours' at every size,
- * and the row was only ever checked with the hollow default. (User's call, 2026-08-27.)
+ * and the row was only ever checked with the hollow default.
  *
  * Read by every caller that lays glyphs out — the row inside an area and the string along
  * a mineline — so that "no two overlap" is one fact rather than two guesses.
@@ -71,7 +71,7 @@ export const MINE_GLYPH_GAP_PX = 10;
  *
  * It was a solid shaft to 2.2 under an open chevron, which is neither publication's drawing:
  * FM 1-02.2 draws the shaft dashed, APP-06 draws it broken before a filled head. The
- * mineline is APP-06 only, so APP-06 decides. (User's call, 2026-09-21.)
+ * mineline is APP-06 only, so APP-06 decides.
  */
 const DIRECTIONAL_ARROW = {shaftStart: 1, shaftEnd: 1.5, headBase: 1.74, tip: 2.1, headHalf: 0.19};
 
@@ -127,11 +127,11 @@ function disc(at: ProjectedPosition, radius: number): ProjectedPosition[] {
  * glyph read as a plain antitank mine, and turned the antennae and arrows to fixed screen
  * directions whatever way the line ran. Every other repeating decoration along a line follows
  * it. Neither publication rules on this: 290101's Example draws plain discs, which show no
- * rotation. (User's call, 2026-09-21.)
+ * rotation.
  *
  * **`arrowAcross` points the directional mine's arrow across the line, to its right**, the
  * side this library puts an ambiguous mark on, opposite the antennae. Along the line it would
- * say nothing about which way the charge faces. (User's call, 2026-09-21.)
+ * say nothing about which way the charge faces.
  */
 export interface MineGlyphFrame {
     /** Unit vector along the line at the glyph, in the drawing direction. */
@@ -155,7 +155,7 @@ const CLUSTER_DASH_PER_RADIUS_PX = 5;
  *
  * Sized against the graphic, a mineline's cluster domes took the line's full 12/8 dash: a
  * dome 20 px wide carried a dash and a half, and read as a broken arc rather than a dashed
- * one (user's report, 2026-09-21). Without a resolution there is no screen size to go on,
+ * one. Without a resolution there is no screen size to go on,
  * and it falls back to the planned dash for the graphic-wide fit to size. @see dashSized
  */
 function clusterDash(radius: number, resolution?: number): {dashPx: number[]; dashSized?: boolean} {
@@ -301,7 +301,7 @@ const TEXT_OFFSET = 1.9;
  * **Off the outline, not off the mine row.** Both plates set field H clear above the
  * boundary and the DTG clear below it; hanging them off the row instead put them inside a
  * tall area and outside a short one, because the row is sized to fit the shape and the
- * shape is not. (User's call, 2026-08-27.)
+ * shape is not.
  *
  * **Scaled by the label, not fixed on screen.** The amplifiers around these areas use the
  * zoom-anchored scale, so they *grow* as the operator zooms in — and a constant 30 px gap
@@ -387,11 +387,9 @@ export function mineFillPaint(): MinePaint {
         // **Field H above, field W below** — the two amplifiers both plates name, and the
         // only two. There is no designation: `T` appears on neither Template, and the box
         // in the middle is Sector 1, which is the mine type drawn rather than typed.
-        // (User's call, 2026-08-27.)
         // **Just above the boundary**, which on a hostile mined area puts it inside the
         // peak near its base. It was lifted clear of the apex for a while, and that read
-        // as a caption on the marker rather than on the minefield. (User's call,
-        // 2026-08-27.)
+        // as a caption on the marker rather than on the minefield.
         const above = amplifierText(feature, (feature.properties.additionalInfo ?? '').trim());
         if (above) {
             const top = bounds ? bounds.maxY + gap : center[1] + room.height * scale * TEXT_OFFSET;
@@ -420,7 +418,7 @@ const FENCE_PITCH_PX = 26;
  * boundary none of them landed anywhere a reader could name. The Template puts `M` at the
  * four cardinals and the two `N` boxes between north and each shoulder, so that is what
  * these are: a ray cast from the middle of the area, and the letter set where it crosses
- * the fence. (User's call, 2026-08-27.)
+ * the fence.
  */
 const FENCE_LETTER_BEARINGS = [0, 90, 180, 270];
 /*
@@ -480,7 +478,7 @@ const MINEFIELD_ENY_BEARINGS = [90, 270];
  * letters use, so the two symbols place their amplifiers by one rule rather than two.
  * Setting them at the *midpoint of the widest segment* and nudging them clear was close on
  * a regular shape and visibly off on a lopsided one, and it left them floating beside the
- * line rather than on it. (User's call, 2026-08-27.)
+ * line rather than on it.
  */
 export function minefieldAreaPaint(): MinePaint {
     return (feature, context) => {
@@ -581,7 +579,7 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
          * were a flat 9 px arm at any size, so a fence 60 px across wore marks 30% of its own
          * side: the wire read as a row of glyphs with an outline behind it. `decorationScale`
          * is the same rule the obstacle teeth and the fortified merlons take, measured against
-         * the shape rather than the zoom. (User's report, 2026-09-10.)
+         * the shape rather than the zoom.
          */
         /*
          * **Floored rather than dropped, because the wire is the whole of the difference.**
@@ -614,7 +612,7 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
             paints.push(areaText(feature, at, 'M', scale, 'middle', 'center', color));
         }
         // The two `N` boxes, between north and each shoulder — on the fence, like the
-        // `M`s, rather than floating above it. (User's call, 2026-08-27.)
+        // `M`s, rather than floating above it.
         if (showsEny(feature)) {
             for (const bearing of FENCE_ENY_BEARINGS) {
                 const at = ringCrossing(ring, middle, bearing);
@@ -678,7 +676,6 @@ function minedAreaPaintWith({fenced}: {fenced: boolean}): MinePaint {
             // running east-west wore the same `x`s — the mark stopped belonging to the
             // line it sits on, and on a sloping side it read as a stray glyph rather than
             // as barbed wire. Each arm is now 45 degrees off the segment.
-            // (User's call, 2026-08-27.)
             const diag = (sign: number): ProjectedPosition[] => {
                 const dx = (ux - sign * uy) * arm;
                 const dy = (uy + sign * ux) * arm;

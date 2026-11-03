@@ -39,8 +39,7 @@ const ECHELON_CROSS_GAP_PX = 2;
  * boundary's `BOUNDARY_GAP_SHARE` is a tenth either side of the middle. Capping the glyph
  * at the same share is what keeps it inside the gap it is drawn in — measured before this,
  * a corps glyph on an 80 px boundary spanned 35 px against a 28 px hole, so its outer arms
- * lay across the line, and on a 40 px one it took half the symbol. (User's report,
- * 2026-09-10.) @see decorationScale, the same shape-relative rule for repeating marks
+ * lay across the line, and on a 40 px one it took half the symbol. @see decorationScale, the same shape-relative rule for repeating marks
  */
 const ECHELON_SPAN_SHARE = 0.2;
 
@@ -68,7 +67,7 @@ interface OpenedRing {
  * and means nothing to an outline turned by its own vertices. Reading it as a radian facing made
  * the side depend on who wrote the bag: OpenLayers never passes it for an area, so its ring opened
  * on the south edge, while MapLibre passed the `rotation: 0` a sample sheet or an import filed and
- * opened the west edge (2026-10-31).
+ * opened the west edge.
  */
 const ECHELON_FACING: readonly [number, number] = [0, -1];
 
@@ -223,7 +222,6 @@ function buildEchelonMarks(
      * them is the width of the glyph itself — `halfLength * √2` is exactly corner to
      * corner — plus daylight, or the arms of neighbouring X's meet and the pair reads as a
      * lattice. Spacing them like the bars leaves a hole down the middle of the XX instead.
-     * (User's call, 2026-09-10.)
      *
      * **The arms are strokes, so the corner is not where the ink stops.** Stepping by the
      * geometry alone left the two X's touching however wide the gap was written: a stroke
@@ -310,7 +308,7 @@ function alongExtentPx(marks: Paint[], mid: ProjectedPosition, ux: number, uy: n
  * segment, plus a fixed clearance — which is right for one echelon at one zoom and wrong
  * either side of it: a corps XXX overran the hole while a squad's single dot sat in a hole
  * four times its width. The same lesson `TURN_LABEL_GAP_METERS` carries for the "T" in a
- * bowed turn: measure the thing, then cut. (User's call, 2026-09-10.)
+ * bowed turn: measure the thing, then cut.
  */
 export function echelonWidthPx(
     dx: number,
