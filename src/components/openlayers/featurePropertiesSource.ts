@@ -16,7 +16,9 @@ import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
 import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByHostility, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
-import {stampAmplifierVisibility} from './amplifierVisibility';
+import {featuresOf, stampAmplifierVisibility} from './amplifierVisibility';
+import {graphicOpacityOf, stampGraphicOpacity} from './graphicOpacity';
+import {removeGraphic} from './persistence';
 import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {readGraphicGeometryState, readGraphicLabels, writeGraphicProperties} from './graphicProperties';
@@ -246,5 +248,15 @@ export function createOpenLayersPropertiesSource(
             if (!selection.id) return;
             stampAmplifierVisibility(map, selection.id, hidden);
         },
+
+        remove(selection) {
+            if (selection.id) removeGraphic(manager, selection.id);
+        },
+
+        setOpacity(selection, opacity) {
+            if (selection.id) stampGraphicOpacity(map, selection.id, opacity);
+        },
+
+        opacityOf: selection => (selection.id ? graphicOpacityOf(featuresOf(map, selection.id)[0]) : 1),
     };
 }

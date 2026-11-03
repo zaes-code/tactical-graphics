@@ -156,6 +156,18 @@ export function createMapLibrePropertiesSource(
             if (!selection.id) return;
             stampAmplifierVisibility(renderer, selection.id, hidden);
         },
+
+        // Straight to the renderer, as `apply` is. The Cesium and ArcGIS demos hand this
+        // source their own renderers, which answer the same three calls.
+        remove(selection) {
+            if (selection.id) renderer.remove(selection.id);
+        },
+
+        setOpacity(selection, opacity) {
+            if (selection.id) renderer.setOpacity(selection.id, opacity);
+        },
+
+        opacityOf: selection => (selection.id ? renderer.opacityOf(selection.id) : 1),
     };
 }
 

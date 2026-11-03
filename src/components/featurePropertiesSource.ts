@@ -74,6 +74,19 @@ export interface FeaturePropertiesSource {
      */
     setAmplifiersHidden(selection: SelectedGraphic, hidden: boolean): void;
 
+    /** Takes this graphic off the map. @see `TacticalGraphicsEngine.remove` */
+    remove(selection: SelectedGraphic): void;
+
+    /**
+     * Draws this graphic at `opacity`, 0 to 1, or fully opaque again at 1. View state like
+     * {@link setAmplifiersHidden}: the graphic itself does not change.
+     * @see `TacticalGraphicsEngine.setOpacity`
+     */
+    setOpacity(selection: SelectedGraphic, opacity: number): void;
+
+    /** The opacity this graphic is drawn at, 1 unless dimmed. */
+    opacityOf(selection: SelectedGraphic): number;
+
     /**
      * Whether a click should be ignored right now — mid-draw, most often.
      *
