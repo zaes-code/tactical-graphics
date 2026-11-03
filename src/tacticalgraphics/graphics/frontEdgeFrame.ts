@@ -123,3 +123,14 @@ export function frontEdgeFrame(base: Feature<LineString>, size: number): FrontEd
 export function legacyAxis(coords: Position[]): Position[] {
     return [coords[coords.length - 1], coords[0]];
 }
+
+/**
+ * How far each end tick on breach and canalize runs either side of its arm's end, as a share
+ * of the half-opening.
+ *
+ * MIL-STD-2525E Table L-XXI (340200, 340400) and APP-06 draw a short tick about a letter tall
+ * across each arm's end: measured off 2525E's Template, about 0.2 of the half-opening each
+ * side. It was 0.75 until 2026-10-31, which drew each tick longer than a short arm. A legacy
+ * two-point base keeps 0.75, because its width grip sits on the tick's end.
+ */
+export const END_TICK_SHARE = 0.2;

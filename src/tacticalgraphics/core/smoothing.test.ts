@@ -1,4 +1,4 @@
-import {chaikinKeepingEnds, chaikinLine, chaikinRing} from './smoothing';
+import {chaikinKeepingEnds, chaikinLine, chaikinRing, smoothingKindOf} from './smoothing';
 import {configureTacticalGraphics, resetTacticalGraphicsConfig} from './config';
 import {renderTacticalGraphic, TacticalGraphicName} from '../index';
 
@@ -112,5 +112,11 @@ describe('the multiple-strike safe distance zone rounds both of its rings', () =
         const legacy = [...ring, ...ring.map(([x, y]) => [x * 1.5 - 0.01, y * 1.5 + 0.01])];
         configureTacticalGraphics({smoothLines: true});
         expect(rings(render(legacy)).map(r => r.length)).toEqual([4 * 8 + 1, 4 * 8 + 1]);
+    });
+});
+
+describe('graphics whose rule says straight lines', () => {
+    it('never smooths 242800 kill zone: 2525E connects its anchor points with straight lines', () => {
+        expect(smoothingKindOf(TacticalGraphicName.KillZone)).toBeUndefined();
     });
 });

@@ -14,7 +14,7 @@
  * what is pinned here is the rule itself.
  */
 
-import {TacticalGraphicName, acceptsInsertedVertex, listTacticalGraphicNames, reservedLeadPx} from './index';
+import {TacticalGraphicName, acceptsInsertedVertex, listTacticalGraphicNames, maxAreaVertices, reservedLeadPx} from './index';
 
 /** A 400 px horizontal run, in screen pixels — which is the unit the rule speaks. */
 const RUN: [number, number][] = [[100, 200], [500, 200]];
@@ -90,5 +90,25 @@ describe('every other graphic is untouched', () => {
     it('answers true for a base too short to have a segment', () => {
         expect(acceptsInsertedVertex(TacticalGraphicName.Abatis, [[100, 200]], [100, 200])).toBe(true);
         expect(acceptsInsertedVertex(TacticalGraphicName.Abatis, [], [100, 200])).toBe(true);
+    });
+});
+
+describe('the capped irregular areas (2525E draw rule Area10)', () => {
+    // A ring of `n` distinct vertices, closed the way a Polygon's is.
+    const ring = (n: number): [number, number][] => {
+        const pts = Array.from({length: n}, (_, i): [number, number] => [100 * Math.cos((2 * Math.PI * i) / n), 100 * Math.sin((2 * Math.PI * i) / n)]);
+        return [...pts, pts[0]];
+    };
+
+    it('takes a vertex up to 100 and refuses the 101st', () => {
+        const name = TacticalGraphicName.BlueKillBoxIrregular;
+        expect(maxAreaVertices(name)).toBe(100);
+        expect(acceptsInsertedVertex(name, ring(6), [80, 0])).toBe(true);
+        expect(acceptsInsertedVertex(name, ring(99), [80, 0])).toBe(true);
+        expect(acceptsInsertedVertex(name, ring(100), [80, 0])).toBe(false);
+    });
+
+    it('leaves an uncapped area alone', () => {
+        expect(acceptsInsertedVertex(TacticalGraphicName.FreeFireAreaIrregular, ring(100), [80, 0])).toBe(true);
     });
 });

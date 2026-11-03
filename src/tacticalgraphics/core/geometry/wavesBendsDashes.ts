@@ -565,8 +565,9 @@ export function getBridgeLabelPoints(coords: Position[], distance: number): Posi
     let start = coords[0];
     let stop = coords[1];
     const identifierCoord = getMidpoint(start, stop);
-    // date time label
-    let dateCoordinate = getExtendedPoint(start, stop, distance);
+    // W - W1 hangs beyond the point 2 / point 4 end of the rails, where 271100 and 271300
+    // box it. It used to extend past point 1, the opposite end.
+    let dateCoordinate = getExtendedPoint(stop, start, distance);
     return [identifierCoord, dateCoordinate];
 }
 

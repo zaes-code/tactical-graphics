@@ -24,10 +24,9 @@ import {toScreen, type ViewTransform} from '../projection';
 /**
  * Applies a paint list's `scale` by rewriting the font's px size.
  *
- * Canvas has no text-scale of its own, and `ctx.scale()` is the wrong tool — it
- * would scale the halo's stroke width with the glyph, so a large label would wear
- * a thick halo and a small one a hairline. OpenLayers' `Text.scale` behaves the
- * way this does.
+ * Canvas has no text-scale of its own, and `ctx.scale()` would also scale the position.
+ * The halo is scaled separately where it is stroked, because OpenLayers' `Text.scale`
+ * renders the label into a scaled canvas, halo and all.
  *
  * Falls back to the unscaled font if the string carries no `NNpx`, which is only
  * reachable if a caller invents a font shorthand using another unit.
@@ -156,7 +155,7 @@ function drawText(ctx: CanvasRenderingContext2D, spec: TextSpec, at: ProjectedPo
     const dy = spec.offsetYPx ?? 0;
 
     if (spec.halo && spec.halo.widthPx > 0) {
-        ctx.lineWidth = spec.halo.widthPx;
+        ctx.lineWidth = spec.halo.widthPx * (spec.scale ?? 1);
         ctx.strokeStyle = spec.halo.color;
         ctx.lineJoin = 'round';
         ctx.miterLimit = 2;

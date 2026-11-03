@@ -17,7 +17,7 @@
  */
 
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {MIN_LEGIBLE_TEXT_PX, resetTacticalGraphicsConfig} from '../core/config';
+import {MIN_LEGIBLE_TEXT_PX, TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {RATIO_LOCKED_LABEL_FONT, fontStyle, ratioLockedLabelScale} from '../core/symbology';
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {arcMissionTaskPaint, defaultLinePaint, missionTaskLabelPaint, obstacleLinePaint, phaseLinePaint} from './paintFunctions';
@@ -49,7 +49,8 @@ const lineFeature = (coords: ProjectedPosition[], overrides: Partial<PaintFeatur
 /** A 400 km line — long enough to carry teeth at a middling resolution. */
 const LONG_LINE: ProjectedPosition[] = [[0, 0], [400_000, 0]];
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('the symbology layer needs no DOM', () => {
     it('paints a phase line with no canvas and no map', () => {
@@ -206,6 +207,21 @@ describe('encirclement teeth are sized against the shape, like the obstacle belt
         const clockwise = [...square(400_000)].reverse() as ProjectedPosition[];
         expect(toothHeightPx(400_000, 1000)).toBeGreaterThan(1);
         expect(toothHeightPx(400_000, 1000, ringFeature(clockwise))).toBeGreaterThan(1);
+    });
+
+    it('wears about ten large, separate teeth, as APP-06 151800 and 2525E Table L-VII draw it', () => {
+        // A traced circle 300 px across at one meter per pixel.
+        const circle: ProjectedPosition[] = Array.from({length: 121}, (_, i) => {
+            const a = (i / 120) * 2 * Math.PI;
+            return [150 * Math.cos(a), 150 * Math.sin(a)];
+        });
+        const geometry = paintEncirclement(ringFeature(circle), context(1))[0].geometry;
+        const points = geometry.type === 'MultiLineString' ? geometry.coordinates.flat() : [];
+        const apexes = points.filter(([x, y]) => Math.hypot(x, y) > 160);
+        expect(apexes.length).toBeGreaterThanOrEqual(9);
+        expect(apexes.length).toBeLessThanOrEqual(11);
+        // Separate: each tooth's apex stands well clear of the next.
+        expect(Math.min(...apexes.map(([x, y]) => Math.hypot(x, y)))).toBeGreaterThan(175);
     });
 
     it('teeth a hostile outline too, and keeps the ENY amplifiers', () => {
@@ -552,5 +568,19 @@ describe("a default line's identifier keeps its prefix when too small", () => {
 
     it('draws no identifier on a line under twice FSCL', () => {
         expect(identifiers(fscl(20, 10))).toEqual([]);
+    });
+});
+
+describe('the IFF lines carry their literal and nothing else (QA pass 2026-10-31)', () => {
+    // 190100 / 190200: no amplifier fields, "used as depicted". An imported designation or
+    // date range used to print "IFF OFF T" and a "W - W1" line at each end.
+    it.each([TacticalGraphicName.IdentificationFriendOrFoeOff, TacticalGraphicName.IdentificationFriendOrFoeOn])('%s', name => {
+        const paints = defaultLinePaint(name)(
+            lineFeature(LONG_LINE, {properties: {name, designation: 'ALPHA', startDate: 'D1', endDate: 'D2'}}),
+            context(1000),
+        );
+        const texts = paints.filter(p => p.text?.text).map(p => p.text!.text);
+        expect(texts.length).toBeGreaterThan(0);
+        expect(new Set(texts)).toEqual(new Set([name === TacticalGraphicName.IdentificationFriendOrFoeOff ? 'IFF OFF' : 'IFF ON']));
     });
 });

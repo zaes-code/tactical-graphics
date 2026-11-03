@@ -20,6 +20,28 @@ function along(from: Position, metres: number, bearingDeg: number): Position {
     return turf.destination(turf.point(from), metres, bearingDeg, {units: 'meters'}).geometry.coordinates as Position;
 }
 
+/** 6400 mils to the full turn: NATO's mil, which 240802's `AN` is stated in. */
+export const MILS_PER_TURN = 6400;
+
+/**
+ * The rectangular target's attitude `AN`, in degrees, from the stored `rotation`.
+ *
+ * **The clockwise turn of the Template**, which draws the length (AM1) running east-west. The
+ * Example proves it: `AN = 1200 mils` is 67.5 degrees, and it draws the 112 m side on a
+ * bearing of about 157 and the 60 m side on about 67. So AN is the bearing of the *width*
+ * axis, and the length lies on AN + 90. `rotation` stores the length axis counter-clockwise
+ * from east, so AN is simply `-rotation`. Until 2026-10-31 the caption printed the length
+ * axis's own bearing, 1600 mils off. @see targetAttitudeMils
+ */
+export function targetAttitudeDegrees(rotation: number): number {
+    return (((-rotation) % 360) + 360) % 360;
+}
+
+/** {@link targetAttitudeDegrees} in mils, rounded, as the plate quotes it. */
+export function targetAttitudeMils(rotation: number): number {
+    return Math.round((targetAttitudeDegrees(rotation) * MILS_PER_TURN) / 360) % MILS_PER_TURN;
+}
+
 /**
  * Rectangular target (APP-06 240802) — **one anchor point, and a shape made of amplifiers**.
  *
@@ -42,8 +64,9 @@ function along(from: Position, metres: number, bearingDeg: number): Position {
  *
  * ## Attitude
  *
- * `rotation` is the attitude, in degrees counter-clockwise from east, as the point-anchored
- * graphics measure it; `generateGraphics` converts it to a bearing.
+ * `rotation` is the length axis, in degrees counter-clockwise from east, as the point-anchored
+ * graphics measure it; `generateGraphics` converts it to a bearing. The plate's `AN` is the
+ * clockwise turn from a length running east-west. @see targetAttitudeDegrees
  * The plate quotes AN in mils; converting for display is a host's business, and carrying a
  * second field for the same physical quantity would be the parallel-flag mistake.
  */

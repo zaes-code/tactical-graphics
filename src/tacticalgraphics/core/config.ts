@@ -215,6 +215,17 @@ export interface TacticalGraphicsConfigOptions {
      */
     smoothLines?: boolean;
 
+    /**
+     * Write `ENY` on hostile graphics as well as drawing them in the hostile color. Default
+     * `true`; set it `false` to identify hostile graphics by their red line work alone.
+     *
+     * APP-06 8.1.4 and FM 1-02.2 field N add `ENY` so a hostile graphic still reads as one
+     * where color is not available, which is why it is on unless a host opts out. It covers every
+     * place the library writes `ENY`: the ends of lines, the arrows, the areas and the
+     * obstacles. Paint only, so `refreshStyles()` is enough to apply a change.
+     */
+    enemyLabels?: boolean;
+
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these color the affordances a renderer draws so a user
     // can edit a graphic. They say "you can drag this", and that meaning must not shift
@@ -254,6 +265,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly labelHaloColor?: string;
     readonly altitudeUnit?: AltitudeUnit;
     readonly smoothLines?: boolean;
+    readonly enemyLabels?: boolean;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -273,6 +285,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
         if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
         if (options.smoothLines !== undefined) this.smoothLines = options.smoothLines;
+        if (options.enemyLabels !== undefined) this.enemyLabels = options.enemyLabels;
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -304,6 +317,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             obstacleColor: overrides.obstacleColor ?? this.obstacleColor,
             altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
             smoothLines: overrides.smoothLines ?? this.smoothLines,
+            enemyLabels: overrides.enemyLabels ?? this.enemyLabels,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -379,6 +393,11 @@ export function resetTacticalGraphicsConfig(): void {
 /** Whether free-drawn lines, areas and arrows are drawn smooth. @see TacticalGraphicsConfigOptions.smoothLines */
 export function getSmoothLines(): boolean {
     return _config.smoothLines ?? false;
+}
+
+/** Whether hostile graphics write `ENY` as well as drawing in the hostile color. @see TacticalGraphicsConfigOptions.enemyLabels */
+export function getEnemyLabels(): boolean {
+    return _config.enemyLabels ?? true;
 }
 
 /**

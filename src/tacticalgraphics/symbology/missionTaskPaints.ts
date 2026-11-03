@@ -39,12 +39,17 @@ type MissionTaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[
  */
 export const CROSSED_HALF_WIDTH_PX = 50;
 
-/** Which of the two arms renders hashed, by sub-line index. Absent = both solid. */
-const CROSSED_HASHED_ARM: Partial<Record<TacticalGraphicName, number>> = {
-    // The "/" stroke of the X.
-    [TacticalGraphicName.Suppress]: 0,
-    // The diagonal; the horizontal stays solid.
-    [TacticalGraphicName.Neutralize]: 1,
+/**
+ * Which arms render hashed, by sub-line index. Absent = both solid.
+ *
+ * MIL-STD-2525E Table L-XXI (and APP-06): Suppress hashes both strokes of its X, Neutralize
+ * the "/" alone. Until 2026-10-31 these followed FM 1-02.2, which hashes one stroke of
+ * Suppress and draws Neutralize as a solid horizontal with a hashed diagonal.
+ */
+const CROSSED_HASHED_ARMS: Partial<Record<TacticalGraphicName, readonly number[]>> = {
+    [TacticalGraphicName.Suppress]: [0, 1],
+    // The "/" stroke of the X; the "\" stays solid.
+    [TacticalGraphicName.Neutralize]: [0],
 };
 
 /** Hash pattern of a doctrinally-broken arm, in screen pixels. */
@@ -133,7 +138,7 @@ function crossedLetterScale(feature: PaintFeature, context: PaintContext, label:
  */
 export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskPaint {
     const label = getLabel(name);
-    const hashedArm = CROSSED_HASHED_ARM[name];
+    const hashedArms = CROSSED_HASHED_ARMS[name] ?? [];
 
     return (feature, context) => {
         const geometry = feature.geometry;
@@ -170,7 +175,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
             const len = Math.hypot(dx, dy);
             if (len === 0) continue;
 
-            const stroke = strokeFor(i === hashedArm);
+            const stroke = strokeFor(hashedArms.includes(i));
             const ux = dx / len;
             const uy = dy / len;
             const boxExit = Math.min(

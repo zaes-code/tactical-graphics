@@ -218,7 +218,7 @@ import {
     minefieldAreaPaint,
     cbrnContaminatedAreaPaint,
     cbrnMarkPaint,
-    dashedOutlinePaint,
+    zoneOfFirePaint,
     fortifiedAreaPaint,
     restrictedTerrainPaint,
     freeFireAreaCircularPaint,
@@ -1359,8 +1359,8 @@ export function lineOfContactStyleFunc(): StyleFunction {
 
 
 /** **Ported.** @see retrogradePaints.ts, `retrogradeTaskPaint`. */
-export function retroGradeTaskStyleFunc(label: string): StyleFunction {
-    return asStyleFunction(retrogradeTaskPaint(label));
+export function retroGradeTaskStyleFunc(label: string, name?: TacticalGraphicName): StyleFunction {
+    return asStyleFunction(retrogradeTaskPaint(label, name));
 }
 
 /**
@@ -1813,7 +1813,7 @@ export function ferryCrossingStyleFunc(name: TacticalGraphicName): StyleFunction
  *   the same zigzag with no glyph.
  */
 export function tacticalFixStyleFunc(label: string = 'F'): StyleFunction {
-    return asStyleFunction(arrowheadedLinePaint(label));
+    return asStyleFunction(arrowheadedLinePaint(label, {openHead: true}));
 }
 
 
@@ -3307,9 +3307,9 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
         return asStyleFunction(fortifiedAreaPaint(), name)(feature, resolution);
     }
     // APP-06 242600 note 1: broken line in *all* status depictions, so the dash belongs
-    // to the symbol rather than to `plannedDash`.
+    // to the symbol rather than to `plannedDash`. Note 2: it can be switched off.
     if (name === TacticalGraphicName.ZoneOfFire) {
-        return asStyleFunction(dashedOutlinePaint(), name)(feature, resolution);
+        return asStyleFunction(zoneOfFirePaint(), name)(feature, resolution);
     }
     // The yellow hatch; the triangle and its letter ride the label feature below. The
     // toxic-industrial-material subtypes hatch identically — the T is on the label.

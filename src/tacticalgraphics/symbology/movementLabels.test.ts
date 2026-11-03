@@ -19,7 +19,7 @@
  */
 
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {resetTacticalGraphicsConfig} from '../core/config';
+import {TacticalGraphicsConfig, setTacticalGraphicsConfig} from '../core/config';
 import {maxGraphicLabelScale} from '../core/symbology';
 import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {getPaintFunction} from './registry';
@@ -69,7 +69,8 @@ const SPAN = 600_000;
 const EAST = {from: [0, 0] as ProjectedPosition, to: [SPAN, 0] as ProjectedPosition, tipX: SPAN};
 const WEST = {from: [SPAN, 0] as ProjectedPosition, to: [0, 0] as ProjectedPosition, tipX: 0};
 
-beforeEach(() => resetTacticalGraphicsConfig());
+// These pin the ENY marks, so they say so rather than lean on the default. @see TacticalGraphicsConfigOptions.enemyLabels
+beforeEach(() => setTacticalGraphicsConfig(new TacticalGraphicsConfig({enemyLabels: true})));
 
 describe('a movement label sits the same distance from the arrowhead either way round', () => {
     const NAMES = [
@@ -92,7 +93,8 @@ describe('a movement label sits the same distance from the arrowhead either way 
         // label reads back from the arrowhead and a fixed-letter one reads forward from its
         // anchor, so pinning the literal `left` here made the test a hostage to a placement
         // change rather than a guard on the bug.
-        for (const name of [TacticalGraphicName.CounterattackByFire, TacticalGraphicName.TurningMovement]) {
+        // Turning movement left this list on 2026-11-02: its T is centred in the head now.
+        for (const name of [TacticalGraphicName.CounterattackByFire]) {
             const paint = getPaintFunction(name)!.label!;
             const east = paint(labelFeature(name, EAST.from, EAST.to), context)[0];
             const west = paint(labelFeature(name, WEST.from, WEST.to), context)[0];
@@ -101,6 +103,34 @@ describe('a movement label sits the same distance from the arrowhead either way 
             const at = (p: typeof east) => (p.geometry as {coordinates: ProjectedPosition}).coordinates;
             expect(Math.abs(at(east)[0] - EAST.from[0])).toBeCloseTo(Math.abs(at(west)[0] - WEST.from[0]), 0);
         }
+    });
+});
+
+describe('frontal attack and turning movement set their letter in the head', () => {
+    it.each([
+        [TacticalGraphicName.FrontalAttack, 'A'],
+        [TacticalGraphicName.TurningMovement, 'T'],
+    ] as const)('%s: centred between base and tip, larger than a plain label', (name, letter) => {
+        const paint = getPaintFunction(name)!.label!;
+        for (const {from, to} of [EAST, WEST]) {
+            const mark = paint(labelFeature(name, from, to), context).find(p => p.text?.text === letter)!;
+            const [x] = (mark.geometry as {coordinates: ProjectedPosition}).coordinates;
+            expect(mark.text!.align).toBe('center');
+            expect(Math.abs(x - from[0])).toBeGreaterThan(0);
+            expect(Math.abs(x - from[0])).toBeLessThan(Math.abs(to[0] - from[0]) / 2);
+            expect(mark.text!.scale).toBeGreaterThan(1);
+        }
+    });
+});
+
+describe('the head letter has a ceiling', () => {
+    // Sized from the head alone it grew without bound on zoom-in (user, 2026-11-02).
+    it.each([TacticalGraphicName.FrontalAttack, TacticalGraphicName.TurningMovement])('%s', name => {
+        const paint = getPaintFunction(name)!.label!;
+        const letter = name === TacticalGraphicName.FrontalAttack ? 'A' : 'T';
+        const zoomedIn = {...context, resolution: context.resolution / 1000};
+        const mark = paint(labelFeature(name, EAST.from, EAST.to), zoomedIn).find(p => p.text?.text === letter)!;
+        expect(mark.text!.scale).toBeLessThanOrEqual(maxGraphicLabelScale() * 1.5 + 1e-9);
     });
 });
 
@@ -176,17 +206,21 @@ describe('APP-06 152300 — the avenue of approach carries field H and the hosti
         ]);
     });
 
-    it('sets field H outside the casing, level with AA', () => {
+    // 152300's Template boxes H outside the upper rail near the rear of the symbol.
+    it('sets field H outside the upper rail, at the rear', () => {
         const f = withRails({designation: '3', additionalInfo: 'WADIS'});
-        const aa = spotOf(f, 'AA 3')!;
         const h = spotOf(f, 'WADIS')!;
-        // Straight out from the label, on the up-screen side, past the rail rather than on it.
-        expect(h[0]).toBeCloseTo(aa[0], 6);
-        expect(h[1] - aa[1]).toBeGreaterThan(HALF_WIDTH);
-        // ...and not so far that it reads as a separate symbol: exactly the half-width plus a
-        // fixed screen gap, so it stays put against the casing at every zoom. (The fixture's
-        // 40 m/px makes that gap look large in metres; on screen it is 12 px.)
-        expect(h[1] - aa[1]).toBeCloseTo(HALF_WIDTH + 12 * context.resolution, 6);
+        // At the rails' rear ends, on the up-screen side, past the rail rather than on it:
+        // exactly the half-width plus a fixed 12 px screen gap, at every zoom.
+        expect(h[0]).toBeCloseTo(-4000, 6);
+        expect(h[1]).toBeCloseTo(HALF_WIDTH + 12 * context.resolution, 6);
+    });
+
+    it('stands field H one line further out on a hostile arrow, clear of ENY', () => {
+        const f = withRails({designation: '3', additionalInfo: 'WADIS', hostility: TacticalGraphicHostility.hostileFaker});
+        const h = spotOf(f, 'WADIS')!;
+        const eny = spotOf(f, 'ENY')!;
+        expect(h[1] - eny[1]).toBeGreaterThan(12 * context.resolution);
     });
 
     it('marks ENY on each rail, and only for a hostile graphic', () => {
@@ -251,5 +285,22 @@ describe('spanProportionalScale stops somewhere', () => {
                 {...context, resolution}).find(p => p.text?.text);
             expect(mark!.text!.scale!).toBeLessThanOrEqual(maxGraphicLabelScale());
         }
+    });
+});
+
+describe('frontal attack and turning movement carry T and W - W1 (QA pass 2026-10-31)', () => {
+    // MIL-STD-2525E 152700 / 152900 box T and W - W1 beside the fixed A / T. They were
+    // offered no field and drew the letter alone.
+    it.each([
+        [TacticalGraphicName.FrontalAttack, 'A'],
+        [TacticalGraphicName.TurningMovement, 'T'],
+    ] as const)('%s', (name, letter) => {
+        const paint = getPaintFunction(name)!.label!;
+        const texts = paint(labelFeature(name, [0, 0], [4000, 0]), context)
+            .filter(p => p.text?.text)
+            .map(p => p.text!.text);
+        expect(texts[0]).toBe(letter);
+        expect(texts.slice(1).join(' ')).toContain('ALPHA');
+        expect(texts.slice(1).join(' ')).toContain('021200ZJUN26');
     });
 });

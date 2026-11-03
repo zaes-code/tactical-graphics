@@ -29,11 +29,10 @@ import {
     RATIO_LOCKED_LABEL_FONT_PX,
     configuredLabelScale,
     getLabelHaloColor,
-    graphicLabelScale,
 } from '../core/symbology';
 import {textWidth, uprightRotation} from './decorations';
-import {lineColorOf, labelColorOf} from './paintFunctions';
-import {capLabelToGraphic, letterGapClearance, letterInGapScale} from './labelFit';
+import {lineColorOf, labelColorOf, symbolLetterScale} from './paintFunctions';
+import {letterGapClearance, letterInGapScale} from './labelFit';
 
 type BlockPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -62,12 +61,7 @@ const GLYPH_GAP_PADDING_PX = 4;
  */
 function blockLetterScale(feature: PaintFeature, context: PaintContext, label: string, p1: ProjectedPosition, p2: ProjectedPosition): number {
     if (!label) return 0;
-    const desired = capLabelToGraphic(
-        graphicLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution),
-        feature,
-        context,
-        RATIO_LOCKED_LABEL_FONT_PX,
-    );
+    const desired = symbolLetterScale(feature, context, RATIO_LOCKED_LABEL_FONT_PX);
     const linePx = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / context.resolution;
     return letterInGapScale(desired, textWidth(context, label, RATIO_LOCKED_LABEL_FONT, 1), RATIO_LOCKED_LABEL_FONT_PX, linePx);
 }
@@ -158,22 +152,53 @@ export function breachPaint(label: string): BlockPaint {
     };
 }
 
+/** Half the angle at a filled head's tip, in degrees, measured off 2525E 270502's Template. */
+const FILLED_HEAD_HALF_ANGLE_DEG = 24;
+
+/**
+ * A `[barb, tip, barb]` open head as a closed, slimmer solid triangle of the same length.
+ *
+ * The generator's open heads spread 45° either side of the shaft. A filled triangle that
+ * wide reads as a blob, so the barbs are drawn in toward the shaft until the tip angle
+ * matches the filled heads the plate draws.
+ */
+function slimFilledHead(head: ProjectedPosition[]): ProjectedPosition[] | undefined {
+    if (head.length !== 3) return undefined;
+    const [left, tip, right] = head;
+    const base: ProjectedPosition = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+    const length = Math.hypot(tip[0] - base[0], tip[1] - base[1]);
+    const halfWidth = Math.hypot(left[0] - base[0], left[1] - base[1]);
+    if (length === 0 || halfWidth === 0) return undefined;
+    const k = (length * Math.tan((FILLED_HEAD_HALF_ANGLE_DEG * Math.PI) / 180)) / halfWidth;
+    const pull = (p: ProjectedPosition): ProjectedPosition => [base[0] + (p[0] - base[0]) * k, base[1] + (p[1] - base[1]) * k];
+    return [tip, pull(left), pull(right), tip];
+}
+
 /**
  * Clear and the two disrupts: the gap goes in sub-line `[4]`, the trident's middle
  * prong.
+ *
+ * `filledHeads` names the sub-lines that are arrowheads drawn solid. The obstacle effect
+ * 270502 fills its three (APP-06, FM 1-02.2 Table 5-19, MIL-STD-2525E Table L-XVI); the
+ * mission task 341000 leaves them open on every plate.
  *
  * `t` is where along that prong the letter sits — 0.6 for Clear, 0.75 for Disrupt,
  * which is what centers the "D" on the middle prong given that it spans 0.5 to 1.0
  * of the user's drawn base.
  */
-export function clearPaint(label: string, t = 0.6): BlockPaint {
+export function clearPaint(label: string, t = 0.6, filledHeads: readonly number[] = []): BlockPaint {
     return (feature, context) => {
         const lines = subLines(feature);
         const mid = lines[4];
         if (!mid || mid.length < 2) return [];
 
-        const outline = lines.filter((_, i) => i !== 4);
-        const paints: Paint[] = [];
+        const outline = lines.filter((_, i) => i !== 4 && !filledHeads.includes(i));
+        const paints: Paint[] = filledHeads.flatMap(i => {
+            const head = lines[i] && slimFilledHead(lines[i]);
+            if (!head) return [];
+            const color = lineColorOf(feature);
+            return [{geometry: {type: 'Polygon', coordinates: [head]}, fill: {color}, stroke: {color, widthPx: LINE_WIDTH()}} as Paint];
+        });
 
         const scale = blockLetterScale(feature, context, label, mid[0], mid[1]);
         if (scale === 0) {

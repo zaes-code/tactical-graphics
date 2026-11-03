@@ -27,7 +27,7 @@ import {
     textWidth,
     topmostSegmentIndex,
 } from './decorations';
-import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {terrainHatchColor} from './sectorModifierPaints';
 
 /** A paint function, in the shape the registry stores. */
@@ -204,8 +204,8 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
  * drawn at, so it grew and shrank with the map while every other toothed graphic on
  * the same screen held its size, and it had no floor to fall through: zoomed out far
  * enough the outline became a band of sub-pixel noise instead of a line.
- * `encirclementToothSize` caps it against the ring's own on-screen size and drops it
- * below `DECORATION_MIN_PX`.
+ * `encirclementToothSize` sizes them so about ten fit round the ring, as every plate
+ * draws it, caps them on screen and drops them below `DECORATION_MIN_PX`.
  *
  * Outward is taken from the ring's winding rather than from drawing order, so a ring
  * drawn anticlockwise does not come out with its teeth on the inside.
@@ -231,7 +231,7 @@ export function encirclementPaint(): AreaPaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         }];
 
-        if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return paints;
+        if (!showsEny(feature)) return paints;
 
         for (const member of paintGeometryMembers(feature.geometry)) {
             if (member.type !== 'MultiPoint') continue;
@@ -301,6 +301,21 @@ export function dashedOutlinePaint(): AreaPaint {
         geometry: strokeableGeometry(feature),
         stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
     }];
+}
+
+/**
+ * Zone of fire (APP-06 242600): the dashed outline, unless `hideBoundary` switches it off.
+ *
+ * Note 2: the boundary *"shall be able to be switched off leaving only the label and T
+ * visible"*. Switched off, the outline is still emitted, fully transparent, so the zone can
+ * still be clicked and selected on the engines that pick features by what they drew.
+ */
+export function zoneOfFirePaint(): AreaPaint {
+    const outline = dashedOutlinePaint();
+    return (feature, context) => {
+        if (!feature.properties.hideBoundary) return outline(feature, context);
+        return outline(feature, context).map(paint => ({...paint, stroke: {...paint.stroke!, color: 'rgba(0,0,0,0)'}}));
+    };
 }
 
 /**

@@ -338,7 +338,11 @@ describe('movement to contact and advance to contact are different symbols', () 
      * head is much shallower than the drawn arrow's, so the shared quantity has to be
      * the stroke measured **against the flank it hangs off**, not against the graphic.
      */
-    it('draws the same lightning mark on both, scaled to each head', () => {
+    // Until 2026-10-31 the two bolts were the same mark scaled to each head. MIL-STD-2525E
+    // 342900 sizes advance to contact's own ("at least twice the width of the base of the
+    // arrow and at a 45 degree angle"), which FM's badge does not follow, so the route's bolt is
+    // now the longer one. Its own size is pinned in graphics/axisArrowShapes.test.ts.
+    it('draws advance to contact’s bolt longer than the FM badge’s, per 2525E 342900', () => {
         // **Geodesic, not planar.** A hypot over raw lon/lat degrees compresses longitude
         // by cos(latitude), and the flank runs mostly across the arrow while the stroke
         // runs mostly along it — so a planar ratio is skewed by the projection rather
@@ -367,7 +371,7 @@ describe('movement to contact and advance to contact are different symbols', () 
         // head is [leftEnd, leftWing, tip, rightWing, rightEnd]; the bolt hangs off the right.
         const routeRatio = strokePerFlank(routeParts[1][3], routeParts[1][2], routeParts[3]);
 
-        expect(routeRatio).toBeCloseTo(badgeRatio, 2);
+        expect(routeRatio).toBeGreaterThan(badgeRatio * 1.5);
     });
 
     it('files them under one specification each, not both', () => {

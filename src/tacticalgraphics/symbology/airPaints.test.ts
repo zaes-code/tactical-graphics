@@ -66,3 +66,15 @@ describe.each([
         expect(legible(paintOf(name)(zone(name, 12), context))).toEqual([]);
     });
 });
+
+it('writes GRID with no colon, as 2525E 240101-240103 print it (QA pass 2026-10-31)', () => {
+    const name = TacticalGraphicName.AirSpaceCoordinationAreaRectangular;
+    const feature = zone(name, 2000);
+    feature.properties.grid = 'NK2312 to NK3013';
+    const text = airspaceCoordinationAreaLabelPaint(name)(feature, context)
+        .filter(p => p.text?.text)
+        .map(p => p.text!.text)
+        .join('\n');
+    expect(text).toMatch(/GRID\s+NK2312/);
+    expect(text).not.toContain('GRID:');
+});

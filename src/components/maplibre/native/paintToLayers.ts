@@ -312,7 +312,10 @@ export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphic
                     glyph: text.glyph === true,
                     color: text.fill,
                     haloColor: text.halo?.color ?? 'transparent',
-                    haloWidth: outwardHalo(text.halo?.widthPx),
+                    // Times the label's scale: OpenLayers renders a scaled label into a scaled
+                    // canvas, halo and all, so a label drawn at half size wears half the halo.
+                    // A fixed halo smothered the small labels a zoomed-out zone carries.
+                    haloWidth: outwardHalo(text.halo?.widthPx) * (text.scale ?? 1),
                     anchor: textAnchor(text.align, text.baseline),
                     justify: text.justify ?? text.align ?? 'center',
                     // Pixels → ems, as one array property. Divided by the rendered size,

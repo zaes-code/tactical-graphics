@@ -14,8 +14,17 @@ graphics.restore(JSON.parse(await db.load()));
 ```
 
 The snapshot is a `FeatureCollection` stamped with `tacticalGraphicsVersion`
-(`SNAPSHOT_VERSION`, currently 2). A file that declares no version is read as
-version 1 and migrated on the way in.
+(`SNAPSHOT_VERSION`, currently 3). **Stamp it on any collection you build yourself**, or
+wrap your features with `toSnapshot(features)`, which does it for you. A file that
+declares no version is read as version 1 and migrated on the way in: an axis arrow's own
+geometry says whether it already carries its width point, but a direction-of-attack
+arrow is reversed, since version 3 stores its arrowhead first as APP-06 numbers it.
+
+| Version | What changed |
+|---|---|
+| 1 | The eleven axis arrows file their width as a `width` amplifier. |
+| 2 | Their width is the base's last coordinate instead. |
+| 3 | The four direction-of-attack arrows (140601, 140602, 140603, 140605) store the arrowhead as point 1. |
 
 **A snapshot taken in one engine restores in the other.** Nothing renderer-specific
 travels with it, which is what makes that true rather than merely likely; the demo's
