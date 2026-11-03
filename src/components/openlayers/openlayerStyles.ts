@@ -419,7 +419,7 @@ export function featureGraphicLabelScale(feature: FeatureLike, resolution: numbe
  * attribution stay visible. A niche library demo is modest use — but if traffic
  * ever stops being modest, that is the moment to move to a provider rather than
  * lean harder on donated tiles. The escape hatch is this flag plus a swap of the
- * `source` below; `decisions.md` lists the alternatives that were compared.
+ * `source` below.
  *
  * The dark/light toggle in `OpenLayers.tsx` bails out when the layers are
  * absent, so the off path needs nothing else.
@@ -2533,7 +2533,7 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
  *
  * Deliberately hand-rolled: a style function receives **projected EPSG:3857
  * meters**, and turf expects geographic degrees, so `booleanPointInPolygon`
- * would quietly give wrong answers here. @see conventions.md
+ * would quietly give wrong answers here.
  */
 function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
     let inside = false;
@@ -2678,7 +2678,7 @@ export function crossedMissionTaskLabelStyleFn(name: TacticalGraphicName): Style
  * happen here rather than in the geometry because it is a function of the live
  * `resolution`, which the generator never sees.
  *
- * Euclidean EPSG:3857 maths only — no turf, no GeometryService. @see conventions.md
+ * Euclidean EPSG:3857 maths only — no turf, no GeometryService.
  */
 /**
  * **Ported.** @see missionTaskPaints.ts, `defeatPaint`.

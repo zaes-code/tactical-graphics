@@ -7,7 +7,7 @@ import {labelColorOf, lineColorOf} from './paintFunctions';
  *
  * **Only the line work and the letters are here.** The center symbol is injected
  * by the host — nothing in this package names milsymbol — so a renderer draws it
- * through the registered provider or draws nothing. @see conventions.md
+ * through the registered provider or draws nothing.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';

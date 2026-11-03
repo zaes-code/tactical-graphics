@@ -9,7 +9,6 @@
  * All three size the gap from the **rendered** glyph. The labels are zoom-clamped
  * while the geometry is not, so a gap baked in meters drifts against the letter
  * it makes room for — wider zoomed in, tighter zoomed out.
- * @see conventions.md, "a gap follows what it makes room for"
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
