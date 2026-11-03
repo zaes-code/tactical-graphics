@@ -319,12 +319,29 @@ export class TacticalGraphicsManager {
         const state = event.frameState;
         if (!state?.extent) return;
         const [minX, minY, maxX, maxY] = state.extent;
-        beginPaintFrame({minX, minY, maxX, maxY}, state.viewState.resolution, () =>
-            this.renderingVectorSource.getFeatures().flatMap(feature => {
-                if (feature.get('role') !== 'graphic') return [];
-                const painted = toPaintFeature(feature);
-                return painted ? [{id: (feature.get('symbolId') as string | undefined) ?? '', feature: painted}] : [];
-            }),
+        let labels: globalThis.Map<string, Feature> | undefined;
+        beginPaintFrame(
+            {minX, minY, maxX, maxY},
+            state.viewState.resolution,
+            () =>
+                this.renderingVectorSource.getFeatures().flatMap(feature => {
+                    if (feature.get('role') !== 'graphic') return [];
+                    const painted = toPaintFeature(feature);
+                    return painted ? [{id: (feature.get('symbolId') as string | undefined) ?? '', feature: painted}] : [];
+                }),
+            {
+                // Each graphic's label feature, found once per frame. @see culledLabelStyles
+                labelOf: id => {
+                    if (!labels) {
+                        labels = new globalThis.Map();
+                        for (const feature of this.renderingVectorSource.getFeatures()) {
+                            if (feature.get('role') === 'label') labels.set(feature.get('symbolId') as string, feature);
+                        }
+                    }
+                    return labels.get(id);
+                },
+                bufferPx: this.renderingVectorLayer.getRenderBuffer(),
+            },
         );
     };
 

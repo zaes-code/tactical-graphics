@@ -426,8 +426,30 @@ export function asStyleFunction(
         const placed = inFrame ? placeAreaLabel(paintFeature, context) : paintFeature;
         const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(placed, context), paintFeature.hideAmplifiers)), context), context);
         if (inFrame) takeLabels(spaceOf(inFrame), paints, context);
-        return paintToOlStyles(withFadedPaints(paints, graphicOpacityOf(feature)));
+        const styles = paintToOlStyles(withFadedPaints(paints, graphicOpacityOf(feature)));
+        if (inFrame && feature.get('role') === 'graphic') styles.push(...culledLabelStyles(inFrame, paintFeature.graphicId, resolution));
+        return styles;
     };
+}
+
+/**
+ * **An area's label whose own point OpenLayers will not style.** OpenLayers styles only the
+ * features whose geometry meets the view and its render buffer, and an area's label is a feature
+ * of its own whose geometry is the one point it usually sits on. Zoomed in on a part of the area,
+ * that point is off screen, so its style function, which is what would bring the label onto the
+ * view, never runs. The area's own outline still meets the view, so the label is styled with it:
+ * every style here carries its own geometry, so it lands where the label's paint puts it.
+ */
+function culledLabelStyles(current: PaintFrame, graphicId: string | undefined, resolution: number): Style[] {
+    const label = graphicId ? current.labelOf?.(graphicId) : undefined;
+    const at = label?.getGeometry()?.getExtent();
+    if (!label || !at) return [];
+    const reach = current.bufferPx * resolution;
+    const view = current.view;
+    const reached = at[2] >= view.minX - reach && at[0] <= view.maxX + reach && at[3] >= view.minY - reach && at[1] <= view.maxY + reach;
+    if (reached) return [];
+    const produced = label.getStyleFunction()?.(label, resolution);
+    return Array.isArray(produced) ? produced : produced ? [produced] : [];
 }
 
 /** The map frame whose features are being styled right now. @see beginPaintFrame */
@@ -436,6 +458,10 @@ interface PaintFrame {
     resolution: number;
     /** The graphics whose line work labels keep off, asked for once per frame. */
     graphics: () => Array<{id: string; feature: PaintFeature}>;
+    /** A graphic's label feature, by graphic id, for one OpenLayers will not style itself. @see culledLabelStyles */
+    labelOf?: (graphicId: string) => Feature | undefined;
+    /** The layer's render buffer: how far past the view OpenLayers still styles a feature. */
+    bufferPx: number;
     space?: LabelSpace;
 }
 
@@ -458,9 +484,17 @@ function spaceOf(current: PaintFrame): LabelSpace {
  * `postcompose`, so a manager opens the frame on the first and closes it on the second. A style
  * call outside a frame (a hit test, an export) paints as if no view were known.
  */
-export function beginPaintFrame(view: ProjectedBounds, resolution: number, graphics: PaintFrame['graphics']): void {
-    frame = {view, resolution, graphics};
+export function beginPaintFrame(
+    view: ProjectedBounds,
+    resolution: number,
+    graphics: PaintFrame['graphics'],
+    labels: {labelOf?: PaintFrame['labelOf']; bufferPx?: number} = {},
+): void {
+    frame = {view, resolution, graphics, labelOf: labels.labelOf, bufferPx: labels.bufferPx ?? DEFAULT_RENDER_BUFFER_PX};
 }
+
+/** OpenLayers' own default render buffer, for a frame opened without the layer's. */
+const DEFAULT_RENDER_BUFFER_PX = 100;
 
 /** Closes the frame {@link beginPaintFrame} opened. */
 export function endPaintFrame(): void {

@@ -115,3 +115,52 @@ describe('an area label in the OpenLayers paint frame', () => {
         expect(inside.every(([x, y]) => x >= view.minX && x <= view.maxX && y >= view.minY && y <= view.maxY)).toBe(true);
     });
 });
+
+describe('an area label OpenLayers would not style', () => {
+    it('is styled with the area, onto the view, when its own point is past the render buffer', () => {
+        const ring = [
+            [-200_000, -100_000],
+            [200_000, -100_000],
+            [200_000, 100_000],
+            [-200_000, 100_000],
+            [-200_000, -100_000],
+        ];
+        const label = new Feature({
+            geometry: new Point([0, 0]),
+            symbolId: 'obj',
+            role: 'label',
+            polygonRing: ring,
+            [TACTICAL_GRAPHIC_KEY]: {name: TacticalGraphicName.ObjectiveArea, designation: 'SWORD'},
+        });
+        label.setStyle(getAreaLabelStylesFn(TacticalGraphicName.ObjectiveArea));
+        // The outline, which does meet the view; styled through the same wrapper as any graphic.
+        const outline = new Feature({geometry: new LineString(ring), symbolId: 'obj', role: 'graphic'});
+        const outlineStyle = phaseLineStyleFunc(TacticalGraphicName.PhaseLine);
+        const view = {minX: 100_000, minY: -40_000, maxX: 180_000, maxY: 40_000};
+
+        beginPaintFrame(view, RESOLUTION, () => [], {labelOf: id => (id === 'obj' ? label : undefined), bufferPx: 100});
+        const drawn = (outlineStyle(outline, RESOLUTION) as Style[]).filter(
+            s => s.getText()?.getText() === 'SWORD' || s.getText()?.getText()?.includes('SWORD'),
+        );
+        expect(drawn.length).toBeGreaterThan(0);
+        const at = (drawn[0].getGeometry() as {getCoordinates(): number[]}).getCoordinates();
+        expect(at[0] >= view.minX && at[0] <= view.maxX && at[1] >= view.minY && at[1] <= view.maxY).toBe(true);
+    });
+
+    it('is left to its own feature when its point is within the render buffer', () => {
+        const label = new Feature({geometry: new Point([150_000, 0]), symbolId: 'obj', role: 'label'});
+        label.setStyle(() => {
+            throw new Error('styled twice');
+        });
+        const outline = new Feature({
+            geometry: new LineString([
+                [-200_000, 0],
+                [200_000, 0],
+            ]),
+            symbolId: 'obj',
+            role: 'graphic',
+        });
+        beginPaintFrame({minX: 100_000, minY: -40_000, maxX: 180_000, maxY: 40_000}, RESOLUTION, () => [], {labelOf: () => label, bufferPx: 100});
+        expect(() => phaseLineStyleFunc(TacticalGraphicName.PhaseLine)(outline, RESOLUTION)).not.toThrow();
+    });
+});
