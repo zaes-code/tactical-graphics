@@ -18,6 +18,7 @@ import {amplifierDash, asAmplifier, getFullLabel, showsEny, legibleDesignation, 
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
+import {distanceInView, pointAlong} from './viewFollow';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -129,7 +130,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         const leftWing = arrowCoords[0];
         const rightWing = arrowCoords[2];
         const clearance = ARROW_LABEL_CLEARANCE_PX * context.resolution;
-        const anchor: ProjectedPosition = [
+        const behindHead: ProjectedPosition = [
             (leftWing[0] + rightWing[0]) / 2 - ux * clearance,
             (leftWing[1] + rightWing[1]) / 2 - uy * clearance,
         ];
@@ -152,7 +153,21 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             ? legibleDesignation(enyFull, 'ENY', scale, fontStyle, context, pathLength(baseCoords) / context.resolution)
             : {text: enyFull, scale};
         const prefixOnly = shown.text !== enyFull;
-        const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
+        /*
+         * **Behind the head, unless that is off screen**, when the words come along the shaft to
+         * the nearest place in view; the breaks and the dates are measured from the same place,
+         * so they come with them. @see distanceInView
+         */
+        const labelPx = prefixOnly
+            ? (shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0)
+            : (nameText ? textWidth(context, nameText, fontStyle, scale) : 0) +
+              (showEny ? ARROW_ENY_GAP_PX + textWidth(context, 'ENY', fontStyle, scale) : 0);
+        const total = pathLength(baseCoords);
+        const naturalFromEnd = (p2[0] - behindHead[0]) * ux + (p2[1] - behindHead[1]) * uy;
+        const naturalCenter = total - naturalFromEnd - (labelPx * context.resolution) / 2;
+        const center = distanceInView(baseCoords, naturalCenter, labelPx / 2, context);
+        const fromEnd = total - center - (labelPx * context.resolution) / 2;
+        const anchor: ProjectedPosition = center === naturalCenter ? behindHead : pointAlong(baseCoords, total - fromEnd).at;
         /*
          * **On the shaft, bending with it.** A word ending `backPx` behind the anchor is laid
          * along the drawn route, so on a short last leg it follows the turn rather than running

@@ -15,6 +15,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {TacticalGraphicEchelon, TacticalGraphicStatus} from '../core/type';
 import {cutGapAlongPath, decorationScale, gapFits, joinedAtSeam, pathLength, runVector, splitAtCorners, splitPathAroundAll} from './decorations';
 import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {midSegmentInView} from './viewFollow';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -560,12 +561,15 @@ export function unexplodedOrdnanceAreaPaint(): AreaPaint {
         for (const i of [maxIndex, minIndex]) {
             const p1 = ring[i];
             const p2 = ring[i + 1];
-            if (!gapFits(ring, i, 0.5, gapMap / 2, true)) continue;
+            // The side's middle, or the middle of what is in view of it when that is off screen:
+            // the gap and its `UXO` together. @see midSegmentInView
+            const {t} = midSegmentInView([p1, p2], {index: 0, t: 0.5}, context);
+            if (!gapFits(ring, i, t, gapMap / 2, true)) continue;
             const along = (i - start + m) % m;
-            gaps.push({at: pathLength(walk.slice(0, along + 1)) + Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 2, halfGap: gapMap / 2});
+            gaps.push({at: pathLength(walk.slice(0, along + 1)) + Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) * t, halfGap: gapMap / 2});
 
             paints.push({
-                geometry: {type: 'Point', coordinates: [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2]},
+                geometry: {type: 'Point', coordinates: [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t]},
                 text: {
                     text: 'UXO',
                     font: fontStyle,

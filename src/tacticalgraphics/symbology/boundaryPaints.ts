@@ -13,6 +13,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, 
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
 import {cutGapAlongPath, projectedMidSegment, runVector, textWidth} from './decorations';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
+import {midSegmentInView, ringDirectionInView} from './viewFollow';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {hostileEndMarks} from './midLabelLinePaints';
 
@@ -93,7 +94,12 @@ export function boundaryPaint(): LinePaint {
         const bottomLabel = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
         const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
 
-        const {index, t} = projectedMidSegment(coords);
+        // Both names and the gap between them, so the pair slides clear of other labels together.
+        const footprintScale = scaleOf(feature, context);
+        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context, {
+            alongPx: Math.max(textWidth(context, topLabel, fontStyle, footprintScale), textWidth(context, bottomLabel, fontStyle, footprintScale)) / 2,
+            acrossPx: (BASE_FONT_SIZE_PX + echelonPerpExtentPx(echelon) + BOUNDARY_GAP_PX) * footprintScale,
+        });
         // As long as the run the middle sits on, so the glyph's cap is measured against the
         // line it marks and not against one chord of a smoothed curve. @see runVector
         const [dx, dy] = runVector(coords, index, t);
@@ -228,6 +234,9 @@ function formatAzimuth(deg: number): string {
     if (n < 0) n += 360;
     return String(n).padStart(3, '0');
 }
+
+/** Points a range fan's ring is sampled at, to find the part of it in view. */
+const RING_SAMPLES = 72;
 
 /**
  * The doctrinal weapon/sensor range fans' labels.
@@ -387,7 +396,14 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
                      */
                     const center = coords[0];
                     const radius = ringRadii[i];
-                    const below: ProjectedPosition = [center[0], center[1] - radius];
+                    // The bottom of the ring, unless that is off screen: then the nearest part of
+                    // the ring in view. @see ringDirectionInView
+                    const circle = Array.from({length: RING_SAMPLES}, (_, k): ProjectedPosition => {
+                        const a = (k / RING_SAMPLES) * 2 * Math.PI;
+                        return [center[0] + radius * Math.cos(a), center[1] + radius * Math.sin(a)];
+                    });
+                    const [ux, uy] = ringDirectionInView(circle, center, [0, -1], context);
+                    const below: ProjectedPosition = [center[0] + ux * radius, center[1] + uy * radius];
                     const widthFit = fitToPx(block, (2 * radius) / context.resolution);
                     const next = ringRadii[i + 1];
                     const heightFit = next === undefined

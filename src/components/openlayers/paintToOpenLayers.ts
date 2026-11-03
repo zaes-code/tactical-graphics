@@ -7,7 +7,14 @@ import {
     TACTICAL_GRAPHIC_KEY,
     TacticalGraphicEchelon,
     TacticalGraphicName,
+    addGraphicLines,
+    emptyLabelSpace,
+    getAutoPlaceLabels,
     hatchTileSegments,
+    placeAreaLabel,
+    takeLabels,
+    withClearance,
+    withFadedPaints,
     withFittedDashes,
     withHiddenAmplifiers,
     withLegibleText,
@@ -16,9 +23,11 @@ import {
 import type {
     FillSpec,
     HatchSpec,
+    LabelSpace,
     Paint,
     PaintContext,
     PaintFeature,
+    ProjectedBounds,
     ProjectedGeometry,
     ProjectedInputGeometry,
     ProjectedPosition,
@@ -27,6 +36,7 @@ import type {
     TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
+import {graphicOpacityOf} from './graphicOpacity';
 import {getTextWidth} from './textMeasure';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 
@@ -403,13 +413,93 @@ export function asStyleFunction(
         const paintFeature = toPaintFeature(feature, name);
         if (!paintFeature) return [];
         // Every OpenLayers paint passes through here, so the hide-amplifiers toggle, the
-        // legibility floor and the dash fit are applied once rather than per family.
-        // @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames, withFittedDashes
-        const context = paintContext(resolution);
-        return paintToOlStyles(
-            withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers)), context), context),
-        );
+        // legibility floor, the dash fit and a host's dimming are applied once rather than
+        // per family. @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames,
+        // withFittedDashes, withFadedPaints
+        // Inside a map frame, the view is known and the labels painted earlier in it are
+        // kept clear of. @see beginPaintFrame
+        const inFrame = frame && getAutoPlaceLabels() && Math.abs(frame.resolution - resolution) <= resolution * 1e-9 ? frame : undefined;
+        const context = inFrame
+            ? withClearance({...paintContext(resolution), view: inFrame.view}, spaceOf(inFrame), paintFeature.graphicId ?? '')
+            : paintContext(resolution);
+        // OpenLayers styles an area's label as a feature of its own, so it is placed here, as the
+        // other engines place it while painting the whole graphic. A no-op for any other feature.
+        const placed = inFrame ? placeAreaLabel(paintFeature, context) : paintFeature;
+        const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(placed, context), paintFeature.hideAmplifiers)), context), context);
+        if (inFrame) takeLabels(spaceOf(inFrame), paints, context);
+        const styles = paintToOlStyles(withFadedPaints(paints, graphicOpacityOf(feature)));
+        if (inFrame && feature.get('role') === 'graphic') styles.push(...culledLabelStyles(inFrame, paintFeature.graphicId, resolution));
+        return styles;
     };
+}
+
+/**
+ * **An area's label whose own point OpenLayers will not style.** OpenLayers styles only the
+ * features whose geometry meets the view and its render buffer, and an area's label is a feature
+ * of its own whose geometry is the one point it usually sits on. Zoomed in on a part of the area,
+ * that point is off screen, so its style function, which is what would bring the label onto the
+ * view, never runs. The area's own outline still meets the view, so the label is styled with it:
+ * every style here carries its own geometry, so it lands where the label's paint puts it.
+ */
+function culledLabelStyles(current: PaintFrame, graphicId: string | undefined, resolution: number): Style[] {
+    const label = graphicId ? current.labelOf?.(graphicId) : undefined;
+    const at = label?.getGeometry()?.getExtent();
+    if (!label || !at) return [];
+    const reach = current.bufferPx * resolution;
+    const view = current.view;
+    const reached = at[2] >= view.minX - reach && at[0] <= view.maxX + reach && at[3] >= view.minY - reach && at[1] <= view.maxY + reach;
+    if (reached) return [];
+    const produced = label.getStyleFunction()?.(label, resolution);
+    return Array.isArray(produced) ? produced : produced ? [produced] : [];
+}
+
+/** The map frame whose features are being styled right now. @see beginPaintFrame */
+interface PaintFrame {
+    view: ProjectedBounds;
+    resolution: number;
+    /** The graphics whose line work labels keep off, asked for once per frame. */
+    graphics: () => Array<{id: string; feature: PaintFeature}>;
+    /** A graphic's label feature, by graphic id, for one OpenLayers will not style itself. @see culledLabelStyles */
+    labelOf?: (graphicId: string) => Feature | undefined;
+    /** The layer's render buffer: how far past the view OpenLayers still styles a feature. */
+    bufferPx: number;
+    space?: LabelSpace;
+}
+
+let frame: PaintFrame | undefined;
+
+function spaceOf(current: PaintFrame): LabelSpace {
+    if (!current.space) {
+        current.space = emptyLabelSpace();
+        for (const {id, feature} of current.graphics()) addGraphicLines(current.space, id, feature, current.view);
+    }
+    return current.space;
+}
+
+/**
+ * Opens a map frame: the style calls until {@link endPaintFrame} paint against `view`, so a label
+ * whose place is off screen moves onto it, and keep each label clear of the ones styled before it
+ * and of the other graphics' lines.
+ *
+ * OpenLayers styles a frame's features in one synchronous run between the map's `precompose` and
+ * `postcompose`, so a manager opens the frame on the first and closes it on the second. A style
+ * call outside a frame (a hit test, an export) paints as if no view were known.
+ */
+export function beginPaintFrame(
+    view: ProjectedBounds,
+    resolution: number,
+    graphics: PaintFrame['graphics'],
+    labels: {labelOf?: PaintFrame['labelOf']; bufferPx?: number} = {},
+): void {
+    frame = {view, resolution, graphics, labelOf: labels.labelOf, bufferPx: labels.bufferPx ?? DEFAULT_RENDER_BUFFER_PX};
+}
+
+/** OpenLayers' own default render buffer, for a frame opened without the layer's. */
+const DEFAULT_RENDER_BUFFER_PX = 100;
+
+/** Closes the frame {@link beginPaintFrame} opened. */
+export function endPaintFrame(): void {
+    frame = undefined;
 }
 
 /** Re-exported for holders that build a `Feature` and want its paint form. */

@@ -18,6 +18,8 @@ import {RouteDirection, TacticalGraphicName, getLabel} from '../core/type';
 import {offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
+import {midSegmentInView} from './viewFollow';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 
 /** Stroke weight of the traffic arrows — half the line weight, never under 1 px. */
 const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
@@ -174,7 +176,10 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         // least twice it. The arrow figure keeps `scale`. @see legibleDesignation
         const {text, scale: textScale} = legibleDesignation(full, getLabel(name), scale, fontStyle, context, routePx);
 
-        const {index, t} = projectedMidSegment(coords);
+        // The route's middle, or the middle of what is in view of it when that is off screen,
+        // clear of other labels. @see midSegmentInView
+        const footprint = {alongPx: (text ? textWidth(context, text, fontStyle, textScale) : 0) / 2, acrossPx: BASE_FONT_SIZE_PX * textScale};
+        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context, footprint);
         const a = coords[index];
         const b = coords[index + 1];
         const middle: ProjectedPosition = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];

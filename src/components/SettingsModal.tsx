@@ -347,6 +347,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 checked={settings.smoothLines === true}
                 onChange={smoothLines => onChange({smoothLines})}
             />
+            <ToggleSetting
+                label="Auto-place Labels"
+                hint="Slide labels onto the screen and clear of each other"
+                checked={settings.autoPlaceLabels === true}
+                onChange={autoPlaceLabels => onChange({autoPlaceLabels})}
+            />
 
             <Divider/>
             <Typography sx={sectionSx}>Affiliation colors</Typography>

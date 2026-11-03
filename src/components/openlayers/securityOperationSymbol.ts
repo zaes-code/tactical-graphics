@@ -71,6 +71,7 @@ import {
 import type {SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from '@zaes/tactical-graphics';
 import {paintContext, setPaintCenterSymbolProvider, toPaintFeature} from './paintToOpenLayers';
 import {readGraphicLabels} from './graphicProperties';
+import {fadedSymbolStyle, graphicOpacityOf} from './graphicOpacity';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 
 /** What the provider is told about the symbol it is being asked for. */
@@ -456,10 +457,11 @@ export function securityOperationSymbolStyle(
             (id ? getGraphicSecuritySymbolProvider(id) : undefined) ??
             provider ??
             getSecuritySymbolProvider();
-        return resolve(
+        const style = resolve(
             {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
             active,
         );
+        return fadedSymbolStyle(style, graphicOpacityOf(source()));
     };
 }
 
@@ -514,6 +516,8 @@ export function followTaskSymbolStyle(feature: FeatureLike, resolution: number):
     // than mutating the cached style's. @see escortSymbolStyle
     const placed = style.clone();
     placed.setGeometry(new Point(placement.at as number[]));
+    const opacity = graphicOpacityOf(feature);
+    if (opacity < 1) placed.getImage()?.setOpacity(opacity);
     return placed;
 }
 
@@ -553,6 +557,8 @@ export function securityOperationCentreSymbolStyle(feature: FeatureLike, resolut
 
     const placed = style.clone();
     placed.setGeometry(new Point(placement.at as number[]));
+    const opacity = graphicOpacityOf(feature);
+    if (opacity < 1) placed.getImage()?.setOpacity(opacity);
     return placed;
 }
 

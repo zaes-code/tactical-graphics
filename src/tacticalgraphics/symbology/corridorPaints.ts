@@ -29,6 +29,7 @@ import {TacticalGraphicName, getLabel} from '../core/type';
 import {pathLength, textWidth} from './decorations';
 import {getFullLabel, groundPixels, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {capLabelToSpan} from './labelFit';
+import {insetView, midSegmentInView, visibleStretch} from './viewFollow';
 
 /** Assumed circle radius when the real one is unknown, in screen pixels. */
 const ACP_FALLBACK_RADIUS_PX = 12 * 0.95;
@@ -315,8 +316,19 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 blockCeiling,
                 capLabelToSpan(context, infoText, fontStyle, baseScale, pathLength(coords) / context.resolution),
             );
-            paints.push(amplifier(feature, [anchorX, anchorY], infoText, blockScale, {
-                align: 'right',
+            /*
+             * **Zoomed in past the block's place, it comes to the view's west edge** and grows
+             * east into it, at its own height held inside the view: the corridor is on screen
+             * and its reference detail would otherwise be nowhere. @see PaintContext.view
+             */
+            const view = insetView(context);
+            const halfHeight = (infoLines.length * BASE_FONT_SIZE_PX * blockScale * context.resolution) / 2;
+            const offScreen = view && !(anchorX >= view.minX && anchorX <= view.maxX && anchorY >= view.minY && anchorY <= view.maxY);
+            const pinned = offScreen && visibleStretch(coords, view)
+                ? ([view.minX, Math.min(view.maxY - halfHeight, Math.max(view.minY + halfHeight, anchorY))] as ProjectedPosition)
+                : undefined;
+            paints.push(amplifier(feature, pinned ?? [anchorX, anchorY], infoText, blockScale, {
+                align: pinned ? 'left' : 'right',
                 baseline: 'middle',
                 // The whole block, `NAME:` line included: the corridor already carries its
                 // designation along each leg, so hiding the block loses nothing but the
@@ -357,7 +369,13 @@ export function airCorridorLabelPaint(name: TacticalGraphicName): (f: PaintFeatu
                 // Held to the rails as the whole label is (`heightCap`): a prefix taller than the
                 // space between them would sit outside the corridor, so it goes instead.
                 const shown = legibleDesignation(text, getLabel(name), designationScale, fontStyle, context, legClearPx[i]);
-                if (shown.text && shown.scale <= heightCap) paints.push(amplifier(feature, [(x0 + x1) / 2, (y0 + y1) / 2], shown.text, shown.scale, {rotation}));
+                if (shown.text && shown.scale <= heightCap) {
+                    // A leg whose middle is off screen carries its name at the middle of what is
+                    // in view of it, clear of other labels. @see midSegmentInView
+                    const footprint = {alongPx: textWidth(context, shown.text, fontStyle, shown.scale) / 2, acrossPx: (BASE_FONT_SIZE_PX * shown.scale) / 2};
+                    const {t} = midSegmentInView([coords[i], coords[i + 1]], {index: 0, t: 0.5}, context, footprint);
+                    paints.push(amplifier(feature, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t], shown.text, shown.scale, {rotation}));
+                }
             }
             paints.push(acpAt(i));
         }

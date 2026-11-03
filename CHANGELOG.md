@@ -15,6 +15,48 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+Labels that follow the view and keep clear of each other, on every renderer.
+
+### Added
+
+- **Labels follow the view.** A label whose usual place is off screen moves onto the visible
+  part of its graphic: phase line and axis labels, boundary and mid-line labels, linear target
+  and FPF labels, and area labels. Every renderer hands the paint functions its view through
+  the new optional **`PaintContext.view`**: MapLibre's native layers and canvas overlay, and
+  OpenLayers, which restyles once a pan settles. A caller that passes no view sees no change.
+- **Labels keep clear of each other.** Every renderer paints its graphics in one pass in which
+  each graphic's labels slide along their line, or across their area, clear of the labels
+  already placed and of the other graphics' lines, through the new optional
+  **`PaintContext.avoid`** and **`avoidLines`**. A label with no clear place keeps its usual one.
+  The pass is `paintWithClearance`, with `emptyLabelSpace`, `addGraphicLines`, `withClearance`,
+  `takeLabels` and `textBounds` for an engine or host that paints graphics itself.
+- **`autoPlaceLabels`** turns both on. It is off by default, so a host that does not set it sees
+  every label at its doctrinal place, as before.
+- **`fullSizeDecorations`** in `TacticalGraphicsConfigOptions` (default `false`), read with
+  `getFullSizeDecorations()`: keeps obstacle teeth, wire loops, ditch teeth and battlements at
+  full size however small the graphic is on screen. A ditch's teeth narrow to fit a short line
+  rather than vanish.
+- **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
+  properties, for a host drawing one graphic at a size of its own.
+- **`turnedSymbolLayer`** exported from the MapLibre entry beside `symbolLayer`.
+- **`engine.remove(id)`** on both engines, and `remove(id)` on `NativeLayerRenderer` and
+  `CanvasOverlayRenderer`: takes one
+  graphic off the map, deselecting it if it was selected, and calls `onChange`. Hiding a graphic
+  is removing it and adding it back later.
+- **`engine.setOpacity(id, opacity)`** on both engines, and `setOpacity` / `opacityOf` on
+  `NativeLayerRenderer` and `CanvasOverlayRenderer`: draws one graphic fainter, its lines,
+  fills, labels and center symbol together. View state like "name only": never in a snapshot,
+  gone after `restore` or `clearAll`. The native renderer reads it through every layer's
+  opacity; OpenLayers and the canvas overlay fade each color through the new
+  `withFadedPaints`.
+
+### Changed
+
+- **`ENY` on a hostile area is sized to the area.** It sits on the outline, so it takes the cap
+  every label there takes, and it is never larger than the area's name. It never goes
+  below the smallest legible size, so a hostile area keeps its marker when its name is too
+  small to show. Affects the action areas, the generic area and the corps support area.
+
 ## [4.7.0] — 2026-11-02
 
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in

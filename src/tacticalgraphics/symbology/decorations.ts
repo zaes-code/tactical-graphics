@@ -22,6 +22,7 @@
  */
 
 import type {PaintContext, ProjectedPosition} from '../core/paint';
+import {getFullSizeDecorations} from '../core/config';
 
 /** Total length of a path, in projected meters. */
 export function pathLength(path: ProjectedPosition[]): number {
@@ -228,6 +229,8 @@ export function decorationScale(
     // fortified area read as texture rather than as battlements.
     //
     // Defaults to `heightPx`, so a caller that has not said otherwise is unchanged.
+    // A host that wants every glyph legible keeps them whole. @see getFullSizeDecorations
+    if (getFullSizeDecorations()) return 1;
     const scale = Math.max(0, Math.min(1, (availablePx * share) / Math.max(heightPx, footprintPx)));
 
     // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is

@@ -30,6 +30,7 @@ import {amplifierText, asAmplifier, showsEny, formatDesignationWithCountry, getF
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {insetView} from './viewFollow';
 
 type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -230,11 +231,19 @@ export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
          * text to nothing. The engine reported the mark and the map showed no words. The
          * outside labels here all bypass it for the same reason. @see zoneLabelPaint
          */
+        /*
+         * **Under the middle, or along under the shape to the view** when the middle is off to
+         * one side and the line under the shape is on screen. @see PaintContext.view
+         */
+        const y = box.minY - BELOW_SHAPE_GAP_PX * context.resolution;
+        let x = (box.minX + box.maxX) / 2;
+        const view = insetView(context);
+        if (view && y >= view.minY && y <= view.maxY && (x < view.minX || x > view.maxX)) {
+            const [lo, hi] = [Math.max(box.minX, view.minX), Math.min(box.maxX, view.maxX)];
+            if (lo < hi) x = Math.min(hi, Math.max(lo, x));
+        }
         return [{
-            geometry: {
-                type: 'Point',
-                coordinates: [(box.minX + box.maxX) / 2, box.minY - BELOW_SHAPE_GAP_PX * context.resolution],
-            },
+            geometry: {type: 'Point', coordinates: [x, y]},
             text: {
                 text: literal,
                 font: fontStyle,
@@ -433,9 +442,17 @@ export function actionAreaLabelPaint(
         // Field H leads the line on the generic area, so only a line that starts with the
         // literal can shrink to it.
         const prefix = first.startsWith(literal) ? literal : '';
-        const paints = designationStack(feature, context, at, lines, scaleOf(feature, context), first, prefix);
-        return paints.concat(hostileFlankMarks(feature, context));
+        const scale = scaleOf(feature, context);
+        const paints = designationStack(feature, context, at, lines, scale, first, prefix);
+        // A name too small to read is dropped; ENY then takes the size it was fitted to.
+        const fitted = lines.length ? stack(feature, context, at, lines, scale).text?.scale ?? scale : scale;
+        return paints.concat(hostileFlankMarks(feature, context, nameScaleOf(paints, fitted)));
     };
+}
+
+/** The scale the area's name was drawn at: the first text in its paints, or `fallback`. */
+function nameScaleOf(paints: Paint[], fallback: number): number {
+    return paints.find(paint => paint.text?.text)?.text?.scale ?? fallback;
 }
 
 /**
@@ -447,12 +464,18 @@ export function actionAreaLabelPaint(
  * already takes. The text stays in the label colour: hostile *line work* goes red, hostile
  * text amplifiers do not. @, the hostility colour rule
  */
-function hostileFlankMarks(feature: PaintFeature, context: PaintContext): Paint[] {
+function hostileFlankMarks(feature: PaintFeature, context: PaintContext, nameScale: number): Paint[] {
     if (!showsEny(feature)) return [];
     const ring = feature.ring;
     if (!ring || ring.length < 4) return [];
 
     const center = ringCenter(ring);
+    // **Capped to the graphic like any label on the outline, and no larger than the name.** At
+    // the centred scale it stood several times the size of the name on a small area, and a
+    // short name (a generic area's) barely shrinks. Never under the legibility floor, though: ENY
+    // is the hostile marker that does not rely on colour, so it stays while the outline does.
+    // @see outsideScaleOf, withLegibleText
+    const fitted = Math.min(scaleOf(feature, context), Math.max(Math.min(outsideScaleOf(feature, context), nameScale), MIN_LEGIBLE_TEXT_PX / BASE_FONT_SIZE_PX));
     const marks: Paint[] = [];
     for (const angle of [0, Math.PI]) {
         const spot = ringCrossingPoint(ring, center, angle);
@@ -466,7 +489,7 @@ function hostileFlankMarks(feature: PaintFeature, context: PaintContext): Paint[
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'middle',
-                scale: scaleOf(feature, context),
+                scale: fitted,
             },
         });
     }
@@ -811,8 +834,10 @@ export function areaDefaultLabelPaint(
         // on two lines: one centred block, so the lines space with the font.
         if (STACKED_DATE_AREAS.has(name)) {
             const lines = [text, ...date.replace(' - ', ' -\n').split('\n')].filter(line => line.length > 0);
-            const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
-            return designationStack(feature, context, at, lines, scale, text, withLiteral ? getLabel(name) : '').concat(flanks);
+            const stacked = designationStack(feature, context, at, lines, scale, text, withLiteral ? getLabel(name) : '');
+            if (!withHostileFlanks) return stacked;
+            const fitted = lines.length ? stack(feature, context, at, lines, scale).text?.scale ?? scale : scale;
+            return stacked.concat(hostileFlankMarks(feature, context, nameScaleOf(stacked, fitted)));
         }
 
         // The two marks are separately anchored, so they are capped as **one block**: the
@@ -840,7 +865,7 @@ export function areaDefaultLabelPaint(
         // Both marks are emitted even when empty, matching the original: an empty
         // `text` renders nothing, and keeping the shape identical keeps the mark
         // count comparable between the two renderers.
-        const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
+        const flanks = withHostileFlanks ? hostileFlankMarks(feature, context, kept?.text ? kept.scale : fitted) : [];
         const designationMark = kept ? mark(kept.text, 0, kept.scale) : mark(text, 0);
         return [designationMark, asAmplifier(mark(date, DEFAULT_DATE_OFFSET_PX)), ...flanks];
     };

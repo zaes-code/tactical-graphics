@@ -172,6 +172,18 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
 
         amplifiersHidden: (id: string) => amplifiersHiddenOn(renderer, id),
 
+        remove(id: string) {
+            const wasSelected = renderer.selection === id;
+            if (!renderer.remove(id)) return false;
+            if (wasSelected) options.onSelect?.(null);
+            options.onChange?.();
+            return true;
+        },
+
+        setOpacity(id: string, opacity: number) {
+            renderer.setOpacity(id, opacity);
+        },
+
         refreshStyles: () => renderer.realize(),
 
         destroy() {

@@ -194,20 +194,36 @@ export function getDrawMarkerOutlineColor(): string {
  * to a crash.
  */
 export function withOpacity(color: string, alpha: number): string {
-    const rgb = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)/);
+    const rgba = rgbaOf(color);
+    return rgba ? `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${alpha})` : color;
+}
+
+/**
+ * A color with its own alpha multiplied by `factor`, so a translucent wash dimmed by half
+ * stays half as strong as it was. Same forms and same fallback as {@link withOpacity}.
+ */
+export function fadeColor(color: string, factor: number): string {
+    const rgba = rgbaOf(color);
+    return rgba ? `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3] * factor})` : color;
+}
+
+/** `[r, g, b, a]` of an `rgb()`/`rgba()` or hex color, or null for any other form. */
+function rgbaOf(color: string): [number, number, number, number] | null {
+    const rgb = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/);
     if (rgb) {
-        const [, r, g, b] = rgb;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        const [, r, g, b, a] = rgb;
+        return [Number(r), Number(g), Number(b), a === undefined ? 1 : Number(a)];
     }
 
     const hex = color.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
     if (hex) {
         let h = hex[1];
         if (h.length <= 4) h = h.split('').map(c => c + c).join(''); // #rgb(a) → #rrggbb(aa)
-        return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${alpha})`;
+        const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+        return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), a];
     }
 
-    return color;
+    return null;
 }
 
 // ── Label scale ──────────────────────────────────────────────────────────────

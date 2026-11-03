@@ -16,7 +16,7 @@ import VectorLayer from 'ol/layer/Vector';
 import type Feature from 'ol/Feature';
 
 /** Every feature on the map's vector layers that belongs to the graphic `symbolId`. */
-function featuresOf(map: OlMap, symbolId: string): Feature[] {
+export function featuresOf(map: OlMap, symbolId: string): Feature[] {
     const found: Feature[] = [];
     for (const layer of map.getLayers().getArray()) {
         if (!(layer instanceof VectorLayer)) continue;

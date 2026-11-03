@@ -28,6 +28,8 @@ import {
     walkPath,
 } from './decorations';
 import {amplifierDash, amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {insetView, midSegmentInView, visibleStretch} from './viewFollow';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 
 type EndGlyphPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -247,15 +249,19 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
         const stroke = {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)};
         const scale = scaleOf(feature, context);
 
-        // The middle segment, split around the gap the echelon glyph sits in.
-        const segIdx = centerSegmentIndex(path);
-        // The direction of the middle, as long as the run it sits on. @see runVector
-        const [runX, runY] = runVector(path, segIdx);
-
         // Cut to fit the glyph rather than to a constant: the corridor takes every echelon
         // from a squad's dot to a corps' XXX, and one figure suits neither end.
         // @see echelonWidthPx
         const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        // The middle segment, split around the gap the echelon glyph sits in; when the line's
+        // middle is off screen, the middle of what is in view, as a boundary's glyph moves.
+        // @see midSegmentInView
+        const center = centerSegmentIndex(path);
+        const [centerX, centerY] = runVector(path, center);
+        const footprint = {alongPx: echelonWidthPx(centerX, centerY, context.resolution, echelon, scale) / 2, acrossPx: BASE_FONT_SIZE_PX * scale};
+        const {index: segIdx, t} = midSegmentInView(path, {index: center, t: 0.5}, context, footprint);
+        // The direction of the middle, as long as the run it sits on. @see runVector
+        const [runX, runY] = runVector(path, segIdx, t);
         const glyphHalfPx = echelonWidthPx(runX, runY, context.resolution, echelon, scale) / 2;
         const halfGap = (glyphHalfPx + ECHELON_GAP_PX * scale) * context.resolution;
         /*
@@ -264,8 +270,8 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
          * a smoothed one the curve around it, whose middle segment is a short chord.
          * @see cutGapAlongPath, gapFits
          */
-        const gapped = gapFits(path, segIdx, 0.5, halfGap);
-        const cut = cutGapAlongPath(path, segIdx, 0.5, gapped ? halfGap : 0);
+        const gapped = gapFits(path, segIdx, t, halfGap);
+        const cut = cutGapAlongPath(path, segIdx, t, gapped ? halfGap : 0);
         const outline = cut.outline;
         const mid = cut.center;
 
@@ -324,7 +330,11 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
          */
         const widthPx = textWidth(context, text, fontStyle, scale);
         const lengthPx = (run: ProjectedPosition[]) => pathLength(run) / context.resolution;
-        const [leading, trailing] = runs;
+        // On screen means what is in view, when the view is known: each run cut to its visible
+        // stretch, so H sits over the middle of what can be seen of it. @see visibleStretch
+        const view = insetView(context);
+        const inView = view ? runs.map(r => (r.length >= 2 ? visibleStretch(r, view) : undefined) ?? []) : runs;
+        const [leading, trailing] = inView.some(r => r.length >= 2) ? inView : runs;
         const run = lengthPx(leading) >= widthPx || lengthPx(leading) >= lengthPx(trailing) ? leading : trailing;
         const spot = walkPath(run, pathLength(run) / 2);
 

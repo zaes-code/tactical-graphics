@@ -12,7 +12,7 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx, getAutoPlaceLabels} from '@zaes/tactical-graphics';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -23,6 +23,8 @@ import {EventsKey} from "ol/events";
 import {Extent, extend as extendExtent} from "ol/extent";
 import {unByKey} from "ol/Observable";
 import {readGraphicGeometryState} from "./graphicProperties";
+import type RenderEvent from "ol/render/Event";
+import {beginPaintFrame, endPaintFrame, toPaintFeature} from "./paintToOpenLayers";
 
 export enum InteractionType {
     'resize',
@@ -298,7 +300,68 @@ export class TacticalGraphicsManager {
         this.map.addLayer(this.renderingVectorLayer);
         this.map.on('pointermove', this.updateHoverCursor);
         this.map.on('singleclick', this.handleSelectClick);
+        this.viewKeys = [
+            this.map.on('precompose', this.openPaintFrame),
+            this.map.on('postcompose', endPaintFrame),
+            this.map.on('moveend', this.restyleForView),
+        ];
     }
+
+    /** The listeners that give the style functions the view. @see stopFollowingView */
+    private viewKeys: EventsKey[];
+
+    /**
+     * Hands the frame about to be styled its view and the graphics whose lines labels keep off.
+     * OpenLayers styles a frame's features between `precompose` and `postcompose`, so the paint
+     * functions see the extent drawn and the labels styled before them. @see beginPaintFrame
+     */
+    private openPaintFrame = (event: RenderEvent): void => {
+        const state = event.frameState;
+        if (!state?.extent || !getAutoPlaceLabels()) return;
+        const [minX, minY, maxX, maxY] = state.extent;
+        let labels: globalThis.Map<string, Feature> | undefined;
+        beginPaintFrame(
+            {minX, minY, maxX, maxY},
+            state.viewState.resolution,
+            () =>
+                this.renderingVectorSource.getFeatures().flatMap(feature => {
+                    if (feature.get('role') !== 'graphic') return [];
+                    const painted = toPaintFeature(feature);
+                    return painted ? [{id: (feature.get('symbolId') as string | undefined) ?? '', feature: painted}] : [];
+                }),
+            {
+                // Each graphic's label feature, found once per frame. @see culledLabelStyles
+                labelOf: id => {
+                    if (!labels) {
+                        labels = new globalThis.Map();
+                        for (const feature of this.renderingVectorSource.getFeatures()) {
+                            if (feature.get('role') === 'label') labels.set(feature.get('symbolId') as string, feature);
+                        }
+                    }
+                    return labels.get(id);
+                },
+                bufferPx: this.renderingVectorLayer.getRenderBuffer(),
+            },
+        );
+    };
+
+    /**
+     * Restyles once a pan or zoom settles. OpenLayers draws a pan from the frames it already
+     * styled, so without this a label moved onto the view would stay where the last view left it.
+     * The layer rather than the source, so no one listening for edits hears of one.
+     */
+    private restyleForView = (): void => {
+        // Off, nothing on the map depends on the view, so the frames OpenLayers already styled stand.
+        if (!getAutoPlaceLabels()) return;
+        this.renderingVectorLayer.changed();
+    };
+
+    /** Takes the view listeners off the map, for a manager being destroyed. */
+    stopFollowingView = (): void => {
+        unByKey(this.viewKeys);
+        this.viewKeys = [];
+        endPaintFrame();
+    };
 
     /**
      * Click-to-select, in `edit` mode only.
