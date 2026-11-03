@@ -1,6 +1,6 @@
 import type {FeatureCollection} from 'geojson';
 import type {Map as MapLibreMap} from 'maplibre-gl';
-import {toSnapshot, withFadedPaints} from '@zaes/tactical-graphics';
+import {paintWithClearance, toSnapshot, withFadedPaints} from '@zaes/tactical-graphics';
 import type {Paint, PaintContext} from '@zaes/tactical-graphics';
 import {viewTransformOf} from '../projection';
 import {paintToCanvas} from './paintToCanvas';
@@ -211,12 +211,22 @@ export class CanvasOverlayRenderer {
         this.ctx.clearRect(0, 0, width, height);
 
         const view = viewTransformOf(this.map);
-        const context: PaintContext = {resolution: view.resolution, measureText: this.context.measureText};
+        // The visible area from the same transform the canvas draws through, so a label moved
+        // onto the view lands where this canvas puts it. Redrawn every frame, so it follows a pan.
+        const [halfW, halfH] = [(view.width / 2) * view.resolution, (view.height / 2) * view.resolution];
+        const context: PaintContext = {
+            resolution: view.resolution,
+            measureText: this.context.measureText,
+            view: {minX: view.center[0] - halfW, minY: view.center[1] - halfH, maxX: view.center[0] + halfW, maxY: view.center[1] + halfH},
+        };
 
         const paints: Paint[] = [];
-        for (const graphic of this.graphics) {
-            paints.push(...withFadedPaints(paintTacticalGraphic(graphic, context), this.opacities.get(graphic.id)));
-        }
+        const painted = paintWithClearance(
+            this.graphics.map(graphic => ({id: graphic.id, feature: graphic.graphic, item: graphic})),
+            context,
+            paintTacticalGraphic,
+        );
+        this.graphics.forEach((graphic, i) => paints.push(...withFadedPaints(painted[i], this.opacities.get(graphic.id))));
 
         paintToCanvas(this.ctx, paints, view);
 

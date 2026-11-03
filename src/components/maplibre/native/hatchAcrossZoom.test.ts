@@ -78,6 +78,8 @@ beforeEach(() => {
             moveTo: () => undefined,
             lineTo: () => undefined,
             stroke: () => undefined,
+            // The labels are measured for their room on the map. @see paintWithClearance
+            measureText: (text: string) => ({width: text.length * 8}),
             getImageData: (_x: number, _y: number, w: number, h: number) => ({width: w, height: h, data: new Uint8ClampedArray(w * h * 4), canvas}),
         } as never;
     });

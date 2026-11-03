@@ -356,6 +356,8 @@ export {
     phaseLinePaint,
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {addGraphicLines, emptyLabelSpace, paintWithClearance, takeLabels, textBounds, withClearance} from './symbology/labelClearance';
+export type {ClearanceItem, LabelSpace} from './symbology/labelClearance';
 export {CARDINAL_LABEL_AREAS, CBRN_AREAS, CBRN_TOXIC_AREAS, CORRIDOR_GRAPHICS} from './symbology/registry';
 export {
     breakRingAt,

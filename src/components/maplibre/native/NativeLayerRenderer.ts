@@ -29,6 +29,7 @@ import {
     geometryConfigKey,
     rebuildPaintedGraphic,
     smoothingKindOf,
+    paintWithClearance,
 } from '@zaes/tactical-graphics';
 import type {PaintContext, ProjectedBounds, ProjectedPosition} from '@zaes/tactical-graphics';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
@@ -596,7 +597,12 @@ export class NativeLayerRenderer {
         this.rebuildForConfig();
         const visible = this.visibleGraphics();
         const paintedAt = performance.now();
-        const perGraphic = visible.map(graphic => paintTacticalGraphic(graphic, context));
+        // In order, each graphic's labels kept clear of the ones before it. @see paintWithClearance
+        const perGraphic = paintWithClearance(
+            visible.map(graphic => ({id: graphic.id, feature: graphic.graphic, item: graphic})),
+            context,
+            paintTacticalGraphic,
+        );
         const bucketedAt = performance.now();
         const buckets = emptyBuckets(hatchGrowth(this.map.getZoom()));
         for (let i = 0; i < perGraphic.length; i++) {

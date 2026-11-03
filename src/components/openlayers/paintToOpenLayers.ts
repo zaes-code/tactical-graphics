@@ -7,7 +7,11 @@ import {
     TACTICAL_GRAPHIC_KEY,
     TacticalGraphicEchelon,
     TacticalGraphicName,
+    addGraphicLines,
+    emptyLabelSpace,
     hatchTileSegments,
+    takeLabels,
+    withClearance,
     withFadedPaints,
     withFittedDashes,
     withHiddenAmplifiers,
@@ -17,9 +21,11 @@ import {
 import type {
     FillSpec,
     HatchSpec,
+    LabelSpace,
     Paint,
     PaintContext,
     PaintFeature,
+    ProjectedBounds,
     ProjectedGeometry,
     ProjectedInputGeometry,
     ProjectedPosition,
@@ -408,10 +414,53 @@ export function asStyleFunction(
         // legibility floor, the dash fit and a host's dimming are applied once rather than
         // per family. @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames,
         // withFittedDashes, withFadedPaints
-        const context = paintContext(resolution);
+        // Inside a map frame, the view is known and the labels painted earlier in it are
+        // kept clear of. @see beginPaintFrame
+        const inFrame = frame && Math.abs(frame.resolution - resolution) <= resolution * 1e-9 ? frame : undefined;
+        const context = inFrame
+            ? withClearance({...paintContext(resolution), view: inFrame.view}, spaceOf(inFrame), paintFeature.graphicId ?? '')
+            : paintContext(resolution);
         const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers)), context), context);
+        if (inFrame) takeLabels(spaceOf(inFrame), paints, context);
         return paintToOlStyles(withFadedPaints(paints, graphicOpacityOf(feature)));
     };
+}
+
+/** The map frame whose features are being styled right now. @see beginPaintFrame */
+interface PaintFrame {
+    view: ProjectedBounds;
+    resolution: number;
+    /** The graphics whose line work labels keep off, asked for once per frame. */
+    graphics: () => Array<{id: string; feature: PaintFeature}>;
+    space?: LabelSpace;
+}
+
+let frame: PaintFrame | undefined;
+
+function spaceOf(current: PaintFrame): LabelSpace {
+    if (!current.space) {
+        current.space = emptyLabelSpace();
+        for (const {id, feature} of current.graphics()) addGraphicLines(current.space, id, feature, current.view);
+    }
+    return current.space;
+}
+
+/**
+ * Opens a map frame: the style calls until {@link endPaintFrame} paint against `view`, so a label
+ * whose place is off screen moves onto it, and keep each label clear of the ones styled before it
+ * and of the other graphics' lines.
+ *
+ * OpenLayers styles a frame's features in one synchronous run between the map's `precompose` and
+ * `postcompose`, so a manager opens the frame on the first and closes it on the second. A style
+ * call outside a frame (a hit test, an export) paints as if no view were known.
+ */
+export function beginPaintFrame(view: ProjectedBounds, resolution: number, graphics: PaintFrame['graphics']): void {
+    frame = {view, resolution, graphics};
+}
+
+/** Closes the frame {@link beginPaintFrame} opened. */
+export function endPaintFrame(): void {
+    frame = undefined;
 }
 
 /** Re-exported for holders that build a `Feature` and want its paint form. */

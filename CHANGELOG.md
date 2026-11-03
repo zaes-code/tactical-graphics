@@ -15,18 +15,21 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
-Labels that follow the view on MapLibre's native renderer, and two hooks for hosts that paint
-graphics into their own layers.
+Labels that follow the view and keep clear of each other, on every renderer.
 
 ### Added
 
-- **`PaintContext.view`** (optional): the visible extent. MapLibre's native renderer supplies
-  it. A label whose usual place is off screen moves onto the visible part of its graphic: phase
-  line and axis labels, boundary and mid-line labels, linear target and FPF labels, and area
-  labels. Without a view nothing changes, so OpenLayers and the canvas overlay are untouched.
-- **`PaintContext.avoid`** and **`avoidLines`** (optional): boxes other labels already hold and
-  lines of other graphics. A label slides along its line, or across its area, to a place clear
-  of both, and keeps its usual place when there is none.
+- **Labels follow the view.** A label whose usual place is off screen moves onto the visible
+  part of its graphic: phase line and axis labels, boundary and mid-line labels, linear target
+  and FPF labels, and area labels. Every renderer hands the paint functions its view through
+  the new optional **`PaintContext.view`**: MapLibre's native layers and canvas overlay, and
+  OpenLayers, which restyles once a pan settles. A caller that passes no view sees no change.
+- **Labels keep clear of each other.** Every renderer paints its graphics in one pass in which
+  each graphic's labels slide along their line, or across their area, clear of the labels
+  already placed and of the other graphics' lines, through the new optional
+  **`PaintContext.avoid`** and **`avoidLines`**. A label with no clear place keeps its usual one.
+  The pass is `paintWithClearance`, with `emptyLabelSpace`, `addGraphicLines`, `withClearance`,
+  `takeLabels` and `textBounds` for an engine or host that paints graphics itself.
 - **`fullSizeDecorations`** in `TacticalGraphicsConfigOptions` (default `false`), read with
   `getFullSizeDecorations()`: keeps obstacle teeth, wire loops, ditch teeth and battlements at
   full size however small the graphic is on screen. A ditch's teeth narrow to fit a short line

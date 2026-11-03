@@ -204,6 +204,7 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
             // a listener behind to re-attach it partway through the *next* draw — which is
             // what made a draw end on a double-click that also zoomed the map.
             manager.restoreDoubleClickZoomNow();
+            manager.stopFollowingView();
             map.removeLayer(manager.renderingVectorLayer);
         },
     };
