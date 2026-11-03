@@ -35,6 +35,7 @@ import {
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_MISSION_TASKS,
     configuredLabelScale,
+    fadeColor,
     fontStyle,
     getColorByHostility,
     getObstacleColor,
@@ -98,6 +99,39 @@ export function amplifierText(feature: PaintFeature, value: string): string {
 export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
     if (!hidden) return paints;
     return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * Every color in a paint list faded by `opacity`, 0 to 1: strokes, fills, hatches, circles,
+ * text and halos together, each keeping its own translucency relative to the others.
+ *
+ * For a renderer that styles per mark rather than per layer. MapLibre fades a graphic
+ * through its layers' opacity instead, so it does not need this.
+ * @see NativeLayerRenderer.setOpacity
+ */
+export function withFadedPaints(paints: Paint[], opacity: number | undefined): Paint[] {
+    if (opacity === undefined || opacity >= 1) return paints;
+    const stroke = (s: Paint['stroke']) => s && {...s, color: fadeColor(s.color, opacity)};
+    const fill = (f: Paint['fill']) => f && {
+        ...f,
+        color: fadeColor(f.color, opacity),
+        ...(f.pattern ? {pattern: {...f.pattern, color: fadeColor(f.pattern.color, opacity)}} : {}),
+    };
+    return paints.map(paint => ({
+        ...paint,
+        ...(paint.stroke ? {stroke: stroke(paint.stroke)} : {}),
+        ...(paint.fill ? {fill: fill(paint.fill)} : {}),
+        ...(paint.circle ? {circle: {...paint.circle, fill: fill(paint.circle.fill), stroke: stroke(paint.circle.stroke)}} : {}),
+        ...(paint.text
+            ? {
+                  text: {
+                      ...paint.text,
+                      fill: fadeColor(paint.text.fill, opacity),
+                      ...(paint.text.halo ? {halo: {...paint.text.halo, color: fadeColor(paint.text.halo.color, opacity)}} : {}),
+                  },
+              }
+            : {}),
+    }));
 }
 
 /**

@@ -276,6 +276,23 @@ export interface TacticalGraphicsEngine {
     amplifiersHidden?(id: string): boolean;
 
     /**
+     * Takes one graphic off the map, deselecting it if it was selected. True when there was
+     * one to take. Calls `onChange`, as any change to the set of graphics does.
+     *
+     * Also how a host hides a graphic: remove it, and add it back when it should show
+     * again. Optional; the MapLibre engine implements it.
+     */
+    remove?(id: string): boolean;
+
+    /**
+     * Draws one graphic at `opacity`, 0 to 1, for a host that dims graphics it wants seen
+     * but not stressed. View state like {@link setAmplifiersHidden}: never in
+     * {@link snapshot}, gone after {@link restore} or {@link clearAll}. Optional; the
+     * MapLibre engine implements it.
+     */
+    setOpacity?(id: string, opacity: number): void;
+
+    /**
      * Redraws everything against the **current** library config.
      *
      * `configureTacticalGraphics` changes what the symbology answers; it does not tell

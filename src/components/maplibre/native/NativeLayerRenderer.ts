@@ -39,6 +39,7 @@ import {centerSymbolPlacement} from '../centerSymbol';
 export {centerSymbolPlacement, followTaskCenter, securityOperationCenter} from '../centerSymbol';
 import {
     GRAPHIC_ID_PROPERTY,
+    OPACITY_PROPERTY,
     bucketPaintsInto,
     handleLayer,
     vertexHintLayer,
@@ -275,6 +276,12 @@ function rasterise(image: HTMLImageElement, wantedPx: number, ratio: number): Im
 
 export class NativeLayerRenderer {
     private readonly graphics: MapLibreTacticalGraphic[] = [];
+    /**
+     * Each dimmed graphic's opacity, by id. Kept here rather than on the graphic because
+     * graphics are rebuilt on zoom, edit and config changes, and a flag on the rebuilt copy
+     * would have to be carried across each one. @see setOpacity
+     */
+    private readonly opacities = new Map<string, number>();
     /** The in-progress draw's picture of itself, or null. @see setPreview */
     private preview: MapLibreTacticalGraphic | null = null;
     /**
@@ -522,7 +529,46 @@ export class NativeLayerRenderer {
 
     clear(): void {
         this.graphics.length = 0;
+        this.opacities.clear();
         this.scheduleRealize();
+    }
+
+    /**
+     * Takes one graphic off the map. True when there was one to take.
+     *
+     * Its opacity goes with it, and so does the selection if it held it. A host that hides
+     * a graphic rather than deleting it removes it here and adds it back later: hidden is
+     * not drawn, so there is no separate hidden state to keep in step.
+     */
+    remove(id: string): boolean {
+        const index = this.graphics.findIndex(g => g.id === id);
+        if (index < 0) return false;
+        this.graphics.splice(index, 1);
+        this.opacities.delete(id);
+        if (this.selectedId === id) this.select(null);
+        this.scheduleRealize();
+        return true;
+    }
+
+    /**
+     * Draws one graphic at `opacity`, 0 to 1: lines, fills, labels and center symbol fade
+     * together. 1 draws it fully opaque again. True when the graphic is on the map.
+     *
+     * View state, not part of the graphic: it never reaches {@link snapshot}, survives
+     * edits and rebuilds, and goes with {@link remove} and {@link clear}.
+     */
+    setOpacity(id: string, opacity: number): boolean {
+        if (!this.find(id)) return false;
+        const clamped = Math.min(1, Math.max(0, Number.isFinite(opacity) ? opacity : 1));
+        if (clamped >= 1) this.opacities.delete(id);
+        else this.opacities.set(id, clamped);
+        this.scheduleRealize();
+        return true;
+    }
+
+    /** A graphic's opacity, 1 unless {@link setOpacity} dimmed it. */
+    opacityOf(id: string): number {
+        return this.opacities.get(id) ?? 1;
     }
 
     get count(): number {
@@ -554,7 +600,7 @@ export class NativeLayerRenderer {
         const bucketedAt = performance.now();
         const buckets = emptyBuckets(hatchGrowth(this.map.getZoom()));
         for (let i = 0; i < perGraphic.length; i++) {
-            bucketPaintsInto(buckets, perGraphic[i], visible[i].id);
+            bucketPaintsInto(buckets, perGraphic[i], visible[i].id, this.opacities.get(visible[i].id));
         }
         const uploadAt = performance.now();
         let features = buckets.fills.length + buckets.circles.length + buckets.symbols.length;
@@ -859,6 +905,7 @@ export class NativeLayerRenderer {
                     // could not attribute — so clicking a Cover selected nothing and its
                     // properties dialog never opened. @see hitTest
                     [GRAPHIC_ID_PROPERTY]: graphic.id,
+                    ...(this.opacities.has(graphic.id) ? {[OPACITY_PROPERTY]: this.opacities.get(graphic.id)} : {}),
                 },
             });
         }

@@ -8,6 +8,7 @@ import {
     TacticalGraphicEchelon,
     TacticalGraphicName,
     hatchTileSegments,
+    withFadedPaints,
     withFittedDashes,
     withHiddenAmplifiers,
     withLegibleText,
@@ -27,6 +28,7 @@ import type {
     TacticalGraphicProperties,
 } from '@zaes/tactical-graphics';
 import {readGraphicLabels} from './graphicProperties';
+import {graphicOpacityOf} from './graphicOpacity';
 import {getTextWidth} from './textMeasure';
 import {GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 
@@ -403,12 +405,12 @@ export function asStyleFunction(
         const paintFeature = toPaintFeature(feature, name);
         if (!paintFeature) return [];
         // Every OpenLayers paint passes through here, so the hide-amplifiers toggle, the
-        // legibility floor and the dash fit are applied once rather than per family.
-        // @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames, withFittedDashes
+        // legibility floor, the dash fit and a host's dimming are applied once rather than
+        // per family. @see withHiddenAmplifiers, withLegibleText, withUnobscuredNames,
+        // withFittedDashes, withFadedPaints
         const context = paintContext(resolution);
-        return paintToOlStyles(
-            withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers)), context), context),
-        );
+        const paints = withFittedDashes(withUnobscuredNames(withLegibleText(withHiddenAmplifiers(paint(paintFeature, context), paintFeature.hideAmplifiers)), context), context);
+        return paintToOlStyles(withFadedPaints(paints, graphicOpacityOf(feature)));
     };
 }
 

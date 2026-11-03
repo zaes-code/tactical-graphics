@@ -34,6 +34,16 @@ graphics into their own layers.
 - **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
   properties, for a host drawing one graphic at a size of its own.
 - **`turnedSymbolLayer`** exported from the MapLibre entry beside `symbolLayer`.
+- **`engine.remove(id)`** on both engines, and `remove(id)` on `NativeLayerRenderer` and
+  `CanvasOverlayRenderer`: takes one
+  graphic off the map, deselecting it if it was selected, and calls `onChange`. Hiding a graphic
+  is removing it and adding it back later.
+- **`engine.setOpacity(id, opacity)`** on both engines, and `setOpacity` / `opacityOf` on
+  `NativeLayerRenderer` and `CanvasOverlayRenderer`: draws one graphic fainter, its lines,
+  fills, labels and center symbol together. View state like "name only": never in a snapshot,
+  gone after `restore` or `clearAll`. The native renderer reads it through every layer's
+  opacity; OpenLayers and the canvas overlay fade each color through the new
+  `withFadedPaints`.
 
 ## [4.7.0] — 2026-11-02
 

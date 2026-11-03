@@ -573,7 +573,7 @@ export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mob
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
 
-export {amplifierText, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from './symbology/paintFunctions';
+export {amplifierText, withFadedPaints, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from './symbology/paintFunctions';
 
 /**
  * ## Building a graphic's paint input, for any renderer

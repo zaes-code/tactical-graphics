@@ -1,6 +1,6 @@
 import type {FeatureCollection} from 'geojson';
 import type {Map as MapLibreMap} from 'maplibre-gl';
-import {toSnapshot} from '@zaes/tactical-graphics';
+import {toSnapshot, withFadedPaints} from '@zaes/tactical-graphics';
 import type {Paint, PaintContext} from '@zaes/tactical-graphics';
 import {viewTransformOf} from '../projection';
 import {paintToCanvas} from './paintToCanvas';
@@ -42,6 +42,8 @@ export class CanvasOverlayRenderer {
     private readonly canvas: HTMLCanvasElement;
     private readonly ctx: CanvasRenderingContext2D;
     private readonly graphics: MapLibreTacticalGraphic[] = [];
+    /** Each dimmed graphic's opacity, by id. @see setOpacity */
+    private readonly opacities = new Map<string, number>();
     private readonly onRender = () => this.draw();
     private measureCanvas: CanvasRenderingContext2D | null = null;
 
@@ -139,7 +141,44 @@ export class CanvasOverlayRenderer {
 
     clear(): void {
         this.graphics.length = 0;
+        this.opacities.clear();
         this.map.triggerRepaint();
+    }
+
+    /** The graphic with this id, or undefined. */
+    find(id: string): MapLibreTacticalGraphic | undefined {
+        return this.graphics.find(g => g.id === id);
+    }
+
+    /**
+     * Takes one graphic off the map, and its opacity with it. True when there was one to
+     * take. The same contract as the native renderer's. @see NativeLayerRenderer.remove
+     */
+    remove(id: string): boolean {
+        const index = this.graphics.findIndex(g => g.id === id);
+        if (index < 0) return false;
+        this.graphics.splice(index, 1);
+        this.opacities.delete(id);
+        this.map.triggerRepaint();
+        return true;
+    }
+
+    /**
+     * Draws one graphic at `opacity`, 0 to 1, by fading every color in its paint list. View
+     * state, never in {@link snapshot}. @see NativeLayerRenderer.setOpacity
+     */
+    setOpacity(id: string, opacity: number): boolean {
+        if (!this.find(id)) return false;
+        const clamped = Math.min(1, Math.max(0, Number.isFinite(opacity) ? opacity : 1));
+        if (clamped >= 1) this.opacities.delete(id);
+        else this.opacities.set(id, clamped);
+        this.map.triggerRepaint();
+        return true;
+    }
+
+    /** A graphic's opacity, 1 unless {@link setOpacity} dimmed it. */
+    opacityOf(id: string): number {
+        return this.opacities.get(id) ?? 1;
     }
 
     get count(): number {
@@ -175,7 +214,9 @@ export class CanvasOverlayRenderer {
         const context: PaintContext = {resolution: view.resolution, measureText: this.context.measureText};
 
         const paints: Paint[] = [];
-        for (const graphic of this.graphics) paints.push(...paintTacticalGraphic(graphic, context));
+        for (const graphic of this.graphics) {
+            paints.push(...withFadedPaints(paintTacticalGraphic(graphic, context), this.opacities.get(graphic.id)));
+        }
 
         paintToCanvas(this.ctx, paints, view);
 
