@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.7.0] — 2026-11-02
+
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
 four directions on every engine, with the user's review of the results.
 
@@ -1911,7 +1913,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...develop
+[4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
 [4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
