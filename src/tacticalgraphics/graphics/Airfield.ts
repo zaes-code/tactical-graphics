@@ -7,7 +7,7 @@
  * > Anchor Points. This symbol requires one anchor point. […] Size/Shape. Static.
  * > Orientation. The symbol is typically centred over the desired location.
  *
- * It was an *area* until 2026-08-17, which made it indistinguishable from
+ * It was an *area*, which made it indistinguishable from
  * `AirfieldZone` (120400) — the same runway glyph fitted inside a drawn boundary. Two
  * graphics that render the same thing are one graphic with a spare name, and the standard
  * draws these two differently on purpose: the zone is a piece of ground with a boundary
@@ -15,7 +15,7 @@
  *
  * **"Static" describes the anchor points, not the extent.** It says the symbol does not
  * change shape as its anchors move — and with a single anchor there is nothing it could
- * change in response to. It was read as "the size is not the operator's" until 2026-08-17,
+ * change in response to. It was read as "the size is not the operator's",
  * which pinned the arms to a constant screen size in the paint layer; the symbol then stayed
  * the same size on screen at every zoom, so it marked a point on the *display* rather than an
  * extent on the ground. It is dropped at a sensible size and resized from the edge handle

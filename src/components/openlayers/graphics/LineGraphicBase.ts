@@ -275,7 +275,7 @@ export class LineGraphicBase implements LineGraphic {
      * every gesture comes through, so gating them on "not a restore" alone let a *move*
      * stretch the graphic: at a zoom where a restored Fix was 96 px long against a 145 px
      * floor, one drag took its base from 5.2 degrees to 35.8 — the near end followed the
-     * cursor and the far end shot off. The user moved it and it changed shape.
+     * cursor and the far end shot off. The operator moved it and it changed shape.
      *
      * Set by `LineGraphicController` around the two gestures that author geometry.
      * @see MissionTaskGraphicBase.sizingFromDraw, the same rule for the curves' size
@@ -287,8 +287,7 @@ export class LineGraphicBase implements LineGraphic {
      * `shapingFromGesture` is set too and the size floors apply, but it is **not** a new graphic,
      * so the standoff seed must not fire: on a legacy two-ring multiple-strike zone a seeded
      * standoff turns the drawing into a self-crossing star. A vertex drag did exactly that on
-     * this engine and not on MapLibre, whose seed runs on a draw alone (all-engine grip sweep,
-     * 2026-09-26). @see standoff
+     * this engine and not on MapLibre, whose seed runs on a draw alone. @see standoff
      */
     reshapingExisting = false;
 
@@ -297,7 +296,7 @@ export class LineGraphicBase implements LineGraphic {
      *
      * `this.resolution` is the draw-time one, which is what every derived decoration size
      * is deliberately spent at — and it is the wrong number for a floor stated in screen
-     * pixels, because the user may have zoomed since. Measured on the handle sweep: a Fix
+     * pixels, because the operator may have zoomed since. Measured on the handle sweep: a Fix
      * dragged at 1,200 m per pixel was floored against a stale resolution, so the 145 px
      * rule did not bite where MapLibre's — which reads the live figure every time — did,
      * and the two engines' far ends finished 21.8 km apart.
@@ -428,7 +427,7 @@ export class LineGraphicBase implements LineGraphic {
      * Where this graphic sits, in degrees, for anything sized in screen pixels.
      *
      * The first vertex, and zero before one exists — a holder is built when the tool is
-     * picked and only learns its place when the user clicks.
+     * picked and only learns its place when the operator clicks.
      */
     protected latitude(): number {
         const first = (this.base.getGeometry() as LineString | undefined)?.getCoordinates()?.[0];
@@ -450,8 +449,8 @@ export class LineGraphicBase implements LineGraphic {
      * and seeding a standoff into it makes the generator read those points as a single
      * traced ring — the symbol comes back as a self-crossing star with a second star
      * offset around it. `SafeDistanceZone` promises that such a graphic "still renders
-     * exactly as it did"; this is the line that has to keep that promise, and it did not
-     * until 2026-09-05. `shapingFromGesture` is the same flag the minimum-length floors
+     * exactly as it did"; this is the line that has to keep that promise, and it did not.
+     * `shapingFromGesture` is the same flag the minimum-length floors
      * use, and for the same reason: the seed belongs to the gesture that authors geometry.
      *
      * Returning `undefined` rather than `0` matters — `updateGraphic` stamps whatever this

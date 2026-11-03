@@ -38,7 +38,7 @@ import {assignRole, writeGraphicProperties} from '../graphicProperties';
  *
  * ## What that buys, and what it replaced
  *
- * The user dragged a box before. It produced the same picture and three things followed:
+ * The operator dragged a box before. It produced the same picture and three things followed:
  *
  * - **The width could be read but not dragged.** It was measured off the ring, so the only
  *   way to change it was to type a number into the dialog or scale the whole zone.
@@ -50,7 +50,7 @@ import {assignRole, writeGraphicProperties} from '../graphicProperties';
  *
  * Now the two points are the base's own vertices — `Modify` drags them, which sets the
  * length and the orientation together — and the third handle is the width, on the `offset`
- * role the corridors already use. (User's call, 2026-08-27.)
+ * role the corridors already use.
  *
  * **The labels are untouched.** They read `polygonRing` and the four `polygon*` extents,
  * which are stamped here exactly as they were, from the **built rectangle** rather than
@@ -199,7 +199,7 @@ export class RectangularAreaGraphicBase implements LineGraphic {
          *
          * These were squared up on the draw — point 2 kept its longitude and took point 1's
          * latitude — so a zone came out level however it was clicked, and turning it was a
-         * separate gesture afterwards. (User's call, 2026-08-27; reversed 2026-09-04.) The
+         * separate gesture afterwards. The
          * rectangular target has never worked that way: its drag sets `rotation` directly,
          * so one family of rectangles took its orientation from the draw and the other
          * nineteen refused to. **All of them take it now.**
@@ -338,7 +338,7 @@ export class RectangularAreaGraphicBase implements LineGraphic {
      * FM 1-02.2 table 5-24 puts its `AM` / "Width (m)" arrow down the edge, and that is
      * also the only place it can go: across the middle it runs straight through the
      * designation and the date-time group, and the hashed line and the text are then two
-     * things fighting for the same pixels. (User's call, 2026-08-27.)
+     * things fighting for the same pixels.
      *
      * Along the rectangle's own axis rather than down the projected right edge — a zone
      * can be turned now, and a vertical read-out beside a rotated shape measures nothing
@@ -378,6 +378,6 @@ export class RectangularAreaGraphicBase implements LineGraphic {
  * How far in from point 2 the width read-out sits, as a share of the axis.
  *
  * Enough to clear the short side and stay well away from the centred designation, which
- * is what it used to run straight through. (User's call, 2026-08-27.)
+ * is what it used to run straight through.
  */
 const MEASURE_INSET = 0.12;

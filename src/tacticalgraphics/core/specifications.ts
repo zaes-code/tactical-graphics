@@ -38,8 +38,8 @@ const BOTH = [TacticalGraphicSpecification.FM1_02_2, TacticalGraphicSpecificatio
  * FM 1-02.2 tables name a symbol by its position under a heading, not by the phrase this
  * library uses. Table 5-28's four contaminated areas are rows reading `biological`,
  * `chemical`, `nuclear` and `radiological` beneath a heading `Contaminated area` — so no
- * search for "biological contaminated area" can find them, and all four sat here until
- * 2026-09-03. Table 5-20 does the same to the minefield family (`dynamic depiction
+ * search for "biological contaminated area" can find them, and all four used to sit here.
+ * Table 5-20 does the same to the minefield family (`dynamic depiction
  * minefield`, `mined area, fenced`) and table 5-15 to `demonstration`.
  *
  * So: **read the manual's table, not a grep of its text**, before putting a graphic here.
@@ -63,9 +63,9 @@ const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
  * trust. Where APP-06 has no code and MIL-STD-2525 does, the comment says so.
  *
  * **323 graphics: 288 in MIL-STD-2525E, 5 of them only there; 225 in both FM 1-02.2 and APP-06,
- * 8 FM 1-02.2 only, 85 APP-06 only** (2026-10-20). The axis runs both ways, which it did not when it was first added -- every
+ * 8 FM 1-02.2 only, 85 APP-06 only**. The axis runs both ways, which it did not when it was first added -- every
  * graphic was then in FM 1-02.2, so filtering by that specification hid nothing. Count it,
- * don't trust it. See `ai/app-6.md` for the source document and how the mapping was derived.
+ * don't trust it. for the source document and how the mapping was derived.
  */
 const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = {
     [TacticalGraphicName.BaseDefenseZone]:                              BOTH,      // APP-06 170800 Base Defence Zone
@@ -284,7 +284,6 @@ const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecifica
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]:            BOTH,      // APP-06 271201 Planned
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]:              BOTH,      // APP-06 271202 Explosives, State of Readiness 1 (Safe)
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]:  BOTH,      // APP-06 271203 Explosives, State of Readiness 2 (Armed but Passable)
-    // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]:                    BOTH,      // APP-06 271204 Roadblock Complete (Executed)
     [TacticalGraphicName.AntiTankDitchUnderConstruction]:               BOTH,      // APP-06 290201 Antitank Ditch Under Construction
     [TacticalGraphicName.AntiTankDitchCompleted]:                       BOTH,      // APP-06 290202 Antitank Ditch Completed
@@ -335,7 +334,7 @@ const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecifica
     [TacticalGraphicName.Infiltration]:                                 BOTH,      // APP-06 343800 Infiltrate
     [TacticalGraphicName.InfiltrationLane]:                             BOTH,      // APP-06 140800 Infiltration Lane
     // FM only. APP-06's advance to contact names the same operation but is a
-    // different symbol -- see AdvanceToContact below, and ai/app-6.md.
+    // different symbol -- see AdvanceToContact below
     [TacticalGraphicName.MovementToContact]:                            FM_ONLY,
     [TacticalGraphicName.AdvanceToContact]:                             APP6_ONLY, // APP-06 342900 Advance to Contact
     [TacticalGraphicName.FrontalAttack]:                                BOTH,      // APP-06 152700 Frontal Attack
@@ -433,7 +432,7 @@ const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecifica
 /**
  * The graphics MIL-STD-2525E Change 1 does not have. Every other graphic is in it.
  *
- * Derived 2026-10-20 from the control-measure table (symbol set 25) in Appendix A of
+ * Derived from the control-measure table (symbol set 25) in Appendix A of
  * MIL-STD-2525E Change 1, by entity code with the names compared. mil-sym-java's `mse.txt`
  * (rows tagged version 15) agrees on every graphic but line of contact: Change 1 describes
  * that symbol under the forward line of troops with no code of its own, so it is in 2525E

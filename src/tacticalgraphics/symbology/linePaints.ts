@@ -75,7 +75,7 @@ const ARROW_DTG_OFFSET_PX = 20;
  * **The labels sit behind the arrowhead and read away from it.** The anchor is a
  * fixed clearance back from the midpoint of the arrowhead's wing base, and the
  * text alignment is chosen from which way the arrow points on screen, so the text
- * extends backward along the line whether the user drew left-to-right or
+ * extends backward along the line whether the operator drew left-to-right or
  * right-to-left. Without that the designation runs over its own arrowhead.
  *
  * "ENY" is set further back still, cleared by the designation's own measured
@@ -156,7 +156,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         /*
          * **On the shaft, bending with it.** A word ending `backPx` behind the anchor is laid
          * along the drawn route, so on a short last leg it follows the turn rather than running
-         * straight off the line (user, 2026-11-02). Where it fits on the last leg, the straight
+         * straight off the line. Where it fits on the last leg, the straight
          * label is kept. @see textAlongPath
          */
         const onShaft = (straight: Paint, backPx: number): Paint[] =>
@@ -184,7 +184,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             /*
              * **Two breaks, with the shaft running between them.** Each of 140601-140605 boxes
              * N and T separately on the line, `A —N—T—>`, so `ENY` and the name are two words
-             * on the shaft rather than one gap with nothing in its middle (user, 2026-11-02).
+             * on the shaft rather than one gap with nothing in its middle.
              */
             const eny = cut(baseCoords, nameWidthPx + ARROW_ENY_GAP_PX, enyWidthPx);
             const outline = [...splitAtCorners(eny.before)];

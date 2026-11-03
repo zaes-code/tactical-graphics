@@ -13,7 +13,7 @@ import {Feature, LineString, MultiPoint} from 'geojson';
  * length", which is this repo's standing tell for a *screen-sized* decoration: the pylons
  * are the same size however far apart they are and at whatever zoom, so they are drawn in
  * the paint layer from the vertices rather than baked into metres here.
- * @see overheadWirePaint, ai/conventions.md
+ * @see overheadWirePaint
  *
  * Every vertex is a handle and a pylon, not just the two ends — the plate's Example draws
  * three pylons for a two-segment run, and the middle one stands on the bend.

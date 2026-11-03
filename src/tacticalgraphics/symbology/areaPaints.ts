@@ -2,7 +2,7 @@
  * # The area graphics that draw something structural
  *
  * `areaOutlinePaint` covers 79 of the 94 area graphics with a plain stroke. These
- * are the rest: the ones whose *shape* carries meaning beyond the ring the user
+ * are the rest: the ones whose *shape* carries meaning beyond the ring the operator
  * drew — teeth, merlons, a hatch, a gap cut for a designation, an amplifier that
  * only appears when the graphic is hostile.
  *
@@ -156,7 +156,7 @@ function fillableGeometry(feature: PaintFeature): Paint['geometry'] {
  * segment for the designation.
  *
  * "Topmost" is the segment with the highest midpoint northing — not the first, not
- * the longest — so the label lands at the top of the shape wherever the user
+ * the longest — so the label lands at the top of the shape wherever the operator
  * started clicking. The gap is sized to the rendered glyph plus 6 px and is only
  * cut when the segment is long enough to survive it; a short top edge keeps its
  * line and lets the label overhang, which reads better than a ring with a bite
@@ -211,7 +211,7 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
  * drawn anticlockwise does not come out with its teeth on the inside.
  *
  * The "ENY" stays in the label color. Hostile line work goes red; hostile text
- * amplifiers do not — see the hostility color rule in `ai/decisions.md`.
+ * amplifiers do not — per the hostility color rule.
  */
 export function encirclementPaint(): AreaPaint {
     return (feature, context) => {

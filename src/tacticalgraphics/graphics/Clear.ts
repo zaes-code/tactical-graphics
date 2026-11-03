@@ -31,7 +31,7 @@ import {frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
  * {@link ARROW_SPACING_RATIO} states. Note the outer arrows are *inset*: they are not at
  * points 1 and 2, but about a seventh of the height in from each end.
  *
- * Two points and a locked 0.3 aspect ratio until 2026-09-06, which made the height and the
+ * Two points and a locked 0.3 aspect ratio, which made the height and the
  * length one number where the plate states two. @see frontEdgeFrame
  */
 export class Clear extends TacticalGraphicsBase<PointGraphicOptions> {

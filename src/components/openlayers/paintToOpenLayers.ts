@@ -175,7 +175,7 @@ export function paintToOlStyle(paint: Paint): Style {
                 // Raw screen pixels, and OpenLayers does not multiply them by `scale` —
                 // measured, not assumed. A paint function whose label scale varies has
                 // to fold the scale into the offset itself, which is why these pass
-                // through untouched. @see ai/conventions.md
+                // through untouched.
                 offsetX: text.offsetXPx,
                 offsetY: text.offsetYPx,
                 placement: text.placement,

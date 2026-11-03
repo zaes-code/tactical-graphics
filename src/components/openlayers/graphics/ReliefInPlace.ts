@@ -48,7 +48,7 @@ export class ReliefInPlace implements LineGraphic {
          * **All four grips are ordinary vertices now.** `handleCoords[0]` used to be the
          * U-height offset — a number beside the base — and the rest were the base's own two
          * ends. 341900 names four anchor points and each is placed, so there is no offset to
-         * peel off and nothing for `offsetHandle` to hold. (User's call, 2026-09-06.)
+         * peel off and nothing for `offsetHandle` to hold.
          */
         const handleCoords = (handles as MultiPoint).getCoordinates();
         this.handles.setGeometry(new MultiPoint(visiblePathHandles(handleCoords, pivotCoordinate(this.name, this.base.getGeometry()?.getCoordinates()), this.hidesStartHandle)));
@@ -56,14 +56,14 @@ export class ReliefInPlace implements LineGraphic {
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
         // consumed is a distance in meters — and that is what a snapshot can carry and a
         // restore can replay without knowing anything about zoom. Stamped on every
-        // rebuild, not just on a width drag, so a graphic the user never touched still
+        // rebuild, not just on a width drag, so a graphic the operator never touched still
         // describes itself.
         /*
          * **Nothing beside the points.** `decorationSize` carried the U's height, which is
          * where points 3 and 4 are now, and the arrowheads are sized as a share of the arrows
          * they end — so every number this symbol has is in its coordinates. A stamp beside
          * them would be a second copy, which is how the two drift. A file written before
-         * 2026-09-06 still carries one and still restores: the generator reads it in its
+         * still carries one and still restores: the generator reads it in its
          * two-point fallback. @see ReliefInPlace.points
          */
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)});
@@ -91,7 +91,7 @@ export class ReliefInPlace implements LineGraphic {
     setOffset(offset: number) {
         this.size = offset;
         this.updateGeometry();
-        // `size` here is the width the user dragged, not a construction-time constant,
+        // `size` here is the width the operator dragged, not a construction-time constant,
         // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
         // decoration, and is not a reach from any center. @see TacticalGraphicProperties.
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {

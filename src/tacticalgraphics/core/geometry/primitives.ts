@@ -156,7 +156,7 @@ export function getExtendedPoint(last: Position, secondLast: Position, lengthMet
  * exactly on the untrimmed last vertex at any latitude.
  *
  * Never eats more than half the line and never returns fewer than two
- * positions, so a graphic stays drawable while the user is still dragging it
+ * positions, so a graphic stays drawable while the operator is still dragging it
  * out: the trim eases in from nothing instead of snapping once the line
  * clears the arrowhead's length.
  */

@@ -10,20 +10,20 @@ import * as turf from '../core/turf';
  * points, in degrees.
  *
  * A right angle: wide enough to read unmistakably as a V rather than a bent line,
- * and a value a user is likely to want to adjust from rather than accept.
+ * and a value an operator is likely to want to adjust from rather than accept.
  */
 const DEFAULT_VEE_DEGREES = 90;
 
 /**
- * The base as a **V**, whatever the user drew.
+ * The base as a **V**, whatever the operator drew.
  *
  * FM 1-02.2 draws fields of fire as two legs meeting at an apex, and the symbol is
  * not a fields-of-fire without both. A two-point base produced a straight line with
- * an arrowhead at each end — a different symbol, and one a user could reach simply
+ * an arrowhead at each end — a different symbol, and one an operator could reach simply
  * by clicking twice.
  *
  * So the second leg is synthesized: the drawn leg swung about the apex by
- * {@link DEFAULT_VEE_DEGREES}. The user then has a real V they can reshape by
+ * {@link DEFAULT_VEE_DEGREES}. The operator then has a real V they can reshape by
  * dragging either end, which is what the handles are for.
  *
  * **Layout is `[end, apex, end]`** — the apex in the middle. That is what
@@ -39,7 +39,7 @@ export function asVee(coords: Position[]): Position[] {
     if (coords.length >= 3) return coords;
     if (coords.length < 2) return coords;
 
-    // The user's second click is the apex: they draw a leg, then where it bends.
+    // The operator's second click is the apex: they draw a leg, then where it bends.
     const [end, apex] = coords;
     const bearing = turf.bearing(turf.point(apex), turf.point(end));
     const length = turf.distance(turf.point(apex), turf.point(end), {units: 'meters'});

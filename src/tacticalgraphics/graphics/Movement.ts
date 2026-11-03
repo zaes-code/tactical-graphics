@@ -26,11 +26,11 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
     type = "LineString";
 
     /**
-     * The center line the arrow body is built from: the user's line with the
+     * The center line the arrow body is built from: the operator's line with the
      * arrowhead's overhang taken off the far end.
      *
-     * The overhang was a `protected tipOverhang` field here and on three subclasses until
-     * 2026-09-10. It is a table in the map-agnostic half now, because the width point the
+     * The overhang was a `protected tipOverhang` field here and on three subclasses.
+     * It is a table in the map-agnostic half now, because the width point the
      * eleven axis arrows store is drawn off this *trimmed* line — so a renderer republishing
      * that point, a draw seeding one, and a sample sheet laying one out all have to spend the
      * same number, and none of them can reach a protected field. @see tipOverhangOf
@@ -125,7 +125,7 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
      * tip-first graphic, so "right of point 1 → point 2" is the **left** of the line this
      * method sees. @see drawOrder.ts, TIP_FIRST_GRAPHICS
      *
-     * The tip handle is the user's own last vertex — the arrowhead points *at* it — so a
+     * The tip handle is the operator's own last vertex — the arrowhead points *at* it — so a
      * vertex-editing tool can pick it up and it tracks the cursor exactly.
      */
     generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
@@ -134,7 +134,7 @@ export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementG
         /*
          * **Through the library's own statement of that position**, rather than the three
          * expressions that used to stand here. Eleven of these arrows store the corner as their
-         * last coordinate as of 2026-09-10, so a renderer moving the grip and this method
+         * last coordinate, so a renderer moving the grip and this method
          * drawing it have to land on one point — and two copies of `trimLineEnd`,
          * `computeParallelLineString` and `getPerpendicularPoint` are how they would stop.
          * @see widthPointForBuiltAxis
@@ -286,7 +286,7 @@ export class AviationAxisOfAdvance extends MovementGraphicBase {
  * arrowhead.
  *
  * Takes the center line rather than the base feature: the body stops short of
- * the user's last vertex by the arrowhead's overhang, and a label anchored on
+ * the operator's last vertex by the arrowhead's overhang, and a label anchored on
  * the raw vertex would sit inside the head.
  */
 export function labelSpanNearArrowhead(centerline: Position[], radius: number): Position[] {
@@ -440,7 +440,7 @@ export class SupportingAttack extends MovementGraphicBase {
  * > the width.
  *
  * Which is `SupportingAttack`'s construction exactly, so it is that class under another name
- * rather than a second copy of the same arrow. It extended `MainAttack` until 2026-10-31 and
+ * rather than a second copy of the same arrow. It extended `MainAttack` and
  * so wore the main attack's double-outlined head, which the plate does not draw: neither FM
  * 1-02.2 nor MIL-STD-2525E defines the symbol, so 152300 is the only authority. Both heads
  * overhang the body by the same `DEFAULT_TIP_OVERHANG`, so a saved width point still lands
@@ -517,7 +517,7 @@ export class Counterattack extends MovementGraphicBase {
      * segment's midpoint — which put `CATK` halfway down the arrow. The span also sets the
      * label's size, and taking it from the arrow's *width* rather than its length is what
      * stops a long counterattack carrying an enormous designation.
-     * @see labelSpanNearArrowhead (user's call, 2026-08-27)
+     * @see labelSpanNearArrowhead
      */
     generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
         const radius = opts?.radius || 20;
@@ -565,8 +565,7 @@ export class CounterattackByFire extends Counterattack {
      * was neither the tip of anything nor the end of the symbol, and a click placed against
      * an enemy position drew a mark past it. Trimming the body by the bracket's own reach as
      * well slides the figure back along its axis until the head lands on the click, which is
-     * exactly what the inherited 1.5 does for the arrow alone. (User's report, 2026-09-06,
-     * with the wanted position drawn on a screenshot; confirmed against the plate first.)
+     * exactly what the inherited 1.5 does for the arrow alone.
      *
      * **Stated as the sum, because it is the sum.** Both terms are the ones
      * `generateGraphics` steps along the axis with, so the head cannot drift off the click

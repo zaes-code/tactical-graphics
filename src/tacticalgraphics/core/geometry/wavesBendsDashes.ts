@@ -252,9 +252,9 @@ export function bendLine(
  * Which leaves point 2 over-determined in the standard and under-determined in practice:
  * solving all four unknowns from the three points puts the axis along
  * `point 2 − midpoint(1, 3)`, which is a few metres long and violently unstable wherever
- * a user naturally drops point 2. So **point 2 is read as depth and side**: its
+ * an operator naturally drops point 2. So **point 2 is read as depth and side**: its
  * perpendicular offset from the chord sets the arcs' radius and which way the S kicks,
- * and its position along the chord sets where the S sits. (User's call, 2026-08-27.)
+ * and its position along the chord sets where the S sits.
  *
  * @param steps points per quarter arc
  */

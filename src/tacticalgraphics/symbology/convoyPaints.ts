@@ -11,17 +11,16 @@
  *   stopped, which is what its Orientation clause describes: "the arrow points to the
  *   location where the convoy has halted".
  *
- * **Neither is a plain line, and both were one until 2026-09-04.** They were switched off
+ * **Neither is a plain line, and both were one.** They were switched off
  * in August on a note saying each "rendered as a `Phaseline`, which is the right shape";
- * the plates say a block arrow and a bodied open triangle. @see ai/excluded-graphics.md
+ * the plates say a block arrow and a bodied open triangle.
  *
  * ## The whole symbol is a proportion of its run
  *
  * Both Size/Shape cells read *"points 1 and 2 determine the length of the symbol, **which
  * varies only in length**"*, and the first version took that as a screen constant across
  * the axis — a body 26 px tall whatever the convoy's length. **Resize then did nothing but
- * stretch it**, which is not what a resize means here. (User's call, 2026-09-04: *"resize
- * should wholesomely affect the shape and labels but labels should be capped".*)
+ * stretch it**, which is not what a resize means here.
  *
  * So every dimension is a share of the run, and the shares are the plate's own — a moving
  * convoy is 0.112 of its reach across the body and 0.254 along the head at any size, which
@@ -66,7 +65,7 @@ type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  *
  * **A screen size, not a share of the run** -- the two were 0.112 and 0.124 of the reach for
  * one round, and that made dragging the red handle to lengthen the convoy fatten it as well.
- * A line the user is lengthening is a line. (User's call, 2026-09-04.)
+ * A line the operator is lengthening is a line.
  *
  * The plate's *relationship* between the two survives: 50/448 against 60/483 makes the
  * halted body about a tenth deeper than the moving one, which is 13 px against 14. The head
@@ -196,8 +195,8 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
         /*
          * **An exactly vertical convoy keeps the layout it always had**: text turned with the
          * axis as drawn and the dates on its west side. The line rule that reads every vertical
-         * segment bottom to top (2026-11-01) flipped a convoy drawn due south, and the user
-         * asked for the convoy to stay as it was (2026-11-02). @see uprightFlipped
+         * segment bottom to top flipped a convoy drawn due south, and the operator
+         * asked for the convoy to stay as it was. @see uprightFlipped
          */
         const vertical = from[0] === to[0];
         const rotation = vertical ? -Math.atan2(to[1] - from[1], 0) : uprightRotation(from, to);
@@ -224,8 +223,8 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
          * They were span-proportional against the whole reach, which is the movement
          * family's rule and right for an arrow whose *length* is the symbol. A convoy's
          * length is the route it covers: lengthening it by dragging the red handle grew the
-         * text along with everything else, and the user's call is that a vertex drag changes
-         * the line and nothing else. (2026-09-04.)
+         * text along with everything else, and the choice is that a vertex drag changes
+         * the line and nothing else.
          *
          * Measured against the body's full height, which is `decorationSize` — so a resize
          * scales the text with the shape, and a longer convoy carries the same lettering.
@@ -257,7 +256,7 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
 
         /*
          * Field `V` is the equipment type -- `M1A2` in 330100's Example, `M915` in 330200's
-         * -- and this library files V under `weapon`. @see ai/conformance/README.md, the
+         * -- and this library files V under `weapon`. @, the
          * letter mapping. Field `H` is the additional information beside it.
          */
         const weapon = amplifierText(feature, String(feature.properties.weapon ?? '').trim());
@@ -273,7 +272,7 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
          * width, and the two fields hold different strings. `M1A2` beside `RESUPPLY` came
          * out with the shorter one visibly larger, and the gap opened as the map zoomed
          * out -- the span shrinks in pixels, so the longer label starts being capped while
-         * the shorter one is still at full size. (User's report, 2026-09-04.)
+         * the shorter one is still at full size.
          *
          * Taking the minimum is what keeps them one row of text: the pair renders at the
          * largest size at which **both** fit their half of the body.

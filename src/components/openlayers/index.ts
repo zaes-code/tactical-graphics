@@ -100,7 +100,7 @@ export {
 export type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 
 // Editor-chrome colors, resolved. Handle dots, the inert center and the draw marker —
-// the affordances this renderer draws so a user can edit a graphic. Each falls back to
+// the affordances this renderer draws so an operator can edit a graphic. Each falls back to
 // `DEFAULT_PALETTE` until the host overrides it through the config.
 //
 // The library has no concept of light or dark: it has colors, and the host decides

@@ -47,7 +47,7 @@ function drawnPath(feature: PaintFeature): ProjectedPosition[] {
  *
  * **Wire Unspecified has no wire at all — there the marks are the symbol.** But if
  * the marks have scaled away, the route is drawn anyway: a graphic that vanishes
- * entirely leaves the user unable to find what they drew, which is worse than a
+ * entirely leaves the operator unable to find what they drew, which is worse than a
  * plain line.
  *
  * None of the nine has a planned form, so there is no status to read and no dash.
@@ -69,7 +69,7 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
          * "Under" is **left of PT 1 -> PT 2**, so the marks stand on its right. 2525E Table
          * L-XVI and APP-06 draw 290305, 290307 and 290308 with PT 2 on the left and PT 1 on
          * the right, the marks above the rail: travelling west, above is the right. It hung on
-         * the right of travel until 2026-10-31, which put the marks on the wrong side.
+         * the right of travel, which put the marks on the wrong side.
          */
         const railOffset = {under: height / 2, center: 0, over: -height / 2};
 
@@ -98,7 +98,7 @@ export function wireObstaclePaint(name: TacticalGraphicName): ObstaclePaint {
          * corners: a mark placed there is built on one segment's frame while sitting on the
          * join between two, so it belongs to neither. Both are what the obstacle teeth and
          * the fortified merlons fixed in September, and this is the same layout.
-         * (User's report, 2026-09-10.) @see splitAtCorners, centredRun
+         * @see splitAtCorners, centredRun
          */
         for (const run of splitAtCorners(path)) {
         const runLength = pathLength(run);

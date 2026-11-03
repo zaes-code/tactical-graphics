@@ -43,7 +43,7 @@ export const CROSSED_HALF_WIDTH_PX = 50;
  * Which arms render hashed, by sub-line index. Absent = both solid.
  *
  * MIL-STD-2525E Table L-XXI (and APP-06): Suppress hashes both strokes of its X, Neutralize
- * the "/" alone. Until 2026-10-31 these followed FM 1-02.2, which hashes one stroke of
+ * the "/" alone. Until these followed FM 1-02.2, which hashes one stroke of
  * Suppress and draws Neutralize as a solid horizontal with a hashed diagonal.
  */
 const CROSSED_HASHED_ARMS: Partial<Record<TacticalGraphicName, readonly number[]>> = {
@@ -72,7 +72,7 @@ const CROSSED_LABEL_CLEARANCE_PX = 7;
  * limit as the operator drags the symbol out — a `D` the size of a building. Fixed
  * outright, it does not shrink when the graphic does, so zooming out leaves a full-size
  * letter sitting in a symbol that has become a few pixels of line work, which is what these
- * looked like until 2026-08-17.
+ * looked like.
  *
  * So it tracks the symbol *downward* and stops at the drop size going up. Below the cap the
  * label and the graphic shrink together; above it the graphic keeps growing and the label
@@ -158,7 +158,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         const cy = feature.graphicCenter?.[1] ?? (a0[1] + a1[1]) / 2;
 
         // **Nothing is divided out any more.** All four crossed tasks carry a real size as
-        // of 2026-08-17, so the arms are drawn where the generator put them and the symbol
+        // of so the arms are drawn where the generator put them and the symbol
         // scales with the map like the ground it covers.
         const scale = crossedLetterScale(feature, context, label);
         const halfW = (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * context.resolution;

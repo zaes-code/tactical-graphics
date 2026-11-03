@@ -51,7 +51,7 @@ function escortCenter(
  * **A function of its own, because the dispatch is the part that broke.** The three arms
  * below each ask the library the question its own family answers; the bug was in which arm a
  * graphic reached. Cover, guard and screen fell to a fourth arm that required a `Point` base
- * — which they had until 2026-08-29, when APP-06's four anchor points made the base a
+ * — which they had, when APP-06's four anchor points made the base a
  * `LineString`. The arm has been unreachable ever since, so the security operations drew with
  * an empty centre on this engine while OpenLayers drew the symbol, and nothing could see it:
  * the selection was inline in a method that needs a live map.
@@ -93,7 +93,7 @@ export function followTaskCenter(
      * metres as degrees. Measured: a body whose centre sits at x = 7,532,595 came back at
      * 828,283,312,397 with the latitude clamped to Mercator's limit, so the icon was
      * registered and placed a hundred thousand worlds off the map. The two follow tasks drew
-     * with no unit symbol at all. (User's report, 2026-09-07.)
+     * with no unit symbol at all.
      */
     const placement = followTaskSymbol(
         {geometry: graphic.graphic.geometry, properties: {...graphic.properties, symbolId: graphic.id}} as never,
@@ -107,7 +107,7 @@ export function followTaskCenter(
  * The unit symbol's place between a security operation's two arms.
  *
  * **Read from the drawn line work, not from the base's shape.** These were placed on a
- * single anchor point until 2026-08-29 and this branch still tested for one, so once APP-06's
+ * single anchor point and this branch still tested for one, so once APP-06's
  * four anchor points made the base a `LineString` the test stopped matching and cover, guard
  * and screen drew with an empty centre on this engine while OpenLayers drew the symbol.
  *

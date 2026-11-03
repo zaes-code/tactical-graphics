@@ -26,7 +26,7 @@ export class DirectionOfSupportingAttack extends TacticalGraphicsBase<MovementGr
      *
      * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
      * dragging them cannot mean anything the line's own ends do not already say — so the
-     * handles are the vertices the user drew, in both engines and for any consumer.
+     * handles are the vertices the operator drew, in both engines and for any consumer.
      */
     generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature(base.geometry.coordinates);
@@ -61,7 +61,7 @@ export class DirectionOfMainAttack extends TacticalGraphicsBase<MovementGraphicO
      *
      * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
      * dragging them cannot mean anything the line's own ends do not already say — so the
-     * handles are the vertices the user drew, in both engines and for any consumer.
+     * handles are the vertices the operator drew, in both engines and for any consumer.
      */
     generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature(base.geometry.coordinates);
@@ -96,7 +96,7 @@ export class DirectionOfMainAttackFeint extends TacticalGraphicsBase<MovementGra
      *
      * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
      * dragging them cannot mean anything the line's own ends do not already say — so the
-     * handles are the vertices the user drew, in both engines and for any consumer.
+     * handles are the vertices the operator drew, in both engines and for any consumer.
      */
     generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature(base.geometry.coordinates);
@@ -214,7 +214,7 @@ export class AviationDirectionOfAttack extends TacticalGraphicsBase<MovementGrap
      *
      * Neither placement earned its keep. The tip and the arrowhead base are *derived* —
      * dragging them cannot mean anything the line's own ends do not already say — so the
-     * handles are the vertices the user drew, in both engines and for any consumer.
+     * handles are the vertices the operator drew, in both engines and for any consumer.
      */
     generateHandles(base: Feature<LineString>, _opts?: MovementGraphicOptions): Feature<MultiPoint> {
         return this.asMultiPointFeature(base.geometry.coordinates);

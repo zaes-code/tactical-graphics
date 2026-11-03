@@ -27,7 +27,7 @@
  * Sector 2 is {@link TERRAIN_HATCH_COLORS} and an upper-cased enum value.
  *
  * Two of the fourteen are not line work at all. Code 12, `NO VEHICLES`, is the literal
- * `ALL`; code 00, `UNSPECIFIED`, draws nothing and is the default, so a user who never
+ * `ALL`; code 00, `UNSPECIFIED`, draws nothing and is the default, so an operator who never
  * opens the dialog gets the bare hatched area the library drew before this existed.
  *
  * ## The frame the shapes are written in
@@ -35,7 +35,7 @@
  * Every glyph is described in **half-widths**: `x` runs -1 to 1 and `y` is in the same
  * unit, centered on zero, so a shape's numbers can be read straight off a plate measured
  * with a ruler. {@link GLYPH_HALF_WIDTH} turns that into projected meters and the fit
- * turns it into something that sits inside the area the user drew.
+ * turns it into something that sits inside the area the operator drew.
  *
  * The stroke weight is in the same unit rather than in screen pixels, for the reason the
  * CBRN mark's arms are: this is a symbol that was just fitted to its area, so a constant
@@ -193,7 +193,7 @@ function hull(): ProjectedPosition[] {
  * Every glyph of Table 8-24's `MOBILITY` category, transcribed from the plate.
  *
  * Exported because the shapes are **symbology**: a renderer paints them, it does not get
- * to decide what they are. @see ai/conventions.md, "A symbology fact never lives in a
+ * to decide what they are. @, "A symbology fact never lives in a
  * holder".
  */
 export const MOBILITY_GLYPHS: Readonly<Record<TacticalGraphicMobility, MobilityGlyph>> = {
@@ -344,7 +344,7 @@ export function mobilityMarks(
  * plausibly and is wrong -- a restricted terrain saying `DENSE WOODLAND` drew a visibly
  * larger icon than one saying `SOFT`, and the limited access area a different size again.
  * The Sector 1 modifier is one symbol out of one table; how large it is drawn is not a
- * fact about the words beside it. (User's call, 2026-08-26.)
+ * fact about the words beside it.
  *
  * It rides the *label* scale rather than a raw pixel count, so the pair still reads as one
  * mark: a host that configures a larger label size gets a larger icon with it, and an area
@@ -408,7 +408,7 @@ function textMark(feature: PaintFeature, at: ProjectedPosition, lines: string[],
  * under the limited access area's Sector 1 box, where APP-06's Table 8-5 sets field H --
  * but the graphic offers H and not the pair, so nothing here draws one. An imported bag
  * can still carry a `startDate` for a symbol that has nowhere to put it, and painting it
- * anyway is how a field nobody offered ends up on the map. (User's call, 2026-08-26.)
+ * anyway is how a field nobody offered ends up on the map.
  *
  * @param options.literal the fixed word above the glyph -- `LAA`, and nothing else today
  * @param options.sectorTwo whether Table 8-25's word joins the block, under the glyph

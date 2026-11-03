@@ -72,7 +72,6 @@ import {CrossedMissionTask} from "../graphics/CrossedMissionTask";
 import {Abatis} from "../graphics/Abatis";
 import {WireObstacle} from "../graphics/WireObstacle";
 import {ExplosivesReadiness} from "../graphics/ExplosivesReadiness";
-// Excluded — see ai/excluded-graphics.md
 import {RoadblockComplete} from "../graphics/RoadblockComplete";
 import {AntiTankDitch} from "../graphics/AntiTankDitch";
 
@@ -113,7 +112,6 @@ TacticalGraphicsRegistry.register(new WireObstacle(TacticalGraphicName.WireTripl
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesPlannedStateOfReadiness));
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness1Safe));
 TacticalGraphicsRegistry.register(new ExplosivesReadiness(TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable));
-// Excluded — see ai/excluded-graphics.md
 TacticalGraphicsRegistry.register(new RoadblockComplete());
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchUnderConstruction));
 TacticalGraphicsRegistry.register(new AntiTankDitch(TacticalGraphicName.AntiTankDitchCompleted));
@@ -385,7 +383,7 @@ TacticalGraphicsRegistry.register(new EncirclementArea());
 TacticalGraphicsRegistry.register(new FortifiedArea());
 
 // APP-06 152200. Three anchor points and two stepped arms; not the fixed-size SVG badge
-// it was before 2026-09-04. @see graphics/SearchArea.ts
+// it was. @see graphics/SearchArea.ts
 TacticalGraphicsRegistry.register(new SearchArea());
 
 /*
@@ -550,7 +548,7 @@ const additionalLineGraphics = [
     TacticalGraphicName.FinalProtectiveFire,
     TacticalGraphicName.LinearSmokeTarget,
     /*
-     * The convoys, revived 2026-09-04. `Phaseline` is the right *generator* -- their base
+     * The convoys, revived. `Phaseline` is the right *generator* -- their base
      * is two anchor points and nothing else -- but it was not the right *symbol*: the
      * block arrow and the open triangle are built in screen space by `convoyPaint`, which
      * is what they lacked before. @see convoyPaints

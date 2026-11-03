@@ -5,8 +5,7 @@
  * was anchored on. That holds while the label fits on that segment. A name and two date-time
  * groups do not, and past the segment's end the text kept going straight while the arrow
  * turned, so it ran out through the wall. Smooth lines made it common, since a rounded arrow
- * has no long straight segment left except the one under its head. (User, 2026-10-23: labels
- * never leave the graphic, and follow the curve.)
+ * has no long straight segment left except the one under its head.
  *
  * **Glyph by glyph, as point text, so every engine draws it the same.** OpenLayers and MapLibre
  * can each lay text along a line, but differently, and both refuse one that does not fit;

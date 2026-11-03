@@ -221,7 +221,7 @@ export const getCaneArrow = (base: Feature<LineString>, caneSize: number, arrowS
     // arrows threw `coord is required` out of `turf.bearing` on the first click of every
     // draw — invisible, because the renderer swallows it, but it meant "nothing is drawn
     // yet" was an exception rather than an answer. 344000 returns an empty geometry there;
-    // this makes the family agree. (2026-09-06.)
+    // this makes the family agree.
     if (baseCoords.length < 2) return turf.multiLineString([]);
     let start = baseCoords[0];
     let end = baseCoords[1];
@@ -243,7 +243,7 @@ export const getCaneArrow = (base: Feature<LineString>, caneSize: number, arrowS
     // that bulges backwards, away from the tip. Its far end is the free point
     // the holder uses as the offset (width) handle.
     const bearing = turf.bearing(start, end);
-    // The center sits one radius off the line, on whichever side the user chose.
+    // The center sits one radius off the line, on whichever side the operator chose.
     const side = mirrored ? 1 : -1;
     const center = turf.destination(turf.point(start), arrowSize, bearing + side * 90, {units: 'meters'});
 

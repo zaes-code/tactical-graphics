@@ -9,7 +9,7 @@
  *
  * They now live on the feature, under the same key the core library uses. Style
  * functions read them with {@link readGraphicLabels}; graphic holders write them
- * with {@link writeGraphicProperties} whenever the user edits a label.
+ * with {@link writeGraphicProperties} whenever the operator edits a label.
  *
  * A feature carrying these properties can be styled with no holder instance at
  * all — which is what makes `readFeatures(geojson)` round-trip.

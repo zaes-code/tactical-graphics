@@ -125,7 +125,7 @@ export const AIRFIELD_DROP_HALF_WIDTH_PX = 34;
  * runway's right-hand end.
  *
  * **Drawn at its own size in metres, so it scales with the map.** It was pinned to a constant
- * screen size until 2026-08-17, on a reading of the row's "Size/Shape. Static" as "the size
+ * screen size, on a reading of the row's "Size/Shape. Static" as "the size
  * is not the operator's". That was wrong twice over: the phrase describes how the symbol
  * responds to its *anchor points* — a static symbol does not change shape as they move, and
  * this one has only the one — and a symbol welded to the screen is a symbol that does not
@@ -136,7 +136,7 @@ export const AIRFIELD_DROP_HALF_WIDTH_PX = 34;
  * like every other resizable graphic's.
  *
  * Distinct from {@link airfieldPaint}, which fits the same glyph *inside a drawn boundary*
- * for the airfield **zone** (120400). The two were one paint until 2026-08-17 and rendered
+ * for the airfield **zone** (120400). The two were one paint and rendered
  * identically, which is why nobody could tell the graphics apart.
  */
 export function airfieldPointPaint(): AirfieldPaint {
