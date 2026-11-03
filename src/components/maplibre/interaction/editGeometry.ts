@@ -22,7 +22,7 @@
  * a graphic "one degree east" moves it a different distance at 60° north than at
  * the equator, and rotating in degrees is meaningless. So each operation projects,
  * does planar arithmetic, and unprojects — the same frame every paint function
- * works in. @see conventions.md
+ * works in.
  */
 
 import type {Geometry, Position} from 'geojson';
