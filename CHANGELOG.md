@@ -15,6 +15,26 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+Labels that follow the view on MapLibre's native renderer, and two hooks for hosts that paint
+graphics into their own layers.
+
+### Added
+
+- **`PaintContext.view`** (optional): the visible extent. MapLibre's native renderer supplies
+  it. A label whose usual place is off screen moves onto the visible part of its graphic: phase
+  line and axis labels, boundary and mid-line labels, linear target and FPF labels, and area
+  labels. Without a view nothing changes, so OpenLayers and the canvas overlay are untouched.
+- **`PaintContext.avoid`** and **`avoidLines`** (optional): boxes other labels already hold and
+  lines of other graphics. A label slides along its line, or across its area, to a place clear
+  of both, and keeps its usual place when there is none.
+- **`fullSizeDecorations`** in `TacticalGraphicsConfigOptions` (default `false`), read with
+  `getFullSizeDecorations()`: keeps obstacle teeth, wire loops, ditch teeth and battlements at
+  full size however small the graphic is on screen. A ditch's teeth narrow to fit a short line
+  rather than vanish.
+- **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
+  properties, for a host drawing one graphic at a size of its own.
+- **`turnedSymbolLayer`** exported from the MapLibre entry beside `symbolLayer`.
+
 ## [4.7.0] — 2026-11-02
 
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
