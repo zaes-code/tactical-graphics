@@ -25,6 +25,7 @@ import {DEFAULT_WIRE_STYLE, WIRE_MARK_PX, WIRE_STYLES} from '../graphics/WireObs
 import {castellatedPath, centerSegmentIndex, centredRun, crenellatedPath, decorationScale, FORTIFIED_CRENEL_PX, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX, obstacleToothSize, offsetBelow, parallelPath, pathLength, splitAtCorners, uprightRotation, walkPath} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {getFullSizeDecorations} from '../core/config';
+import {midSegmentInView} from './viewFollow';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -291,10 +292,12 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
         // Under the center-most drawn segment: the merlons take the upper side, so the
         // two never compete. `offsetBelow` normalizes against the map's down, so the
         // label stays beneath whichever way the line was drawn.
-        const segIdx = centerSegmentIndex(path);
+        // The middle segment, or the part of the line in view when its middle is off screen.
+        // @see midSegmentInView
+        const {index: segIdx, t: along} = midSegmentInView(path, {index: centerSegmentIndex(path), t: 0.5}, context);
         const a = path[segIdx];
         const b = path[segIdx + 1];
-        const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const mid: ProjectedPosition = [a[0] + (b[0] - a[0]) * along, a[1] + (b[1] - a[1]) * along];
 
         paints.push({
             geometry: {type: 'Point', coordinates: offsetBelow(mid, a, b, context.resolution, 8)},

@@ -252,3 +252,73 @@ describe('engineer work line', () => {
         expect(shown).toBeGreaterThan(0);
     });
 });
+
+describe('middle labels that follow the view', () => {
+    // East of the line's middle: every label set at the middle is off screen to the west.
+    const EAST: ProjectedBounds = {minX: 100_000, minY: -30_000, maxX: 180_000, maxY: 30_000};
+
+    it.each([
+        [TacticalGraphicName.Route, 'ROUTE'],
+        [TacticalGraphicName.MainSupplyRoute, 'MSR'],
+        [TacticalGraphicName.AlternateSupplyRoute, 'ASR'],
+    ])('%s: the route name', (name, prefix) => {
+        const graphic = buildPaintedGraphic(name, LONG_LINE as never, {designation: 'ALPHA'} as never, 100)!;
+        const shown = within(EAST);
+        const names = (ctx: PaintContext) => texts(paintGraphic(graphic, ctx)).filter(t => t.text.includes(prefix) && shown(t.at));
+        expect(names({resolution: 100, measureText})).toEqual([]);
+        expect(names({resolution: 100, measureText, view: EAST}).length).toBe(1);
+    });
+
+    it.each([
+        [TacticalGraphicName.BearingLine, 'B'],
+        [TacticalGraphicName.BearingLineElectromagneticWarfare, 'EW'],
+        [TacticalGraphicName.BearingLineAcoustic, 'A'],
+        [TacticalGraphicName.BearingLineElectroOpticalIntercept, 'O'],
+        [TacticalGraphicName.BearingLineElectronic, 'E'],
+    ])('%s: the letter and its gap', (name, letter) => {
+        const graphic = buildPaintedGraphic(name, LONG_LINE as never, {} as never, 100)!;
+        const shown = within(EAST);
+        const paint = (ctx: PaintContext) => paintGraphic(graphic, ctx);
+        const letters = (paints: Paint[]) => texts(paints).filter(t => t.text === letter && shown(t.at));
+        expect(letters(paint({resolution: 100, measureText}))).toEqual([]);
+        const moved = paint({resolution: 100, measureText, view: EAST});
+        const [at] = letters(moved);
+        expect(at).toBeTruthy();
+        // The line is cut where the letter now stands: no stroke crosses its point.
+        const strokes = moved.filter(p => p.stroke && p.geometry.type === 'LineString').map(p => p.geometry.coordinates as ProjectedPosition[]);
+        expect(strokes.some(([a, b]) => Math.min(a[0], b[0]) < at.at[0] && Math.max(a[0], b[0]) > at.at[0])).toBe(false);
+    });
+
+    it.each([TacticalGraphicName.NavigationalRhumbLine, TacticalGraphicName.ObstacleLine, TacticalGraphicName.FortifiedLine])(
+        '%s: its middle label',
+        name => {
+            const {without, within: shown} = inViewCounts(name, LONG_LINE, {designation: 'ALPHA'}, EAST);
+            expect(without).toBe(0);
+            expect(shown).toBeGreaterThan(0);
+        },
+    );
+});
+
+describe('infiltration lane', () => {
+    it('centres its name on the part of its span in view', async () => {
+        const {sampleBase} = await import('../../components/maplibre/sampleGallery');
+        const sample = sampleBase(TacticalGraphicName.InfiltrationLane)!;
+        const coords = (sample.geometry as {coordinates: number[][]}).coordinates;
+        const [ox, oy] = coords[0];
+        const k = 30 / Math.max(...coords.map(([x, y]) => Math.hypot(x - ox, y - oy)));
+        const graphic = buildPaintedGraphic(
+            TacticalGraphicName.InfiltrationLane,
+            {type: 'LineString', coordinates: coords.map(([x, y]) => [ox + (x - ox) * k, oy + (y - oy) * k])} as never,
+            {designation: 'ALPHA', ...sample.properties} as never,
+            100,
+        )!;
+        // The span the name is centred on, and a view a fifth of the way along it.
+        const [a, b] = (graphic.labels!.geometry as {coordinates: ProjectedPosition[]}).coordinates;
+        const [cx, cy] = [a[0] + (b[0] - a[0]) * 0.2, a[1] + (b[1] - a[1]) * 0.2];
+        const view = {minX: cx - 40_000, minY: cy - 30_000, maxX: cx + 40_000, maxY: cy + 30_000};
+        const shown = within(view);
+        const names = (ctx: PaintContext) => texts(paintGraphic(graphic, ctx)).filter(t => shown(t.at));
+        expect(names({resolution: 100, measureText})).toEqual([]);
+        expect(names({resolution: 100, measureText, view}).length).toBe(1);
+    });
+});

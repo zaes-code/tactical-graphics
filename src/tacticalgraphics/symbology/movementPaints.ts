@@ -31,7 +31,7 @@ import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
-import {distanceInView, inView, insetView, isTaken, pathUpTo, pointAlong, visibleStretch} from './viewFollow';
+import {distanceInView, inView, insetView, isTaken, midSegmentInView, pathUpTo, pointAlong, visibleStretch} from './viewFollow';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -694,8 +694,11 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
         const uy = dy / segLenMap;
         const clearance = 10 * context.resolution;
 
+        // Centred on its span, or on the part of the span in view when the middle is off screen.
+        // @see midSegmentInView
+        const {t: along} = centered ? midSegmentInView([c0, c1], {index: 0, t: 0.5}, context) : {t: 0.5};
         const at: ProjectedPosition = centered
-            ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
+            ? [c0[0] + (c1[0] - c0[0]) * along, c0[1] + (c1[1] - c0[1]) * along]
             : [c1[0] - ux * clearance, c1[1] - uy * clearance];
 
         const align: 'left' | 'center' | 'right' = centered ? 'center' : alignAlong('right', c0, c1);

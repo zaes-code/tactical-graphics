@@ -806,7 +806,9 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         const text = getFullLabel(name, feature.properties.designation ?? '');
         const paints: Paint[] = [];
 
-        const segIdx = centerSegmentIndex(coords);
+        // The middle segment, or the part of the line in view when its middle is off screen.
+        // @see midSegmentInView
+        const {index: segIdx, t: along} = midSegmentInView(coords, {index: centerSegmentIndex(coords), t: 0.5}, context);
         const p1 = coords[segIdx];
         const p2 = coords[segIdx + 1];
 
@@ -816,7 +818,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         if (segLength === 0) return paints;
 
         const dir: ProjectedPosition = [segDx / segLength, segDy / segLength];
-        const mid: ProjectedPosition = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+        const mid: ProjectedPosition = [p1[0] + (p2[0] - p1[0]) * along, p1[1] + (p2[1] - p1[1]) * along];
 
         // The right of travel, opposite the teeth.
         const normal: ProjectedPosition = [dir[1], -dir[0]];
