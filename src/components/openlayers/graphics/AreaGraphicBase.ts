@@ -179,7 +179,7 @@ export class AreaGraphicBase implements PolygonGraphic {
 
         // Group or series of targets places its name on the top edge of the outline it draws,
         // where its paint cuts the gap. Anchor the labels feature there (instead of the centroid)
-        // so OL's feature-level culling keeps the text rendered when the user zooms in close to
+        // so OL's feature-level culling keeps the text rendered when the operator zooms in close to
         // it; labelSegmentA/B turn the text along the edge. @see topEdgeLabel
         const top = topEdgeLabel(this.graphicName, drawnRing);
         if (top) {
@@ -205,11 +205,11 @@ export class AreaGraphicBase implements PolygonGraphic {
     // width, defined in meters**... points 1 and 2 will be located in the center of
     // two opposing sides of the rectangle".
     //
-    // We let the user drag a box, which produces the same rectangle — but the width
+    // We let the operator drag a box, which produces the same rectangle — but the width
     // was pure geometry, so a saved zone carried no figure a NATO consumer could read
     // back, and none could be typed in. The two now drive each other, exactly as
     // `AirCorridor` does: a drag writes the amplifier, a typed amplifier resizes the
-    // shape. @see ai/app-6.md, "F2"
+    // shape.
     //
     // **Not printed on the symbol.** FM's construct examples show only the
     // designation and the date-time group; the width is an input, not a label.
@@ -218,7 +218,7 @@ export class AreaGraphicBase implements PolygonGraphic {
      * The rectangle's width — the extent *across* it — in ground meters.
      *
      * Measured geodesically rather than from the projected extent: the amplifier is a
-     * number a user reads and types, and projected meters are inflated by 1/cos(lat),
+     * number an operator reads and types, and projected meters are inflated by 1/cos(lat),
      * which at 51° would show a 10 km zone as 16 km.
      */
     private rectangleWidthMeters(): number {
@@ -231,7 +231,7 @@ export class AreaGraphicBase implements PolygonGraphic {
      *
      * It had its own copy — geodesic, extent-based, the same answer to within a tenth of
      * a percent — which is one implementation too many for a number the two engines both
-     * publish. MapLibre reads `rectangleAmplifiers`; so does this now. @see ai/conventions.md
+     * publish. MapLibre reads `rectangleAmplifiers`; so does this now.
      */
     private rectangleAmplifiers(): {width?: number; length?: number} {
         const ring = this.base.getGeometry()?.getCoordinates()?.[0];

@@ -15,6 +15,64 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.7.0] — 2026-11-02
+
+A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
+four directions on every engine, and the results reviewed.
+
+### Added
+
+- **`enemyLabels`** in `TacticalGraphicsConfigOptions` (default `true`), read with
+  `getEnemyLabels()`. Hostile graphics write `ENY` where the standards put field N: both ends of
+  every hostile line, the four direction of attack arrows, outside an axis's rails, the hostile
+  areas and obstacles. Set it `false` to rely on the hostile color alone.
+- **The zone of fire's boundary can be switched off** (APP-06 242600 note 2): a saved
+  `hideBoundary` boolean, offered by the dialog as "Hide boundary". `zoneOfFirePaint` is exported.
+- **Rectangular target attitude in mils:** `targetAttitudeDegrees`, `targetAttitudeMils` and
+  `MILS_PER_TURN`.
+- **Saved-file helpers:** `upgradeSavedLine`, `endsInWidthPoint`, `declaredSnapshotVersion` and
+  `TIP_FIRST_SINCE_SNAPSHOT_3`; `maxAreaVertices(name)` for the irregular zones' vertex cap.
+- `W` on delay, the passages of lines and the mined area; `T` and `W - W1` on frontal attack,
+  turning movement and bridge; the radius on the three circular target-acquisition zones that
+  lacked it.
+
+### Changed
+
+- **The four direction of attack arrows store their tip first** (`SNAPSHOT_VERSION` 3), as
+  APP-06 140601-140605 and 2525E number them. A file older than version 3, or one with no
+  version, is reversed on read. A base built in code for these four must now list the arrowhead
+  point first, or carry `tacticalGraphicsVersion` below 3.
+- **Point order and sides follow the plates.** Bridge and assault crossing number their points as
+  the plates do (point 3 across from point 1, point 4 across from point 2), and a base saved the
+  old way settles into this order with the same rails. The capture family's arc leaves the circle
+  at point 2; antitank ditch teeth and wire marks hang on the side 2525E draws; escort's point 1
+  stays on the middle of the bar.
+- **A versionless file is read base by base:** an axis arrow that already carries its width point
+  is no longer given a second one.
+- The irregular zones take up to 100 vertices; every engine closes the draw at the cap.
+
+### Fixed
+
+- **Shapes as 2525E draws them:** destroy, suppress and neutralize; the fix head; deny; the
+  obstacle disrupt's arrowheads; encirclement's teeth; isolate, cordon and retain; the line of
+  contact scallops; ford bars; the coordinated fire line and 271202 dashes; frontal attack,
+  turning movement and advance to contact proportions; breach and canalize ticks; the fields of
+  fire blade; the aviation axes' twist; avenue of approach's head.
+- **Labels where the plates put them:** axis T, dates and ENY; the crossings' dates against the
+  point 2 flares; area literals stacked over T; IFF lines; GRID and ATIZ text; route
+  identifiers; passage lane and munition flight path dates; engineer work line repeats; radar
+  search T; safe lane or gap's column on the left of point 1 to point 2, centered; avenue of
+  approach's H level and clear of the rail; frontal attack's A and turning movement's T in the
+  head, capped in size; a battle position's echelon on its south edge.
+- **Labels in every direction:** an exactly vertical line reads the same way at both ends; text
+  overlap is measured on the turned boxes, so dates under a diagonal line are no longer dropped;
+  labels stay clear of their line on every heading; arrow labels stay off the head and follow a
+  bent route; a vertical bearing line keeps H within the line.
+- **Mission task letters** are sized from the symbol on every engine, and the MapLibre label halo
+  scales with the label.
+- Kill zone stays straight with smooth lines on, and bridge, gap and assault crossing no longer
+  draw a hashed construction line while editing.
+
 ## [4.6.3] — 2026-10-25
 
 ### Fixed
@@ -142,7 +200,7 @@ the npm publish dates — when a version actually became installable.
   user traces as a free path with its corners rounded: the control lines and boundaries, the
   obstacle, wire and fortified lines, the irregular areas, the multiple-strike safe distance
   zone, and the arrows, both the thin direction-of-attack lines and the axis arrows with a body.
-  162 graphics in all. The points the user placed are still what is saved, edited and exported,
+  162 graphics in all. The points the operator placed are still what is saved, edited and exported,
   and a selected graphic shows them as a dashed line. An arrow keeps the segment its head is
   built on, and an axis arrow's sides are rounded after the offset so a bend cannot fold the
   body. Graphics whose points are anchors (mission tasks, the two- and three-point symbols,
@@ -264,7 +322,7 @@ before these fixes landed. No code changed.
   feature for 114 of 318 graphics (127 of 317), and 312 graphics without a center symbol
   (280-odd). It also documents the graphic builder, and no longer points at notes that are not
   published.
-- `docs/app6-field-validation.md` says plainly that it records the 2026-09-03 sweep rather than
+- `docs/app6-field-validation.md` says plainly that it records the sweep rather than
   today's field sets, and no longer cites line numbers that have drifted or paths that are not
   in this repository.
 
@@ -680,7 +738,7 @@ not be read correctly by 3.4.0.
   same note about facing the enemy, so two identical pictures with two captions were one
   control measure. `FortifiedPosition` is the survivor — its draw model is the one 291000's
   plate specifies — and it is displayed under **both** names and recorded as being in both
-  publications, so a user searching for "fighting position" still finds it.
+  publications, so an operator searching for "fighting position" still finds it.
 
   **A consumer referencing the removed member will not compile.** Saved data, however, is
   migrated: `migrateRetiredGraphic` rewrites a file naming it, and both engines apply it on
@@ -779,7 +837,7 @@ not be read correctly by 3.4.0.
   It is a third thing, distinct from the two that existed: `anchorVertex` makes *one* vertex
   of an editable path inert, and `publishesAnchorHandleOnly` is about *how many* handles a
   graphic publishes. Its tracker row still reads `N` for shape and handles, so it is listed
-  **upcoming** rather than counted as capability. (User's call, 2026-09-07.)
+  **upcoming** rather than counted as capability.
 
 - **APP-06 line and area coverage is closed** — every group at 100%. Twenty-six graphics
   join the registry: the nine bearing lines and both navigational lines, nine maritime areas
@@ -820,7 +878,7 @@ not be read correctly by 3.4.0.
 - **The MapLibre sample sheet built its own bases, and built them wrongly.** Serialize and
   restore always carried a complete bag, so a graphic drawn on one engine and opened on the
   other was right — the fault only showed when the sheet was drawn *from* MapLibre, which is
-  what a user sees, since the app restores from it. Measured before the fix, **53 of 318
+  what an operator sees, since the app restores from it. Measured before the fix, **53 of 318
   graphics came out a different shape on the two sheets**:
 
   - five plates need two dimensions from a one-number drag, and MapLibre read the pair only
@@ -1014,7 +1072,7 @@ correctly shaped and fully editable.
 ### Added
 
 - **A fourth entry point, `@zaes/tactical-graphics/thumbnails`** — one small SVG per
-  graphic, for a picker that has to show the user what they are about to add. 293
+  graphic, for a picker that has to show the operator what they are about to add. 293
   thumbnails, keyed by `TacticalGraphicName`:
 
   ```ts
@@ -1294,7 +1352,7 @@ English. Your compiler finds all of them.
 
   **No handles, and resize scales the whole symbol.** Every point but the two drawn ones is derived, and dragging one of those alone would break the symmetry the symbol is built on — so the generator publishes no handle points and the edit-mode resize scales the base, which is what these want. The centre symbol is capped at the same 96 px ceiling the escort and the follow tasks stop at, so zooming in does not inflate it.
 
-  Everything is a ratio of the drawn arm, recovered from the pixel constants the badge was built from, so the symbol looks as it did at whatever size it is drawn. One deliberate departure, the user's call after seeing it: the arms now sit close to what they surround — the gap is 0.42 of an arm, measured off the Template, where the badge's constants left a hole as wide as an arm was long. The fold in each arm, and the mirroring of the second, are the shipped shape and the plate's, unchanged.
+  Everything is a ratio of the drawn arm, recovered from the pixel constants the badge was built from, so the symbol looks as it did at whatever size it is drawn. One deliberate departure: the arms now sit close to what they surround — the gap is 0.42 of an arm, measured off the Template, where the badge's constants left a hole as wide as an arm was long. The fold in each arm, and the mirroring of the second, are the shipped shape and the plate's, unchanged.
 
   The portable statements moved with it: `BASE_VERTEX_COUNT` says two points, `DROP_SIZE_PX` no longer names them (which is what tells a renderer to wait for the second click), and `ROTATE_ONLY_SYMBOLS` is empty — the library has no fixed-size symbol left.
 
@@ -1306,7 +1364,7 @@ English. Your compiler finds all of them.
 
   **A graphic saved before this still loads.** `applyAmplifierAliases` gained `RECASED_AMPLIFIER_VALUES`, the sibling of the key-rename table one level down, applied at the same three read points. One direction only: nothing writes an old value back. `enumValueCasing.test.ts` asserts the rule by shape rather than by listing today's values, so a new enum is covered the day it is added.
 
-- **Thirty-two graphics store their drawn points in APP-06's order: the arrowhead is point 1.** The standard numbers an arrow symbol's anchor points from its tip — *"Point 1 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol"* (152300 Avenue of Approach, and the same sentence across the offensive-maneuver family) — and this library filed them rear-first, so the head landed on the user's *last* click.
+- **Thirty-two graphics store their drawn points in APP-06's order: the arrowhead is point 1.** The standard numbers an arrow symbol's anchor points from its tip — *"Point 1 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol"* (152300 Avenue of Approach, and the same sentence across the offensive-maneuver family) — and this library filed them rear-first, so the head landed on the operator's *last* click.
 
   The affected graphics are the axis-of-advance family, avenue of approach, both counterattacks, advance to contact, frontal attack, turning movement, mobile defense, the seven retrograde canes, exploit, both fixes, breach, bypass, canalize, clear, both blocks, penetrate, relief in place, and fields of fire. `TIP_FIRST_GRAPHICS` is the list.
 
@@ -1375,7 +1433,7 @@ English. Your compiler finds all of them.
 
   **It is a renderer input, not part of the graphic.** `PaintFeature.hideAmplifiers`, supplied at render time the way `graphicSize` is — set it on the OpenLayers feature or on the MapLibre `PaintFeature`. It is deliberately not a field on `TacticalGraphicProperties`: it says nothing about what the symbol *is*, two identical graphics side by side may reasonably differ, and none of it should travel in a file another operator opens. A host keeps the choice wherever its other view state lives; the demo keeps a set of ids in local storage, which is the worked example.
 
-- **The two follow tasks take a host-supplied unit symbol where field T goes.** Same seam as the security operations and the escort — `setSecuritySymbolProvider` / `setGraphicSecuritySymbolProvider`, and nothing in this package imports milsymbol, so a host that registers nothing gets the designation the user typed. When a provider answers, the symbol **replaces** the designation and the body widens to hold it: a picture of the unit says more than its name.
+- **The two follow tasks take a host-supplied unit symbol where field T goes.** Same seam as the security operations and the escort — `setSecuritySymbolProvider` / `setGraphicSecuritySymbolProvider`, and nothing in this package imports milsymbol, so a host that registers nothing gets the designation the operator typed. When a provider answers, the symbol **replaces** the designation and the body widens to hold it: a picture of the unit says more than its name.
 
   `followTaskSymbol` is the single statement of where it goes and how big it is, exported from the root entry point and read by the paint — which cuts the body to fit and skips the text — and by both renderers, which draw the image. Placing it from a second calculation is how a symbol ends up not sitting in its own hole, which is the lesson `escortSymbolStyle` already carries.
 
@@ -1808,7 +1866,7 @@ fix like "hostile line work goes red" could never leave the demo.
 - Circle graphics resize on edit, with the center as an inert anchor.
 - Edit mode stretches fixed-vertex graphics instead of panning the map.
 - Width handles sit on the graphic, with the drag scale corrected to match.
-- Movement arrowheads land on the user's last vertex.
+- Movement arrowheads land on the operator's last vertex.
 - Handles moved onto the graphic for ambush, pursuit and exploitation.
 
 ### Fixed
@@ -1855,7 +1913,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...develop
+[4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
 [4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2
 [4.6.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1

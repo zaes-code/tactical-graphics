@@ -22,7 +22,6 @@ import {TacticalGraphicName} from './type';
  * consumes the meters it documents, and the viewport quantity stays in the renderer
  * where it belongs.
  *
- * @see ai/decisions.md, "size is meters-per-pixel in six generators"
  */
 const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.DirectionOfMainAttack]: 20,
@@ -75,11 +74,11 @@ const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.WireTripleStrandConcertina]: 14,
 
     /*
-     * **The three whose furniture must survive a vertex drag.** (User's call, 2026-09-04.)
+     * **The three whose furniture must survive a vertex drag.**
      *
      * 218400's ticks and the two convoys' body widths were briefly shares of the drawn run,
      * so lengthening the line by dragging its red handle fattened the symbol — and a line
-     * the user is lengthening is a line, not a bigger symbol. Being in this table makes each
+     * the operator is lengthening is a line, not a bigger symbol. Being in this table makes each
      * of them a `decorationSize`: fixed against a vertex drag, and scaled by the resize
      * gesture, which multiplies it. Exactly what `Fix` above has always done, and for the
      * same reason.
@@ -210,7 +209,7 @@ export function crossedMissionTaskMeters(drawingResolution?: number): number | u
  * half of the codebase the other renderer cannot see. MapLibre fell back to the generic
  * 20 px, so the same block drawn on the two engines came out 120 px tall against 40 —
  * three times the difference, from one number written where only one renderer could read
- * it. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ * it.
  */
 const DRAWN_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
     [TacticalGraphicName.TacticalBlock]: 60,
@@ -239,8 +238,8 @@ export function drawnSizeMeters(name: TacticalGraphicName, resolution: number): 
  * It was not re-armed. It only ever governed the draw, never a later resize, so a symbol
  * could be dragged under it a moment afterwards and the guard was partial at best; and
  * arming it on a click-placed draw pins the size while the cursor keeps going, which is
- * the "jumpy and not smooth" preview reported on 2026-09-05. Keeping the constant on those
- * terms would state a protection the code cannot deliver. (User's call, 2026-09-10.)
+ * the "jumpy and not smooth" preview reported. Keeping the constant on those
+ * terms would state a protection the code cannot deliver.
  *
  * If small curves need guarding, the answer is something after the draw that the operator
  * can see and overrule, not a size the gesture silently overrides.
@@ -308,7 +307,6 @@ export function minimumFirstSegmentPx(name: TacticalGraphicName): number | undef
  *
  * The rule "a drag of `r` means a box `2r` long and `2·k·r` wide" is symbology: it is the
  * same answer for any renderer, and only the multiplication by a live drag belongs to one.
- * @see ai/conventions.md, "A symbology fact never lives in a holder"
  *
  * ## The ratios
  *

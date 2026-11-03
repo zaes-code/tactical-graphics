@@ -10,7 +10,7 @@
  *
  * **The circle is not a decoration — it holds a unit symbol.** *"The size of the circle
  * should be adjusted as needed to contain the unit assigned the task"*, which is why point
- * 2 exists at all: the radius is the user's, not a constant. The symbol itself is field A,
+ * 2 exists at all: the radius is the operator's, not a constant. The symbol itself is field A,
  * the same host-injected entity symbol the security operations carry, so nothing here
  * draws one. @see securityPaints, "the centre symbol is injected, never imported"
  *
@@ -28,7 +28,7 @@ const CIRCLE_STEPS = 64;
 const ARC_STEPS = 40;
 
 /**
- * The four drawn points, or nothing if the user has not placed them all yet.
+ * The four drawn points, or nothing if the operator has not placed them all yet.
  *
  * A *finished* graphic needs all four: the arc cannot be solved without its through-point.
  * What a half-drawn one shows is a different question — @see generateGraphics.
@@ -46,27 +46,13 @@ function circleOf(center: Position, edge: Position): Position[] {
 }
 
 /**
- * Where the sweep leaves the circle: on the rim, on the side it is heading for, so the
- * arrow meets the unit's symbol rather than starting inside it.
- */
-function rimToward(center: Position, edge: Position, toward: Position): Position {
-    const radius = turf.distance(turf.point(center), turf.point(edge), {units: 'meters'});
-    return turf.destination(
-        turf.point(center),
-        radius / 1000,
-        turf.bearing(turf.point(center), turf.point(toward)),
-        {units: 'kilometers'},
-    ).geometry.coordinates;
-}
-
-/**
  * A quadratic Bézier from `start` to `end` that **passes through** `through` at its
  * middle.
  *
  * The draw rule says point 3 is the middle of the arc, not a control point — and a Bézier
  * does not pass through its control point, it passes through `(start + 2·control + end)/4`.
  * Solving that for the control point is the one line below, and skipping it puts the arc
- * roughly half as far from the chord as the user asked for.
+ * roughly half as far from the chord as the operator asked for.
  */
 function arcThrough(start: Position, through: Position, end: Position): Position[] {
     const cx = 2 * through[0] - (start[0] + end[0]) / 2;
@@ -112,12 +98,12 @@ export class SweptArcTask extends TacticalGraphicsBase {
      * |---|---|
      * | 1 | the point |
      * | 2 | the circle — centre and radius are both settled |
-     * | 3 | the circle, and a straight run from its rim to point 3 |
+     * | 3 | the circle, and a straight run from point 2 to point 3 |
      * | 4 | the circle and the arc, curved through point 3 |
      *
      * The three-point run is deliberately **straight**. Point 3 is the arc's middle, so a
      * curve through it needs point 4 to exist; drawing a guessed curve would swing when the
-     * last click lands, where a straight run simply bends. (User's call, 2026-08-27.)
+     * last click lands, where a straight run simply bends.
      */
     generateGraphics(base: Feature<LineString>, opts?: IBaseGraphicOptions): Feature<MultiLineString> {
         const c = base.geometry.coordinates;
@@ -127,13 +113,19 @@ export class SweptArcTask extends TacticalGraphicsBase {
             if (c.length < 2) return this.asMultiLineStringFeature([c]);
             const ring = circleOf(c[0], c[1]);
             if (c.length < 3) return this.asMultiLineStringFeature([ring]);
-            return this.asMultiLineStringFeature([ring, [rimToward(c[0], c[1], c[2]), c[2]]]);
+            return this.asMultiLineStringFeature([ring, [c[1], c[2]]]);
         }
 
         const [center, edge, middle, tip] = points;
+        /*
+         * **The arc leaves the rim at point 2.** Point 2 is on the rim by definition (it sets
+         * the radius), and the Template's PT.2 leader marks exactly where the arc leaves the
+         * circle. It used to leave on the bearing toward point 3, so point 2 sized the circle
+         * and nothing else.
+         */
         return this.asMultiLineStringFeature([
             circleOf(center, edge),
-            arcThrough(rimToward(center, edge, middle), middle, tip),
+            arcThrough(edge, middle, tip),
         ]);
     }
 

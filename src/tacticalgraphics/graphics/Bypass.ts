@@ -19,7 +19,7 @@ import {frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
  * same pair of places, since the arrowheads sit at the arms' far ends. The two differ in
  * their end marks, not in their frame. @see frontEdgeFrame
  *
- * Two points and a locked 0.3 aspect ratio until 2026-09-06; the plate states the height and
+ * Two points and a locked 0.3 aspect ratio; the plate states the height and
  * the length independently, which a ratio lock cannot do.
  */
 export class Bypass extends TacticalGraphicsBase<PointGraphicOptions> {

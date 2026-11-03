@@ -2,7 +2,7 @@
  * # The area graphics that draw something structural
  *
  * `areaOutlinePaint` covers 79 of the 94 area graphics with a plain stroke. These
- * are the rest: the ones whose *shape* carries meaning beyond the ring the user
+ * are the rest: the ones whose *shape* carries meaning beyond the ring the operator
  * drew — teeth, merlons, a hatch, a gap cut for a designation, an amplifier that
  * only appears when the graphic is hostile.
  *
@@ -27,7 +27,7 @@ import {
     textWidth,
     topmostSegmentIndex,
 } from './decorations';
-import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {terrainHatchColor} from './sectorModifierPaints';
 
 /** A paint function, in the shape the registry stores. */
@@ -156,7 +156,7 @@ function fillableGeometry(feature: PaintFeature): Paint['geometry'] {
  * segment for the designation.
  *
  * "Topmost" is the segment with the highest midpoint northing — not the first, not
- * the longest — so the label lands at the top of the shape wherever the user
+ * the longest — so the label lands at the top of the shape wherever the operator
  * started clicking. The gap is sized to the rendered glyph plus 6 px and is only
  * cut when the segment is long enough to survive it; a short top edge keeps its
  * line and lets the label overhang, which reads better than a ring with a bite
@@ -204,14 +204,14 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
  * drawn at, so it grew and shrank with the map while every other toothed graphic on
  * the same screen held its size, and it had no floor to fall through: zoomed out far
  * enough the outline became a band of sub-pixel noise instead of a line.
- * `encirclementToothSize` caps it against the ring's own on-screen size and drops it
- * below `DECORATION_MIN_PX`.
+ * `encirclementToothSize` sizes them so about ten fit round the ring, as every plate
+ * draws it, caps them on screen and drops them below `DECORATION_MIN_PX`.
  *
  * Outward is taken from the ring's winding rather than from drawing order, so a ring
  * drawn anticlockwise does not come out with its teeth on the inside.
  *
  * The "ENY" stays in the label color. Hostile line work goes red; hostile text
- * amplifiers do not — see the hostility color rule in `ai/decisions.md`.
+ * amplifiers do not — per the hostility color rule.
  */
 export function encirclementPaint(): AreaPaint {
     return (feature, context) => {
@@ -231,7 +231,7 @@ export function encirclementPaint(): AreaPaint {
             stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
         }];
 
-        if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return paints;
+        if (!showsEny(feature)) return paints;
 
         for (const member of paintGeometryMembers(feature.geometry)) {
             if (member.type !== 'MultiPoint') continue;
@@ -301,6 +301,21 @@ export function dashedOutlinePaint(): AreaPaint {
         geometry: strokeableGeometry(feature),
         stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
     }];
+}
+
+/**
+ * Zone of fire (APP-06 242600): the dashed outline, unless `hideBoundary` switches it off.
+ *
+ * Note 2: the boundary *"shall be able to be switched off leaving only the label and T
+ * visible"*. Switched off, the outline is still emitted, fully transparent, so the zone can
+ * still be clicked and selected on the engines that pick features by what they drew.
+ */
+export function zoneOfFirePaint(): AreaPaint {
+    const outline = dashedOutlinePaint();
+    return (feature, context) => {
+        if (!feature.properties.hideBoundary) return outline(feature, context);
+        return outline(feature, context).map(paint => ({...paint, stroke: {...paint.stroke!, color: 'rgba(0,0,0,0)'}}));
+    };
 }
 
 /**

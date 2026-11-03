@@ -11,11 +11,13 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {offsetBelow, pathLength, textWidth, uprightRotation} from './decorations';
-import {amplifierDash, asAmplifier, getFullLabel, hostilityOf, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {BASE_FONT_SIZE_PX} from '../core/config';
+import { TacticalGraphicName} from '../core/type';
+import {cutGapAlongPath, offsetBelow, pathLength, splitAtCorners, textWidth, uprightFlipped, uprightRotation} from './decorations';
+import {amplifierDash, asAmplifier, getFullLabel, showsEny, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
+import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -41,10 +43,23 @@ function label(
     };
 }
 
+/** The segment and fraction `distance` along `path`, clamped to its ends. */
+function locateAlong(path: ProjectedPosition[], distance: number): {index: number; t: number} {
+    let left = Math.max(0, distance);
+    for (let i = 0; i < path.length - 1; i++) {
+        const length = Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+        if (left <= length || i === path.length - 2) return {index: i, t: length === 0 ? 0 : Math.min(1, left / length)};
+        left -= length;
+    }
+    return {index: 0, t: 0};
+}
+
 /** Clearance between the arrowhead's wing base and the start of the text. */
 const ARROW_LABEL_CLEARANCE_PX = 10;
 /** Gap between the designation and an "ENY" prefix set behind it. */
 const ARROW_ENY_GAP_PX = 36;
+/** Clearance either side of the text in the break cut for it, in screen pixels. */
+const ARROW_TEXT_BREAK_PAD_PX = 4;
 /** How far below the line the date-time group sits, before the label scale is applied. */
 const ARROW_DTG_OFFSET_PX = 20;
 
@@ -60,12 +75,16 @@ const ARROW_DTG_OFFSET_PX = 20;
  * **The labels sit behind the arrowhead and read away from it.** The anchor is a
  * fixed clearance back from the midpoint of the arrowhead's wing base, and the
  * text alignment is chosen from which way the arrow points on screen, so the text
- * extends backward along the line whether the user drew left-to-right or
+ * extends backward along the line whether the operator drew left-to-right or
  * right-to-left. Without that the designation runs over its own arrowhead.
  *
  * "ENY" is set further back still, cleared by the designation's own measured
- * width — and only for the supporting attack, which is the one variant whose plate
- * carries it.
+ * width, on every hostile variant: each of APP-06 140601, 140602, 140603 and 140605 boxes
+ * N behind T, and their Enemy examples read `ENY MAIN`. It used to be the supporting
+ * attack's alone.
+ *
+ * **The text sits in a break of the line**, as each of the four templates draws its T box:
+ * the shaft is cut from just ahead of the designation to just behind `ENY`.
  */
 export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
     return (feature, context) => {
@@ -76,10 +95,11 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         if (!baseCoords) return [];
 
         const color = lineColorOf(feature);
-        const paints: Paint[] = [{
+        const shaft: Paint = {
             geometry: {type: 'LineString', coordinates: baseCoords},
             stroke: {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
-        }];
+        };
+        const paints: Paint[] = [shaft];
 
         if (allCoords.length > 1) {
             // The feint's chevron is dashed as the symbol. @see DASHED_PARTS
@@ -116,13 +136,11 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
 
         const rotation = uprightRotation(p1, p2);
         const scale = scaleOf(feature, context);
-        const align: 'left' | 'right' = p2[0] >= p1[0] ? 'right' : 'left';
+        const align: 'left' | 'right' = !uprightFlipped(p1, p2) ? 'right' : 'left';
 
         const nameText = getFullLabel(name, feature.properties.designation ?? '');
         const dateText = areaDateLabel(feature);
-        const showEny =
-            name === TacticalGraphicName.DirectionOfSupportingAttack
-            && hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+        const showEny = showsEny(feature);
 
         /*
          * `ENY` is the only prefix these arrows carry, and it is set apart from the name rather
@@ -134,21 +152,66 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             ? legibleDesignation(enyFull, 'ENY', scale, fontStyle, context, pathLength(baseCoords) / context.resolution)
             : {text: enyFull, scale};
         const prefixOnly = shown.text !== enyFull;
+        const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
+        /*
+         * **On the shaft, bending with it.** A word ending `backPx` behind the anchor is laid
+         * along the drawn route, so on a short last leg it follows the turn rather than running
+         * straight off the line. Where it fits on the last leg, the straight
+         * label is kept. @see textAlongPath
+         */
+        const onShaft = (straight: Paint, backPx: number): Paint[] =>
+            textOnPath(baseCoords, pathLength(baseCoords) - fromEnd - backPx * context.resolution, 'end', straight.text!, context);
         if (prefixOnly) {
-            if (shown.text) paints.push(label(feature, anchor, shown.text, shown.scale, {rotation, align}));
+            if (shown.text) paints.push(...onShaft(label(feature, anchor, shown.text, shown.scale, {rotation, align}), 0));
         } else if (nameText) {
-            paints.push(label(feature, anchor, nameText, scale, {rotation, align}));
+            paints.push(...onShaft(label(feature, anchor, nameText, scale, {rotation, align}), 0));
         }
+
+        const pad = ARROW_TEXT_BREAK_PAD_PX * context.resolution;
+        // One break in the shaft, `widthPx` of text ending `backPx` behind the anchor, on `path`
+        // whose far end is the shaft's end.
+        const cut = (path: ProjectedPosition[], backPx: number, widthPx: number) => {
+            const middle = pathLength(path) - fromEnd - (backPx + widthPx / 2) * context.resolution;
+            const {index, t} = locateAlong(path, middle);
+            return cutGapAlongPath(path, index, t, (widthPx * context.resolution) / 2 + pad);
+        };
 
         if (showEny && !prefixOnly) {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
+            const enyWidthPx = textWidth(context, 'ENY', fontStyle, scale);
             const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
-            paints.push(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}));
+            paints.push(...onShaft(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}), nameWidthPx + ARROW_ENY_GAP_PX));
+            /*
+             * **Two breaks, with the shaft running between them.** Each of 140601-140605 boxes
+             * N and T separately on the line, `A —N—T—>`, so `ENY` and the name are two words
+             * on the shaft rather than one gap with nothing in its middle.
+             */
+            const eny = cut(baseCoords, nameWidthPx + ARROW_ENY_GAP_PX, enyWidthPx);
+            const outline = [...splitAtCorners(eny.before)];
+            if (nameText) outline.push(...cut(eny.after, 0, nameWidthPx).outline);
+            else outline.push(eny.after);
+            shaft.geometry = {type: 'MultiLineString', coordinates: outline.filter(run => run.length > 1 && pathLength(run) > 0)};
+        } else {
+            const textPx = prefixOnly
+                ? (shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0)
+                : (nameText ? textWidth(context, nameText, fontStyle, scale) : 0);
+            if (textPx > 0) shaft.geometry = {type: 'MultiLineString', coordinates: cut(baseCoords, 0, textPx).outline};
         }
 
         if (dateText) {
             const at = offsetBelow(anchor, p1, p2, context.resolution, ARROW_DTG_OFFSET_PX * scale);
-            paints.push(asAmplifier(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'})));
+            const straight = asAmplifier(label(feature, at, dateText, scale, {rotation, align, baseline: 'top'}));
+            // The dates follow the route too, on a line offset below it by the same amount,
+            // measured to the middle of the text since the glyphs are centred on their path.
+            const offsetPx = (ARROW_DTG_OFFSET_PX + BASE_FONT_SIZE_PX / 2) * scale;
+            const below = offsetBelow(anchor, p1, p2, context.resolution, offsetPx);
+            const under = offsetPath(baseCoords, [below[0] - anchor[0], below[1] - anchor[1]]);
+            // Measured from the anchor's place on the route, which a short last leg can put on an
+            // earlier leg than the one `below` was offset from.
+            const {index, t} = locateAlong(baseCoords, pathLength(baseCoords) - fromEnd);
+            const [ra, rb] = [baseCoords[index], baseCoords[index + 1]];
+            const onRoute: ProjectedPosition = [ra[0] + (rb[0] - ra[0]) * t, ra[1] + (rb[1] - ra[1]) * t];
+            paints.push(...textOnPath(under, distanceAlongPath(under, onRoute), 'end', straight.text!, context));
         }
 
         return paints;

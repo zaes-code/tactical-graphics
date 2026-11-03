@@ -69,10 +69,10 @@ function sectorFan(rangeM: number): PaintFeature {
     };
 }
 
-/** Every text mark the paint emitted, as `{text, scale}`. */
+/** Every text mark the paint emitted, as `{text, scale}`, less a sector's center azimuth at the apex. */
 function marks(feature: PaintFeature, name: TacticalGraphicName, resolution: number) {
     return rangeFanLabelPaint(name)(feature, context(resolution))
-        .filter(p => p.text)
+        .filter(p => p.text && !(p.geometry.coordinates[0] === 0 && p.geometry.coordinates[1] === 0))
         .map(p => ({text: p.text!.text, scale: p.text!.scale ?? 1}));
 }
 
@@ -90,12 +90,16 @@ describe('a one-band circular fan', () => {
         expect(far.scale).toBeLessThan(near.scale);
     });
 
-    it('keeps the block inside the ring it names', () => {
-        // The ring is what the label has to fit in, so that is what it is measured against.
+    it('hangs the block under its ring, no wider than the ring', () => {
+        // 242100: each band's block sits at the bottom of its ring, just outside it.
         for (const resolution of [200, 800, 2000, 6000]) {
-            const [mark] = marks(circularFan([200_000]), TacticalGraphicName.WeaponSensorRangeFanCircular, resolution);
+            const paint = rangeFanLabelPaint(TacticalGraphicName.WeaponSensorRangeFanCircular)(circularFan([200_000]), context(resolution))
+                .find(p => p.text)!;
+            expect(paint.geometry.coordinates).toEqual([0, -200_000]);
+            // Screen y grows downward, so a positive offset puts it below the ring.
+            expect(paint.text!.offsetYPx!).toBeGreaterThan(0);
             const radiusPx = 200_000 / resolution;
-            expect(widestRowPx(mark.text) * mark.scale).toBeLessThanOrEqual(radiusPx);
+            expect(widestRowPx(paint.text!.text) * (paint.text!.scale ?? 1)).toBeLessThanOrEqual(2 * radiusPx);
         }
     });
 
@@ -113,9 +117,14 @@ describe('a multi-band circular fan', () => {
         // The innermost ring is the minimum range; the ones outside it are maximums, which
         // is how 242100 letters them. This used to read "MIN RG" three times.
         expect(bands.map(b => b.text)).toEqual(['MIN RG 100,000', 'MAX RG(1) 200,000', 'MAX RG(2) 300,000']);
-        // Three blocks 50 km apart at 4000 m/px is 12.5px of room — far too little for ten
-        // characters, so every one of them is held well under full size.
-        for (const band of bands) expect(band.scale).toBeLessThan(0.5);
+        // Each hangs under its own ring, and the two inner ones must fit the 100 km to the next
+        // ring: 25 px at 4000 m/px, so one row and its clearance are held well under full size.
+        const paints = rangeFanLabelPaint(TacticalGraphicName.WeaponSensorRangeFanCircular)(
+            circularFan([100_000, 200_000, 300_000]),
+            context(4000),
+        ).filter(p => p.text);
+        expect(paints.map(p => p.geometry.coordinates)).toEqual([[0, -100_000], [0, -200_000], [0, -300_000]]);
+        for (const p of paints.slice(0, 2)) expect((16 * 1.2 + 8) * (p.text!.scale ?? 1)).toBeLessThanOrEqual(25);
     });
 });
 
@@ -171,7 +180,7 @@ describe('a sector fan', () => {
         // At a resolution where the cap actually bites, so a fixed 16px nudge under a
         // shrunken label fails this rather than passing by coincidence at scale 1.
         const paints = rangeFanLabelPaint(TacticalGraphicName.WeaponSensorRangeFanSector)(sectorFan(180_000), context(40_000));
-        const bearings = paints.filter(p => /^\d{3}$/.test(p.text?.text ?? ''));
+        const bearings = paints.filter(p => /^\d{3}$/.test(p.text?.text ?? '') && p.geometry.coordinates[0] !== 0);
         expect(bearings.length).toBe(2);
         for (const b of bearings) {
             const scale = b.text!.scale ?? 1;
@@ -179,5 +188,16 @@ describe('a sector fan', () => {
             const offset = Math.hypot(b.text!.offsetXPx ?? 0, b.text!.offsetYPx ?? 0);
             expect(offset).toBeCloseTo(16 * scale, 5);
         }
+    });
+});
+
+// 242200's Template letters AN at the apex for the sector's center azimuth.
+describe('a sector fan names its center azimuth', () => {
+    it('sets AN behind the apex', () => {
+        const paints = rangeFanLabelPaint(TacticalGraphicName.WeaponSensorRangeFanSector)(sectorFan(180_000), context(400));
+        const an = paints.find(p => p.geometry.coordinates[0] === 0 && p.geometry.coordinates[1] === 0)!;
+        // The fixture's center line runs east, so 090, nudged west of the apex.
+        expect(an.text!.text).toBe('090');
+        expect(an.text!.offsetXPx!).toBeLessThan(0);
     });
 });

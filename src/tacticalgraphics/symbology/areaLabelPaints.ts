@@ -24,9 +24,9 @@
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
-import {TacticalGraphicHostility, TacticalGraphicName, getLabel} from '../core/type';
+import { TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
-import {amplifierText, asAmplifier, formatDesignationWithCountry, getFullLabel, hostilityOf, labelColorOf, legibleDesignation} from './paintFunctions';
+import {amplifierText, asAmplifier, showsEny, formatDesignationWithCountry, getFullLabel, labelColorOf, legibleDesignation} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
 import {capLabelToGraphic, fitLabelScale} from './labelFit';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
@@ -72,14 +72,14 @@ function scaleOf(feature: PaintFeature, context: PaintContext): number {
  * Inside and outside want different rules, which is why there are two functions here. A
  * label *inside* an area is already governed by `fitLabelScale`, which shrinks it until it
  * genuinely fits the ring — a second cap on top of that would only make a label smaller
- * than the shape it comfortably sits in, and the user's word on those is that they read
+ * than the shape it comfortably sits in, and the operator's word on those is that they read
  * correctly. A label *outside* has no ring to be held by and nothing else stopping it, so
  * it keeps growing relative to a shape that shrinks with the zoom: the dates above a
  * rectangle, the `PAA` markers around a position area, a group of targets' designation on
  * its northern edge.
  *
  * Those take the general rule instead — a quarter of the graphic's own on-screen size.
- * (User's call, 2026-08-29.) @see capLabelToGraphic
+ * @see capLabelToGraphic
  */
 function outsideScaleOf(feature: PaintFeature, context: PaintContext): number {
     // The configured size rather than the anchored one: outside the shape there is no ring
@@ -213,7 +213,7 @@ const BELOW_SHAPE_GAP_PX = 10;
  *
  * The airhead line is the case: its plate labels the enclosure with the words "AIRHEAD
  * LINE" under it and offers no name box at all, so there is nothing for the operator to
- * type and nothing for a designation-driven label to draw. (User's call, 2026-09-01.)
+ * type and nothing for a designation-driven label to draw.
  *
  * Below the *painted* outline rather than at the label anchor, because the anchor sits in
  * the middle of the shape and this word belongs outside it. The gap is in screen pixels so
@@ -275,6 +275,54 @@ const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
 ];
 
 /**
+ * The areas whose plate sets the symbol's own literal **on a line of its own**, over the
+ * designation, rather than beside it as a prefix.
+ *
+ * Read by both {@link areaLabelStackPaint} and {@link areaDefaultLabelPaint}, so whichever
+ * route an engine takes to one of these graphics, the stack comes out the same. That is the
+ * point of a table here rather than a branch in the registry: the OpenLayers switch and the
+ * paint registry reach these graphics by different functions.
+ *
+ * - The free, no and restrictive fire areas: MIL-STD-2525E 2402xx-2404xx and APP-06 set
+ *   `FFA` over `T` over `W - W1`.
+ * - Kill zone (2525E 242800): `KILL ZONE` over `T`.
+ * - FARP (310300), DHA (310100) and refugee holding area (310400, `REFUGEE` / `HOLDING
+ *   AREA`): the literal over `T`, the same layout as the EPW holding area.
+ * - Regimental support area (310500), bomb area (240808) and terminally guided munition
+ *   footprint (242000): the bare literal. Encirclement and the UXO area: nothing. Their Template carries no `T` box, so a
+ *   designation arriving on an imported graphic is not drawn.
+ */
+export const STACKED_AREA_LITERALS: Partial<Record<TacticalGraphicName, {lines: string[]; withDesignation?: boolean}>> = {
+    [TacticalGraphicName.FreeFireAreaCircular]: {lines: ['FFA']},
+    [TacticalGraphicName.FreeFireAreaIrregular]: {lines: ['FFA']},
+    [TacticalGraphicName.FreeFireAreaRectangular]: {lines: ['FFA']},
+    [TacticalGraphicName.NoFireAreaCircular]: {lines: ['NFA']},
+    [TacticalGraphicName.NoFireAreaIrregular]: {lines: ['NFA']},
+    [TacticalGraphicName.NoFireAreaRectangular]: {lines: ['NFA']},
+    [TacticalGraphicName.RestrictiveFireAreaCircular]: {lines: ['RFA']},
+    [TacticalGraphicName.RestrictiveFireAreaIrregular]: {lines: ['RFA']},
+    [TacticalGraphicName.RestrictiveFireAreaRectangular]: {lines: ['RFA']},
+    [TacticalGraphicName.KillZone]: {lines: ['KILL ZONE']},
+    [TacticalGraphicName.ForwardArmingAndRefuelingPoint]: {lines: ['FARP']},
+    [TacticalGraphicName.DetaineeHoldingArea]: {lines: ['DHA']},
+    [TacticalGraphicName.RefugeeHoldingArea]: {lines: ['REFUGEE', 'HOLDING AREA']},
+    [TacticalGraphicName.RegimentalSupportArea]: {lines: ['RSA'], withDesignation: false},
+    [TacticalGraphicName.BombArea]: {lines: ['BOMB'], withDesignation: false},
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: {lines: ['TGMF'], withDesignation: false},
+    // Nothing in the middle at all: 151800 letters only its two ENY boxes and 271000 only the
+    // UXO in its two gaps, and both of those are drawn with the outline. A centred T used to
+    // sit inside each.
+    [TacticalGraphicName.Encirclement]: {lines: [], withDesignation: false},
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: {lines: [], withDesignation: false},
+};
+
+/** The areas whose plate breaks `W - W1` after the hyphen. @see areaDefaultLabelPaint */
+const STACKED_DATE_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
+]);
+
+/**
  * The default: designation over date-time group, centered on the anchor.
  *
  * What every area graphic gets when its family has no bespoke layout, and the
@@ -304,6 +352,10 @@ export function areaLabelStackPaint(
         withDesignation?: boolean;
     } = {},
 ): AreaLabelPaint {
+    const stacked = STACKED_AREA_LITERALS[name];
+    if (stacked && !options.literalLines) {
+        options = {literalLines: stacked.lines, withDesignation: stacked.withDesignation, ...options};
+    }
     return (feature, context) => {
         const at = anchorOf(feature);
         if (!at) return [];
@@ -393,10 +445,10 @@ export function actionAreaLabelPaint(
  * The Template boxes an `N` at exactly those two points. Field N is the hostile marker, so
  * it appears for a hostile graphic and for no other -- the same reading the encirclement
  * already takes. The text stays in the label colour: hostile *line work* goes red, hostile
- * text amplifiers do not. @see ai/decisions.md, the hostility colour rule
+ * text amplifiers do not. @, the hostility colour rule
  */
 function hostileFlankMarks(feature: PaintFeature, context: PaintContext): Paint[] {
-    if (hostilityOf(feature) !== TacticalGraphicHostility.hostileFaker) return [];
+    if (!showsEny(feature)) return [];
     const ring = feature.ring;
     if (!ring || ring.length < 4) return [];
 
@@ -475,7 +527,7 @@ export function smokeObscurantLabelPaint(): AreaLabelPaint {
  * friendly, censor, call-for-fire, dead space, and the blue and purple kill boxes,
  * in their irregular, rectangular and circular variants.
  *
- * Twenty-three names on one layout: the doctrinal prefix over the user's name,
+ * Twenty-three names on one layout: the doctrinal prefix over the operator's name,
  * centered in the shape; the two date-time groups stacked **outside** the shape's
  * upper-left, right-aligned so they run away from it.
  *
@@ -513,7 +565,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
                  * the PsyOps zones beside them — the same block, from this function's own
                  * other half — wrote theirs across. Nothing in the plate asks for the
                  * break; it was two implementations of one layout disagreeing, which is
-                 * also why the anchor below is now shared. (User's call, 2026-09-04.)
+                 * also why the anchor below is now shared.
                  */
                 text: [dtg1, dtg2].filter(s => s.length > 0).join(' - '),
                 kind: 'amplifier',
@@ -580,7 +632,7 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
  *   angle they were drawn on, its bounding box's top edge is the height of whichever
  *   corner happens to be highest. Tilt one and the dates climbed away from the corner
  *   they belong beside — *"it tends to get far up if the top-right corner of the
- *   rectangle is much higher than top-left"* (user, 2026-09-04). It anchors on the real
+ *   rectangle is much higher than top-left"*. It anchors on the real
  *   corner.
  * - a **circle** has no corners at all, so the square hugging it is the only stand-in.
  *   Its leftmost *vertex* is level with its centre, which would put the dates at the
@@ -632,6 +684,28 @@ function upperLeftCorner(feature: PaintFeature): ProjectedPosition | undefined {
 }
 
 /**
+ * Where the four `PAA` markers go: on the outline, one to a side.
+ *
+ * A rectangle's are its edge midpoints. Any other ring takes the points where rays north,
+ * south, west and east of its centre cross it. The bounding box's edge midpoints, which these
+ * replace, are on the shape only while it is square to the screen: turned 45 degrees, all
+ * four stood off its corners.
+ */
+function paaMarkerSpots(ring: readonly ProjectedPosition[] | undefined, fallback: ProjectedPosition[]): ProjectedPosition[] {
+    if (!ring || ring.length < 4) return fallback;
+    const open = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+    if (open.length === 4) {
+        return open.map((p, i) => {
+            const q = open[(i + 1) % 4];
+            return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] as ProjectedPosition;
+        });
+    }
+    const center = ringCenter(ring);
+    const spots = [Math.PI / 2, -Math.PI / 2, Math.PI, 0].map(angle => ringCrossingPoint(ring, center, angle));
+    return spots.every(Boolean) ? (spots as ProjectedPosition[]) : fallback;
+}
+
+/**
  * Position area for artillery: "PAA" at each of the four edge midpoints of the
  * shape's bounding box, plus the name and date-time group centered.
  *
@@ -652,12 +726,12 @@ export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): Area
         const cx = (bounds.minX + bounds.maxX) / 2;
         const cy = (bounds.minY + bounds.maxY) / 2;
 
-        const paints: Paint[] = ([
+        const paints: Paint[] = paaMarkerSpots(feature.ring, [
             [cx, bounds.maxY],
             [cx, bounds.minY],
             [bounds.minX, cy],
             [bounds.maxX, cy],
-        ] as ProjectedPosition[]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
+        ]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
 
         const at = anchorOf(feature);
         const designation = getFullLabel(name, feature.properties.designation ?? '').trim();
@@ -710,7 +784,7 @@ export function areaDefaultLabelPaint(
      * True for almost every area, and false for the two that already write theirs into
      * their boundary: an artillery manoeuvre area sets `AMA` at each of the four cardinal
      * breaks, and repeating it in the middle put the same three letters on the symbol five
-     * times. The designation is what the middle is for. (User's call, 2026-08-27.)
+     * times. The designation is what the middle is for.
      * @see cardinalLabelPaint
      */
     withLiteral = true,
@@ -719,11 +793,12 @@ export function areaDefaultLabelPaint(
      * hostile — field `N`.
      *
      * The corps support area is the one that asked for it here: its plate boxes an `N` at
-     * exactly those two points, where the other support areas carry none. (User's call,
-     * 2026-09-01.) @see hostileFlankMarks
+     * exactly those two points, where the other support areas carry none. @see hostileFlankMarks
      */
     withHostileFlanks = false,
 ): AreaLabelPaint {
+    // A plate that stacks the literal is drawn by the stack, whichever route reached it.
+    if (withLiteral && !withHostileFlanks && STACKED_AREA_LITERALS[name]) return areaLabelStackPaint(name);
     return (feature, context) => {
         const at = anchorOf(feature);
         if (!at) return [];
@@ -732,6 +807,13 @@ export function areaDefaultLabelPaint(
         const designation = feature.properties.designation ?? '';
         const text = withLiteral ? getFullLabel(name, designation) : designation.trim();
         const date = areaDateLabel(feature);
+        // APP-06 242400 / 242500 stack the pair, `W -` over `W1`, and every Example prints it
+        // on two lines: one centred block, so the lines space with the font.
+        if (STACKED_DATE_AREAS.has(name)) {
+            const lines = [text, ...date.replace(' - ', ' -\n').split('\n')].filter(line => line.length > 0);
+            const flanks = withHostileFlanks ? hostileFlankMarks(feature, context) : [];
+            return designationStack(feature, context, at, lines, scale, text, withLiteral ? getLabel(name) : '').concat(flanks);
+        }
 
         // The two marks are separately anchored, so they are capped as **one block**: the
         // date hangs `DEFAULT_DATE_OFFSET_PX` below the designation, and fitting each alone

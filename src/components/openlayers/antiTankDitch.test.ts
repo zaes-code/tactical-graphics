@@ -32,9 +32,8 @@ describe('anti-tank ditches', () => {
         expect(out.graphic.geometry.coordinates).toEqual([[[0, 0], [0.05, 0]]]);
     });
 
-    // Teeth fill consecutive slots, so their bases touch. On the reinforced state every
-    // other slot holds a mine instead, which is what keeps the mines legible - see the
-    // style function - so there the teeth touch the mines rather than each other.
+    // Teeth fill consecutive slots, so their bases touch. On the reinforced state a mine
+    // sits in a gap after each tooth instead, as 2525E 290203 draws it.
     it.each([['under construction', UNDER], ['completed', DONE]] as const)('%s teeth touch base to base', (_l, name) => {
         const ringOf = (st: any) => {
             const g = st.getGeometry();
@@ -75,15 +74,13 @@ describe('anti-tank ditches', () => {
         expect(decorations(UNDER).length).toBe(decorations(DONE).length);
     });
 
-    it('nests one mine per notch, never at either end', () => {
+    it('follows each tooth with a mine, tooth first (2525E 290203)', () => {
         const all = decorations(MINED);
         const isTooth = (st: any) => (st.getGeometry() as Polygon).getCoordinates()[0].length === 4;
         const teeth = all.filter(isTooth);
         const mines = all.filter((st: any) => !isTooth(st));
 
-        // A notch needs a tooth either side, so there is exactly one fewer mine than tooth.
-        // Any other count means one landed past the end of the run.
-        expect(mines.length).toBe(teeth.length - 1);
+        expect(mines.length).toBe(teeth.length);
         expect(mines.length).toBeGreaterThan(0);
         for (const m of mines) expect(m.getFill()).toBeInstanceOf(Fill);
 
@@ -91,11 +88,11 @@ describe('anti-tank ditches', () => {
             const xs = (st.getGeometry() as Polygon).getCoordinates()[0].map((c: number[]) => c[0]);
             return (Math.min(...xs) + Math.max(...xs)) / 2;
         };
-        // Each mine sits in the notch between the two teeth either side of it.
+        // Each mine sits after its tooth and before the next one.
         const sorted = [...mines].sort((a, b) => midX(a) - midX(b));
         sorted.forEach((m, i) => {
             expect(midX(m)).toBeGreaterThan(midX(teeth[i]));
-            expect(midX(m)).toBeLessThan(midX(teeth[i + 1]));
+            if (teeth[i + 1]) expect(midX(m)).toBeLessThan(midX(teeth[i + 1]));
         });
     });
 

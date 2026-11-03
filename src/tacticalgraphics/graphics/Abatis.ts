@@ -17,7 +17,7 @@ export const ABATIS_HEIGHT_RATIO = 0.588;
  * route" (FM 1-02.2 table 5-19).
  *
  * **A drawn route carrying one fixed-size tooth**, in the anti-tank ditches' mold.
- * The user draws the line the obstacle lies along, adding as many vertices as the
+ * The operator draws the line the obstacle lies along, adding as many vertices as the
  * road needs, and the chevron sits at the leading end at a constant screen size.
  *
  * APP-06 Ed E (280100) states both halves of that:
@@ -33,7 +33,7 @@ export const ABATIS_HEIGHT_RATIO = 0.588;
  *
  * **This used to be point-anchored** with a fixed 6:1 route derived from one `size`,
  * so the tooth grew with the obstacle and the obstacle could not follow a road at
- * all. @see ai/app-6.md, "F1"
+ * all.
  *
  * **The route runs *into* the chevron and out the other side** rather than continuing
  * beneath it: drawing the base line straight through would close the chevron into a
@@ -48,7 +48,7 @@ export const ABATIS_HEIGHT_RATIO = 0.588;
  * on is decided once, when the line is drawn: the side facing north, so a route drawn right
  * to left no longer puts it underneath (`drawnSide`, which both engines apply). It is stored
  * as `mirrored`, the other side from the default left of the line, and from then on it turns
- * with the line: rotated half a turn, the tooth points south, as the user asked (2026-09-25).
+ * with the line: rotated half a turn, the tooth points south, as the operator asked.
  * Nothing but the draw sets it; there is no grip to flip it. @see drawnSide, northSide
  */
 /**

@@ -118,3 +118,33 @@ describe('relief in place and exfiltrate draw their letters at their own scale, 
         expect(pieces(tiny, 12)).toBe(1);
     });
 });
+
+// APP-06 343700: EX sits in a break of the straight run from point 1. Drawn with point 2
+// close to point 1, that segment cannot hold it, and the letters moved on to no break at all.
+describe('exfiltrate finds a segment that holds EX', () => {
+    const route = (coords: ProjectedPosition[]): PaintFeature => ({
+        geometry: {type: 'MultiLineString', coordinates: [coords, [[9_000, 100], [10_000, 0], [9_000, -100]]]},
+        properties: {name: TacticalGraphicName.Exfiltrate},
+        bounds: {minX: 0, minY: -100, maxX: 10_000, maxY: 100},
+    });
+
+    it('sets EX in a break of the second segment when the first is a stub', () => {
+        const paints = exfiltratePaint('EX')(route([[0, 0], [10, 0], [10, 5_000], [10_000, 5_000]]), context(10));
+        const ex = texts(paints)[0];
+        expect(ex).toBeDefined();
+        const [x, y] = paints.find(p => p.text)!.geometry.coordinates as ProjectedPosition;
+        expect(x).toBeCloseTo(10, 6);
+        expect(y).toBeCloseTo(2_500, 6);
+        // The route is broken around it: no run passes through the letter's anchor.
+        const runs = lines(paints).filter(run => run.some(([, ry]) => ry > 0 && ry < 5_000));
+        for (const run of runs) for (const [, ry] of run) expect(Math.abs(ry - 2_500)).toBeGreaterThan(50);
+    });
+
+    it('never sets EX on the last segment, which the arrowhead sits on', () => {
+        // Zoomed out, only the long last leg held EX, and the letters went over the head.
+        const paints = exfiltratePaint('EX')(route([[0, 0], [10, 0], [20, 0], [10_000, 0]]), context(10));
+        const at = paints.find(p => p.text)?.geometry.coordinates as ProjectedPosition | undefined;
+        expect(at).toBeDefined();
+        expect(at![0]).toBeLessThan(20);
+    });
+});

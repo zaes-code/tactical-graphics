@@ -37,7 +37,7 @@
  * It looks wasteful and it is the only version that cannot go stale. The pairing is
  * decided in twelve holder constructors that dispatch on the name alone; restating it
  * here would be the same fact in two places, which is the failure this repo names in
- * `ai/conventions.md` and has paid for repeatedly. So this constructs the holder the
+ * this codebase and has paid for repeatedly. So this constructs the holder the
  * controller registry would build, reads the styles off the features it created, and
  * throws the holder away. The result is cached per name — the pairing cannot change for
  * a given name within a session.

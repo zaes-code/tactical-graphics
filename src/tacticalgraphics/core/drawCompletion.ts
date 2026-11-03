@@ -12,7 +12,7 @@ import {normalizeDrawnBase} from './drawnBase';
  * double-click once it has two points, whatever the symbol needs. So a demolition obstacle
  * or roadblock drawn with two clicks and a double-click stored two points on OpenLayers,
  * and its third grip, the side, had no vertex behind it and did nothing when dragged.
- * MapLibre waited for the third click. (User's report, 2026-09-21.)
+ * MapLibre waited for the third click.
  *
  * - Where the library states a click count, that many clicks. `DRAW_CLICKS` exists to say
  *   exactly this, and it differs from the stored count for envelopment and the two hairpins,

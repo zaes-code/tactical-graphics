@@ -53,7 +53,7 @@ export class RetrogradeTask implements LineGraphic {
      * carries a crossbar the seven retrograde tasks have none of. Copying this holder to
      * change one line would have made the *editing* a fact stated twice, which is the drift
      * that had pursuit behaving unlike its siblings in the first place.
-     * (User's report, 2026-09-06.) @see pursuitStyleFunc
+     * @see pursuitStyleFunc
      */
     constructor(name: TacticalGraphicName, size: number, drawingResolution?: number, style?: StyleFunction) {
         this.name = name;
@@ -66,7 +66,7 @@ export class RetrogradeTask implements LineGraphic {
             this.labels.set('drawingResolution', drawingResolution);
         }
         this.setSymbolId('');
-        this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name)));
+        this.graphic.setStyle(style ?? retroGradeTaskStyleFunc(getLabel(name), name));
         /*
          * **A separate label paint, for the graphics whose letter is not in their line work.**
          *
@@ -74,7 +74,7 @@ export class RetrogradeTask implements LineGraphic {
          * holder never had a label feature worth styling and did not style one. 344000 pursuit
          * does not: its paint cuts the gap for the "P" and something else has to put the
          * letter in it. Moved onto this holder without that, it drew a run with a hole in the
-         * middle and no label at all. (User's report, 2026-09-06.)
+         * middle and no label at all.
          *
          * `getPaintFunction(name).label` is the library's own statement of which graphics have
          * one — the same field MapLibre's `paintTacticalGraphic` reads to decide the identical
@@ -86,10 +86,10 @@ export class RetrogradeTask implements LineGraphic {
          * **Styled either way, because an unstyled feature is not an invisible one.** An
          * OpenLayers feature with no style falls back to the library default — a 5 px circle,
          * white at 40% inside a #3399CC stroke — and it draws that at every coordinate of
-         * whatever geometry it holds. This feature held none until 2026-09-06, so the missing
+         * whatever geometry it holds. This feature held none, so the missing
          * style cost nothing; giving it the generator's label points put a small hollow blue
          * dot on the arc of all seven cane arrows, outside edit mode and in every screenshot.
-         * (User's report, 2026-09-06.) An explicit empty style says "draws nothing" and means
+         * An explicit empty style says "draws nothing" and means
          * it.
          */
         const labelPaint = getPaintFunction(name)?.label;
@@ -114,7 +114,7 @@ export class RetrogradeTask implements LineGraphic {
          *
          * This used to peel `handleCoords[0]` off into `offsetHandle` - the mirror handle,
          * whose only job was turning the symbol over - and publish the rest. Point 3 states
-         * which side the arc falls on as of 2026-09-06, so there is nothing left to flip and
+         * which side the arc falls on, so there is nothing left to flip and
          * all three anchor points are ordinary shape grips. A legacy two-point base publishes
          * the two it has. @see RetrogradeTask.generateHandles
          */
@@ -126,7 +126,7 @@ export class RetrogradeTask implements LineGraphic {
         // `size` starts life as `20 x drawingResolution`, but what the generator actually
         // consumed is a distance in meters — and that is what a snapshot can carry and a
         // restore can replay without knowing anything about zoom. Stamped on every
-        // rebuild, not just on a width drag, so a graphic the user never touched still
+        // rebuild, not just on a width drag, so a graphic the operator never touched still
         // describes itself.
         this.publish();
     };
@@ -151,7 +151,7 @@ export class RetrogradeTask implements LineGraphic {
     setOffset(offset: number) {
         this.size = offset;
         this.updateGeometry();
-        // `size` here is the width the user dragged, not a construction-time constant,
+        // `size` here is the width the operator dragged, not a construction-time constant,
         // so it has to be saved. Persisted as `decorationSize` — it sizes the drawn
         // decoration, and is not a reach from any center. @see TacticalGraphicProperties.
         this.publish();
@@ -164,7 +164,7 @@ export class RetrogradeTask implements LineGraphic {
          *
          * A three-point base states the arc's side by where point 3 is, so stamping the flag
          * beside it would be a second copy of the same fact and the two would drift. A base
-         * saved before 2026-09-06 has two points and nothing else that carries the side, so
+         * saved has two points and nothing else that carries the side, so
          * it keeps the flag until an edit grows its third point.
          *
          * `decorationSize` stays either way: it sizes the arrowhead, which is a screen

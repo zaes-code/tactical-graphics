@@ -11,7 +11,7 @@
  *
  * **Nothing here follows hostility.** The yellow is the hazard convention, on the same
  * reasoning that makes the no-fire family's hatch a neutral: a contaminated area warns
- * about the ground, and it reads the same whoever drew it. As of 2026-08-26 the outline
+ * about the ground, and it reads the same whoever drew it. As of the outline
  * does not carry an affiliation either — these are exempt in `supportsHostility`, so
  * `lineColorOf` answers the unaffiliated colour whatever the property bag says, and the
  * dialog offers no identity to choose. @see HAZARD_AREAS
@@ -97,8 +97,8 @@ const INSET = 0.62;
  * The two genuinely disagree below the crossing: the plate's arms bend to near-vertical and
  * stop about a third of the way out, where the reference splays them wider and sets the discs
  * at the full half-width. The reference is the more legible mark at the size these render,
- * and following it is a confirmed decision — asked and answered, 2026-08-17. It is on the
- * conformance review page as a departure. @see ai/decisions.md
+ * and following it is a confirmed decision — asked and answered. It is on the
+ * conformance review page as a departure.
  *
  * The frame is therefore the mark's own: `x` in half-widths either side of the crossing, `y`
  * up from it, both scaled by {@link MARK_HALF_WIDTH} and placed in the triangle at

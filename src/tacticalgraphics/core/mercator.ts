@@ -23,7 +23,7 @@
  * `rectangleAmplifiers` already says this for the rectangular zones ("projected metres
  * carry a 1/cos(lat) inflation that would show a 10 km zone as 16 km at 51 degrees"). This
  * module is the same statement, factored out, so both engines convert with one rule
- * instead of two. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ * instead of two.
  *
  * ## What this is not
  *

@@ -27,10 +27,8 @@ export const DASHED_PARTS: Readonly<Partial<Record<TacticalGraphicName, readonly
     [TacticalGraphicName.CounterattackByFire]: [0, 1],
     // [shaft, head, tail stroke, tail stroke]
     [TacticalGraphicName.Exploitation]: [2, 3],
-    // [upper bar, lower bar]
-    [TacticalGraphicName.FordEasy]: [0, 1],
-    // [upper bar, lower bar, zigzag]
-    [TacticalGraphicName.FordDifficult]: [0, 1],
+    // [the line]: a coordinated fire line is dashed in every status (2525E 260200).
+    [TacticalGraphicName.CoordinatedFireLine]: [0],
     // [the V, arrowhead, arrowhead]: 2525E 140504's Example dashes the legs.
     [TacticalGraphicName.SecondaryDirectionOfFire]: [0],
 };

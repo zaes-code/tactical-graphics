@@ -39,12 +39,17 @@ type MissionTaskPaint = (feature: PaintFeature, context: PaintContext) => Paint[
  */
 export const CROSSED_HALF_WIDTH_PX = 50;
 
-/** Which of the two arms renders hashed, by sub-line index. Absent = both solid. */
-const CROSSED_HASHED_ARM: Partial<Record<TacticalGraphicName, number>> = {
-    // The "/" stroke of the X.
-    [TacticalGraphicName.Suppress]: 0,
-    // The diagonal; the horizontal stays solid.
-    [TacticalGraphicName.Neutralize]: 1,
+/**
+ * Which arms render hashed, by sub-line index. Absent = both solid.
+ *
+ * MIL-STD-2525E Table L-XXI (and APP-06): Suppress hashes both strokes of its X, Neutralize
+ * the "/" alone. Until these followed FM 1-02.2, which hashes one stroke of
+ * Suppress and draws Neutralize as a solid horizontal with a hashed diagonal.
+ */
+const CROSSED_HASHED_ARMS: Partial<Record<TacticalGraphicName, readonly number[]>> = {
+    [TacticalGraphicName.Suppress]: [0, 1],
+    // The "/" stroke of the X; the "\" stays solid.
+    [TacticalGraphicName.Neutralize]: [0],
 };
 
 /** Hash pattern of a doctrinally-broken arm, in screen pixels. */
@@ -67,7 +72,7 @@ const CROSSED_LABEL_CLEARANCE_PX = 7;
  * limit as the operator drags the symbol out — a `D` the size of a building. Fixed
  * outright, it does not shrink when the graphic does, so zooming out leaves a full-size
  * letter sitting in a symbol that has become a few pixels of line work, which is what these
- * looked like until 2026-08-17.
+ * looked like.
  *
  * So it tracks the symbol *downward* and stops at the drop size going up. Below the cap the
  * label and the graphic shrink together; above it the graphic keeps growing and the label
@@ -133,7 +138,7 @@ function crossedLetterScale(feature: PaintFeature, context: PaintContext, label:
  */
 export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskPaint {
     const label = getLabel(name);
-    const hashedArm = CROSSED_HASHED_ARM[name];
+    const hashedArms = CROSSED_HASHED_ARMS[name] ?? [];
 
     return (feature, context) => {
         const geometry = feature.geometry;
@@ -153,7 +158,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
         const cy = feature.graphicCenter?.[1] ?? (a0[1] + a1[1]) / 2;
 
         // **Nothing is divided out any more.** All four crossed tasks carry a real size as
-        // of 2026-08-17, so the arms are drawn where the generator put them and the symbol
+        // of so the arms are drawn where the generator put them and the symbol
         // scales with the map like the ground it covers.
         const scale = crossedLetterScale(feature, context, label);
         const halfW = (textWidth(context, label, RATIO_LOCKED_LABEL_FONT, scale) / 2) * context.resolution;
@@ -170,7 +175,7 @@ export function crossedMissionTaskPaint(name: TacticalGraphicName): MissionTaskP
             const len = Math.hypot(dx, dy);
             if (len === 0) continue;
 
-            const stroke = strokeFor(i === hashedArm);
+            const stroke = strokeFor(hashedArms.includes(i));
             const ux = dx / len;
             const uy = dy / len;
             const boxExit = Math.min(

@@ -14,7 +14,7 @@
  * **Registering a paint takes two edits**, and this is the trap: the entry here, and the
  * routing on the OpenLayers side. A holder that still chooses its style itself will not
  * consult this table however complete the table is, so a paint can be registered, tested,
- * and never drawn. @see ai/conventions.md — "A symbology fact never lives in a holder"
+ * and never drawn.
  */
 
 import type {PaintFeature, PaintContext, Paint} from '../core/paint';
@@ -122,7 +122,7 @@ import {
     fortifiedAreaPaint,
     groupOrSeriesOfTargetsPaint,
     limitedAccessAreaPaint,
-    dashedOutlinePaint,
+    zoneOfFirePaint,
     obstacleAreaPaint,
     restrictedTerrainPaint,
     freeFireAreaCircularPaint,
@@ -178,7 +178,7 @@ const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
  *
  * `MovingConvoy` and `HaltedConvoy` are **not** here. They belong to the set by
  * shape — the same generator, the same default style — but both are switched off
- * on purpose (`ai/excluded-graphics.md`, 2026-08-02, "for now"), so their enum
+ * on purpose, so their enum
  * members are commented out. Reviving them means uncommenting seven sites, of
  * which this list is now one.
  */
@@ -187,9 +187,8 @@ const ARC_MISSION_TASKS: readonly TacticalGraphicName[] = [
  *
  * Only the ones that take a country code beside the designation. The fire-support family
  * letters it `T2 ( AS )` and renders `FSCL MND(USA)`; the battlefield handover and delay
- * lines are the same shape by the user's call, their examples carrying a designation and a
+ * lines are the same shape, their examples carrying a designation and a
  * date range at each end. Everything else in the list below takes the plain default.
- * (User's call, 2026-09-01.)
  */
 const DEFAULT_LINE_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.BattlefieldHandoverLine,
@@ -474,7 +473,7 @@ const AIRSPACE_COORDINATION_AREAS: readonly TacticalGraphicName[] = [
  * The two ellipses, plus **240802**, which was left out of the first pass and should not have
  * been: its Example is the one that spells the block out in full — `AM = 60 Metres`,
  * `AM1 = 112 Metres`, `AN = 1200 mils` — and it letters all three boxes on its Template.
- * (User's report, 2026-09-04.) What each of the three *means* differs between the two
+ * What each of the three *means* differs between the two
  * plates; that reading lives with the paint. @see axisAmplifierPaint
  */
 const AXIS_AMPLIFIER_GRAPHICS: readonly TacticalGraphicName[] = [
@@ -506,7 +505,7 @@ function areaLabelPainterFor(name: TacticalGraphicName) {
     if (name === TacticalGraphicName.AirheadLine) return belowShapeLiteralPaint('AIRHEAD LINE');
     // 310800 boxes an `N` at the west and east crossings, which the other support areas do
     // not. Everything else about its block is the default: CSA over the designation, dates
-    // beneath. (User's call, 2026-09-01.)
+    // beneath.
     if (name === TacticalGraphicName.CorpsSupportArea) return areaDefaultLabelPaint(name, true, true);
     // 310200's Template stacks its literal on two lines with the designation **under** it,
     // where every other prefixed area sets the two side by side. @see areaLabelStackPaint
@@ -643,7 +642,6 @@ const BAR_SYMBOL_GRAPHICS: readonly TacticalGraphicName[] = [
     TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
     TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
     TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
-    // Excluded — see ai/excluded-graphics.md
     TacticalGraphicName.RoadblockCompleteExecuted,
 ];
 
@@ -797,7 +795,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleRestrictedArea]: {graphic: obstacleAreaPaint({outward: false, hatched: true})},
         // APP-06 242600 note 1: the boundary is a broken line in *all* status
         // depictions, so the dash is the symbol rather than a status.
-        [TacticalGraphicName.ZoneOfFire]: {graphic: dashedOutlinePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
+        [TacticalGraphicName.ZoneOfFire]: {graphic: zoneOfFirePaint(), label: areaDefaultLabelPaint(TacticalGraphicName.ZoneOfFire)},
         // Told apart from each other by texture alone. @see hatchTileSegments
         // Sector 1 over Sector 2 over field H, which is the whole of what these two say.
         // @see sectorModifierPaints
@@ -860,7 +858,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     }
 
     // 0.75 for the disrupts, not the 0.6 default: it centers the "D" on the middle
-    // prong, which spans 0.5 to 1.0 of the user's drawn base.
+    // prong, which spans 0.5 to 1.0 of the operator's drawn base.
     registry[TacticalGraphicName.TacticalBlock] = {graphic: blockPaint(getLabel(TacticalGraphicName.TacticalBlock))};
     registry[TacticalGraphicName.Penetration] = {graphic: blockPaint(getLabel(TacticalGraphicName.Penetration))};
     registry[TacticalGraphicName.Block] = {graphic: blockPaint(getLabel(TacticalGraphicName.Block))};
@@ -869,14 +867,15 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.Breach] = {graphic: breachPaint(getLabel(TacticalGraphicName.Breach))};
     registry[TacticalGraphicName.Clear] = {graphic: clearPaint(getLabel(TacticalGraphicName.Clear))};
     registry[TacticalGraphicName.TacticalDisrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.TacticalDisrupt), 0.75)};
-    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75)};
+    // The obstacle effect's three heads are solid; the mission task's are open. @see clearPaint
+    registry[TacticalGraphicName.Disrupt] = {graphic: clearPaint(getLabel(TacticalGraphicName.Disrupt), 0.75, [1, 3, 5])};
 
     for (const [name, label] of CARDINAL_LABEL_AREAS) {
         registry[name] = {
             graphic: cardinalBoundaryPaint(label),
             // **No literal in the middle.** These two write their abbreviation into their
             // own boundary, four times over, so the centre block carries the designation
-            // and the date and nothing else. (User's call, 2026-08-27.)
+            // and the date and nothing else.
             label: cardinalLabelPaint(label, areaDefaultLabelPaint(name, false)),
         };
     }
@@ -979,7 +978,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.CuedAcquisitionDoctrine] = {graphic: cuedAcquisitionDoctrinePaint()};
     /*
      * **One painter, no label slot.** 200700 is drawn from three anchor points since
-     * 2026-09-04, which puts it on a line holder — and a line holder draws everything off
+     * which puts it on a line holder — and a line holder draws everything off
      * the one geometry. Its `T` rides the graphic's own collection, so registering a label
      * painter as well would draw the designation twice on MapLibre and once here.
      */
@@ -1004,8 +1003,8 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     registry[TacticalGraphicName.SafeLaneOrGap] = {graphic: safeLaneOrGapPaint()};
     registry[TacticalGraphicName.OverheadWire] = {graphic: overheadWirePaint()};
     // 'F' for the mission task, '' for the table 5-19 twin and the ferry crossing.
-    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix))};
-    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix))};
+    registry[TacticalGraphicName.TacticalFix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.TacticalFix), {openHead: true})};
+    registry[TacticalGraphicName.Fix] = {graphic: arrowheadedLinePaint(getLabel(TacticalGraphicName.Fix), {openHead: true})};
     registry[TacticalGraphicName.FerryCrossing] = {graphic: arrowheadedLinePaint()};
 
     registry[TacticalGraphicName.Pursuit] = {
@@ -1048,7 +1047,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     // Abatis is a drawn route carrying one fixed-size chevron, so the whole symbol is
     // in the geometry and a plain stroke draws it. It has no doctrinal designation —
     // it sat in the group above and took `missionTaskLabelPaint`, which rendered
-    // nothing for it. @see Abatis, ai/app-6.md "F1"
+    // nothing for it. @see Abatis
     registry[TacticalGraphicName.Abatis] = {graphic: plainOutlinePaint()};
 
     // Turn's "T" comes off its own label feature, so the graphic painter takes the
@@ -1133,7 +1132,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
     }
 
     for (const name of RETROGRADE_GRAPHICS) {
-        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name))};
+        registry[name] = {graphic: retrogradeTaskPaint(getLabel(name), name)};
     }
 
     for (const name of CORRIDOR_GRAPHICS) {

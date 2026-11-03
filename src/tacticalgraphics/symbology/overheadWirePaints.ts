@@ -1,7 +1,7 @@
 /**
  * # Overhead wire, and the safe lane
  *
- * Two APP-06 obstacle symbols added on 2026-09-01, sharing a file because both put
+ * Two APP-06 obstacle symbols added, sharing a file because both put
  * everything that is not the drawn line into the paint layer.
  */
 
@@ -69,8 +69,7 @@ const PYLON_TOP_Y = 15;
  * The plate points its `PT` arrow at the base, and standing the pylon on the anchor was the
  * literal reading of that; it draws the wire along the ground with the towers above it,
  * which is not what either the Template or the Example shows. Both run the wire through the
- * pylons at mid height. (User's call, 2026-09-01: "the line needs to be from the middle of
- * the svg, like the decision line".)
+ * pylons at mid height.
  */
 const PYLON_ANCHOR_Y = (PYLON_TOP_Y + PYLON_GROUND_Y) / 2;
 
@@ -140,7 +139,7 @@ const SAFE_LANE_LABEL_GAP_PX = 10;
  * a graphics and a handles feature and nothing else — so the column would render on one
  * engine and silently not on the other. That is the exact defect shape this repo keeps
  * finding, so the amplifiers ride the graphic feature with the line work, which both
- * engines draw. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ * engines draw.
  *
  * ## The stack sits to one side, level with the entry
  *
@@ -152,7 +151,7 @@ const SAFE_LANE_LABEL_GAP_PX = 10;
  *
  * ## Right of travel, upright, and measured clear of the symbol
  *
- * Three rules, all of them about the reader rather than the plate (user's call, 2026-09-01):
+ * Three rules, all of them about the reader rather than the plate:
  *
  * - **Right of the line running point 1 to point 2.** Relative to travel, not to the map's
  *   north, so redrawing the same lane the other way round does not swap the column across
@@ -205,15 +204,20 @@ export function safeLaneOrGapPaint(): LinePaint {
         const len = Math.hypot(dx, dy);
         if (len === 0) return lineWork;
 
-        // The right hand looking from point 1 to point 2, in a projection whose y runs up.
-        const rightX = dy / len;
-        const rightY = -dx / len;
+        /*
+         * **The left hand looking from point 1 to point 2**, in a projection whose y runs up.
+         * APP-06 290600's Template draws point 1 at the top, point 2 below it and the column
+         * on the east, which is the left of travel; turned so point 1 is east of point 2, it
+         * sits under the lane. It was on the right, and started level with point 1. The names below keep `right` for the side the column is on.
+         */
+        const rightX = -dy / len;
+        const rightY = dx / len;
 
         /*
          * How far the drawn symbol reaches on that side, measured rather than assumed.
          *
          * The splay is `size` metres long at 45 degrees to the lane, and `size` is derived
-         * from the zoom — so the reach in projected metres changes as the user zooms, and
+         * from the zoom — so the reach in projected metres changes as the operator zooms, and
          * any constant that cleared it at one zoom would sit on the arm at another. Every
          * point of the realized geometry is projected onto the offset direction and the
          * furthest one wins; the fixed gap is then added to that.
@@ -225,7 +229,9 @@ export function safeLaneOrGapPaint(): LinePaint {
             }
         }
         const offset = reach + SAFE_LANE_LABEL_GAP_PX * context.resolution;
-        const at: ProjectedPosition = [entry[0] + rightX * offset, entry[1] + rightY * offset];
+        // Centred on the lane, as the plate draws the column between the two points.
+        const middle: ProjectedPosition = [(entry[0] + exit[0]) / 2, (entry[1] + exit[1]) / 2];
+        const at: ProjectedPosition = [middle[0] + rightX * offset, middle[1] + rightY * offset];
 
         /*
          * The block grows away from the lane in both axes.

@@ -16,7 +16,7 @@ const OPENING_QUARTER_TURN = 90;
 /**
  * How many radial tics 151204 draws: **ten full length plus one short beside the `C`**.
  *
- * Counted off the Template by the user (2026-09-04). @see Contain.tics for why the count is
+ * Counted off the Template by the operator. @see Contain.tics for why the count is
  * a reading rather than a measurement.
  */
 const CONTAIN_TIC_COUNT = 11;
@@ -129,6 +129,26 @@ export class Control extends MissionTask {
 
 }
 
+/**
+ * The inward triangles isolate, cordon and search and cordon and knock share, as
+ * MIL-STD-2525E Tables L-XXI draws all three (and APP-06 341500): small isosceles teeth,
+ * evenly spaced round both arcs, four on each, each about a fifth of the radius tall.
+ *
+ * They were seven teeth 0.4 of the radius tall, packed so close they read as a sawtooth.
+ * Each arc is `[from, to, count, gap]` in degrees from the rotation axis;
+ * a tooth's base spans 12 degrees and its centres sit 35 apart.
+ */
+const RING_TEETH_HEIGHT = 0.2;
+const RING_TEETH_UPPER = [34, 151, 4, 23] as const;
+const RING_TEETH_LOWER = [229, 346, 4, 23] as const;
+
+/** The two arcs' inward teeth, upper then lower. @see RING_TEETH_HEIGHT */
+function ringTeeth(center: Position, size: number, rotation: number): [Position[][], Position[][]] {
+    const arc = ([from, to, count, gap]: readonly [number, number, number, number]) =>
+        geometryService.generateArcTrianglesWithGap(center, size, rotation, from, to, size * RING_TEETH_HEIGHT, count, gap);
+    return [arc(RING_TEETH_UPPER), arc(RING_TEETH_LOWER)];
+}
+
 export class CordonAndSearch extends MissionTask {
     name: string = TacticalGraphicName.CordonAndSearch;
 
@@ -138,8 +158,7 @@ export class CordonAndSearch extends MissionTask {
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
 
-        let upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 30, 160, size / 2.5, 4);
-        let lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 240, 340, size / 2.5, 3);
+        let [upperTriangles, lowerTriangles] = ringTeeth(center, size, rotation);
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperTriangles).geometry,
@@ -149,37 +168,63 @@ export class CordonAndSearch extends MissionTask {
 }
 
 /**
- * Deny (APP-06 343400) — the family's arc and arrowhead with **outward** spikes, and a
- * letter in the opening.
+ * Deny (APP-06 343400): the family's arc with **outward** spikes, a solid arrowhead, and
+ * its letter in a break low on the right of the rim.
  *
  * > The radius will be long enough for the graphic to encompass the area being denied.
- * > The opening will be a 30 degree arc of the circle. […] The opening will be on the
+ * > The opening will be a 30 degree arc of the circle. [...] The opening will be on the
  * > friendly side of the graphic.
  *
- * Thirty degrees is exactly what `DEFAULT_LABEL_GAP_DEGREES` already produces, so a
- * static GeoJSON consumer gets the opening the rule names; a live renderer passes 0 and
- * cuts the gap from the rendered glyph instead, which is how the whole family works.
- *
- * The spikes point **out**, unlike cordon and search's, which is the only thing in the
- * construction that differs — `computeIsoscelesApexPoint` reads the sign of the height as
- * "toward the centroid" or away from it.
+ * Neither FM 1-02.2 nor MIL-STD-2525E defines Deny, so the APP-06 plate decides. It drew an
+ * open head with the `D` at three o'clock. @see DENY_LABEL_DEGREES
  */
+/**
+ * Where Deny's `D` sits, in degrees from the rotation axis: in a break low on the rim at
+ * about half past four, not at three o'clock where the rest of the family puts its letter.
+ * APP-06 343400 (the only plate that defines it) draws it there in both Template and Example.
+ */
+export const DENY_LABEL_DEGREES = -35;
+
+/** Deny's outward spikes, `[from, to, count, gap]` in degrees: seven on the long arc, two on the short. */
+const DENY_UPPER_SPIKES = [-20, 168, 7, 8] as const;
+const DENY_LOWER_SPIKES = [245, 305, 2, 20] as const;
+
 export class Deny extends MissionTask {
     name: string = TacticalGraphicName.Deny;
+
+    /**
+     * The long arc from beside the `D` over the top to the start point, the short one from
+     * the arrowhead round to the other side of the `D`. Sub-lines `[0]` and `[1]` are these
+     * two, with their label-side ends meeting at the letter, as the family's paint expects.
+     */
+    private arcs(center: Position, opts: PointGraphicOptions): {upperArch: Position[]; lowerArch: Position[]} {
+        const gap = labelGapDegrees(opts);
+        return {
+            upperArch: geometryService.createCircularArc(center, opts.rotation, opts.size, DENY_LABEL_DEGREES + gap, 175, 100),
+            lowerArch: geometryService.createCircularArc(center, opts.rotation, opts.size, 205, 360 + DENY_LABEL_DEGREES - gap, 100),
+        };
+    }
 
     generateGraphics(base: Feature<Point>, opts: PointGraphicOptions): Feature<GeometryCollection> {
         const center = base.geometry.coordinates;
         const {rotation, size} = opts;
-        const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
-        const arrowHeadCoords: Position[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
+        const {upperArch, lowerArch} = this.arcs(center, opts);
+        // A solid head, as 343400 draws it.
+        const [left, tip, right] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 30);
 
-        const upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 20, 170, -size / 3, 5, 8);
-        const lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 215, 340, -size / 3, 4, 8);
+        const spikes = ([from, to, count, gap]: readonly [number, number, number, number]) =>
+            geometryService.generateArcTrianglesWithGap(center, size, rotation, from, to, -size / 3, count, gap);
         return this.asGeometryCollectionFeature([
-            this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
-            this.asMultiLineStringFeature(upperTriangles).geometry,
-            this.asMultiLineStringFeature(lowerTriangles).geometry,
+            this.asMultiLineStringFeature([upperArch, lowerArch]).geometry,
+            this.asMultiLineStringFeature(spikes(DENY_UPPER_SPIKES)).geometry,
+            this.asMultiLineStringFeature(spikes(DENY_LOWER_SPIKES)).geometry,
+            this.asPolygonFeature([[tip, left, right, tip]]).geometry,
         ]);
+    }
+
+    generateLabels(base: Feature<Point>, opts: PointGraphicOptions): Feature<Point> {
+        const center = base.geometry.coordinates;
+        return this.asPointFeature(geometryService.translateCoordinates(center, opts.size, toRadians(opts.rotation + DENY_LABEL_DEGREES)));
     }
 }
 
@@ -192,8 +237,7 @@ export class Isolate extends MissionTask {
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
 
-        let upperTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 30, 160, size / 2.5, 4);
-        let lowerTriangles = geometryService.generateArcTrianglesWithGap(center, size, rotation, 240, 340, size / 2.5, 3);
+        let [upperTriangles, lowerTriangles] = ringTeeth(center, size, rotation);
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperTriangles).geometry,
@@ -201,6 +245,18 @@ export class Isolate extends MissionTask {
         ]);
     }
 }
+
+/**
+ * Where Retain's tics run, in degrees from the rotation axis: round both arcs from just
+ * clear of the `R` to just short of each free end. APP-06 151205 and MIL-STD-2525E Table
+ * L-VIII draw them continuously, up to the start point, up to the arrowhead and either side
+ * of the letter. They stopped at 30-160 and 240-340, leaving bare rim.
+ *
+ * Each range is the arc the tics are spread over, and every tic sits mid-way along its
+ * share of it, so the first and last land half a step in: at about 20 and 170, 215 and 340.
+ */
+const RETAIN_UPPER_TICS: readonly [number, number] = [13, 177];
+const RETAIN_LOWER_TICS: readonly [number, number] = [208, 347];
 
 export class Retain extends MissionTask {
     name: string = TacticalGraphicName.Retain;
@@ -210,8 +266,10 @@ export class Retain extends MissionTask {
         let {rotation, size} = opts;
         const {upperArch, lowerArch} = this.labelGapArcs(center, opts);
         let arrowHeadCoords: Coordinate[] = geometryService.computeArrowheadPoints(lowerArch[1], lowerArch[0], size / 4, 45);
-        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 30, 160, size * ARC_TIC_FRACTION, arcTicCount(130));
-        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, 240, 340, size * ARC_TIC_FRACTION, arcTicCount(100));
+        const [upperFrom, upperTo] = RETAIN_UPPER_TICS;
+        const [lowerFrom, lowerTo] = RETAIN_LOWER_TICS;
+        let upperRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, upperFrom, upperTo, size * ARC_TIC_FRACTION, arcTicCount(upperTo - upperFrom));
+        let lowerRadialLineStrings = geometryService.generateRadialLineStrings(center, rotation, size, lowerFrom, lowerTo, size * ARC_TIC_FRACTION, arcTicCount(lowerTo - lowerFrom));
         return this.asGeometryCollectionFeature([
             this.asMultiLineStringFeature([upperArch, lowerArch, arrowHeadCoords]).geometry,
             this.asMultiLineStringFeature(upperRadialLineStrings).geometry,
@@ -244,7 +302,7 @@ export class Contain extends MissionTask {
      * the graphic and point 2 defines the graphic's start point and radius", which is
      * the centre-and-edge pair this library already draws. Contain names the arc's two
      * *ends* instead, so it is the only one of the seven that had to move.
-     * @see core/anchors.ts, ai/app-6.md "F3"
+     * @see core/anchors.ts
      */
     type: string = 'LineString';
 
@@ -290,10 +348,9 @@ export class Contain extends MissionTask {
      * `generateRadialLineStrings` was drawing these across 75 to 285 degrees — fifteen
      * degrees past each end of an arc that runs 90 to 270 — so two tics hung off the open
      * side with no rim behind them. It also derived the count from the letter-height
-     * spacing rule, which produced a few too many. (User's count off the Template,
-     * 2026-09-04.)
+     * spacing rule, which produced a few too many.
      *
-     * **The count is the user's reading, not a measurement**, and deliberately so: a tic
+     * **The count is review, not a measurement**, and deliberately so: a tic
      * census taken off the Template at 500 dpi could not be made to agree with itself —
      * fitting the arc's centre moved by enough to split single tics into three runs and to
      * report sixteen. An admitted count from someone reading the plate is worth more than a
@@ -326,12 +383,12 @@ export class Contain extends MissionTask {
      *
      * 151204's Template annotates `PT. 1` against the upper end of the opening and `PT. 2`
      * against the lower one. Those two are the whole of what the plate marks: there is no
-     * annotation on the centre, because the centre is not a point the user places — it is
+     * annotation on the centre, because the centre is not a point the operator places — it is
      * the midpoint of the two that are.
      *
      * This published `[point 2, centre]`, so one of the two marked points had a grip, the
      * other had none, and the graphic offered a handle on a place the plate does not name.
-     * (User's report, 2026-09-04.) Before that it sat at 205 degrees, which on a half
+     * Before that it sat at 205 degrees, which on a half
      * circle running 90 to 270 is neither end of the opening nor anywhere at all.
      *
      * A base that is still a bare point — a save written before the anchor-point

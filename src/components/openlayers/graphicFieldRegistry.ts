@@ -113,7 +113,7 @@ export type GraphicFieldSet = {
      * mistake `isDarkMode` was. @see RectangularTarget
      */
     attitude: boolean;
-    /** Circle radius in meters — the graphics a user resizes by a radius. */
+    /** Circle radius in meters — the graphics an operator resizes by a radius. */
     radius: boolean;
     /** Grids field (Airspace Coordination Area). */
     grids: boolean;
@@ -129,7 +129,7 @@ export type GraphicFieldSet = {
     /**
      * How many bands the fan editor offers, when the plate fixes the number.
      *
-     * Omitted, the editor is what `rangeFan` has always been: a list a user adds rings to
+     * Omitted, the editor is what `rangeFan` has always been: a list an operator adds rings to
      * and removes them from, which is right for the two weapon/sensor fans — their plates
      * draw an arbitrary stack of arcs.
      *
@@ -150,7 +150,7 @@ export type GraphicFieldSet = {
      * Its Size/Shape names *"a stop relative bearing"*, singular, and the plate says it is
      * "an equal angle either side of the search axis". The range-fan editor's default is the
      * weapon fans' shape: two absolute azimuths on every band, which for a two-ring 200700 is
-     * four fields stating one number four times over — and nothing stops a user typing four
+     * four fields stating one number four times over — and nothing stops an operator typing four
      * that disagree.
      *
      * Set, the editor offers one **Stop Relative Bearing** instead and the axis field is
@@ -160,6 +160,12 @@ export type GraphicFieldSet = {
      * them survives. @see RadarSearchDoctrine.frame, setRadarHalfAngle
      */
     stopRelativeBearing?: boolean;
+
+    /**
+     * A switch that hides the boundary, leaving the label and T — zone of fire (242600)
+     * alone, whose Note 2 asks for it. @see TacticalGraphicProperties.hideBoundary
+     */
+    boundarySwitch?: boolean;
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -190,6 +196,7 @@ function f(
             | 'grids'
             | 'weapon'
             | 'rangeFan'
+            | 'boundarySwitch'
         >
     > = {},
 ): GraphicFieldSet {
@@ -227,6 +234,8 @@ function f(
 /** Shape with no user-facing label (forms of maneuver, range fans, etc.). */
 const SHAPE_ONLY = f(false, false, false, false, false);
 const SHAPE_AND_DTG = f(false, false, true, true, false);
+/** One date-time group and nothing else: the retrograde tasks whose plate boxes a lone W. */
+const SHAPE_AND_W = f(false, false, true, false, false);
 
 /**
  * Safe lane or gap (APP-06 290600): `T` / `AM` / `W` / `W1`, stacked beside the lane.
@@ -247,7 +256,7 @@ const GENERIC_LINE = f(true, false, false, false, true);
  * The designation and a country code, set apart by a slash rather than bracketed --
  * the decision line's form, not the fire-support family's. The *area* form (120200)
  * letters no country code at all, which is why this is its own profile rather than a
- * shared one. (User's call, 2026-09-01.)
+ * shared one.
  */
 const NAI_LINE = f(true, false, false, false, true, {countryCodes: true});
 
@@ -275,7 +284,7 @@ const OBSTACLE_LINE = f(true, false, false, false, false);
  *
  * The Template carries no `T`, so there is no designation to type — the box in the middle
  * is Sector 1, which is the mine type drawn rather than typed. `W` is a single
- * self-destruct DTG and there is no `W1` beside it. (User's call, 2026-08-27.)
+ * self-destruct DTG and there is no `W1` beside it.
  * @see mineFillPaint
  */
 const MINE_AREA_DYNAMIC = f(false, false, true, false, false, {mineType: true, additionalInfo: true});
@@ -285,8 +294,7 @@ const MINE_AREA_DYNAMIC = f(false, false, true, false, false, {mineType: true, a
  * and nothing else.
  *
  * The same Template as the dynamic depiction minus the date — these are marked minefields
- * rather than scatterable ones, so there is no self-destruct time to post. (User's call,
- * 2026-08-27.) A `startDate` arriving on a restored or imported graphic still draws;
+ * rather than scatterable ones, so there is no self-destruct time to post. A `startDate` arriving on a restored or imported graphic still draws;
  * what is gone is the control that invites one.
  *
  * **One set for both**, because the two plates letter the same boxes: 270800 and 270801
@@ -323,7 +331,7 @@ const BEARING_LINE = f(false, false, false, false, false, {additionalInfo: true}
  * `measured.rotation`. There is no dead UI, and the day a holder does stamp one the row
  * appears by itself. The alternative was a stamp in *two* places, because the two engines
  * fill `measured` from different ends of the same bag; that asymmetry is how six parity
- * defects got in. @see ai/conventions.md, "A symbology fact never lives in a holder"
+ * defects got in.
  */
 const RHUMB_LINE = f(true, false, false, false, false, {attitude: true});
 
@@ -350,10 +358,10 @@ const SECTOR_MODIFIER_TERRAIN = f(false, false, false, false, false, {
  * Sector 1 and field H. The two standards draw the same symbol with *different* amplifiers
  * under the Sector 1 box -- APP-06 sets field H there and FM sets `W - W1` -- and the
  * graphic follows APP-06: one box, one field, rather than a stack carrying both readings
- * of the same box. (User's call, 2026-08-26.)
+ * of the same box.
  *
  * No designation either: the `LAA` above the modifier is the symbol's own literal, printed
- * by both plates, not something a user types.
+ * by both plates, not something an operator types.
  */
 const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
     mobility: true,
@@ -366,7 +374,7 @@ const LIMITED_ACCESS_AREA = f(false, false, false, false, false, {
  * `1X/007`, so the paint still joins two fields with a slash when both are set. The dialog
  * offers only the first: the second half is not something this program's operators fill in,
  * and a control nobody uses is a control that gets filled in by accident. Setting
- * `secondDesignation` on a restored or imported graphic still draws it. (User's call, 2026-08-25.)
+ * `secondDesignation` on a restored or imported graphic still draws it.
  */
 /** Decision line: `T/AS` — the designation and its country code, slash-separated. */
 const DECISION_LINE = f(true, false, false, false, false, {countryCodes: true});
@@ -376,7 +384,7 @@ const DECISION_LINE = f(true, false, false, false, false, {countryCodes: true});
  * The Template is `H` over `B` with no `T`, and the example is "SMALL DITCHES" — a
  * description of the going rather than a name, which is field H's job. It offered
  * `identifier1` instead; the paint read `designation` while its own comment called the
- * amplifier H. (User's call, 2026-08-31.)
+ * amplifier H.
  *
  * Strong point has the same two amplifiers the other way round — a real `T` with `B` under
  * it — so the two look alike here and are not. @see mobilityCorridorPaint
@@ -389,9 +397,9 @@ const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
  *
  * APP-06 letters these `T2 ( AS )`. The designation stays in `identifier1` — a second
  * designation with no first means nothing to an operator, the same call as the fire-support
- * *areas* — and the country code joins it. (User's call, 2026-09-01.)
+ * *areas* — and the country code joins it.
  *
- * The no fire line and the restrictive fire line joined on 2026-09-01, which settles the
+ * The no fire line and the restrictive fire line joined, which settles the
  * open question this note used to carry: they share the plate and they take the same
  * change. `FIRE_SUPPORT_LINE` is now the profile for the lines that have no `AS` box.
  */
@@ -411,7 +419,7 @@ const NAME_FIELD_ONLY = f(true, false, false, false, false);
  * 272200's Template carries one lettered box and it is `H`; the Example fills it with
  * `30 CGH`, a dose rate, which is exactly what a designation is not. Offering a name
  * instead put an amplifier on the symbol that no plate asks for and left the one it does
- * ask for unreachable. (User's call, 2026-09-01.)
+ * ask for unreachable.
  */
 const ADDITIONAL_INFO_ONLY = f(false, false, false, false, false, {additionalInfo: true});
 
@@ -446,6 +454,8 @@ const PSYOPS_ZONE = f(true, false, true, true, false, {additionalInfo: true});
  */
 const OBSTACLE_AREA = f(true, false, true, true, false);
 const AREA_SIMPLE = f(true, false, false, false, true);
+/** An area whose plate prints only its own literal: the status, and no designation. */
+const AREA_STATUS_ONLY = f(false, false, false, false, true);
 /**
  * Free fire / no fire / restrictive fire area (APP-06 2402xx, 2403xx, 2404xx).
  *
@@ -453,7 +463,7 @@ const AREA_SIMPLE = f(true, false, false, false, true);
  * plain `T` at all: `FFA / 2AD (DEU)`, `NFA / 52ID (GBR)`, `RFA / 1ID (FRA)`. A second
  * designation with no first makes no sense to an operator, so the text goes in
  * `identifier1` and the country beside it, the same way field `AP` already routes to the
- * designation on the target graphics. (User's call, 2026-08-31.)
+ * designation on the target graphics.
  *
  * Position area for artillery looks identical on this side of the registry but is *not*
  * this shape — its plate really is a plain `T` (`3BCT`) with no country field. It has its
@@ -469,7 +479,7 @@ const POSITION_AREA_ARTILLERY = f(true, false, true, true, true);
  *
  * Both publications give this symbol a second name field; they simply letter it differently,
  * APP-06 as `T2` and FM 1-02.2 as `T1`. Either way the operator gets two boxes, so it is
- * `identifier1` + `identifier2` here. (User's call, 2026-08-31.)
+ * `identifier1` + `identifier2` here.
  *
  * An earlier comment on the engagement-zone constant claimed the FM template listed no
  * second identifier for ACAs. That was wrong, and it was attached to a constant the ACAs
@@ -530,7 +540,7 @@ const COUNTERATTACK = f(true, false, false, false, false, {width: true});
  * Its Template carries `AA` with field `T` beside it, a field `H` set apart from the arrow,
  * and field `N` twice down the tail. There is no `W` or `W1` anywhere on it — the graphic
  * had been sharing `MOVEMENT_ARROW`, which offers both, because it is built from the same
- * arrow as the axes of advance. (User's call, 2026-08-27.)
+ * arrow as the axes of advance.
  *
  * Field H is *not* offered yet: the plate's note says it "should be movable to avoid
  * obscuring key geographic information", and a movable amplifier is a placement decision
@@ -563,7 +573,7 @@ const ECH = f(true, false, false, false, true, {echelon: true});
  * Spread onto each entry rather than added to `FIRE_SUPPORT_AREA` /
  * `TARGET_ACQUISITION_AREA`, because those constants are shared with the circular and
  * irregular variants — a circle takes a radius and an irregular area takes neither.
- * @see AreaGraphicBase, ai/app-6.md "F2"
+ * @see AreaGraphicBase
  */
 
 // ── Registry ──────────────────────────────────────────────────────────────────
@@ -579,10 +589,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ReleaseLine]: GENERIC_LINE,
     [TacticalGraphicName.BridgeheadLine]: GENERIC_LINE,
     // Its template shows neither, but the worked example carries both: BHL 23ID over a
-    // date range at each end. (User's call, 2026-09-01.)
+    // date range at each end.
     [TacticalGraphicName.BattlefieldHandoverLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     // FM 1-02.2 table 5-8 draws its example with a date range at each end, like the
-    // battlefield handover line above it. (User's call, 2026-09-01.)
+    // battlefield handover line above it.
     [TacticalGraphicName.DelayLine]: FIRE_SUPPORT_LINE_WITH_COUNTRY,
     [TacticalGraphicName.FinalCoordinationLine]: GENERIC_LINE,
     [TacticalGraphicName.LimitOfAdvance]: GENERIC_LINE,
@@ -656,8 +666,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Escort's own amplifier is field A, a host-injected unit symbol, not text.
     [TacticalGraphicName.Escort]: SHAPE_ONLY,
     // `DEM` is the symbol's own literal, printed by the plate, and 343300 names no other
-    // amplifier. A designation typed here had nowhere doctrinal to go. (User's call,
-    // 2026-08-27.) The paint still appends one on a restored or imported graphic.
+    // amplifier. A designation typed here had nowhere doctrinal to go. The paint still appends one on a restored or imported graphic.
     [TacticalGraphicName.Demonstration]: SHAPE_ONLY,
     [TacticalGraphicName.Evacuate]: SHAPE_ONLY,
     [TacticalGraphicName.Recover]: SHAPE_ONLY,
@@ -674,7 +683,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.RadiationDoseRateContourLine]: ADDITIONAL_INFO_ONLY,
     // Free text plus the mine type the area is filled with.
     [TacticalGraphicName.MinefieldDynamicDepiction]: MINE_AREA_DYNAMIC,
-    [TacticalGraphicName.MinedArea]: MINE_AREA,
+    // 2525E 270800 boxes W below the area (the self-destruct DTG of scatterable mines);
+    // 270801 boxes no W and no H. 2525E decides over the earlier one-set-for-both call.
+    [TacticalGraphicName.MinedArea]: {...MINE_AREA, dtg1: true},
     [TacticalGraphicName.MinedAreaFenced]: MINE_AREA,
     [TacticalGraphicName.PsyOpsZoneIrregular]: PSYOPS_ZONE,
     // Every rectangular variant offers the across-dimension as a typed field.
@@ -686,12 +697,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Modifier 1 and nothing else. 290101's Template sets a `Modifier 1` box between the
     // two `N`s and no `T`, and the modifier is what the beads are drawn from rather than
     // a caption to type. Hostility comes from `supportsHostility`, not from here.
-    // (User's call, 2026-08-27.) @see minelinePaint
+    // @see minelinePaint
     [TacticalGraphicName.Mineline]: f(false, false, false, false, false, {mineType: true}),
     // Status, and nothing else. 290400 is a *"CM Status Type: Circled"* row: its own
     // dashes are spent — the note says they show in present status too — so planned is
     // said with a ring instead, and the operator needs the control that sets it.
-    // (User's call, 2026-08-27.) @see plannedStatusRing
+    // @see plannedStatusRing
     [TacticalGraphicName.MineCluster]: f(false, false, false, false, true),
     [TacticalGraphicName.TripWire]: SHAPE_ONLY,
     [TacticalGraphicName.RaftSite]: SHAPE_ONLY,
@@ -714,17 +725,18 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // designation, secondDesignation and weapon.
     [TacticalGraphicName.FinalProtectiveFire]: f(true, true, false, false, false, {weapon: true}),
     [TacticalGraphicName.LinearSmokeTarget]: NAME_FIELD_ONLY,
-    // Excluded — see ai/excluded-graphics.md
+    // Excluded on purpose.
     // [TacticalGraphicName.MovingConvoy]: MOV,
     // [TacticalGraphicName.HaltedConvoy]: MOV,
 
     // ── Shape-only lines (hardcoded label, no user input) ───────────────────
     [TacticalGraphicName.LineOfContact]: SHAPE_ONLY,
-    [TacticalGraphicName.FieldsOfFire]: f(true, false, false, false, false),
-    [TacticalGraphicName.FinalProtectiveFireLeft]: f(true, false, false, false, false),
-    [TacticalGraphicName.FinalProtectiveFireRight]: f(true, false, false, false, false),
-    [TacticalGraphicName.PrincipalDirectionOfFire]: f(true, false, false, false, false),
-    [TacticalGraphicName.SecondaryDirectionOfFire]: f(true, false, false, false, false),
+    // 140500-140504 letter no amplifier: the box at point 1 is the unit symbol, in grey.
+    [TacticalGraphicName.FieldsOfFire]: SHAPE_ONLY,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: SHAPE_ONLY,
+    [TacticalGraphicName.FinalProtectiveFireRight]: SHAPE_ONLY,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: SHAPE_ONLY,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: SHAPE_ONLY,
 
     // ── Movement (arrow) graphics ────────────────────────────────────────────
     // Table 5-9: T (name) + W/W1 (dates) per FM construct examples.
@@ -737,12 +749,13 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // Table 5-11 (attack/defense planning): identifier only.
     [TacticalGraphicName.Counterattack]: COUNTERATTACK,
     [TacticalGraphicName.CounterattackByFire]: COUNTERATTACK,
-    // Mobility / water crossing (Table 5-16) — see the FerryCrossing note above:
-    // the crossing-site symbols carry no name.
-    [TacticalGraphicName.Bridge]: SHAPE_ONLY,
-    // `T` over `W - W1`; the second date was missing. (User's call, 2026-09-01.)
+    // Mobility / water crossing. FM 1-02.2 Table 5-16's bridge carries no amplifiers, but
+    // MIL-STD-2525E 271100 (bridge or gap) boxes T between the rails and W - W1 below the
+    // point 2 / point 4 end, and so does APP-06. 2525E decides.
+    [TacticalGraphicName.Bridge]: f(true, false, true, true, false),
+    // `T` over `W - W1`; the second date was missing.
     [TacticalGraphicName.Gap]: f(true, false, true, true, false),
-    // `W - W1`, not a lone `W`. (User's call, 2026-09-01.)
+    // `W - W1`, not a lone `W`.
     [TacticalGraphicName.AssaultCrossing]: f(false, false, true, true, false),
     [TacticalGraphicName.FordEasy]: SHAPE_ONLY,
     [TacticalGraphicName.FordDifficult]: SHAPE_ONLY,
@@ -784,7 +797,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.SupportByFire]: MISSION_TASK,
     [TacticalGraphicName.Suppress]: MISSION_TASK,
     [TacticalGraphicName.Interdict]: MISSION_TASK,
-    // Excluded — see ai/excluded-graphics.md
+    // Excluded on purpose.
     // [TacticalGraphicName.FollowAndAssume]: MISSION_TASK,
     // [TacticalGraphicName.FollowAndSupport]: MISSION_TASK,
 
@@ -795,7 +808,6 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: SHAPE_ONLY,
     [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: SHAPE_ONLY,
     [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: SHAPE_ONLY,
-    // Excluded — see ai/excluded-graphics.md
     [TacticalGraphicName.RoadblockCompleteExecuted]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchUnderConstruction]: SHAPE_ONLY,
     [TacticalGraphicName.AntiTankDitchCompleted]: SHAPE_ONLY,
@@ -815,18 +827,20 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.WireSingleConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.WireDoubleStrandConcertina]: SHAPE_ONLY,
     [TacticalGraphicName.WireTripleStrandConcertina]: SHAPE_ONLY,
-    [TacticalGraphicName.Delay]: SHAPE_ONLY,
+    // 2525E 340800 boxes W above the D (FM 1-02.2 adds W1; 2525E decides).
+    [TacticalGraphicName.Delay]: SHAPE_AND_W,
     [TacticalGraphicName.Withdraw]: SHAPE_ONLY,
     [TacticalGraphicName.WithdrawUnderPressure]: SHAPE_ONLY,
     [TacticalGraphicName.Retirement]: SHAPE_ONLY,
     // Disengage appears in Table 6-1 (Ch. 6) → no amplifiers.
     [TacticalGraphicName.Disengage]: MISSION_TASK,
     // Passage of lines / relief (Table 5-13 enabling operations): identifier only.
-    [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_ONLY,
-    [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_ONLY,
+    // APP-06 344100 / 344200 box W above the line near the arrowhead.
+    [TacticalGraphicName.ForwardPassageOfLines]: SHAPE_AND_W,
+    [TacticalGraphicName.RearwardPassageOfLines]: SHAPE_AND_W,
     // Exfiltrate (Table 6-1, Ch. 6) → no amplifiers.
     // Hostility and nothing else, like its twin: 343700's Template carries `EX` and no
-    // amplifier box at all. (User's call, 2026-08-27.)
+    // amplifier box at all.
     [TacticalGraphicName.Exfiltrate]: SHAPE_ONLY,
 
     // ── Mission task bubbles ─────────────────────────────────────────────────
@@ -854,11 +868,10 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     // W . W1 inside it -- so unlike FM's badge this one takes a designation and a
     // date-time range. @see FM 1-02.2 table 5-2 for what the letters mean.
     [TacticalGraphicName.AdvanceToContact]: AXIS_ARROW,
-    // 152700 and 152900 carry no amplifier of their own, but they do carry a width the
-    // operator dragged, and it is the same read-out the rest of the family shows.
-    // @see widthFromBase
-    [TacticalGraphicName.FrontalAttack]: f(false, false, false, false, false, {width: true}),
-    [TacticalGraphicName.TurningMovement]: f(false, false, false, false, false, {width: true}),
+    // 2525E 152700 / 152900 box T and W - W1 beside the fixed A / T, and the width the
+    // operator dragged is the same read-out the rest of the family shows. @see widthFromBase
+    [TacticalGraphicName.FrontalAttack]: f(true, false, true, true, false, {width: true}),
+    [TacticalGraphicName.TurningMovement]: f(true, false, true, true, false, {width: true}),
     [TacticalGraphicName.Pursuit]: SHAPE_ONLY,
     [TacticalGraphicName.Envelopment]: SHAPE_ONLY,
     [TacticalGraphicName.MobileDefense]: SHAPE_ONLY,
@@ -884,8 +897,9 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BaseCamp]: AREA_SIMPLE,
     [TacticalGraphicName.GuerrillaBase]: AREA_SIMPLE,
     [TacticalGraphicName.DetaineeHoldingArea]: AREA_SIMPLE,
-    [TacticalGraphicName.BombArea]: AREA_SIMPLE,
-    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_SIMPLE,
+    // 240808 and 242000 print the bare literal: no T box. (MIL-STD-2525E and APP-06.)
+    [TacticalGraphicName.BombArea]: AREA_STATUS_ONLY,
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: AREA_STATUS_ONLY,
     [TacticalGraphicName.Bridgehead]: AREA_SIMPLE,
     [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: AREA_SIMPLE,
     [TacticalGraphicName.HumanTerrain]: HUMAN_TERRAIN,
@@ -900,9 +914,8 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.AreaGeneric]: AREA_GENERIC,
     // **No status.** `dashedOutlinePaint` breaks this outline whatever the status says —
     // the dashes are the symbol, not a reading of `planned` — so the control changed
-    // nothing on the map, which is the same trap "Label Plate" was. (User's call,
-    // 2026-08-27.) @see dashedOutlinePaint
-    [TacticalGraphicName.ZoneOfFire]: f(true, false, false, false, false),
+    // nothing on the map, which is the same trap "Label Plate" was. @see dashedOutlinePaint
+    [TacticalGraphicName.ZoneOfFire]: f(true, false, false, false, false, {boundarySwitch: true}),
     [TacticalGraphicName.RestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     [TacticalGraphicName.SeverelyRestrictedTerrain]: SECTOR_MODIFIER_TERRAIN,
     // The four contaminated areas carry no amplifier either: 271700, 271800, 271900 and
@@ -923,18 +936,19 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     [TacticalGraphicName.BrigadeSupportArea]: AREA_SIMPLE,
     [TacticalGraphicName.DivisionSupportArea]: AREA_SIMPLE,
     // Its plate carries `W - W1` and the example fills in a real range, where the other
-    // support areas carry none. (User's call, 2026-09-01.)
+    // support areas carry none.
     [TacticalGraphicName.CorpsSupportArea]: f(true, false, true, true, true),
     [TacticalGraphicName.FighterEngagementZone]: ENGAGEMENT_ZONE,
     [TacticalGraphicName.ExtractionZone]: AREA_SIMPLE,
-    [TacticalGraphicName.RegimentalSupportArea]: AREA_SIMPLE,
+    // 310500 prints a bare RSA with no T box. (MIL-STD-2525E and APP-06.)
+    [TacticalGraphicName.RegimentalSupportArea]: AREA_STATUS_ONLY,
     [TacticalGraphicName.DropZone]: AREA_SIMPLE,
     [TacticalGraphicName.LandingZone]: AREA_SIMPLE,
     [TacticalGraphicName.KillZone]: AREA_SIMPLE,
     [TacticalGraphicName.PickupZone]: AREA_SIMPLE,
     [TacticalGraphicName.AirfieldZone]: AIRFIELD_ZONE,
     // Field T: the text beside the strip names the airfield. The airfield *zone* next to it
-    // is the one that takes field H. (User's call, 2026-09-01.) @see airfieldPointLabelPaint
+    // is the one that takes field H. @see airfieldPointLabelPaint
     [TacticalGraphicName.Airfield]: NAME_FIELD_ONLY,
     [TacticalGraphicName.BattlePosition]: ECH,
     [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: ECH,
@@ -1044,8 +1058,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
      * **And one opening, not four bearings.** `stopRelativeBearing` collapses the fans'
      * per-band left/right azimuths into the single relative angle 200700 states, so the modal
      * carries exactly the four numbers the plate names and no more: the search axis azimuth,
-     * the start range, the stop range and the stop relative bearing. (User's call,
-     * 2026-09-05.) @see stopRelativeBearing
+     * the start range, the stop range and the stop relative bearing. @see stopRelativeBearing
      */
     [TacticalGraphicName.RadarSearchDoctrine]: {
         ...NAME_FIELD_ONLY,
@@ -1063,7 +1076,7 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
     /*
      * The convoys letter `V`, `H`, `W` and `W1` and no designation at all. `V` is the
      * equipment type -- `M1A2` and `M915` in the two Examples -- and this library files V
-     * under `weapon`. @see ai/conformance/README.md, the letter mapping
+     * under `weapon`. @, the letter mapping
      */
     [TacticalGraphicName.MovingConvoy]: {...SHAPE_AND_DTG, additionalInfo: true, weapon: true},
     [TacticalGraphicName.HaltedConvoy]: {...SHAPE_AND_DTG, additionalInfo: true, weapon: true},
@@ -1097,11 +1110,12 @@ const GRAPHIC_FIELDS: Record<TacticalGraphicName, GraphicFieldSet> = {
         altitude2: true,
         grids: true,
     }),
-    [TacticalGraphicName.Encirclement]: f(true, false, false, false, false),
-    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: NAME_FIELD_ONLY,
+    // 151800 letters only the two N (ENY) boxes, and 271000 only UXO in its two gaps: no T.
+    [TacticalGraphicName.Encirclement]: SHAPE_ONLY,
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: SHAPE_ONLY,
     [TacticalGraphicName.FortifiedArea]: NAME_FIELD_ONLY,
     // No designation: its plate labels the shape with the words "AIRHEAD LINE" and offers
-    // no name box. (User's call, 2026-09-01.) @see airheadLineLabelPaint
+    // no name box. @see airheadLineLabelPaint
     [TacticalGraphicName.AirheadLine]: f(false, false, false, false, false),
     [TacticalGraphicName.ObstacleBelt]: NAME_FIELD_ONLY,
     [TacticalGraphicName.ObstacleZone]: NAME_FIELD_ONLY,
@@ -1152,7 +1166,7 @@ export {supportsHostility};
 // ── Public accessor ───────────────────────────────────────────────────────────
 
 /**
- * The graphics a user sizes by dragging a radius — every name routed through
+ * The graphics an operator sizes by dragging a radius — every name routed through
  * `MissionTaskController`. They are the ones whose `radius` is a real reach from the
  * center rather than a decoration scalar, so they are the only ones worth showing it for.
  *

@@ -189,6 +189,18 @@ describe('withUnobscuredNames', () => {
         expect(out.map(p => p.text?.text)).toEqual(['ALPHA', '031813ZOCT26']);
     });
 
+    it('keeps the dates under a diagonal line, whose name sits over it', () => {
+        // A line at 45 degrees: the name above it, the dates below, both turned with it. Their
+        // screen-squared boxes meet; the glyphs are 20 px apart.
+        const r = -Math.PI / 4;
+        const [nx, ny] = [Math.sin(r) * 10, Math.cos(r) * 10];
+        const out = withUnobscuredNames([
+            at(nx, ny, 'BCL ALPHA (USA)', undefined, {rotation: r, align: 'left', baseline: 'bottom'}),
+            at(-nx, -ny, '011200ZOCT26 - 021800ZOCT26', 'amplifier', {rotation: r, align: 'left', baseline: 'top'}),
+        ], context(1));
+        expect(out.map(p => p.text?.text)).toEqual(['BCL ALPHA (USA)', '011200ZOCT26 - 021800ZOCT26']);
+    });
+
     it('never takes the name away', () => {
         const out = withUnobscuredNames([at(0, 0, '031813ZOCT26', 'amplifier'), at(0, 0, 'ALPHA')], context(1));
         expect(out.map(p => p.text?.text)).toEqual(['ALPHA']);

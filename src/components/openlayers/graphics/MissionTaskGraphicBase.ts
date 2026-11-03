@@ -95,7 +95,7 @@ const ENVELOPMENT_REAR_HANDLE = 2;
  *
  * The circle handle sits *on* the axis, so its perpendicular offset is zero at
  * rest. Reading the raw sign would let a pixel of jitter flip the graphic back
- * and forth while the user is only trying to lengthen the hook; requiring a
+ * and forth while the operator is only trying to lengthen the hook; requiring a
  * deliberate move to one side keeps the flip available without that.
  */
 /** @see ENVELOPMENT_FLIP_THRESHOLD in the library, which this used to duplicate. */
@@ -110,7 +110,7 @@ const ENVELOPMENT_REAR_HANDLE = 2;
  * the graphic, while the label inside it is capped. A 30° hole that fits a
  * letter on a small circle is four times too big on a large one.
  *
- * **`CordonAndKnock` and `Locate` were missing from this list until 2026-08-14.** Both
+ * **`CordonAndKnock` and `Locate` were missing from this list.** Both
  * were added to the family in `symbology/registry.ts` without being added here, so
  * OpenLayers gave them the generator's fixed 30° hole while their siblings measured
  * theirs — visible as a gap two or three times wider than "C/K" and "LOC" need, and
@@ -436,8 +436,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
          * The branch below promotes a set with nothing off-centre to the live red handle, on
          * the reasoning that a graphic should never have nothing to grab. For these that is
          * the wrong trade: it paints a dot the colour that means "drag me" and then declines
-         * every drag. MapLibre has drawn them gray all along. (User's rule, 2026-09-13: red
-         * markers must do something, gray ones need not.) @see publishesAnchorHandleOnly
+         * every drag. MapLibre has drawn them gray all along. @see publishesAnchorHandleOnly
          */
         if (publishesAnchorHandleOnly(this.name)) {
             this.handles.setGeometry(new MultiPoint([]));
@@ -490,7 +489,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
     /**
      * Where the gesture actually is — the cursor while drawing, the dragged point while
      * resizing. The line is drawn to whichever handle is nearest it, so the read-out
-     * follows the handle the user has hold of rather than whichever one the generator
+     * follows the handle the operator has hold of rather than whichever one the generator
      * happened to emit first.
      */
     private measureAnchor: Coordinate | undefined;
@@ -500,7 +499,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * disarmed.
      *
      * Anchored on the two handles rather than on `center` + `size` so it lands exactly
-     * where the user is dragging: the edit handle is the thing under the cursor, and a
+     * where the operator is dragging: the edit handle is the thing under the cursor, and a
      * line drawn to a computed bearing instead would sit beside it on any graphic whose
      * handle is not due east.
      */
@@ -619,7 +618,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
      * Reads the existing bag back rather than taking amplifiers as an argument: the
      * properties dialog stamps amplifiers straight onto the features
      * (`tactical-graphics-dialog.tsx`), so a resize that wrote only `{name, size,
-     * rotation}` would silently wipe the hostility the user had just set.
+     * rotation}` would silently wipe the hostility the operator had just set.
      */
     protected publishGeometryState(extra?: GraphicGeometryState): void {
         writeGraphicProperties(this.getFeatures(), this.name, {...readGraphicLabels(this.graphic)}, {
@@ -633,7 +632,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
              * `bowFromAnchors` and `hookFromAnchors` do the same for their shapes. Stamping
              * them as well is a second copy of the geometry — the defect this repo keeps
              * finding, and the one the demolition block's `width` and 200700's `radius` both
-             * were. (User's call, 2026-09-06.)
+             * were.
              *
              * Verified by rendering all seven anchor graphics with each scalar removed: the
              * drawn geometry is byte-identical every time. What is *not* recoverable from the
@@ -738,8 +737,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
              * limit), and the base kept the raw points: the file saved an apex the symbol never
              * reached, and the grip, which is that stored point, came away from the curve under
              * the cursor. MapLibre writes the frame back into the points (`withAnchorGeometry`),
-             * so the two engines stored different apexes for the same drag (all-engine grip
-             * sweep, 2026-09-26). Written in place with `setCoordinates`, so a Modify drag still
+             * so the two engines stored different apexes for the same drag. Written in place with `setCoordinates`, so a Modify drag still
              * holds the same geometry, and only when the frame moved a point by more than a
              * meter, so an unclamped drag leaves the operator's own points alone.
              */
@@ -873,7 +871,7 @@ export class MissionTaskGraphicBase implements MissionTaskGraphic {
         return {side: this.mirrored ? -1 : 1};
     }
 
-    /** Takes center, length and bearing from anchor points the user drew. */
+    /** Takes center, length and bearing from anchor points the operator drew. */
     protected adoptFrame(frame: DrawnFrame): void {
         this.center = fromLonLat(frame.center as Coordinate);
         this.rotation = (frame.angle * 180) / Math.PI;
@@ -959,7 +957,7 @@ export class CircularAreaGraphicBase extends MissionTaskGraphicBase {
  * Turn — the one mission task with a third shape input, `bend`.
  *
  * `bend` is how sharp the turn is, a signed multiple of `size`. Being unitless
- * it survives a resize, which is the point: the user sets the sharpness once
+ * it survives a resize, which is the point: the operator sets the sharpness once
  * and stretching the curve does not undo it.
  *
  * The arrowhead is sized in **flat meters off the drawing resolution**, not as
@@ -1096,7 +1094,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
              * arrowhead rather than scaling about its middle. That is the difference
              * between this and the tip grip above, and it is why the two are separate
              * roles: grabbing the back of an arrow and pulling should make it longer, not
-             * make it bigger in both directions at once. (User's call, 2026-09-05.)
+             * make it bigger in both directions at once.
              *
              * Rebuilt from the two chord ends rather than from a delta, so the grip lands
              * exactly under the cursor at any length: the new chord is tip → cursor, and
@@ -1148,7 +1146,7 @@ export class TurnGraphicBase extends MissionTaskGraphicBase {
  *
  * @see Envelopment in the core library for why the circle is derived from the
  * approach rather than drawn: it is what puts the arrowhead on the line's own
- * continuation and stops the user assembling the circle wrong.
+ * continuation and stops the operator assembling the circle wrong.
  */
 export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
     /** @see ENVELOPMENT_DEFAULT_BEND */
@@ -1293,7 +1291,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
              * **Point 1 moves and the run's far end stays put** — the approach lengthens
              * backwards from the semicircle rather than scaling about its middle, which is
              * the same rule Turn's rear grip follows and the reason `extend` is a role of
-             * its own. (User's call, 2026-09-05.)
+             * its own.
              *
              * Rebuilt from the two ends of the run through `adoptAnchors`, for the reason
              * that branch spells out: `size` is spent geodesically when `anchorPoints`
@@ -1332,7 +1330,7 @@ export class EnvelopmentGraphicBase extends MissionTaskGraphicBase {
          * **On the ground, because `size` is**, as Turn's bend branch above already does: the
          * cursor is measured on the screen, and `along / size` mixed projected meters with
          * ground ones. At 16 degrees south that put the tip 17.7 km from where MapLibre, whose
-         * `setBend` converts, put it for the same drag (all-engine grip sweep, 2026-09-26).
+         * `setBend` converts, put it for the same drag.
          */
         const latitude = latitudeFromMercatorY(center[1]);
         const along = groundLength(dx * Math.cos(theta) + dy * Math.sin(theta), latitude);
@@ -1384,7 +1382,7 @@ export class RectangularTargetGraphicBase extends MissionTaskGraphicBase {
      * Half the full width in ground metres — the generators' own unit.
      *
      * **Derived from the current `size`, not seeded once.** The constructor is handed the
-     * *initial* size, which is a resolution; the size a user actually drew arrives later
+     * *initial* size, which is a resolution; the size an operator actually drew arrives later
      * through `updateGeom`. Fixing the width at construction time therefore left a target
      * whose length grew to thousands of kilometres and whose width stayed at about one, and
      * it drew as a hairline rather than a box.

@@ -7,7 +7,7 @@ import {labelColorOf, lineColorOf} from './paintFunctions';
  *
  * **Only the line work and the letters are here.** The center symbol is injected
  * by the host — nothing in this package names milsymbol — so a renderer draws it
- * through the registered provider or draws nothing. @see conventions.md
+ * through the registered provider or draws nothing.
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
@@ -38,7 +38,7 @@ type SecurityPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
  *
  * ## The glyph does not rotate with the graphic
  *
- * Rotating it turned the letter upside down as soon as the user swung the graphic
+ * Rotating it turned the letter upside down as soon as the operator swung the graphic
  * past the horizontal, which is what an amplifier must never do: a label is read
  * by the operator, not by the symbol. The letter still travels with its own arm,
  * because the label *anchor* is rotated about the center by the holder. Position

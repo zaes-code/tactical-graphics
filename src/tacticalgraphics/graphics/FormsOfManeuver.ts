@@ -200,7 +200,6 @@ export class MovementToContact extends TacticalGraphicsBase<PointGraphicOptions>
  * **Vertex order is this library's, not APP-06's.** The standard numbers from the tip
  * backwards; every drawn arrow here runs rear-to-tip, because that is the direction a
  * user draws a route and the direction the whole movement family already stores.
- * @see ai/app-6.md
  */
 export class AdvanceToContact extends SolidManeuverArrow {
     constructor() {
@@ -218,10 +217,18 @@ export class AdvanceToContact extends SolidManeuverArrow {
      * ratios give the same picture at a different head shape.
      */
     private static readonly ZIG_START_T = 0.5;
-    private static readonly ZIG_SEG_PER_FLANK = 0.534;
-    private static readonly ZIG_HEAD_PER_FLANK = 0.09;
-    /** Tilt of each stroke off the heading, toward the outside. FM's value, unchanged. */
-    private static readonly ZIG_ANGLE_DEG = 25;
+    /**
+     * **Sized by MIL-STD-2525E 342900, not FM.** "The length of the lightning bolts shall be
+     * at least twice the width of the base of the arrow and at a 45° angle from the arrow
+     * tip." Each stroke tilts 37° off the heading, which puts the whole bolt, two strokes and
+     * the step back between them, at 45°; a stroke of 1.16 flanks makes it 2.2 body widths end
+     * to end. FM's proportions (0.534 flanks at 25°) drew a bolt a third the head's length,
+     * which is what it carried.
+     */
+    private static readonly ZIG_SEG_PER_FLANK = 1.16;
+    private static readonly ZIG_HEAD_PER_FLANK = 0.2;
+    /** Tilt of each stroke off the heading, toward the outside. @see ZIG_SEG_PER_FLANK */
+    private static readonly ZIG_ANGLE_DEG = 37;
     /**
      * Clear space between the arrowhead's flank and the bolt that leaves it.
      *
@@ -294,7 +301,7 @@ export class AdvanceToContact extends SolidManeuverArrow {
         // **One bolt per flank**, as on FM's badge. The extracted template appeared to
         // show a single mark, but that template is itself a crop and the symbol runs off
         // its top edge — the upper bolt was outside the picture, not absent from the
-        // symbol. Trusting the crop is the same mistake `ai/app-6.md` records twice.
+        // symbol. Trusting the crop is a mistake that has been made twice.
         return this.asMultiLineStringFeature([
             ...arrow,
             ...this.zigzag(leftWing, tip, centerEnd, heading),
@@ -302,6 +309,12 @@ export class AdvanceToContact extends SolidManeuverArrow {
         ]);
     }
 }
+
+/** Half the frontal attack's tip line, in half-widths: twice the head's 4×radius base. */
+export const FRONTAL_ATTACK_BAR_HALF = 4;
+/** Where the turning movement's line crosses the first leg, and half its length in half-widths. */
+export const TURNING_MOVEMENT_LINE_AT = 0.35;
+export const TURNING_MOVEMENT_LINE_HALF = 3;
 
 export class FrontalAttack extends SolidManeuverArrow {
     constructor() { super(TacticalGraphicName.FrontalAttack); }
@@ -314,11 +327,13 @@ export class FrontalAttack extends SolidManeuverArrow {
 
         const arrowLines = super.generateGraphics(base, opts).geometry.coordinates;
 
-        // Vertical line at the arrow tip, perpendicular to arrow direction.
-        // Arrowhead base spans 4×radius; line is 50% larger → ±3×radius each side.
+        // The straight line across the tip, square to the arrow. The head's base spans
+        // 4×radius, and 152700 (APP-06, MIL-STD-2525E Table L-VII) says the line "shall be
+        // centered and at least twice the width of the base of the arrow" → ±4×radius.
+        // It was ±3×radius, one and a half times the base.
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
-        const lineTop    = geometryService.getPerpendicularPoint(arrowTip, lastPoint,  3 * radius);
-        const lineBottom = geometryService.getPerpendicularPoint(arrowTip, lastPoint, -3 * radius);
+        const lineTop    = geometryService.getPerpendicularPoint(arrowTip, lastPoint,  FRONTAL_ATTACK_BAR_HALF * radius);
+        const lineBottom = geometryService.getPerpendicularPoint(arrowTip, lastPoint, -FRONTAL_ATTACK_BAR_HALF * radius);
 
         return this.asMultiLineStringFeature([...arrowLines, [lineTop, lineBottom]]);
     }
@@ -329,8 +344,10 @@ export class FrontalAttack extends SolidManeuverArrow {
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
-        // Midpoint of [lastPoint, arrowTip] = center of the arrowhead area
-        return this.asMultiPointFeature([lastPoint, arrowTip]);
+        // Midpoint of [lastPoint, arrowTip] = center of the arrowhead area. The centre line
+        // follows, so the name and dates behind the head bend with the body rather than
+        // running straight off it. @see letterWithNameAndDate
+        return this.asMultiPointFeature([lastPoint, arrowTip, ...this.labelPath(baseCoords)]);
     }
 }
 
@@ -347,16 +364,17 @@ export class TurningMovement extends SolidManeuverArrow {
 
         const arrowLines = super.generateGraphics(base, opts).geometry.coordinates;
 
-        // Perpendicular crossing line at 60% along the first segment (toward the arrowhead).
-        // Linear interpolation is accurate enough for the short segments tactical graphics use.
-        // Extends ±1.5×radius — 50% wider than the 2×radius arrow body.
-        const t = 0.6;
+        // A long line square across the body near the tail. 152900 (APP-06 and MIL-STD-2525E
+        // Table L-VII) draws it a third of the way up the first leg and about three body
+        // widths long, well past both rails; it was a short bar at 60% reaching ±1.5×radius
+        // (FM 1-02.2's form). Linear interpolation is accurate enough here.
+        const t = TURNING_MOVEMENT_LINE_AT;
         const crossPoint: Position = [
             baseCoords[0][0] + t * (baseCoords[1][0] - baseCoords[0][0]),
             baseCoords[0][1] + t * (baseCoords[1][1] - baseCoords[0][1]),
         ];
-        const tailTop    = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1],  1.5 * radius);
-        const tailBottom = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1], -1.5 * radius);
+        const tailTop    = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1],  TURNING_MOVEMENT_LINE_HALF * radius);
+        const tailBottom = geometryService.getPerpendicularPoint(crossPoint, baseCoords[1], -TURNING_MOVEMENT_LINE_HALF * radius);
 
         return this.asMultiLineStringFeature([...arrowLines, [tailTop, tailBottom]]);
     }
@@ -367,7 +385,7 @@ export class TurningMovement extends SolidManeuverArrow {
         const lastPoint = baseCoords[baseCoords.length - 1];
         const secondToLast = baseCoords[baseCoords.length - 2];
         const arrowTip = geometryService.getExtendedPoint(lastPoint, secondToLast, radius);
-        return this.asMultiPointFeature([lastPoint, arrowTip]);
+        return this.asMultiPointFeature([lastPoint, arrowTip, ...this.labelPath(baseCoords)]);
     }
 }
 
@@ -387,9 +405,9 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      * Points 2 and 3 are the ends of the arc's diameter, and the standard's template
      * runs that diameter **across** the straight line: the line arrives at the top of
      * the hook and the arrowhead leaves from the bottom. The line's length and the
-     * hook's size are therefore two separate things the user sets, where the dropped
+     * hook's size are therefore two separate things the operator sets, where the dropped
      * form fixed the line at 2.4 x the radius forever.
-     * @see core/anchors.ts, ai/app-6.md "F3"
+     * @see core/anchors.ts
      */
     type: string = 'LineString';
 
@@ -418,7 +436,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
          * Its seven sibling cane arrows show nothing there, because their fallback is driven
          * by the line the operator drew rather than by a `size`. Two clicks give a preview
          * hook off the drawn run, three give the measured one, and one gives nothing.
-         * (User's report, 2026-09-06.) @see hookAnchorsFromClicks
+         * @see hookAnchorsFromClicks
          */
         if (Array.isArray(coords?.[0])) {
             const anchors = hookAnchorsFromClicks(coords as Position[]);
@@ -426,7 +444,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
         }
 
         /*
-         * **A `Point` base is the dropped form**, which is a file written before 2026-09-05
+         * **A `Point` base is the dropped form**, which is a file written
          * or hand-written GeoJSON. `applyRestoredGeometry` upgrades those on the way in, so
          * this is the reader of last resort rather than the ordinary path.
          */
@@ -497,7 +515,7 @@ export class Pursuit extends TacticalGraphicsBase<PointGraphicOptions> {
      * arc falls on, so dragging it across the line already *is* the flip; the mirror grip had
      * nothing left to do. Index N is base point N now, which is what every sibling publishes
      * and what a vertex drag on either engine assumes.
-     * (User's report, 2026-09-06.) @see carriesSeparationInBase, MIRROR_HANDLE_GRAPHICS
+     * @see carriesSeparationInBase, MIRROR_HANDLE_GRAPHICS
      */
     generateHandles(base: Feature<any>, opts?: PointGraphicOptions): Feature<MultiPoint> {
         const frame = this.frame(base, opts);
@@ -541,8 +559,7 @@ const ENVELOPMENT_HEAD_RATIO = 0.3;
  * `headSize` is a **screen** size converted to metres at the zoom the graphic was drawn at,
  * while the arc is a drawn distance the operator set with point 3 — so the two are not tied
  * to one another, and a small envelopment asks for a head bigger than the hook it sits on.
- * The result reads as an arrowhead with a curve stuck to it. (User's report, 2026-09-06:
- * "the arrow tip is sometimes bigger than the arch which looks wrong".)
+ * The result reads as an arrowhead with a curve stuck to it.
  *
  * A legibility cap rather than a plate reading — the standard dimensions neither — so it is
  * a ceiling and not a size: an ordinary envelopment is unaffected and only the ones that
@@ -577,13 +594,13 @@ export const ENVELOPMENT_FLIP_THRESHOLD = 0.25;
  * the frame origin — so the radius is half of however far past the run's end the cursor is,
  * and the perpendicular carries no radius at all.
  *
- * This read the perpendicular for the magnitude between 2026-09-05 and 2026-09-06, on the
+ * This read the perpendicular for the magnitude between and on the
  * belief that the grip had been moved off the axis to the arc's apex. It never was, and the
  * pairing failed both ways: dragging *along* the run changed nothing (measured — eight 15 px
  * steps moved the handle 0 px and left `bend` at 0.12), while the first pixel *across* it took
  * the perpendicular from 0 to a full radius and snapped the hook open. Moving the grip to
  * match was the wrong half to change: point 3 is a placed anchor point and the plate puts it
- * on the axis. (User's report, 2026-09-06.)
+ * on the axis.
  *
  * The flank still comes from the perpendicular, past a threshold, so dragging the tip across
  * the run turns the hook over — and a grip resting on the axis cannot flip on jitter alone.
@@ -613,7 +630,7 @@ export function envelopmentBendFrom(
  * open arrowhead.
  *
  * **Point-anchored**, like Turn. It used to be drawn as a multi-vertex line whose
- * *last segment* was the half circle's diameter, which meant the user set the
+ * *last segment* was the half circle's diameter, which meant the operator set the
  * circle's radius and its angle by where they happened to put the final vertex:
  * the shape could be assembled wrong, and the arrowhead could end up anywhere
  * rather than on the approach's own axis.
@@ -625,7 +642,7 @@ export function envelopmentBendFrom(
  *
  * Because the diameter always lies **along** the approach, the far end of the arc
  * — and so the arrowhead — falls on the line's own continuation by construction.
- * That is a property of the geometry now, not something the user has to achieve
+ * That is a property of the geometry now, not something the operator has to achieve
  * by hand.
  *
  * Emitted as MultiLineString `[straightRun, arc, arrowHead]`, the same shape the
@@ -642,11 +659,11 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * Points 2 and 3 are therefore the **feet of the semicircle**, and the standard's
      * own template puts both of them on the run's continuation — which is exactly where
      * the construction below already had them. So the shape math is untouched: `frame`
-     * reads its center, bearing, half-length and arc radius off the points the user
+     * reads its center, bearing, half-length and arc radius off the points the operator
      * drew instead of off a `size` and a `rotation`. That is what makes the approach's
      * length and the arc's diameter independent, which they were not when one `size`
      * drove both.
-     * @see core/anchors.ts, ai/app-6.md "F3"
+     * @see core/anchors.ts
      */
     type: string = 'LineString';
 
@@ -769,7 +786,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      *
      * Point 1, the beginning of the straight line, is likewise determined — it is `size`
      * back from the centre along the approach — so it carries no grip of its own; the centre
-     * is the move affordance. (User's call, 2026-08-27.)
+     * is the move affordance.
      */
     /**
      * `[arcTip, lineEnd, point1]` — one grip per thing an operator can change.
@@ -777,7 +794,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
      * The third used to be the frame's centre, which `publishHandles` demotes to the grey
      * inert dot: a mark in the middle of the run that cannot be dragged, while **point 1 —
      * "the beginning of the straight line" — had no grip at all**. The dot is gone and point
-     * 1 has it instead, so all three marks do something. (User's call, 2026-09-05.)
+     * 1 has it instead, so all three marks do something.
      *
      * Translate is unaffected: it reads `centerCoordinate()`, which is holder state, not the
      * dot that used to sit on it.
@@ -792,8 +809,7 @@ export class Envelopment extends TacticalGraphicsBase<TurnOptions> {
              *
              * The tip was briefly moved off the axis to the frame's own perpendicular, on a
              * misreading of `envelopmentBendFrom`'s comment — which left a grip floating above
-             * the run touching nothing, and point 3 with no grip at all. (User's report,
-             * 2026-09-06.) The reader was the half that was wrong, and it is fixed there.
+             * the run touching nothing, and point 3 with no grip at all. The reader was the half that was wrong, and it is fixed there.
              */
             this.at(center, angle, size + 2 * radius, 0),
             this.at(center, angle, size, 0),
@@ -900,7 +916,7 @@ const MD_LABEL_REACH_OF_RADIUS = 0.7;
 
 /**
  * The diameter a **legacy** two-point mobile defence is redrawn at, as a share of its
- * length. Only reached by a graphic saved before 2026-09-06. @see MobileDefense.frame
+ * length. Only reached by a graphic saved. @see MobileDefense.frame
  */
 const MD_LEGACY_DIAMETER_SHARE = 0.5;
 
@@ -952,16 +968,15 @@ const MD_LEGACY_DIAMETER_SHARE = 0.5;
  *   every size, which is the property the sentence protects. It is **not** read as "add
  *   more barbs as it grows", which would make the symbol's appearance depend on its size.
  *
- * It was a two-point **ellipse** with a gap and an arrow leaving one arc until 2026-09-06,
+ * It was a two-point **ellipse** with a gap and an arrow leaving one arc,
  * which is not a shape the plate draws at all; `mirrored` was its only asymmetry. Point 3
  * states the side now, so the flip is a placed point rather than a hidden amplifier.
- * (User's call.)
  */
 export class MobileDefense extends MovementGraphicBase {
     name: string = TacticalGraphicName.MobileDefense;
 
     /** Nothing is drawn past the arrowhead. */
-    // The overhang is a table in the map-agnostic half as of 2026-09-10: zero for this one,
+    // The overhang is a table in the map-agnostic half: zero for this one,
     // whose head already lands on its last vertex. @see TIP_OVERHANG
 
     /**
@@ -995,7 +1010,7 @@ export class MobileDefense extends MovementGraphicBase {
             diameter = Math.max(Math.abs(across), 1);
             side = Math.sign(across) || 1;
         } else {
-            // A graphic saved before 2026-09-06 carries two points and, at most, a
+            // A graphic saved carries two points and, at most, a
             // `mirrored` flag — which is the only thing its old shape said about the side.
             diameter = Math.max(length * MD_LEGACY_DIAMETER_SHARE, 1);
             side = opts?.mirrored ? -1 : 1;
@@ -1040,7 +1055,6 @@ export class MobileDefense extends MovementGraphicBase {
      * tangent, so the curve falls away underneath it and daylight shows between the two.
      * Corners taken off the path leave nothing to show through: on the arc the base is a
      * chord, and the sliver of curve above it is covered by the triangle's own ink.
-     * (User's report, 2026-09-10.)
      *
      * `outward` is asked for the finished base's midpoint, because on a curve the direction
      * away from the shape is a function of where the barb ended up rather than of where it
@@ -1187,7 +1201,7 @@ export class MobileDefense extends MovementGraphicBase {
  *
  * So it is the same construction, and it shares the block's helpers rather than restating
  * them: `halfWidthFromSide` measures the separation off point 3 and `sidePoint` puts the
- * grip back on the rail. (User's call, 2026-09-05.)
+ * grip back on the rail.
  *
  * **What changed.** It was a two-point centreline carrying its separation beside it as a
  * `width` amplifier, dragged by a *derived* offset handle riding the end of the left rail —
@@ -1204,7 +1218,7 @@ export class InfiltrationLane extends MovementGraphicBase {
     name: string = TacticalGraphicName.InfiltrationLane;
 
     /** Two bare rails, no arrowhead — the lane ends on the last vertex. */
-    // The overhang is a table in the map-agnostic half as of 2026-09-10: zero for this one,
+    // The overhang is a table in the map-agnostic half: zero for this one,
     // whose head already lands on its last vertex. @see TIP_OVERHANG
 
     /** The centreline the plate names: points 1 and 2, never point 3. */
@@ -1272,8 +1286,8 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
      *
      * The center is never drawn — it is recovered from the chord, which works because
      * the curved line spans a known 120 degrees. Point 1 is honored as a real tip, so
-     * how far the arrow reaches is now the user's to set; the dropped form fixed it at
-     * two radii. @see core/anchors.ts, ai/app-6.md "F3"
+     * how far the arrow reaches is now the operator's to set; the dropped form fixed it at
+     * two radii. @see core/anchors.ts
      */
     type: string = 'LineString';
 
@@ -1289,8 +1303,7 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
      * **A drawn path is read, never replaced.** One click is a draw in progress; two are a
      * half-placed symbol and preview through the same reader the third click will use. It
      * fell through to the *dropped* form on both — a default-sized ambush parked on click 1,
-     * which then jumped when the points were stated. (User's report, 2026-09-06: "the preview
-     * while drawing is wrong, unlike before".) @see arcAndArrowAnchorsFromClicks
+     * which then jumped when the points were stated. @see arcAndArrowAnchorsFromClicks
      */
     private frame(base: Feature<any>, opts: PointGraphicOptions): {center: Position; rotation: number; radius: number; reach: number} | undefined {
         const coords = base.geometry?.coordinates;
@@ -1302,7 +1315,7 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
             return {center: drawn.center, rotation: (drawn.angle * 180) / Math.PI, radius: drawn.radius, reach: drawn.arrowReach};
         }
         /*
-         * **A `Point` base is the dropped form** — a file written before 2026-09-05, or
+         * **A `Point` base is the dropped form** — a file written, or
          * hand-written GeoJSON. `applyRestoredGeometry` upgrades those on the way in, so this
          * is the reader of last resort rather than the ordinary path.
          */
@@ -1379,11 +1392,11 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
         // rendered in the hollow of the arc with nothing under it, and it is not
         // load-bearing — `handleCircleDrag` picks its operation from the global
         // interaction mode and does its angle/scale maths against the base
-        // point, never against the handle the user grabbed.
+        // point, never against the handle the operator grabbed.
         /*
          * **A grip on each of the three points, read the way the drawing reads them.**
          *
-         * 141700 became a three-click graphic on 2026-09-06 — points 2 and 3 are the curved
+         * 141700 became a three-click graphic — points 2 and 3 are the curved
          * back's own endpoints — so the lower arc end is a point the operator put down and
          * needs a grip like the other two.
          *
@@ -1392,7 +1405,7 @@ export class Ambush extends TacticalGraphicsBase<PointGraphicOptions> {
          * turn computed in projected metres does not leave a geodesic 120 degree arc exactly
          * consistent. The drawing re-reads and settles them; publishing the raw pair meant the
          * grips were placed from one description and the arc from another, so point 3's dot
-         * sat off the symbol after a rotation. (User's report, 2026-09-06.)
+         * sat off the symbol after a rotation.
          * @see arcAndArrowAnchorsFromClicks
          */
         const coords = base.geometry?.coordinates;
@@ -1450,7 +1463,6 @@ const ARROWHEAD_LEG_SHARE = 0.2;
  * was the first one offset perpendicular, so the two arrows were forced parallel and
  * equal-length and points 3 and 4 existed nowhere. The rule says "the length of **each**
  * arrow", which is two lengths, and says nothing about the legs being parallel.
- * (User's call, 2026-09-06.)
  *
  * ## The one interpretation
  *
@@ -1484,7 +1496,7 @@ export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
      * Point 4 is therefore point 3 displaced by point 2 → point 1, and point 3 is read only
      * for its distance across the first leg and its side. @see hairpinAnchors
      *
-     * A base of two points is one written before 2026-09-06 — two points and a `size` — and
+     * A base of two points is one written — two points and a `size` — and
      * resolves through the old parallel-leg layout so nothing saved stops rendering.
      * `size * 3` was the U's height then and is kept exactly, or a restored symbol would come
      * back a different shape from the one that was saved.
@@ -1505,10 +1517,10 @@ export class ReliefInPlace extends TacticalGraphicsBase<PointGraphicOptions> {
          *
          * This is what the operator sees between click 1 and click 2, so the arrows have to
          * point the way the finished graphic will — the first stored point is the tip, which
-         * is the plate's own numbering. It read the pair *end-for-end* until 2026-09-06,
+         * is the plate's own numbering. It read the pair *end-for-end*,
          * because 341900 was in `TIP_FIRST_GRAPHICS` and its two-point saves were stored
          * reversed; leaving that flip here made the preview draw backwards and snap round on
-         * click 3, which is exactly what a user reported ("the graphic appears wrong direction
+         * click 3, which is exactly what an operator reported ("the graphic appears wrong direction
          * after click 1 and then correct/flips after click 2"). A one-day-old two-point save
          * comes back mirrored as a result, and that is the right trade: a wrong preview is on
          * every draw, and 341900 stores four points now.

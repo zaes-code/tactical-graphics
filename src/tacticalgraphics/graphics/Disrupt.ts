@@ -57,7 +57,7 @@ export class Disrupt extends TacticalGraphicsBase<PointGraphicOptions> {
      * and the two ratios below are **measured off the Template at 600 dpi** rather than
      * chosen — see {@link DISRUPT_MIDDLE_REACH} and {@link DISRUPT_SHORT_REACH}.
      *
-     * **It was a two-point graphic until 2026-09-06**, and the two were along the arrows: the
+     * **It was a two-point graphic**, and the two were along the arrows: the
      * bar was `size` — a screen constant — laid across the midpoint, so the operator could
      * state neither the symbol's height nor where its arrows started. 341000 states the same
      * rule as 270502, which is why the mission task and the table 8-17 obstacle effect share

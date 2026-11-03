@@ -11,8 +11,8 @@ import {halfWidthFromSide, sidePoint} from './ExplosivesReadiness';
  * **The ceiling keeps arms beyond the crossings.** The two pairs cross in a square `2w` on a
  * side, centred on the centreline's midpoint, and each bar runs half the centreline's length
  * either side of it. So the crossings reach the bar ends at `w = L / 2`, where the four bars
- * close into a bare square. The user's call was to stop well short of that: at most halfway
- * from the centre to the ends, `w <= L / 4`. (User's call, 2026-09-21.)
+ * close into a bare square. The choice was to stop well short of that: at most halfway
+ * from the centre to the ends, `w <= L / 4`.
  *
  * **The floor keeps two crosses.** At no width each pair collapses onto one line and the
  * symbol is a single X.
@@ -39,7 +39,7 @@ const lengthOf = (ends: Position[]): number => turf.distance(turf.point(ends[0])
  *
  * The drawing clamps the width whatever the base says, so this is what keeps a saved file
  * agreeing with the picture: dragged far out, point 3 was stored 1.3 centrelines off while the
- * symbol stopped at a quarter. (Found driving it, 2026-09-21.) @see clampRoadblockHalfWidth
+ * symbol stopped at a quarter. @see clampRoadblockHalfWidth
  */
 export function clampRoadblockBase(points: Position[]): Position[] {
     if (points.length < 3) return points;
@@ -67,8 +67,7 @@ function legacyBase(center: Position, span: number): Position[] {
  * *"Demolition Obstacle Symbol — obstacles created using explosives"*, after the three states
  * of readiness; APP-06 puts it directly after 271201-271203 with an empty Draw Rules cell, so
  * it takes 271201's: *"Points 1 and 2 determine the centreline of the symbol and point 3
- * determines its width."* Its Template marks the points where theirs do. (User's call,
- * 2026-09-21: *"they don't look from the same family and they should be"*.)
+ * determines its width."* Its Template marks the points where theirs do.
  *
  * So the first pair of bars **is** the readiness states' pair, from the same centreline and
  * side point, drawn solid. The second pair is that pair turned a quarter-turn about the

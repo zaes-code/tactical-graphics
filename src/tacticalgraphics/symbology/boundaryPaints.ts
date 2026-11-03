@@ -14,6 +14,7 @@ import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} f
 import {cutGapAlongPath, projectedMidSegment, runVector, textWidth} from './decorations';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {hostileEndMarks} from './midLabelLinePaints';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -105,7 +106,7 @@ export function boundaryPaint(): LinePaint {
          * segment either side of the middle, which is one number for every echelon: a corps
          * XXX overran it while a squad's single dot sat in a hole four times its width. The
          * glyph is measured first — after its own cap — and the line is cut to fit it.
-         * (User's call, 2026-09-10.) @see echelonWidthPx
+         * @see echelonWidthPx
          */
         const glyphHalfPx = echelonWidthPx(dx, dy, context.resolution, echelon, scale) / 2;
         const gapHalfMap = (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution;
@@ -127,6 +128,8 @@ export function boundaryPaint(): LinePaint {
         const ny = perpSign * (dx / segLen);
 
         return [
+            // APP-06 110100 boxes N at each end of a hostile boundary. @see hostileEndMarks
+            ...hostileEndMarks(feature, coords, scale, context),
             amplifier(feature, [midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
             amplifier(feature, [midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
             ...echelonMarks(
@@ -160,7 +163,7 @@ export interface ResolvedRangeFanBand {
     label?: string;
     altitude?: string;
     /**
-     * Absolute compass bearings, already resolved. The user-facing fields on a
+     * Absolute compass bearings, already resolved. The operator-facing fields on a
      * band are deflections from the graphic's center bearing; resolving them is
      * the holder's job so the paint function never re-runs the resolver.
      */
@@ -235,7 +238,7 @@ function formatAzimuth(deg: number): string {
  * - sector: `[center, band1Mid, band1LeftAz, band1RightAz, band2Mid, …]`
  *
  * so the stride is three for a sector and one for a circle. Per band the stack
- * reads: the user's name if there is one, then the range — "MIN RG" on a circle
+ * reads: the operator's name if there is one, then the range — "MIN RG" on a circle
  * and "RG" on a sector — then the altitude if entered. **The range line renders
  * even when nothing is typed**: an unnamed band still has a range, and that is
  * the number the symbol exists to communicate.
@@ -302,6 +305,30 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
             return fitToPx(block, spacing / context.resolution);
         };
 
+        // A circle's ring radii, recovered from its mid-radius anchors. @see the circular block below
+        const ringRadii: number[] = [];
+        if (!isSector) {
+            for (let i = 0; 1 + i < coords.length && i < bands.length; i++) {
+                const mid = Math.hypot(coords[1 + i][0] - coords[0][0], coords[1 + i][1] - coords[0][1]);
+                ringRadii.push(2 * mid - (ringRadii[i - 1] ?? 0));
+            }
+        }
+
+        // 242200's Template letters AN at the apex: the sector's own center azimuth, read
+        // off the bearing the generator anchors every band's block on, set behind the apex.
+        if (isSector && coords.length >= 2) {
+            const [apex, along] = [coords[0], coords[1]];
+            const [dx, dy] = [along[0] - apex[0], along[1] - apex[1]];
+            const length = Math.hypot(dx, dy);
+            if (length > 0) {
+                const gap = AZIMUTH_LABEL_GAP_PX * scale;
+                paints.push(text(apex, formatAzimuth((Math.atan2(dx, dy) * 180) / Math.PI), {
+                    offsetXPx: (-dx / length) * gap,
+                    offsetYPx: (dy / length) * gap,
+                }));
+            }
+        }
+
         for (let i = 0; i < bands.length; i++) {
             const midIndex = 1 + i * stride;
             if (midIndex >= coords.length) break;
@@ -346,11 +373,29 @@ export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
                 // held in by its neighbour. Capping against the centre was tried first and
                 // was too tight: the anchor is at mid-radius, so the centre is half the room
                 // the label actually has. @see bandScale
-                const neighbor = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
-                const fitted = bandScale(block, coords[midIndex], neighbor);
-                paints.push(
-                    text(coords[midIndex], block, isSector ? {offsetYPx: -rangeBlockLiftPx(lines.length) * fitted} : {}, fitted),
-                );
+                if (isSector) {
+                    const neighbor = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
+                    const fitted = bandScale(block, coords[midIndex], neighbor);
+                    paints.push(text(coords[midIndex], block, {offsetYPx: -rangeBlockLiftPx(lines.length) * fitted}, fitted));
+                } else {
+                    /*
+                     * **Below each ring, just outside it.** 242100's Template and FM's both hang
+                     * each band's block under the bottom of its own ring. The generator anchors
+                     * band i at mid-radius on the reference bearing, so its ring's radius is
+                     * twice that less the ring inside it. The block has the ring's width to fit
+                     * in and, unless it is the outermost, the gap to the next ring for height.
+                     */
+                    const center = coords[0];
+                    const radius = ringRadii[i];
+                    const below: ProjectedPosition = [center[0], center[1] - radius];
+                    const widthFit = fitToPx(block, (2 * radius) / context.resolution);
+                    const next = ringRadii[i + 1];
+                    const heightFit = next === undefined
+                        ? widthFit
+                        : ((next - radius) / context.resolution) * BAND_LABEL_FIT_SHARE / (lines.length * LABEL_LINE_PX + RANGE_BLOCK_CLEARANCE_PX);
+                    const fitted = Math.min(widthFit, heightFit);
+                    paints.push(text(below, block, {offsetYPx: rangeBlockLiftPx(lines.length) * fitted}, fitted));
+                }
             }
 
             if (!isSector) continue;

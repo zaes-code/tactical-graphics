@@ -2,7 +2,7 @@ import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
 import {PointGraphicOptions, TacticalGraphicName} from "../core/type";
 import {Feature, LineString, MultiLineString, MultiPoint} from "geojson";
 import geometryService from "../core/GeometryService";
-import {frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
+import {END_TICK_SHARE, frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
 
 /**
  * Breach — APP-06 340200.
@@ -15,7 +15,7 @@ import {frontEdgeFrame, legacyAxis} from "./frontEdgeFrame";
  * > **Orientation.** The opening defines the span of the breach and typically faces enemy
  * > forces.
  *
- * **It was two points and a locked aspect ratio until 2026-09-06.** The base ran rear to
+ * **It was two points and a locked aspect ratio.** The base ran rear to
  * front and the height came from `RATIO_LOCK`, a fixed 0.3 of that length — so the two
  * dimensions the plate states *independently* were one number, and the third anchor point
  * had nowhere to live. Points 1 and 2 are the opening now, and how far back point 3 sits is
@@ -34,8 +34,8 @@ export class Breach extends TacticalGraphicsBase<PointGraphicOptions> {
 
     generateGraphics(base: Feature<LineString>, opts: PointGraphicOptions): Feature<MultiLineString> {
         const {axis, half} = frontEdgeFrame(base, opts.size);
-        let topArrow = geometryService.getBreachArrow(axis, -half, 45, -135);
-        let bottomArrow = geometryService.getBreachArrow(axis, half, 135, -45);
+        let topArrow = geometryService.getBreachArrow(axis, -half, 45, -135, END_TICK_SHARE);
+        let bottomArrow = geometryService.getBreachArrow(axis, half, 135, -45, END_TICK_SHARE);
         return this.asMultiLineStringFeature([
             ...bottomArrow.geometry.coordinates,
             ...topArrow.geometry.coordinates,

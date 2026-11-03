@@ -8,7 +8,7 @@ import * as turf from '../core/turf';
 
 /**
  * Depth of the bow as a multiple of `size`, when the caller supplies none.
- * The user drags it from there — see `TurnGraphicBase.setBandRange`.
+ * The operator drags it from there — see `TurnGraphicBase.setBandRange`.
  */
 export const TURN_DEFAULT_BEND = 0.5;
 /**
@@ -24,7 +24,7 @@ export const TURN_DEFAULT_BEND = 0.5;
  * was, and it reads as the drag accelerating away from the graphic.
  *
  * 0.02 still guards the degenerate case — a bend of exactly zero has no curve for the
- * label's gap to sit in — while leaving the handle free for the whole range a user can
+ * label's gap to sit in — while leaving the handle free for the whole range an operator can
  * actually aim at. Flattening a turn until it is nearly a line is now their call.
  */
 export const TURN_MIN_BEND = 0.02;
@@ -60,7 +60,7 @@ export function clampTurnBend(bend: number): number {
  * `bendLine` bows to — the same convention `bowFromAnchors` uses when it reads the stored
  * point back, which is why that function's formula and this one are the same arithmetic.
  * Stated here because both renderers do this drag and a rule stated twice drifts.
- * @see anchorsForBow, ai/conventions.md "A symbology fact never lives in a holder"
+ * @see anchorsForBow
  */
 export function turnBendFromOffset(clockwiseOffset: number, size: number): number {
     if (!(size > 0)) return TURN_DEFAULT_BEND;
@@ -90,7 +90,7 @@ export function turnBendFrom(along: number, perpendicular: number, size: number,
  * the chord's half-length.
  *
  * **`bend` is the sharpness of the turn**, a signed multiple of `size` — it is
- * what the user drags, and being unitless it survives a resize unchanged.
+ * what the operator drags, and being unitless it survives a resize unchanged.
  * `headSize` is a flat distance rather than a fraction of `size`, so the
  * arrowhead also holds its size while the curve is resized.
  *
@@ -108,8 +108,8 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
      * Tip first, which is the standard's numbering and looks backwards next to the way
      * the symbol is drawn. The third point is kept as a full bow depth rather than only
      * a side, because the rule's own point count contradicts the points it then names,
-     * and reading it as "side only" would delete a control the user has today.
-     * @see core/anchors.ts, ai/app-6.md "F3"
+     * and reading it as "side only" would delete a control the operator has today.
+     * @see core/anchors.ts
      */
     type: string = 'LineString';
 
@@ -237,8 +237,8 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
      *   where `createArrowHeadPolygon` puts the point of the head. Dragging it sets both
      *   `size` and `rotation`.
      * - **`[1]` point 2, the rear.** The other end of the chord. It had no handle at all
-     *   until 2026-09-05, so the one end of the symbol an operator would naturally grab to
-     *   make it longer was the one end that could not be grabbed. (User's report.)
+     *   so the one end of the symbol an operator would naturally grab to
+     *   make it longer was the one end that could not be grabbed.
      * - **`[2]` point 3, the bend.** On the curve's apex. Dragging it away from the chord
      *   sharpens the turn; dragging it across flips the direction.
      *
@@ -249,7 +249,7 @@ export class Turn extends TacticalGraphicsBase<TurnOptions> {
      * plus the centre, which `publishHandles` then demoted to an inert dot. So the symbol
      * published one grip that was **1384 km off its own curve** at a chord half-length of
      * 1.3 Mm, one that was on it, and one dot that did nothing; and the handles disagreed
-     * with the anchor points the base stored, which is the disagreement the user saw as
+     * with the anchor points the base stored, which is the disagreement the operator saw as
      * "point 3 is on the line but not while editing".
      *
      * Emitting the stored anchors directly removes the second statement rather than

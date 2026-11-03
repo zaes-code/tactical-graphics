@@ -50,7 +50,7 @@ export {lonLatToMercator as toMercator, mercatorToLonLat as toLonLat} from '@zae
  * zoom number is one power of two apart. A raster source declaring
  * `tileSize: 256` changes which tiles are fetched, not this definition.
  *
- * **2. There is no `cos(latitude)` term.** `ai/maplibre-renderer.md` wrote this
+ * **2. There is no `cos(latitude)` term.** An early estimate wrote this
  * conversion as `156543.03392 × cos(latitude) / 2^zoom`, which is the formula for
  * *ground* meters per pixel. EPSG:3857 meters already carry the Mercator stretch,
  * so applying the cosine again double-counts it: at 45° every decoration would

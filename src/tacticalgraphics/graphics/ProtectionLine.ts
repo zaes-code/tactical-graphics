@@ -6,15 +6,15 @@
  *
  * **The fortified position has an FM counterpart and the other four do not.** FM 1-02.2
  * Table 5-22 draws the same bracket as *fighting position* -- see the class below. The
- * claim that none of the five is in the manual stood here until 2026-09-05, and it was
+ * claim that none of the five is in the manual stood here, and it was
  * wrong about the one whose own table neighbour, the fortified line, was already tagged
  * as being in both.
  *
- * Four of the five put **nothing** in the geometry beyond the line the user drew, because
+ * Four of the five put **nothing** in the geometry beyond the line the operator drew, because
  * their draw rules say so. Each reads some variation of *"points 1 and 2 determine the
  * length of the symbol, which varies only in length"* — the arrowheads on a raft site and
  * the legs on a fortified position are a fixed size, and a fixed size belongs in screen
- * space where the paint layer can hold it, not baked into meters at whatever zoom the user
+ * space where the paint layer can hold it, not baked into meters at whatever zoom the operator
  * happened to be at. @see protectionLinePaints.ts
  *
  * The mine cluster is the exception and states its proportion outright: *"the radius of
@@ -127,7 +127,7 @@ export class RaftSite extends ProtectionLineBase {
  * line* that 290900 pairs with here, in the same order, with the same note about facing
  * the enemy. So this is `BOTH`, not APP-06 only, and it is displayed under both names.
  * One graphic, because two identical pictures with two captions are one control measure.
- * (User's call, 2026-09-05.) @see DISPLAY_NAME_OVERRIDES
+ * @see DISPLAY_NAME_OVERRIDES
  */
 export class FortifiedPosition extends ProtectionLineBase {
     name: string = TacticalGraphicName.FortifiedPosition;

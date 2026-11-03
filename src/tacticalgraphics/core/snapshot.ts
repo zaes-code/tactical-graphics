@@ -16,32 +16,36 @@ import {TacticalGraphicName} from './type';
  * reach it without importing across the renderer boundary, which the build forbids and which
  * would drag `ol` into the MapLibre bundle. So MapLibre wrote a collection with no version
  * stamp at all, and the two engines produced files that were interchangeable in memory and
- * *not* interchangeable on disk. @see ai/conventions.md, "A symbology fact never lives in a
+ * *not* interchangeable on disk. @, "A symbology fact never lives in a
  * holder" — the same argument, one level up
  */
 
 /**
  * Bumped when the snapshot shape changes in a way a reader must notice.
  *
- * **2 since 2026-09-10**, when the eleven axis arrows stopped filing their width as an
+ * **2**, when the eleven axis arrows stopped filing their width as an
  * amplifier and started storing it as their last coordinate. That is the structure moving:
  * a version 1 base holds a run of route points and a `width` beside it, a version 2 base holds
  * the same run with one more coordinate on the end and no width at all. Both are readable, and
  * `upgradeAxisBase` is where a version 1 one is converted. @see axisWidth.ts
+ *
+ * **3**, when the four direction-of-attack arrows (140601, 140602, 140603,
+ * 140605) joined `TIP_FIRST_GRAPHICS`: their plates letter the arrowhead PT 1, and they had
+ * been stored rear first. A version 2 base of theirs is reversed on read. @see upgradeSavedLine
  *
  * The 3.0.0 amplifier renames did not bump it: they are handled on read by
  * `applyAmplifierAliases`, which is the cheaper answer for a rename that leaves the
  * *structure* alone. Bump this when the structure itself moves — a second feature per
  * graphic, a different home for the description, a geometry in another projection.
  */
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 /**
  * The version a file that declares none is read as.
  *
  * **Not {@link SNAPSHOT_VERSION}**, which is what this used to be. Two things wrote unversioned
  * collections and both of them wrote the *oldest* shape: MapLibre, until the stamp moved here on
- * 2026-09-04, and any host that assembled a FeatureCollection by hand from the documented
+ * and any host that assembled a FeatureCollection by hand from the documented
  * property. Reading those as "current" was harmless while there was only one shape, and became a
  * silent misreading the moment there were two — an axis arrow's route point taken for a width.
  */
@@ -55,8 +59,8 @@ export interface TacticalGraphicsSnapshot extends FeatureCollection {
     features: Feature<Geometry>[];
     /**
      * Absent on files written before this was shared between the engines — every MapLibre
-     * export up to 2026-09-04. A reader treats a missing version as {@link SNAPSHOT_VERSION}
-     * rather than refusing the file. @see snapshotVersionOf
+     * export up to. A reader treats a missing version as {@link LEGACY_SNAPSHOT_VERSION}
+     * rather than refusing the file, and checks each axis arrow's own shape. @see upgradeSavedLine
      */
     tacticalGraphicsVersion?: number;
 }
@@ -72,8 +76,18 @@ export interface TacticalGraphicsSnapshot extends FeatureCollection {
  * @see LEGACY_SNAPSHOT_VERSION
  */
 export function snapshotVersionOf(snapshot: unknown): number {
+    return declaredSnapshotVersion(snapshot) ?? LEGACY_SNAPSHOT_VERSION;
+}
+
+/**
+ * The version a snapshot states, or `undefined` when it states none.
+ *
+ * A reader that has to tell "an old file" from "a file with its stamp missing" asks this:
+ * an axis arrow's base can be read either way, and its geometry says which. @see endsInWidthPoint
+ */
+export function declaredSnapshotVersion(snapshot: unknown): number | undefined {
     const declared = (snapshot as {tacticalGraphicsVersion?: unknown} | null | undefined)?.tacticalGraphicsVersion;
-    return typeof declared === 'number' && Number.isFinite(declared) ? declared : LEGACY_SNAPSHOT_VERSION;
+    return typeof declared === 'number' && Number.isFinite(declared) ? declared : undefined;
 }
 
 /** The name and standoff a base's description states, for the two functions below. */
@@ -88,7 +102,7 @@ function strikeStandoff(name: unknown, bag: unknown): number | undefined {
  *
  * The same for every graphic but one. The multiple-strike safe distance zone is edited as zone 1
  * alone, with zone 2 derived from its standoff, and filed with both rings' points as APP-06
- * 272101 lists them (user, 2026-10-11). @see filedStrikeBase
+ * 272101 lists them. @see filedStrikeBase
  */
 export function filedBaseGeometry(name: unknown, geometry: Geometry, bag: unknown): Geometry {
     const standoff = strikeStandoff(name, bag);
@@ -146,7 +160,7 @@ export function toSnapshot(features: Feature<Geometry>[]): TacticalGraphicsSnaps
  *
  * So what is filed is what the *caller* stated, plus whatever a renderer derived from
  * something the file does not carry — the drawing resolution, most often, which is the only
- * record of a screen-sized default and travels nowhere else. @see ai/context.md, "A saved
+ * record of a screen-sized default and travels nowhere else. @, "A saved
  * graphic carries one object"
  *
  * @param completed what the renderer drew with

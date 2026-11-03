@@ -70,7 +70,7 @@ export class Escort extends TacticalGraphicsBase {
  *
  * So the first click drops it and points 2, 3 and 4 follow from point 1, the leg length
  * and the aim. Resize and rotate change the whole graphic together; there is no ratio to
- * edit and no vertex to drag. (User's call, 2026-08-27.)
+ * edit and no vertex to drag.
  *
  * **Point 1 is the anchor, not a centre** — unlike every other layout in
  * `core/anchors.ts`. That is the standard's numbering, and it means the symbol grows away
@@ -101,9 +101,7 @@ export class Demonstration extends TacticalGraphicsBase<IBaseGraphicOptions> {
      * 152800 gets and for the same reason: the turn is tangent to both straights.
      *
      * The operator therefore places three points and drags three grips, and the legs cannot
-     * splay or come out unequal at any point in between. (User's call, 2026-09-06: "the
-     * lines across from each other must be parallel and same size at all times"; and "let's
-     * draw these 2 like we do canes where we just let the user pick 3 points".)
+     * splay or come out unequal at any point in between.
      * @see hairpinAnchors, which states both readings once for this graphic and 341900
      *
      * ## What this replaced
