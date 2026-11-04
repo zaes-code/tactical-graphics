@@ -22,6 +22,7 @@ configureTacticalGraphics({
     smoothLines: false,            // default false — see below
     enemyLabels: true,             // default true — see below
     autoPlaceLabels: false,        // default false — see below
+    minLabelSize: 11,              // px, default unset — see below
 });
 
 graphics.refreshStyles();   // repaint what is already drawn
@@ -47,8 +48,20 @@ applies it.
 
 By default every label is drawn at its doctrinal place whatever the view. Set
 `autoPlaceLabels: true` and a label whose usual place is off screen slides onto the visible part
-of its graphic, and labels step aside from other labels and from other graphics' lines. It
-changes paint only, so `refreshStyles()` applies it, on every renderer.
+of its graphic, and labels step aside from other labels and from other graphics' lines. A label
+that moves keeps out of other graphics' areas, unless that area holds its usual place too (an
+area's label may still sit inside the area of operations around it), and takes a place where it
+fits whole over one that would shrink it. When every clear place would shrink it more than its
+usual one, it stays put. It changes paint only, so `refreshStyles()` applies it, on every
+renderer.
+
+## Smallest label size
+
+A label shrinks to fit its graphic: an area's name to its outline, an arrow's name to the arrow.
+From far out a small graphic's name gets too small to read, and under 6 px it is dropped. Set
+`minLabelSize` to the smallest size you want a label shrunk to: below it the label keeps that
+size and runs over its outline instead. Unset, labels shrink as far as their graphic needs. It
+never makes a label larger than it would otherwise be.
 
 ## Smooth lines
 

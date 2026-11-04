@@ -247,6 +247,17 @@ export interface TacticalGraphicsConfigOptions {
      */
     fullSizeDecorations?: boolean;
 
+    /**
+     * Smallest size, in px, a label is shrunk to so it fits inside its graphic. Default unset:
+     * a label shrinks as far as its graphic needs, and a name under {@link MIN_LEGIBLE_TEXT_PX}
+     * is dropped.
+     *
+     * Set, a small area seen from far out keeps a readable name at this size and lets it run
+     * over its outline instead. Clamped to [MIN_LEGIBLE_TEXT_PX, MAX_LABEL_SIZE]; it never
+     * raises a label above the size it would otherwise have.
+     */
+    minLabelSize?: number;
+
     // ── Editor chrome ────────────────────────────────────────────────────────
     // Not part of any symbol: these color the affordances a renderer draws so an operator
     // can edit a graphic. They say "you can drag this", and that meaning must not shift
@@ -289,6 +300,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
     readonly enemyLabels?: boolean;
     readonly autoPlaceLabels?: boolean;
     readonly fullSizeDecorations?: boolean;
+    readonly minLabelSize?: number;
     readonly handleColor?: string;
     readonly inertHandleColor?: string;
     readonly drawMarkerColor?: string;
@@ -311,6 +323,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
         if (options.enemyLabels !== undefined) this.enemyLabels = options.enemyLabels;
         if (options.autoPlaceLabels !== undefined) this.autoPlaceLabels = options.autoPlaceLabels;
         if (options.fullSizeDecorations !== undefined) this.fullSizeDecorations = options.fullSizeDecorations;
+        if (options.minLabelSize !== undefined) this.minLabelSize = Math.min(MAX_LABEL_SIZE, Math.max(MIN_LEGIBLE_TEXT_PX, options.minLabelSize));
         if (options.handleColor !== undefined) this.handleColor = options.handleColor;
         if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
         if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
@@ -345,6 +358,7 @@ export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
             enemyLabels: overrides.enemyLabels ?? this.enemyLabels,
             autoPlaceLabels: overrides.autoPlaceLabels ?? this.autoPlaceLabels,
             fullSizeDecorations: overrides.fullSizeDecorations ?? this.fullSizeDecorations,
+            minLabelSize: overrides.minLabelSize ?? this.minLabelSize,
             handleColor: overrides.handleColor ?? this.handleColor,
             inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
             drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
@@ -415,6 +429,11 @@ export function setTacticalGraphicsConfig(config: TacticalGraphicsConfig): void 
 /** Drop every override and go back to the doctrinal defaults. */
 export function resetTacticalGraphicsConfig(): void {
     _config = EMPTY_CONFIG;
+}
+
+/** The smallest size in px a label shrinks to while fitting its graphic, if any. @see TacticalGraphicsConfigOptions.minLabelSize */
+export function getMinLabelSize(): number | undefined {
+    return _config.minLabelSize;
 }
 
 /** Whether decorations keep their full size on a small graphic. @see TacticalGraphicsConfigOptions.fullSizeDecorations */

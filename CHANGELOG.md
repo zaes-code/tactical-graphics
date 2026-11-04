@@ -50,7 +50,16 @@ Labels that follow the view and keep clear of each other, on every renderer.
   opacity; OpenLayers and the canvas overlay fade each color through the new
   `withFadedPaints`.
 
+- **`minLabelSize`** sets the smallest size, in px, a label is shrunk to while fitting its
+  graphic. Below it the label keeps that size and may run over its outline, so a small area's
+  name stays readable from far out. Unset, nothing changes.
 ### Changed
+
+- **A moved label keeps out of other graphics' areas** and prefers a place where it fits whole.
+  With `autoPlaceLabels` on, a label stepping aside no longer settles inside a different area
+  (the AO's name inside a kill zone), and an area's name no longer shrinks to illegibility
+  because the first clear place was cramped: it takes a roomier one, or stays at its usual
+  place when that reads larger.
 
 - **`ENY` on a hostile area is sized to the area.** It sits on the outline, so it takes the cap
   every label there takes, and it is never larger than the area's name. It never goes
