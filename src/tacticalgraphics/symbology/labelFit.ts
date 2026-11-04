@@ -21,7 +21,7 @@
  */
 
 import type {PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
-import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, getMinLabelSize} from '../core/config';
 import {pointInRing} from './symbolFit';
 import {textWidth} from './decorations';
 
@@ -123,7 +123,16 @@ export function capLabelToGraphic(
     if (!(longer > 0)) return desired;
 
     const sizePx = Math.max(Math.min(widthPx, heightPx), longer / CAP_MAX_ASPECT);
-    return Math.min(desired, (share * sizePx) / fontPx);
+    return withLabelFloor(Math.min(desired, (share * sizePx) / fontPx), desired, fontPx);
+}
+
+/**
+ * `scale` raised to the host's smallest label size, never past `desired`.
+ * @see TacticalGraphicsConfigOptions.minLabelSize
+ */
+export function withLabelFloor(scale: number, desired: number, fontPx: number = BASE_FONT_SIZE_PX): number {
+    const floor = getMinLabelSize();
+    return floor === undefined ? scale : Math.min(desired, Math.max(scale, floor / fontPx));
 }
 
 /**
@@ -172,7 +181,13 @@ export function capLabelToSpan(
     // The widest line, so a multi-line block is capped by the line that overruns first.
     const naturalPx = Math.max(...value.split('\n').map(line => textWidth(context, line, font, 1)));
     if (!(naturalPx > 0)) return desired;
-    return Math.min(desired, (spanPx * share) / naturalPx);
+    return withLabelFloor(Math.min(desired, (spanPx * share) / naturalPx), desired, fontPxOf(font));
+}
+
+/** The px size a CSS font string names, else the base size. */
+function fontPxOf(font: string): number {
+    const px = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1]);
+    return px > 0 ? px : BASE_FONT_SIZE_PX;
 }
 
 /**
@@ -222,7 +237,7 @@ export function fitLabelScale(
         if (fits(mid)) low = mid;
         else high = mid;
     }
-    return low;
+    return withLabelFloor(low, desired);
 }
 
 /**

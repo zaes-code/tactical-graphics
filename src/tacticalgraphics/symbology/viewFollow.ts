@@ -235,6 +235,12 @@ export function endAnchorInView(
     return which === 'start' ? {at, from, to} : {at, from: to, to: from};
 }
 
+/** Whether `line` closes on itself, so it outlines an area. */
+function isClosed(line: ProjectedPosition[]): boolean {
+    const [a, z] = [line[0], line[line.length - 1]];
+    return line.length >= 4 && a[0] === z[0] && a[1] === z[1];
+}
+
 /** Whether `p` lies inside the polygon `ring` (even-odd rule). */
 export function inRing(p: ProjectedPosition, ring: ProjectedPosition[]): boolean {
     let inside = false;
@@ -317,7 +323,7 @@ export function areaLabelInView(feature: PaintFeature, context: PaintContext, fo
     if (!view || !ring || ring.length < 3 || feature.geometry.type !== 'Point') return feature;
     const at = feature.geometry.coordinates;
     if (!inRing(at, ring)) return feature;
-    const taken = (p: ProjectedPosition) => !!footprint && isTaken(p, footprint, 1, 0, context);
+    const taken = (p: ProjectedPosition) => !!footprint && isTaken(p, footprint, 1, 0, context, at);
     if (inView(at, view) && !taken(at)) return feature;
     const visible = clipRing(ring, view);
     if (visible.length < 3) return feature;
@@ -327,8 +333,39 @@ export function areaLabelInView(feature: PaintFeature, context: PaintContext, fo
     const ys = visible.map(([, y]) => y);
     const [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
     const candidates = [middle, ...(footprint ? SLIDE_SHARES.flatMap(share => spanPlaces(visible, minY + (maxY - minY) * share)) : [])];
-    const moved = candidates.find((p): p is ProjectedPosition => !!p && !taken(p)) ?? (inView(at, view) ? undefined : middle);
+    const clear = candidates.filter((p): p is ProjectedPosition => !!p && !taken(p));
+    if (!footprint) {
+        const moved = clear[0] ?? (inView(at, view) ? undefined : middle);
+        return moved ? {...feature, geometry: {type: 'Point', coordinates: moved}} : feature;
+    }
+    // A clear place the label fits whole, else the clear place it fits largest, unless it fits
+    // larger at home: text over a line still reads, text shrunk past legibility is dropped.
+    const share = (p: ProjectedPosition) => fitShare(p, footprint, ring, context.resolution);
+    const whole = clear.find(p => share(p) >= 1);
+    const roomiest = whole ?? clear.reduce<ProjectedPosition | undefined>((best, p) => (!best || share(p) > share(best) ? p : best), undefined);
+    const homeShare = inView(at, view) ? share(at) : 0;
+    const moved = roomiest && (whole || share(roomiest) > homeShare) ? roomiest : inView(at, view) ? undefined : middle;
     return moved ? {...feature, geometry: {type: 'Point', coordinates: moved}} : feature;
+}
+
+/** Points on a label's box, as shares of its half-extents, that must lie inside its area. */
+const FIT_SAMPLES: [number, number][] = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
+/**
+ * How much of `footprint` fits inside `ring` around `p`: 1 when the whole label does, else the
+ * largest share of its size that does.
+ */
+function fitShare(p: ProjectedPosition, footprint: LabelFootprint, ring: ProjectedPosition[], resolution: number): number {
+    const fits = (k: number) =>
+        FIT_SAMPLES.every(([u, v]) => inRing([p[0] + u * k * footprint.alongPx * resolution, p[1] + v * k * footprint.acrossPx * resolution], ring));
+    if (fits(1)) return 1;
+    let [low, high] = [0, 1];
+    for (let i = 0; i < 10; i++) {
+        const mid = (low + high) / 2;
+        if (fits(mid)) low = mid;
+        else high = mid;
+    }
+    return low;
 }
 
 /** Places across the widest span of `ring` at height `y`: its middle, then out toward its ends. */
@@ -368,7 +405,7 @@ export function midSegmentInView(
     const [a, b] = [coords[mid.index], coords[mid.index + 1] ?? coords[mid.index]];
     const at: ProjectedPosition = [a[0] + (b[0] - a[0]) * mid.t, a[1] + (b[1] - a[1]) * mid.t];
     const onScreen = inView(at, view);
-    if (onScreen && !(footprint && isTaken(at, footprint, b[0] - a[0], b[1] - a[1], context))) return mid;
+    if (onScreen && !(footprint && isTaken(at, footprint, b[0] - a[0], b[1] - a[1], context, at))) return mid;
     const stretch = visibleStretch(coords, view);
     if (!stretch) return mid;
     const start = distanceAlongPath(coords, stretch[0]);
@@ -378,7 +415,7 @@ export function midSegmentInView(
         const placed = segmentAt(coords, start + span * share);
         const [p, q] = [coords[placed.index], coords[placed.index + 1]];
         const there: ProjectedPosition = [p[0] + (q[0] - p[0]) * placed.t, p[1] + (q[1] - p[1]) * placed.t];
-        if (!footprint || !isTaken(there, footprint, q[0] - p[0], q[1] - p[1], context)) return placed;
+        if (!footprint || !isTaken(there, footprint, q[0] - p[0], q[1] - p[1], context, at)) return placed;
     }
     // Nowhere clear: where it would have gone.
     return onScreen ? mid : segmentAt(coords, start + span / 2);
@@ -411,9 +448,22 @@ export interface LabelFootprint {
  * place another label holds. Measured on its axis-aligned extent, so a slanted label is never
  * judged clear of something it touches.
  */
-export function isTaken(at: ProjectedPosition, footprint: LabelFootprint, dx: number, dy: number, context: PaintContext): boolean {
+export function isTaken(
+    at: ProjectedPosition,
+    footprint: LabelFootprint,
+    dx: number,
+    dy: number,
+    context: PaintContext,
+    /**
+     * Where the label sits when nothing moves it. With it, a place inside another graphic's
+     * closed outline is taken unless that outline holds `home` too: a label set down inside a
+     * different area reads as that area's, while an area inside the AO may still label itself.
+     */
+    home?: ProjectedPosition,
+): boolean {
     const {avoid, avoidLines} = context;
     if (!getAutoPlaceLabels() || (!avoid?.length && !avoidLines?.length)) return false;
+    if (home && avoidLines?.some(line => isClosed(line) && inRing(at, line) && !inRing(home, line))) return true;
     const len = Math.hypot(dx, dy) || 1;
     const [c, s] = [Math.abs(dx / len), Math.abs(dy / len)];
     const halfX = (c * footprint.alongPx + s * footprint.acrossPx) * context.resolution;

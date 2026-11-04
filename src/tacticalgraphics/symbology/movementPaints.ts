@@ -26,7 +26,7 @@ import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import { TacticalGraphicName} from '../core/type';
 import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
-import {letterGapClearance, letterInGapScale} from './labelFit';
+import {letterGapClearance, letterInGapScale, withLabelFloor} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
@@ -83,7 +83,8 @@ export function spanProportionalScale(
     fontPx: number,
 ): number {
     const spanPx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
-    return Math.min(maxGraphicLabelScale(), (spanPx * 0.7) / fontPx);
+    const ceiling = maxGraphicLabelScale();
+    return withLabelFloor(Math.min(ceiling, (spanPx * 0.7) / fontPx), ceiling, fontPx);
 }
 
 /** The divisor the default movement label uses — a 24 px font literal. */
