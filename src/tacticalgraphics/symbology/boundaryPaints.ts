@@ -11,7 +11,7 @@ import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core
 import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
-import {cutGapAlongPath, projectedMidSegment, runVector, textWidth} from './decorations';
+import {cutGapAlongPath, projectedMidSegment, runVector, splitAtCorners, textWidth} from './decorations';
 import {echelonMarks, echelonWidthPx} from './echelonPaints';
 import {midSegmentInView, ringDirectionInView} from './viewFollow';
 import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
@@ -29,14 +29,23 @@ const BOUNDARY_GAP_PX = 10;
  */
 
 /** The echelon glyph's half-extent *across* the line, in screen pixels at scale 1. */
-function echelonPerpExtentPx(echelon: TacticalGraphicEchelon): number {
+function echelonPerpExtentPx(echelon: TacticalGraphicEchelon | undefined): number {
     switch (echelon) {
+        case undefined:
+        case TacticalGraphicEchelon.unknown:
+            return 0;
+        case TacticalGraphicEchelon.teamCrew:
+            return 7;
         case TacticalGraphicEchelon.companyBatteryTroop:
         case TacticalGraphicEchelon.battalionSquadron:
         case TacticalGraphicEchelon.regimentGroup:
         case TacticalGraphicEchelon.brigade:
         case TacticalGraphicEchelon.division:
         case TacticalGraphicEchelon.corpsMef:
+        case TacticalGraphicEchelon.army:
+        case TacticalGraphicEchelon.armyGroupFront:
+        case TacticalGraphicEchelon.regionTheater:
+        case TacticalGraphicEchelon.command:
             return 10;
         default:
             return 5;
@@ -92,7 +101,8 @@ export function boundaryPaint(): LinePaint {
         const props = feature.properties;
         const topLabel = formatDesignationWithCountry(props.designation, props.countryCode);
         const bottomLabel = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
-        const echelon = feature.echelon ?? props.echelon ?? TacticalGraphicEchelon.unknown;
+        // No echelon draws no glyph and leaves the line unbroken. @see echelonMarks
+        const echelon = feature.echelon ?? props.echelon;
 
         // Both names and the gap between them, so the pair slides clear of other labels together.
         const footprintScale = scaleOf(feature, context);
@@ -115,10 +125,12 @@ export function boundaryPaint(): LinePaint {
          * @see echelonWidthPx
          */
         const glyphHalfPx = echelonWidthPx(dx, dy, context.resolution, echelon, scale) / 2;
-        const gapHalfMap = (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution;
+        const gapHalfMap = glyphHalfPx > 0 ? (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution : 0;
         // Along the path, so a smoothed boundary, whose middle segment is a short chord of the
         // curve, gets the same hole a straight one does. @see cutGapAlongPath
-        const {outline, center: midGap} = cutGapAlongPath(coords, index, t, gapHalfMap);
+        const cut = cutGapAlongPath(coords, index, t, gapHalfMap);
+        const midGap = cut.center;
+        const outline = gapHalfMap > 0 ? cut.outline : splitAtCorners(coords).filter(run => run.length > 1);
 
         let rotation = -Math.atan2(dy, dx);
         let perpSign = 1;

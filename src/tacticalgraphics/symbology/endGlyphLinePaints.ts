@@ -252,7 +252,10 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
         // Cut to fit the glyph rather than to a constant: the corridor takes every echelon
         // from a squad's dot to a corps' XXX, and one figure suits neither end.
         // @see echelonWidthPx
-        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        // Field B is mandatory here, so an unset or unknown echelon still draws a squad's dot,
+        // where every other echelon-carrying graphic draws nothing. @see echelonMarks
+        const stated = feature.echelon ?? feature.properties.echelon;
+        const echelon = stated && stated !== TacticalGraphicEchelon.unknown ? stated : TacticalGraphicEchelon.squad;
         // The middle segment, split around the gap the echelon glyph sits in; when the line's
         // middle is off screen, the middle of what is in view, as a boundary's glyph moves.
         // @see midSegmentInView

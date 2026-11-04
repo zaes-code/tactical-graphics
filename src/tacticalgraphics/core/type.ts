@@ -1510,7 +1510,15 @@ export enum TacticalGraphicTerrain {
     obstacles = 'Obstacles',       // 05 - green
 }
 
+/**
+ * The echelon amplifier, field B: MIL-STD-2525E's echelon set, Team/Crew through Command.
+ *
+ * `unknown`, or no echelon at all, draws no mark. FM 1-02.2 table 2-3 names the three above
+ * corps: XXXX is a theater army, XXXXX an army group, XXXXXX a theater.
+ */
 export enum TacticalGraphicEchelon {
+    /** Ø */
+    teamCrew = 'Team/Crew',
     squad = 'Squad',
     section = 'Section',
     platoonDetachment = 'Platoon/Detachment',
@@ -1520,6 +1528,14 @@ export enum TacticalGraphicEchelon {
     brigade = 'Brigade',
     division = 'Division',
     corpsMef = 'Corps/MEF',
+    /** XXXX, the theater army. */
+    army = 'Army',
+    /** XXXXX */
+    armyGroupFront = 'Army Group/Front',
+    /** XXXXXX */
+    regionTheater = 'Region/Theater',
+    /** ++, a command above the echelon ladder. */
+    command = 'Command',
     unknown = 'Unknown',
 }
 

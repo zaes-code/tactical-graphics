@@ -481,7 +481,7 @@ export interface PaintFeature {
      * lives: the demo's properties dialog stamps `echelon` straight onto the
      * OpenLayers feature and does **not** put it in `properties.tacticalGraphic`,
      * so a paint function that read only the bag would silently render every
-     * position as a squad. Falls back to the bag, then to squad.
+     * position as a squad. Falls back to the bag; with neither, no glyph is drawn.
      *
      * Worth fixing at the source one day — the bag is meant to be the single
      * description a graphic carries, and an echelon that never gets saved is a
