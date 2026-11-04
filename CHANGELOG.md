@@ -50,10 +50,24 @@ Labels that follow the view and keep clear of each other, on every renderer.
   opacity; OpenLayers and the canvas overlay fade each color through the new
   `withFadedPaints`.
 
+- **`openingDirection`** on a battle position, a prepared battle position or a strong point
+  picks the edge it opens on: degrees counter-clockwise from east, from the opening toward the
+  inside. Unset, the ring opens on its south edge as before. Every renderer reads it from the
+  saved properties.
+- **Echelons above corps, team and command.** `TacticalGraphicEchelon` gains `teamCrew` (Ø),
+  `army` (XXXX), `armyGroupFront` (XXXXX), `regionTheater` (XXXXXX) and `command` (++), drawn
+  on boundaries, battle positions, strong points and mobility corridors. Code that maps every
+  member, such as a `Record<TacticalGraphicEchelon, string>`, needs the five new entries.
+
 - **`minLabelSize`** sets the smallest size, in px, a label is shrunk to while fitting its
   graphic. Below it the label keeps that size and may run over its outline, so a small area's
   name stays readable from far out. Unset, nothing changes.
 ### Changed
+
+- **No echelon draws no echelon mark.** A boundary, battle position or strong point with no
+  echelon, or `Unknown`, used to draw a squad's dot. A boundary now draws an unbroken line and
+  a battle position a small opening with nothing in it. The mobility corridor still draws a
+  dot, since its field B is mandatory.
 
 - **A moved label keeps out of other graphics' areas** and prefers a place where it fits whole.
   With `autoPlaceLabels` on, a label stepping aside no longer settles inside a different area

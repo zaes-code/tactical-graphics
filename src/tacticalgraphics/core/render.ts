@@ -138,7 +138,18 @@ export interface TacticalGraphicProperties {
     status?: TacticalGraphicStatus;
     /** `Suspected` on a hostile graphic dashes its line work, as `Planned` does. */
     confidence?: TacticalGraphicConfidence;
+    /** Field B. No echelon, or `Unknown`, draws no mark. */
     echelon?: TacticalGraphicEchelon;
+    /**
+     * Which side a battle position, a prepared battle position or a strong point opens on:
+     * the direction from the opening toward the inside, in degrees counter-clockwise from
+     * east. 90 puts the break and the echelon on the south edge, which is also what the
+     * symbol does when this is absent.
+     *
+     * Its own field rather than `rotation`, which several paths file as 0 on an area and
+     * which would then open every such position to the west.
+     */
+    openingDirection?: number;
     /** The route graphics: route, main supply route and alternate supply route. */
     direction?: RouteDirection;
     /**
@@ -354,6 +365,8 @@ export interface GraphicLabels {
     weapon?: string;
     hostility?: TacticalGraphicHostility;
     echelon?: TacticalGraphicEchelon;
+    /** @see TacticalGraphicProperties.openingDirection */
+    openingDirection?: number;
     direction?: RouteDirection;
     /** @see TacticalGraphicProperties.mineType */
     mineType?: TacticalGraphicMineType;

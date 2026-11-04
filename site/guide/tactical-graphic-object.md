@@ -51,7 +51,10 @@ tacticalGraphic: {
     status: 'Present',        // TacticalGraphicStatus — Planned ⇒ dashed
     confidence: 'Known',      // TacticalGraphicConfidence — Suspected on a hostile
                               // graphic dashes its line work, as Planned does
-    echelon: 'Battalion/Squadron', // TacticalGraphicEchelon
+    echelon: 'Battalion/Squadron', // TacticalGraphicEchelon. None draws no mark
+    openingDirection: 90,     // battle positions and strong point: degrees counter-
+                              // clockwise from east, from the opening toward the
+                              // inside. 90 (the default) opens the south edge
     direction: 'One Way',     // RouteDirection — route graphics
     mineType: 'Antitank Mine', // TacticalGraphicMineType — which mine the three mine
                               // areas draw inside themselves, and a mineline along itself
@@ -113,7 +116,7 @@ its value are the same string at run time — `TacticalGraphicHostility.friend` 
 | `hostility` | `TacticalGraphicHostility` | `Assumed Friend` · `Friend` · `Hostile/Faker` · `Neutral` · `Pending` · `Suspect/Joker` · `Unknown` |
 | `status` | `TacticalGraphicStatus` | `Present` · `Planned` |
 | `confidence` | `TacticalGraphicConfidence` | `Known` · `Suspected` |
-| `echelon` | `TacticalGraphicEchelon` | `Squad` · `Section` · `Platoon/Detachment` · `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` · `Brigade` · `Division` · `Corps/MEF` · `Unknown` |
+| `echelon` | `TacticalGraphicEchelon` | `Team/Crew` · `Squad` · `Section` · `Platoon/Detachment` · `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` · `Brigade` · `Division` · `Corps/MEF` · `Army` · `Army Group/Front` · `Region/Theater` · `Command` · `Unknown` |
 | `direction` | `RouteDirection` | `General` · `One Way` · `Two Way` · `Alternating` |
 | `mineType` | `TacticalGraphicMineType` | `Unspecified Mine` · `Antipersonnel Mine` · `Antipersonnel Mine with Directional Effects` · `Antitank Mine` · `Antitank Mine with Antihandling Device` · `Wide Area Antitank Mine` · `Mine Cluster` |
 | `mobility` | `TacticalGraphicMobility` | `Unspecified` · `Standard Mobility/On-Road` · `High Mobility/Off-Road` · `Tracked` · `Tracked and Wheeled Combination` · `Towed` · `Railway` · `Over-Snow (Prime Mover)` · `Sled` · `Pack Animal` · `Barge` · `Amphibious` · `No Vehicles` · `Dismounted` |
@@ -172,6 +175,36 @@ before 4.0.0 may also carry `mirrored` on the seven cane arrows (delay, withdraw
 withdraw under pressure, disengage, retirement, forward and rearward passage of lines) and
 mobile defense. Those graphics now state their side with a third anchor point, and the old
 files still draw as they were saved.
+
+## Echelons and the battle position's opening
+
+The echelon (field B) is drawn as a mark, not text, on a boundary, a battle position, a
+prepared battle position, a strong point and a mobility corridor:
+
+| Echelon | Mark |
+|---|---|
+| `Team/Crew` | Ø |
+| `Squad` · `Section` · `Platoon/Detachment` | one, two or three dots |
+| `Company/Battery/Troop` · `Battalion/Squadron` · `Regiment/Group` | one, two or three bars |
+| `Brigade` · `Division` · `Corps/MEF` | X · XX · XXX |
+| `Army` · `Army Group/Front` · `Region/Theater` | XXXX · XXXXX · XXXXXX |
+| `Command` | ++ |
+
+With no echelon, or `Unknown`, nothing is drawn: a boundary's line stays unbroken and a
+battle position opens only by a small gap. A mobility corridor is the exception, because
+its field B is mandatory: with none it still draws a squad's dot.
+
+A battle position or strong point opens on its south edge unless you say otherwise. Set
+`openingDirection` to the direction from the opening toward the inside, in degrees
+counter-clockwise from east, and the ring opens on the edge facing the other way. To open
+a position toward a threat to its west, pass `0`, which puts the break and the echelon on
+the west edge:
+
+```ts
+tacticalGraphic: {name: 'BattlePosition', echelon: 'Company/Battery/Troop', openingDirection: 0}
+```
+
+It is its own field rather than `rotation`, which some paths file as `0` on any area.
 
 ## Range fans
 

@@ -85,6 +85,66 @@ describe('the echelons drawn as X', () => {
 });
 
 /**
+ * # Above corps, and the two that are not a count
+ *
+ * FM 1-02.2 table 2-3 goes on past corps: XXXX for a theater army, XXXXX for an army group,
+ * XXXXXX for a theater, and ++ for a command. Below squad sits the team or crew, Ø.
+ */
+describe('the echelons the ladder did not reach', () => {
+    it.each([
+        {echelon: TacticalGraphicEchelon.army, crosses: 4},
+        {echelon: TacticalGraphicEchelon.armyGroupFront, crosses: 5},
+        {echelon: TacticalGraphicEchelon.regionTheater, crosses: 6},
+    ])('$echelon draws $crosses X, centred and evenly stepped', ({echelon, crosses}) => {
+        const drawn = arms(marks(echelon));
+        expect(drawn).toHaveLength(crosses * 2);
+        const xs = drawn.flat().map(p => p[0]);
+        expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(0, 6);
+        // Each X's centre, one per pair of arms, a division's step apart.
+        const centres = [...new Set(drawn.map(a => Math.round(((a[0][0] + a[1][0]) / 2) * 1e6) / 1e6))].sort((a, b) => a - b);
+        expect(centres).toHaveLength(crosses);
+        const division = [...new Set(arms(marks(TacticalGraphicEchelon.division)).map(a => (a[0][0] + a[1][0]) / 2))];
+        const step = Math.abs(division[1] - division[0]);
+        for (let i = 1; i < centres.length; i++) expect(centres[i] - centres[i - 1]).toBeCloseTo(step, 4);
+    });
+
+    it('draws a command as two plus signs, one along the line and one across it each', () => {
+        const drawn = arms(marks(TacticalGraphicEchelon.command));
+        expect(drawn).toHaveLength(4);
+        const along = drawn.filter(([a, b]) => a[1] === b[1]);
+        const across = drawn.filter(([a, b]) => a[0] === b[0]);
+        expect(along).toHaveLength(2);
+        expect(across).toHaveLength(2);
+        // Each across-arm crosses the middle of an along-arm, and the pair is centred.
+        for (const [a] of across) expect(along.some(([p, q]) => Math.abs((p[0] + q[0]) / 2 - a[0]) < 1e-9)).toBe(true);
+        expect(across[0][0][0] + across[1][0][0]).toBeCloseTo(0, 6);
+        // Daylight between them.
+        const [left, right] = along.sort((p, q) => p[0][0] - q[0][0]);
+        expect(right[0][0] - left[1][0]).toBeGreaterThan(2);
+    });
+
+    it('draws a team as a ring with a slash through it', () => {
+        const drawn = arms(marks(TacticalGraphicEchelon.teamCrew));
+        expect(drawn).toHaveLength(2);
+        const [ring, slash] = drawn;
+        expect(ring[0]).toEqual(ring[ring.length - 1]);
+        const radii = ring.map(([x, y]) => Math.hypot(x, y));
+        expect(Math.max(...radii) - Math.min(...radii)).toBeLessThan(1e-9);
+        // Lower left to upper right on a line running east, through the middle and past the ring.
+        expect(slash).toHaveLength(2);
+        const [[x0, y0], [x1, y1]] = slash;
+        expect(x0 + x1).toBeCloseTo(0, 9);
+        expect(y0 + y1).toBeCloseTo(0, 9);
+        expect((y1 - y0) / (x1 - x0)).toBeCloseTo(1, 9);
+        expect(Math.hypot(x1, y1)).toBeGreaterThan(radii[0]);
+    });
+
+    it.each([undefined, TacticalGraphicEchelon.unknown])('draws nothing for %s', echelon => {
+        expect(echelonMarks(MID, 2_000, 0, RES, echelon, '#000')).toEqual([]);
+    });
+});
+
+/**
  * # The glyph may not outgrow the line it sits on
  *
  * Every size in it is screen pixels times the label scale, so it held its size while the
@@ -120,6 +180,22 @@ describe('the cap against the segment', () => {
         // A tenth of a pixel of slack: the space between the X's is a stroke allowance and
         // does not shrink with the rest. @see ECHELON_SPAN_SHARE
         for (const segmentPx of [40, 80, 160]) {
+            expect(widthPx(echelon, segmentPx)).toBeLessThanOrEqual(segmentPx * 0.2 + 3.1);
+        }
+    });
+
+    /*
+     * The longer glyphs carry more of the stroke allowance that does not shrink, a couple of
+     * pixels per gap, so they hold the cap from a slightly longer segment up.
+     */
+    it.each([
+        TacticalGraphicEchelon.teamCrew,
+        TacticalGraphicEchelon.command,
+        TacticalGraphicEchelon.army,
+        TacticalGraphicEchelon.armyGroupFront,
+        TacticalGraphicEchelon.regionTheater,
+    ])('%s stays inside the fifth of the segment too', echelon => {
+        for (const segmentPx of [160, 320]) {
             expect(widthPx(echelon, segmentPx)).toBeLessThanOrEqual(segmentPx * 0.2 + 3.1);
         }
     });
