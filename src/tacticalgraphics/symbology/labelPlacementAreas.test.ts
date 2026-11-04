@@ -51,10 +51,11 @@ describe('an area label that has to move', () => {
     const feature = (at: ProjectedPosition): PaintFeature => ({geometry: {type: 'Point', coordinates: at}, ring, properties: {}} as unknown as PaintFeature);
     const view = {minX: -1000, minY: -1000, maxX: 1000, maxY: 1000};
     const context: PaintContext = {resolution: 1, measureText, view, avoidLines: [crossing]};
+    const anchor = (f: PaintFeature) => (f.geometry as {coordinates: ProjectedPosition}).coordinates;
 
     it('goes where it fits whole', () => {
         const moved = areaLabelInView(feature([100, 100]), context, {alongPx: 60, acrossPx: 15});
-        const [x, y] = moved.geometry.coordinates as ProjectedPosition;
+        const [x, y] = anchor(moved);
         expect(Math.abs(y - 100)).toBeGreaterThan(15);
         expect(x - 60).toBeGreaterThanOrEqual(0);
         expect(x + 60).toBeLessThanOrEqual(200);
@@ -64,7 +65,7 @@ describe('an area label that has to move', () => {
         // Too wide for the area anywhere: home fits it best, so it stays and crosses the line.
         const home: ProjectedPosition = [100, 100];
         const moved = areaLabelInView(feature(home), context, {alongPx: 140, acrossPx: 95});
-        expect(moved.geometry.coordinates).toEqual(home);
+        expect(anchor(moved)).toEqual(home);
     });
 });
 
