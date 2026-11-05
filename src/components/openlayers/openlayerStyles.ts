@@ -191,6 +191,7 @@ import {
     followTaskPaint,
     sweptArcTaskPaint,
     mineClusterPaint,
+    minefieldStaticPaint,
     minelinePaint,
     raftSitePaint,
     tripWirePaint,
@@ -1983,6 +1984,8 @@ export function protectionLineStyleFunc(name: TacticalGraphicName): StyleFunctio
             return asStyleFunction(raftSitePaint(), name);
         case TacticalGraphicName.FortifiedPosition:
             return asStyleFunction(fortifiedPositionPaint(), name);
+        case TacticalGraphicName.MinefieldStaticDepiction:
+            return asStyleFunction(minefieldStaticPaint(), name);
         default:
             return asStyleFunction(minelinePaint(name), name);
     }

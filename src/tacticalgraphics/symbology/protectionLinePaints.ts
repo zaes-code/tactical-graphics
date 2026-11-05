@@ -19,11 +19,14 @@
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import { TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
+import {getFullSizeDecorations} from '../core/config';
 import {MINE_GLYPH_GAP_PX, mineGlyph, mineGlyphExtent, mineGlyphPitch} from './minePaints';
 import {
     DECORATION_MIN_PX,
     endFrame,
     endMarkScale,
+    offsetAbove,
+    parallelPath,
     pathLength,
     splitPathAroundAll,
     uprightFlipped,
@@ -33,6 +36,7 @@ import {
 import {
     PLANNED_DASH_PX,
     amplifierDash,
+    amplifierText,
     lineColorOf,
     plannedStatusRing,
     scaleOf,
@@ -85,6 +89,7 @@ function amplifier(
     scale: number,
     rotation: number,
     align: 'left' | 'center' | 'right',
+    baseline: 'top' | 'middle' | 'bottom' = 'middle',
 ): Paint {
     return {
         geometry: {type: 'Point', coordinates: at},
@@ -95,10 +100,53 @@ function amplifier(
             halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
             rotation,
             align,
-            baseline: 'middle',
+            baseline,
             scale,
         },
     };
+}
+
+/**
+ * `ENY` beyond each end of `path`, level with it and reading outward, so the letters grow
+ * away from the graphic rather than back across it. `clearPx` is the screen gap between
+ * the end and the letter. Shared by the mineline and the static-depiction minefield.
+ */
+function enyBeyondEnds(
+    feature: PaintFeature,
+    path: ProjectedPosition[],
+    scale: number,
+    resolution: number,
+    clearPx = MINELINE_LABEL_GAP_PX,
+): Paint[] {
+    const start = path[0];
+    const afterStart = path[1];
+    const end = path[path.length - 1];
+    const beforeEnd = path[path.length - 2];
+    const labelGap = clearPx * resolution;
+    const outward = (from: ProjectedPosition, to: ProjectedPosition): ProjectedPosition => {
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const len = Math.hypot(dx, dy) || 1;
+        return [to[0] + (dx / len) * labelGap, to[1] + (dy / len) * labelGap];
+    };
+    return [
+        amplifier(
+            feature,
+            outward(afterStart, start),
+            'ENY',
+            scale,
+            uprightRotation(start, afterStart),
+            !uprightFlipped(start, afterStart) ? 'right' : 'left',
+        ),
+        amplifier(
+            feature,
+            outward(beforeEnd, end),
+            'ENY',
+            scale,
+            uprightRotation(beforeEnd, end),
+            !uprightFlipped(beforeEnd, end) ? 'left' : 'right',
+        ),
+    ];
 }
 
 /**
@@ -215,30 +263,140 @@ export function minelinePaint(name: TacticalGraphicName): ProtectionPaint {
         // hostile marker goes*, the way every other `N` box in the standard does — it is
         // not something to print. So the ends carry `ENY` when the mineline is the
         // enemy's and nothing at all otherwise.
-        if (!showsEny(feature)) return paints;
+        if (showsEny(feature)) paints.push(...enyBeyondEnds(feature, path, scale, context.resolution));
+        return paints;
+    };
+}
 
-        const start = path[0];
-        const afterStart = path[1];
-        const end = path[path.length - 1];
-        const beforeEnd = path[path.length - 2];
+/**
+ * The static-depiction minefield's proportions, in mine radii, and the mine's radius at
+ * full size in screen pixels. The frame stands {@link STATIC_MINEFIELD_HALF_HEIGHT} radii
+ * either side of the drawn line, or further for a glyph that reaches further; mines repeat
+ * every {@link STATIC_MINEFIELD_PITCH} radii; the first and last sit at least
+ * {@link STATIC_MINEFIELD_MARGIN} radii in from the frame's ends, and less than half a pitch
+ * more, so the end margin averages 3.3 radii.
+ */
+export const STATIC_MINEFIELD_MINE_PX = 10;
+export const STATIC_MINEFIELD_HALF_HEIGHT = 2.2;
+export const STATIC_MINEFIELD_PITCH = 4.4;
+export const STATIC_MINEFIELD_MARGIN = 2.2;
+/** Least clear space between a glyph's reach and the frame, in mine radii. */
+const STATIC_MINEFIELD_CLEARANCE = 0.5;
 
-        // Beyond each end and reading outward, so the letters grow away from the graphic
-        // rather than back across the mines.
-        const labelGap = MINELINE_LABEL_GAP_PX * context.resolution;
-        const outward = (from: ProjectedPosition, to: ProjectedPosition): ProjectedPosition => {
-            const dx = to[0] - from[0];
-            const dy = to[1] - from[1];
-            const len = Math.hypot(dx, dy) || 1;
-            return [to[0] + (dx / len) * labelGap, to[1] + (dy / len) * labelGap];
-        };
-        paints.push(amplifier(
-            feature, outward(afterStart, start), 'ENY', scale,
-            uprightRotation(start, afterStart), !uprightFlipped(start, afterStart) ? 'right' : 'left',
-        ));
-        paints.push(amplifier(
-            feature, outward(beforeEnd, end), 'ENY', scale,
-            uprightRotation(beforeEnd, end), !uprightFlipped(beforeEnd, end) ? 'left' : 'right',
-        ));
+/** Where a static-depiction minefield's frame and mines go, in projected meters. */
+export interface StaticMinefieldLayout {
+    /** The closed frame: the left rail, the far end cap, the right rail back, the near cap. */
+    frame: ProjectedPosition[];
+    /** Mine radius. */
+    radius: number;
+    /** Frame half-height. */
+    halfHeight: number;
+    /** Where each glyph is centred, and the drawn line's direction there. */
+    mines: {at: ProjectedPosition; along: ProjectedPosition}[];
+}
+
+/**
+ * Lays out APP-06 270701 along a drawn line. `undefined` only for a line of no length.
+ *
+ * **Screen-constant, like the mineline.** The radius and the pitch are screen sizes, so the
+ * mine count follows the zoom. A whole number of mines is centred on the line at a fixed
+ * pitch, which leaves the same margin before the first as after the last; the frame spans
+ * the whole drawn line, so its ends sit that margin beyond the end mines.
+ *
+ * **A short line keeps its frame.** Below the length one full-size mine and its two margins
+ * need, everything shrinks together and a single mine sits in the middle; the mine is
+ * dropped once it is under {@link DECORATION_MIN_PX} across, and the frame is drawn alone.
+ * `fullSizeDecorations` keeps the full size however short the line.
+ *
+ * **Glyphs are centred across the frame by their reach**, so an antipersonnel mine's
+ * antennae and an antihandling stem clear the rails the same way.
+ */
+export function staticMinefieldLayout(
+    path: ProjectedPosition[],
+    resolution: number,
+    type: TacticalGraphicMineType,
+): StaticMinefieldLayout | undefined {
+    const total = pathLength(path);
+    if (!(total > 0) || !(resolution > 0)) return undefined;
+
+    const fullPx = 2 * STATIC_MINEFIELD_MARGIN * STATIC_MINEFIELD_MINE_PX;
+    const scale = getFullSizeDecorations() ? 1 : Math.min(1, total / resolution / fullPx);
+    const radius = STATIC_MINEFIELD_MINE_PX * scale * resolution;
+
+    const extent = mineGlyphExtent(type, true);
+    const halfHeight = Math.max(STATIC_MINEFIELD_HALF_HEIGHT, (extent.top + extent.bottom) / 2 + STATIC_MINEFIELD_CLEARANCE) * radius;
+    const left = parallelPath(path, halfHeight);
+    const right = parallelPath(path, -halfHeight);
+    const frame = [...left, ...[...right].reverse(), left[0]];
+
+    const mines: StaticMinefieldLayout['mines'] = [];
+    if (2 * radius >= DECORATION_MIN_PX * resolution) {
+        const pitch = Math.max(STATIC_MINEFIELD_PITCH * radius, mineGlyphPitch(type, radius, MINE_GLYPH_GAP_PX * resolution * scale, true));
+        const margin = STATIC_MINEFIELD_MARGIN * radius;
+        const count = total >= 2 * margin ? Math.floor((total - 2 * margin) / pitch + 1e-9) + 1 : 1;
+        const lead = (total - (count - 1) * pitch) / 2;
+        // The glyph's own y runs to the left of the line; shift it so its reach is centred.
+        const shift = ((extent.bottom - extent.top) / 2) * radius;
+        for (let i = 0; i < count; i++) {
+            const step = walkPath(path, lead + i * pitch);
+            if (!step) continue;
+            const [ux, uy] = step.tangent;
+            mines.push({at: [step.point[0] - uy * shift, step.point[1] + ux * shift], along: step.tangent});
+        }
+    }
+    return {frame, radius, halfHeight, mines};
+}
+
+/**
+ * APP-06 270701 minefield, static depiction: a closed rectangular frame that follows the
+ * drawn line, with the mine type's glyph repeated along the line inside it.
+ *
+ * **Anchored to a line, which milsymbol's point symbol is not.** The plate's draw rule is
+ * one static point, and milsymbol draws it so: a fixed-size box holding three Sector 1
+ * glyphs (codes 13-19 only). A minefield laid along a feature needs its frame to follow the
+ * ground, so here the drawn line is the long axis and the mine count follows its length.
+ *
+ * The glyphs are Table 8-24's, the same ones the mineline and the mine areas draw.
+ * `ENY` sits beyond each end of the frame when the minefield is the enemy's, as on the
+ * mineline; field H is set above the frame and W below it. There is no designation.
+ */
+export function minefieldStaticPaint(): ProtectionPaint {
+    return (feature, context) => {
+        const path = drawnPath(feature);
+        if (path.length < 2) return [];
+
+        const type = feature.properties.mineType ?? TacticalGraphicMineType.unspecified;
+        const layout = staticMinefieldLayout(path, context.resolution, type);
+        if (!layout) return [];
+
+        const color = lineColorOf(feature);
+        const paints: Paint[] = [
+            {geometry: {type: 'LineString', coordinates: layout.frame}, stroke: {color, widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)}},
+        ];
+        for (const mine of layout.mines) {
+            paints.push(...mineGlyph(mine.at, layout.radius, type, color, context.resolution, {along: mine.along, arrowAcross: true}));
+        }
+        const scale = scaleOf(feature, context);
+        if (showsEny(feature)) paints.push(...enyBeyondEnds(feature, path, scale, context.resolution));
+
+        // Field H above the frame and W below it, at the middle of the line, as the
+        // Template sets them.
+        const mid = walkPath(path, pathLength(path) / 2);
+        if (!mid) return paints;
+        const a = mid.point;
+        const b: ProjectedPosition = [a[0] + mid.tangent[0], a[1] + mid.tangent[1]];
+        const up = offsetAbove([0, 0], a, b, 1, 1);
+        const reach = layout.halfHeight + LABEL_OFFSET_PX * context.resolution;
+        const rotation = uprightRotation(a, b);
+        const texts: [string, number, 'bottom' | 'top'][] = [
+            [amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()), 1, 'bottom'],
+            [amplifierText(feature, (feature.properties.startDate ?? '').trim()), -1, 'top'],
+        ];
+        for (const [text, side, baseline] of texts) {
+            if (!text) continue;
+            const at: ProjectedPosition = [a[0] + up[0] * reach * side, a[1] + up[1] * reach * side];
+            paints.push(amplifier(feature, at, text, scale, rotation, 'center', baseline));
+        }
         return paints;
     };
 }

@@ -153,8 +153,8 @@ export interface TacticalGraphicProperties {
     /** The route graphics: route, main supply route and alternate supply route. */
     direction?: RouteDirection;
     /**
-     * Which mine the three mine areas draw inside themselves, and the mineline along
-     * itself — APP-06 Table 8-24's Sector 1 Modifier, restricted to its seven primitive
+     * Which mine the three mine areas and the static-depiction minefield draw inside
+     * themselves, and the mineline along itself — APP-06 Table 8-24's Sector 1 Modifier, restricted to its seven primitive
      * types.
      * @see TacticalGraphicMineType
      */

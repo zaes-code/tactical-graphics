@@ -396,10 +396,13 @@ export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstacleP
 export {
     fortifiedPositionPaint,
     mineClusterPaint,
+    minefieldStaticPaint,
     minelinePaint,
     raftSitePaint,
+    staticMinefieldLayout,
     tripWirePaint,
 } from './symbology/protectionLinePaints';
+export type {StaticMinefieldLayout} from './symbology/protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
 export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
 export {followTaskPaint, followTaskSymbol} from './symbology/followTaskPaints';

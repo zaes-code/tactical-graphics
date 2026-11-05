@@ -120,6 +120,7 @@ export const GRAPHIC_ENTITY_CODES: Record<TacticalGraphicName, string | null> = 
     [TacticalGraphicName.Retain]:                                      '151205',  // Retain
     [TacticalGraphicName.Control]:                                     '343200',  // Control
     [TacticalGraphicName.CordonAndKnock]:                              '342600',  // Cordon and Knock
+    [TacticalGraphicName.MinefieldStaticDepiction]:                    '270701',  // Minefield, Static Depiction
     [TacticalGraphicName.MinefieldDynamicDepiction]:                   '270707',  // Minefield, Dynamic Depiction
     [TacticalGraphicName.MinedArea]:                                   '270800',  // Mined Area
     [TacticalGraphicName.MinedAreaFenced]:                             '270801',  // Mined Area, Fenced

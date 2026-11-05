@@ -154,6 +154,7 @@ export const SMOOTHED_GRAPHICS: Readonly<Partial<Record<N, SmoothingKind>>> = Ob
     [N.ForwardLineOfOwnTroops]: 'line',
     [N.LineOfContact]: 'line',
     [N.Mineline]: 'line',
+    [N.MinefieldStaticDepiction]: 'line',
     [N.MobilityCorridor]: 'line',
     [N.ObstacleLine]: 'line',
     [N.WireUnspecified]: 'line',
