@@ -52,6 +52,7 @@ const NAMES: TacticalGraphicName[] = [
     TacticalGraphicName.WireSingleConcertina,
     TacticalGraphicName.WireDoubleStrandConcertina,
     TacticalGraphicName.WireTripleStrandConcertina,
+    TacticalGraphicName.MinefieldStaticDepiction,
     TacticalGraphicName.FortifiedLine,
     TacticalGraphicName.PassageLane,
     TacticalGraphicName.FerryCrossing,
