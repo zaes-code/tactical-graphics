@@ -1116,6 +1116,12 @@ export enum TacticalGraphicName {
     PsyOpsZoneIrregular = 'PsyOpsZoneIrregular',      // APP-06 242701 PsyOps Zone, Irregular
     PsyOpsZoneRectangular = 'PsyOpsZoneRectangular',  // APP-06 242702 PsyOps Zone, Rectangular
     PsyOpsZoneCircular = 'PsyOpsZoneCircular',        // APP-06 242703 PsyOps Zone, Circular
+    /**
+     * APP-06 270701. A point symbol in Table A-32, which milsymbol draws at a fixed size. This
+     * is the line-anchored depiction: a frame whose length follows a drawn line, with the
+     * mine type repeated inside. @see minefieldStaticPaint
+     */
+    MinefieldStaticDepiction = 'MinefieldStaticDepiction',    // APP-06 270701 Minefield, Static Depiction
     MinefieldDynamicDepiction = 'MinefieldDynamicDepiction',  // APP-06 270707 Minefield, Dynamic Depiction
     /**
      * APP-06 270800. **The fenced area's parent, and a symbol in its own right** --
@@ -1323,6 +1329,7 @@ const DISPLAY_NAME_OVERRIDES: Partial<Record<TacticalGraphicName, string>> = {
     [TacticalGraphicName.PsyOpsZoneIrregular]: 'PsyOps zone, irregular',
     [TacticalGraphicName.PsyOpsZoneRectangular]: 'PsyOps zone, rectangular',
     [TacticalGraphicName.PsyOpsZoneCircular]: 'PsyOps zone, circular',
+    [TacticalGraphicName.MinefieldStaticDepiction]: 'minefield, static depiction',
     [TacticalGraphicName.MinefieldDynamicDepiction]: 'minefield, dynamic depiction',
     [TacticalGraphicName.MinedArea]: 'mined area',
     [TacticalGraphicName.MinedAreaFenced]: 'mined area, fenced',

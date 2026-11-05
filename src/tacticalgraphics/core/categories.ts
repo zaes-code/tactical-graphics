@@ -252,6 +252,7 @@ export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCate
     [TacticalGraphicName.Recover]:                          TacticalGraphicCategory.TacticalMissionTasks,
     [TacticalGraphicName.DecisionLine]:                     TacticalGraphicCategory.Lines,
     [TacticalGraphicName.MobilityCorridor]:                 TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.MinefieldStaticDepiction]:         TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.MinefieldDynamicDepiction]:        TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.MinedArea]:                        TacticalGraphicCategory.MobilityAndCountermobility,
     [TacticalGraphicName.MinedAreaFenced]:                  TacticalGraphicCategory.MobilityAndCountermobility,

@@ -36,6 +36,12 @@ Labels that follow the view and keep clear of each other, on every renderer.
   `getFullSizeDecorations()`: keeps obstacle teeth, wire loops, ditch teeth and battlements at
   full size however small the graphic is on screen. A ditch's teeth narrow to fit a short line
   rather than vanish.
+- **Minefield, static depiction** (`TacticalGraphicName.MinefieldStaticDepiction`, 270701),
+  anchored to a line: a closed frame that follows the drawn line, with the `mineType` glyph
+  repeated inside at a constant screen size, `ENY` beyond each end when hostile, field H above
+  and W below. milsymbol draws 270701 as a fixed-size point symbol; this is the depiction
+  whose length follows the ground. Painted by the new `minefieldStaticPaint`, with
+  `staticMinefieldLayout` for the geometry.
 - **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
   properties, for a host drawing one graphic at a size of its own.
 - **`turnedSymbolLayer`** exported from the MapLibre entry beside `symbolLayer`.

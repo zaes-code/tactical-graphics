@@ -32,6 +32,7 @@ import {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstacleP
 import {
     fortifiedPositionPaint,
     mineClusterPaint,
+    minefieldStaticPaint,
     minelinePaint,
     raftSitePaint,
     tripWirePaint,
@@ -768,6 +769,7 @@ function buildRegistry(): Partial<Record<TacticalGraphicName, GraphicPainters>> 
         [TacticalGraphicName.ObstacleBypassDifficult]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassDifficult)},
         [TacticalGraphicName.ObstacleBypassImpossible]: {graphic: obstacleBypassPaint(TacticalGraphicName.ObstacleBypassImpossible)},
         [TacticalGraphicName.Mineline]: {graphic: minelinePaint(TacticalGraphicName.Mineline)},
+        [TacticalGraphicName.MinefieldStaticDepiction]: {graphic: minefieldStaticPaint()},
         [TacticalGraphicName.MineCluster]: {graphic: mineClusterPaint()},
         [TacticalGraphicName.TripWire]: {graphic: tripWirePaint()},
         [TacticalGraphicName.RaftSite]: {graphic: raftSitePaint()},

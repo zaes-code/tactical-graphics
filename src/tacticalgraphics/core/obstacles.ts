@@ -44,7 +44,7 @@
 import {TacticalGraphicName} from './type';
 
 /**
- * The 35 graphics 8.1.4.3 reaches.
+ * The 37 graphics 8.1.4.3 reaches.
  *
  * Ordered by the entity code the plate carries, so the three ranges stay legible; obstacle
  * group is last because FM 1-02.2 codes nothing.
@@ -59,6 +59,7 @@ export const OBSTACLE_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
     TacticalGraphicName.Disrupt, // 270502
     TacticalGraphicName.Fix, // 270503
     TacticalGraphicName.Turn, // 270504
+    TacticalGraphicName.MinefieldStaticDepiction, // 270701
     TacticalGraphicName.MinefieldDynamicDepiction, // 270707
     TacticalGraphicName.MinedArea, // 270800
     TacticalGraphicName.MinedAreaFenced, // 270801

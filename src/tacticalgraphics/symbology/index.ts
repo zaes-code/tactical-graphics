@@ -76,10 +76,13 @@ export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstacleP
 export {
     fortifiedPositionPaint,
     mineClusterPaint,
+    minefieldStaticPaint,
     minelinePaint,
     raftSitePaint,
+    staticMinefieldLayout,
     tripWirePaint,
 } from './protectionLinePaints';
+export type {StaticMinefieldLayout} from './protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './endGlyphLinePaints';
 export {sweptArcTaskPaint} from './sweptArcTaskPaints';
 export {obstacleBypassPaint} from './obstacleBypassPaints';

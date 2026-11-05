@@ -2,7 +2,7 @@ import {IGraphicGenerator, TacticalGraphicName} from "./type";
 import {AirCorridor} from "../graphics/AirCorridor";
 import {ObstacleLine, Phaseline} from "../graphics/Phaseline";
 import {Airfield} from "../graphics/Airfield";
-import {FortifiedPosition, MineCluster, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
+import {FortifiedPosition, MineCluster, MinefieldStaticDepiction, Mineline, RaftSite, TripWire} from "../graphics/ProtectionLine";
 import {DecisionLine, MobilityCorridor} from "../graphics/EndGlyphLine";
 import {SweptArcTask} from "../graphics/SweptArcTask";
 import {Demonstration, Escort} from "../graphics/EscortAndDemonstration";
@@ -422,6 +422,7 @@ obstacleFreeGraphics.forEach(name => TacticalGraphicsRegistry.register(new Obsta
 
 TacticalGraphicsRegistry.register(new ObstacleLine());
 TacticalGraphicsRegistry.register(new Mineline());
+TacticalGraphicsRegistry.register(new MinefieldStaticDepiction());
 TacticalGraphicsRegistry.register(new MinimumSafeDistanceZone());
 TacticalGraphicsRegistry.register(new MinimumSafeDistanceMultipleStrike());
 for (const bypass of [

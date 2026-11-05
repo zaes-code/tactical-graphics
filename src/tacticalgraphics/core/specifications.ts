@@ -62,7 +62,7 @@ const MIL_STD_2525_ONLY = [TacticalGraphicSpecification.MIL_STD_2525] as const;
  * Table A-32, so a claim can be checked against the standard rather than taken on
  * trust. Where APP-06 has no code and MIL-STD-2525 does, the comment says so.
  *
- * **323 graphics: 288 in MIL-STD-2525E, 5 of them only there; 225 in both FM 1-02.2 and APP-06,
+ * **324 graphics: 289 in MIL-STD-2525E, 5 of them only there; 226 in both FM 1-02.2 and APP-06,
  * 8 FM 1-02.2 only, 85 APP-06 only**. The axis runs both ways, which it did not when it was first added -- every
  * graphic was then in FM 1-02.2, so filtering by that specification hid nothing. Count it,
  * don't trust it. for the source document and how the mapping was derived.
@@ -159,6 +159,7 @@ const FM_AND_APP6: Record<TacticalGraphicName, readonly TacticalGraphicSpecifica
     [TacticalGraphicName.Retain]:                                       BOTH,      // APP-06 151205 Retain
     [TacticalGraphicName.Control]:                                      BOTH,      // APP-06 343200 Control
     [TacticalGraphicName.CordonAndKnock]: APP6_ONLY, // APP-06 342600 Cordon and Knock
+    [TacticalGraphicName.MinefieldStaticDepiction]: BOTH, // APP-06 270701 Minefield, Static Depiction -- FM table 5-20 "static depiction minefield"
     [TacticalGraphicName.MinefieldDynamicDepiction]: BOTH, // APP-06 270707 Minefield, Dynamic Depiction -- FM table 5-20 "dynamic depiction minefield"
     [TacticalGraphicName.MinedArea]: BOTH, // APP-06 270800 Mined Area -- FM table 5-20 "mined area"
     [TacticalGraphicName.MinedAreaFenced]: BOTH, // APP-06 270801 Mined Area, Fenced -- FM table 5-20 "mined area, fenced"
@@ -484,7 +485,7 @@ const NOT_IN_MIL_STD_2525: ReadonlySet<TacticalGraphicName> = new Set([
  * Which specifications define each graphic: MIL-STD-2525 for every graphic MIL-STD-2525E
  * Change 1 has, then FM 1-02.2 and APP-06 as tagged by hand. Listed in that order.
  *
- * **288 of 323 graphics are in MIL-STD-2525.** Count it, don't trust it.
+ * **289 of 324 graphics are in MIL-STD-2525.** Count it, don't trust it.
  */
 export const GRAPHIC_SPECIFICATIONS: Record<TacticalGraphicName, readonly TacticalGraphicSpecification[]> = (() => {
     // One frozen array per combination, shared like the consts above, so a caller that

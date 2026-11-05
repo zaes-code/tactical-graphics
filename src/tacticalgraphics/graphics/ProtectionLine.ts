@@ -69,6 +69,15 @@ export class Mineline extends ProtectionLineBase {
 }
 
 /**
+ * APP-06 270701 — the static-depiction minefield, anchored to a line: the drawn line is
+ * the minefield's long axis, and the frame and mines around it are screen sizes.
+ * @see minefieldStaticPaint
+ */
+export class MinefieldStaticDepiction extends ProtectionLineBase {
+    name: string = TacticalGraphicName.MinefieldStaticDepiction;
+}
+
+/**
  * APP-06 290400 — a dome over its own chord, both broken.
  *
  * Points 1 and 2 are the *corners*: the chord runs between them and the semicircle stands

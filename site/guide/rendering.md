@@ -281,7 +281,7 @@ after a restore: a restore keeps each graphic's saved `symbolId`, so the same id
 
 ## A picture for a menu
 
-A list of names does not tell an operator what is about to land on their map, and 323 of
+A list of names does not tell an operator what is about to land on their map, and 324 of
 them do not tell them apart. `@zaes/tactical-graphics/thumbnails` carries one small SVG
 per graphic for exactly that:
 
