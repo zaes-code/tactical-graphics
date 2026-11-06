@@ -215,7 +215,7 @@ describe('APP-06 152300 — the avenue of approach carries field H and the hosti
         // exactly the half-width plus a 12 px gap at the label's own size. @see labelGapPx
         expect(scale).toBeLessThan(1);
         expect(h[0]).toBeCloseTo(-4000, 6);
-        expect(h[1]).toBeCloseTo(HALF_WIDTH + 12 * scale * context.resolution, 6);
+        expect(h[1]).toBeCloseTo(HALF_WIDTH + 12 * scale! * context.resolution, 6);
     });
 
     it('stands field H one line further out on a hostile arrow, clear of ENY', () => {
