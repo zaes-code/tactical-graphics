@@ -132,12 +132,8 @@ const readDrawnStyles = (page, graphicName) =>
 
 const selectGraphic = async (page, displayName) => {
     await page.getByPlaceholder('Filter graphics').fill(displayName);
+    // Clicking the name in the list arms the draw; there is no Add Graphic button.
     await page.getByText(displayName, {exact: true}).first().click();
-    // Match on both labels. The button now returns to "Add Graphic" after a
-    // draw ends, but it legitimately reads "Drawing…" mid-draw, and its handler
-    // restarts the draw for the newly selected shape either way — so matching
-    // both keeps this working whichever state the previous step left it in.
-    await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
 };
 
 /** Draws a 3-vertex line at vertical offset `yOff`: click, click, double-click to finish. */

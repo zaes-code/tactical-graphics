@@ -196,6 +196,26 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
      */
     const [engineHandle, setEngineHandle] = useState<MapEngineHandle | null>(null);
 
+    /**
+     * A mode the engine reports, with `view` read as edit.
+     *
+     * The demo has no Edit button: the map rests in edit mode, so a click selects and the
+     * selection box offers the gestures and the properties. An engine goes back to `view`
+     * on its own when a draw ends or is canceled, so that is where it is put back. Deferred,
+     * because the report arrives from inside the engine's own mode change.
+     */
+    const handleModeChange = useCallback((mode: EditMode) => {
+        const handle = engineRef.current;
+        if (mode === 'view' && handle?.capabilities.edit) {
+            setTimeout(() => {
+                if (engineRef.current === handle && handle.getInteractionMode() === 'view') handle.setInteractionMode('edit');
+            }, 0);
+            setInteractionMode('edit');
+            return;
+        }
+        setInteractionMode(mode);
+    }, []);
+
     const handleEngineReady = useCallback((handle: MapEngineHandle | null) => {
         engineRef.current = handle;
         setEngineHandle(handle);
@@ -206,9 +226,10 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
             (window as unknown as Record<string, unknown>).__tacticalEngine = handle;
         }
         setCapabilities(handle?.capabilities ?? null);
-        // A view that cannot edit must not leave the panel showing a stale mode from
-        // the engine that could.
-        if (!handle?.capabilities.edit) setInteractionMode('view');
+        // The map rests in edit mode, so a click on a graphic selects it. A view that
+        // cannot edit rests in view, and the panel must not show the last engine's mode.
+        if (handle?.capabilities.edit) handle.setInteractionMode('edit');
+        setInteractionMode(handle?.capabilities.edit ? 'edit' : 'view');
 
         // Hand the graphics to the engine that just arrived.
         //
@@ -398,7 +419,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                                 darkMode={darkMode}
                                 graphicsSettings={settings}
                                 onReady={handleEngineReady}
-                                onInteractionModeChange={setInteractionMode}
+                                onInteractionModeChange={handleModeChange}
                             />
                         </React.Suspense>
                     </AddonErrorBoundary>
@@ -408,7 +429,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         darkMode={darkMode}
                         graphicsSettings={settings}
                         onReady={handleEngineReady}
-                        onInteractionModeChange={setInteractionMode}
+                        onInteractionModeChange={handleModeChange}
                     />
                     : <MapLibreMap
                         key="maplibre"
@@ -416,7 +437,7 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         tilted={tilted}
                         graphicsSettings={settings}
                         onReady={handleEngineReady}
-                        onInteractionModeChange={setInteractionMode}
+                        onInteractionModeChange={handleModeChange}
                     />}
 
                 {/*
@@ -464,15 +485,8 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                 {capabilities && (
                     <MapControls
                         capabilities={capabilities}
-                        onDrawTacticalGraphics={() => engineRef.current?.startDrawing(selectedShape)}
-                        onToggleInteraction={mode => {
-                            // Held here, not inside an engine. The panel's buttons read this
-                            // state, and only OpenLayers ever reported a mode back — so on
-                            // MapLibre the mode reached the map and never reached the panel,
-                            // and no edit button appeared selected.
-                            setInteractionMode(mode);
-                            engineRef.current?.setInteractionMode(mode);
-                        }}
+                        onDrawTacticalGraphics={name => engineRef.current?.startDrawing(name)}
+                        onCancelDrawing={() => engineRef.current?.cancelDrawing()}
                         onShapeChange={setSelectedShape}
                         onReset={() => engineRef.current?.reset()}
                         onDrawSamples={(hostility, names) => engineRef.current?.drawSamples(hostility, names)}
@@ -481,10 +495,6 @@ const MapRendering: React.FC<MapRenderingProps> = ({darkMode, onToggleDarkMode})
                         exportFormats={engineHandle?.exportFormats}
                         onImportGeoJson={file => engineRef.current?.importGeoJson(file)}
                         interactionMode={interactionMode}
-                        isRotating={interactionMode === 'rotate'}
-                        isResizing={interactionMode === 'resize'}
-                        isRepositioning={interactionMode === 'translate'}
-                        isModifying={interactionMode === 'modify'}
                         defaultShape={selectedShape}
                         thumbnailInk={thumbnailInkFor({...paletteFor(darkMode), ...settings})}
                     />

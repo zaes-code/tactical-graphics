@@ -80,6 +80,37 @@ attachEditControls(mapContainer, graphics, {
 });
 ```
 
+Buttons of your own go in `actions`. They are pressed rather than dragged, and show with the
+box. `onPress` is handed the selected graphic. `visible` decides which graphics a button shows
+for; leave it out and the button shows for every one:
+
+```ts
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {attachEditControls} from '@zaes/tactical-graphics/edit-controls';
+
+attachEditControls(mapContainer, graphics, {
+    actions: [
+        {
+            id: 'properties',                 // class tg-edit-button--properties
+            label: 'Properties',
+            icon: '<svg>...</svg>',
+            corner: 'bottom-left',            // the default, the corner the gestures leave free
+            onPress: graphic => console.log(graphic?.id),
+        },
+        {
+            id: 'bands',
+            label: 'Edit range bands',
+            icon: '<svg>...</svg>',
+            corner: 'top-left',
+            visible: graphic => graphic.name === TacticalGraphicName.WeaponSensorRangeFanCircular,
+            onPress: graphic => console.log(graphic?.base),
+        },
+    ],
+});
+```
+
+`visible` is asked when the selection changes, not on every frame.
+
 The colors are CSS custom properties, set on the container or any ancestor:
 `--tg-edit-button-background`, `--tg-edit-button-color`, `--tg-edit-button-border`,
 `--tg-edit-button-hover`, `--tg-edit-box-color` and `--tg-edit-z-index`. For more, style the

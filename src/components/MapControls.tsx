@@ -25,7 +25,6 @@ import {
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import EditIcon from '@mui/icons-material/Edit';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -45,7 +44,10 @@ import type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
 import {getGraphicThumbnailSvg, getGraphicThumbnailUrl} from '@zaes/tactical-graphics/thumbnails';
 
 interface Props {
-    onDrawTacticalGraphics(): void;
+    /** Arms the draw tool for `name`. The panel calls it when a graphic in the list is clicked. */
+    onDrawTacticalGraphics(name: TacticalGraphicName): void;
+    /** Abandons the draw in progress. */
+    onCancelDrawing(): void;
     onShapeChange(name: TacticalGraphicName): void;
     onReset(): void;
     /** Hostility applied to every sample that accepts one; undefined = leave default. */
@@ -66,14 +68,9 @@ interface Props {
     /** Replaces everything on the map with the graphics in `file`. */
     onImportGeoJson(file: File): void;
     interactionMode: EditMode;
-    isRotating: boolean;
-    isResizing: boolean;
-    isModifying: boolean;
-    isRepositioning: boolean;
     defaultShape: TacticalGraphicName;
     /** The colors the thumbnails are recolored to. @see thumbnailInkFor */
     thumbnailInk: ThumbnailInk;
-    onToggleInteraction(mode: EditMode): void;
     /**
      * What the live engine can actually do.
      *
@@ -295,6 +292,7 @@ function graphicThumbnailUrl(name: TacticalGraphicName, ink: ThumbnailInk): stri
 const MapControls: React.FC<Props> = ({
     capabilities,
     onDrawTacticalGraphics,
+    onCancelDrawing,
     onShapeChange,
     onReset,
     onDrawSamples,
@@ -303,7 +301,6 @@ const MapControls: React.FC<Props> = ({
     exportFormats,
     onImportGeoJson,
     interactionMode,
-    onToggleInteraction,
     defaultShape,
     thumbnailInk,
 }) => {
@@ -362,31 +359,33 @@ const MapControls: React.FC<Props> = ({
         return Array.from(map.entries());
     }, [filtered]);
 
-    const handleSelect = (opt: GraphicOption) => {
-        setSelected(opt);
-        onShapeChange(opt.value);
-    };
-
     const isDrawing = interactionMode === 'drawing';
 
     /**
-     * **One button, because the operator is picking a graphic, not a verb.**
-     *
-     * This panel used to offer four — rotate, resize, move, edit — each a *global* mode.
-     * That made the toolbar the thing being manipulated: you chose a verb, then hunted
-     * for a noun, every graphic on the map wore handles at once, and a symbol that
-     * refuses the verb you picked simply did nothing when you dragged it.
-     *
-     * `edit` inverts it. Click a graphic; it wears its own handles, a dashed box, and a
-     * button for each gesture *it* accepts. The four old modes are still in `EditMode`
-     * and still work — they are published surface — but nothing in this panel selects
-     * them any more. @see EditAffordances
+     * **Clicking a graphic in the list draws it.** There is no Add Graphic button and no Edit
+     * button: picking the graphic is the whole request, and the map rests in edit mode, so a
+     * click on a graphic already drawn selects it and its box offers the gestures and the
+     * properties. Clicking the graphic being drawn again cancels the draw. @see EditAffordances
      */
-    const isEditing = interactionMode === 'edit';
-
-    const handleEditMode = () => {
-        onToggleInteraction(isEditing ? 'view' : 'edit');
+    const handleSelect = (opt: GraphicOption) => {
+        if (isDrawing && selected?.value === opt.value) {
+            onCancelDrawing();
+            return;
+        }
+        setSelected(opt);
+        onShapeChange(opt.value);
+        if (capabilities.draw) onDrawTacticalGraphics(opt.value);
     };
+
+    // Esc cancels a draw on every engine, including those that do not listen for it themselves.
+    useEffect(() => {
+        if (!isDrawing) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onCancelDrawing();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isDrawing, onCancelDrawing]);
 
     const pointHint = selected ? getPointHint(selected.value) : null;
 
@@ -669,82 +668,37 @@ const MapControls: React.FC<Props> = ({
                     </Typography>
                 )}
 
-                {/* Draw button — disabled outright on an engine with no draw interaction. */}
-                {/*
-                  * The `span` is required, not decorative: MUI's Tooltip listens to its
-                  * child's events, and a disabled button fires none — so without a
-                  * wrapper the tooltip explaining *why* it is disabled never appears,
-                  * which is the one case it exists for.
-                  */}
-                <Tooltip title={capabilities.draw ? '' : capabilities.unsupportedReason ?? ''} placement="top">
-                <Box component="span" sx={{display: 'block', width: '100%'}}>
+                {/* What a click does now, in place of the Add Graphic and Edit buttons. */}
                 <Box
-                    component="button"
-                    onClick={onDrawTacticalGraphics}
-                    disabled={!selected || !capabilities.draw}
+                    data-testid="draw-hint"
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
                         gap: 0.75,
-                        width: '100%',
-                        py: 0.875,
-                        px: 1.5,
-                        border: 'none',
+                        px: 1,
+                        py: 0.75,
                         borderRadius: 1,
-                        cursor: selected && capabilities.draw ? 'pointer' : 'not-allowed',
-                        backgroundColor: isDrawing ? 'transparent' : 'primary.dark',
-                        color: isDrawing ? 'primary.main' : '#ffffff',
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
+                        fontSize: '0.72rem',
+                        color: isDrawing ? 'primary.main' : 'text.secondary',
                         outline: isDrawing ? '1px solid' : 'none',
-                        outlineColor: isDrawing ? 'primary.main' : 'transparent',
-                        transition: 'background-color 0.15s',
-                        '&:hover:not(:disabled)': {
-                            backgroundColor: isDrawing
-                                ? (theme) => theme.palette.mode === 'dark' ? '#112b1a' : '#ccffd8'
-                                : 'primary.main',
-                        },
-                        '&:disabled': {opacity: 0.4},
+                        outlineColor: 'primary.main',
                     }}
                 >
-                    <AddCircleOutlineIcon sx={{fontSize: 16}}/>
-                    {isDrawing ? 'Drawing… (click to place points)' : 'Add Graphic'}
-                </Box>
-                </Box>
-                </Tooltip>
-
-                <Divider/>
-
-                {/* Edit mode toggle */}
-                <Box>
-                    <Typography sx={{
-                        fontSize: '0.65rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        color: 'text.secondary',
-                        mb: 0.5,
-                    }}>
-                        Edit Mode
-                    </Typography>
-                    <Tooltip title={capabilities.edit ? 'Select a graphic to move, rotate, resize or reshape it' : capabilities.unsupportedReason ?? ''}>
-                        {/* A span, because MUI cannot attach a tooltip to a disabled button. */}
-                        <span>
-                            <Button
-                                fullWidth
-                                variant={isEditing ? 'contained' : 'outlined'}
-                                size="small"
-                                disabled={!capabilities.edit}
-                                onClick={handleEditMode}
-                                startIcon={<EditIcon sx={{fontSize: 16}}/>}
-                                sx={{textTransform: 'none'}}
-                            >
-                                {isEditing ? 'Editing — click a graphic' : 'Edit'}
-                            </Button>
-                        </span>
-                    </Tooltip>
+                    {isDrawing && <AddCircleOutlineIcon sx={{fontSize: 16, flexShrink: 0}}/>}
+                    <Box sx={{flex: 1}}>
+                        {!capabilities.draw
+                            ? capabilities.unsupportedReason ?? 'This map cannot draw.'
+                            : isDrawing
+                            ? 'Click the map to place points. Esc cancels.'
+                            : capabilities.edit
+                            ? 'Click a graphic in the list to draw it. Click one on the map to edit it.'
+                            : 'Click a graphic in the list to draw it.'}
+                    </Box>
+                    {isDrawing && (
+                        <Button size="small" onClick={onCancelDrawing} sx={{textTransform: 'none', minWidth: 0, py: 0, fontSize: '0.72rem'}}>
+                            Cancel
+                        </Button>
+                    )}
                 </Box>
 
                 <Divider/>

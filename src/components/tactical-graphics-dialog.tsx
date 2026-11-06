@@ -26,6 +26,7 @@ import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
 import {rememberAmplifiersHidden, rememberedAmplifiersHidden} from './amplifierVisibility';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal} from './dtg';
+import {onPropertiesRequest} from './propertiesRequest';
 import {
     getDisplayName,
     RangeFanBand,
@@ -270,34 +271,49 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
     const paperRef = useRef<HTMLDivElement | null>(null);
     const lineRef = useRef<SVGLineElement | null>(null);
 
-    // Open dialog on feature click
+    /** Opens the dialog on `next`. */
+    const open = (next: SelectedGraphic) => {
+        setSelection(next);
+        // Read-only: the geometry inputs the user set by dragging. Kept out of
+        // `pendingChanges` because nothing in this dialog can change them.
+        setMeasured(next.measured);
+
+        const curr = {
+            echelon: next.echelon,
+            labels: shownLabels(next),
+        };
+        setCurrentProperties(curr);
+        setPendingChanges(curr);
+        // View state, not an amplifier: it comes from this app's store rather than
+        // from the graphic. @see amplifierVisibility
+        setNameOnly(rememberedAmplifiersHidden(next.id));
+        setOpenedNameOnly(rememberedAmplifiersHidden(next.id));
+        setOpacity(source.opacityOf(next));
+        setOpenedOpacity(source.opacityOf(next));
+        setDialogPosition({x: 0, y: 0});
+    };
+
+    // A click on a graphic opens the dialog where the engine does not take that click to
+    // select; in edit mode it is the Properties button on the selection box. @see requestProperties
     useEffect(() => {
-        return source.onSelect(next => {
+        const stopClicks = source.onSelect(next => {
             if (!next) {
                 setSelection(null);
                 return;
             }
             if (source.suppressed?.()) return;
-
-            setSelection(next);
-            // Read-only: the geometry inputs the user set by dragging. Kept out of
-            // `pendingChanges` because nothing in this dialog can change them.
-            setMeasured(next.measured);
-
-            const curr = {
-                echelon: next.echelon,
-                labels: shownLabels(next),
-            };
-            setCurrentProperties(curr);
-            setPendingChanges(curr);
-            // View state, not an amplifier: it comes from this app's store rather than
-            // from the graphic. @see amplifierVisibility
-            setNameOnly(rememberedAmplifiersHidden(next.id));
-            setOpenedNameOnly(rememberedAmplifiersHidden(next.id));
-            setOpacity(source.opacityOf(next));
-            setOpenedOpacity(source.opacityOf(next));
-            setDialogPosition({x: 0, y: 0});
+            open(next);
         });
+        const stopRequests = onPropertiesRequest(id => {
+            const next = source.selectionFor(id);
+            if (next) open(next);
+        });
+        return () => {
+            stopClicks();
+            stopRequests();
+        };
+        // `open` only calls state setters and reads `source`.
+        // eslint-disable-next-line
     }, [source]);
 
     /**

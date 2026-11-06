@@ -23,7 +23,7 @@ import type {Map as MapLibreMap} from 'maplibre-gl';
 import {TacticalGraphicName, widthFromBase, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
 import {stampAmplifierVisibility} from './amplifierVisibility';
 import type {GraphicLabels} from '../graphicAmplifiers';
-import type {FeaturePropertiesSource} from '../featurePropertiesSource';
+import type {FeaturePropertiesSource, SelectedGraphic} from '../featurePropertiesSource';
 import {buildTacticalGraphic, carryPaintFlags, descriptionOf} from './maplibreAdapter';
 import type {NativeLayerRenderer} from './native/NativeLayerRenderer';
 import {resolutionOf} from './projection';
@@ -45,55 +45,60 @@ export function createMapLibrePropertiesSource(
      */
     isSuppressed: () => boolean = () => false,
 ): FeaturePropertiesSource {
+    /** What the dialog needs from one realized graphic. */
+    const selectionOf = (graphic: NonNullable<ReturnType<NativeLayerRenderer['find']>>): SelectedGraphic => {
+        const props = graphic.properties;
+        return {
+            id: graphic.id,
+            graphicName: graphic.name,
+            labels: props as GraphicLabels,
+            // The bag is the only place MapLibre keeps it — there is no feature
+            // to stamp it on the way the OpenLayers dialog does.
+            echelon: (props.echelon as string) ?? '',
+            measured: {
+                radius: props.radius,
+                decorationSize: props.decorationSize,
+                /*
+                 * **The eleven axis arrows state their width in the base**, so the bag
+                 * holds none and this has to be derived — exactly as the OpenLayers
+                 * source derives it. Without that the panel had no measured figure for
+                 * them and drew the *typed input* instead, which is an empty box on a
+                 * number the operator sets by dragging.
+                 *
+                 * The field registry leaves `widthTyped` off for these, so a measured
+                 * value renders as the read-out the other engine shows.
+                 * @see widthFromBase, carriesWidthPointInBase
+                 */
+                width: widthFromBase(graphic.name, basePositions(graphic.base.geometry)) ?? props.width,
+                /*
+                 * **`length` is a read-out this half never reported**, so the five plates
+                 * that state a length and a width about one anchor point showed the figure
+                 * on OpenLayers and nothing at all here. Both engines file the same number
+                 * — measured, 80,000 m for 200101 on each — so the panel's silence was
+                 * this line missing rather than anything about the graphic.
+                 * @see GraphicGeometryState, hasAxisAndWidth
+                 */
+                length: props.length,
+                rotation: props.rotation,
+                bend: props.bend,
+                mirrored: props.mirrored,
+            },
+            graphicSize: props.radius,
+        };
+    };
+
     return {
+        selectionFor(id) {
+            const graphic = renderer.find(id);
+            return graphic ? selectionOf(graphic) : null;
+        },
+
         suppressed: () => isSuppressed(),
 
         onSelect(callback) {
             const handleClick = (event: {point: {x: number; y: number}}) => {
                 const graphic = renderer.hitTest(event.point, HIT_RADIUS_PX);
-                if (!graphic) {
-                    callback(null);
-                    return;
-                }
-
-                const props = graphic.properties;
-                callback({
-                    id: graphic.id,
-                    graphicName: graphic.name,
-                    labels: props as GraphicLabels,
-                    // The bag is the only place MapLibre keeps it — there is no feature
-                    // to stamp it on the way the OpenLayers dialog does.
-                    echelon: (props.echelon as string) ?? '',
-                    measured: {
-                        radius: props.radius,
-                        decorationSize: props.decorationSize,
-                        /*
-                         * **The eleven axis arrows state their width in the base**, so the bag
-                         * holds none and this has to be derived — exactly as the OpenLayers
-                         * source derives it. Without that the panel had no measured figure for
-                         * them and drew the *typed input* instead, which is an empty box on a
-                         * number the operator sets by dragging.
-                         *
-                         * The field registry leaves `widthTyped` off for these, so a measured
-                         * value renders as the read-out the other engine shows.
-                         * @see widthFromBase, carriesWidthPointInBase
-                         */
-                        width: widthFromBase(graphic.name, basePositions(graphic.base.geometry)) ?? props.width,
-                        /*
-                         * **`length` is a read-out this half never reported**, so the five plates
-                         * that state a length and a width about one anchor point showed the figure
-                         * on OpenLayers and nothing at all here. Both engines file the same number
-                         * — measured, 80,000 m for 200101 on each — so the panel's silence was
-                         * this line missing rather than anything about the graphic.
-                         * @see GraphicGeometryState, hasAxisAndWidth
-                         */
-                        length: props.length,
-                        rotation: props.rotation,
-                        bend: props.bend,
-                        mirrored: props.mirrored,
-                    },
-                    graphicSize: props.radius,
-                });
+                callback(graphic ? selectionOf(graphic) : null);
             };
 
             map.on('click', handleClick);
