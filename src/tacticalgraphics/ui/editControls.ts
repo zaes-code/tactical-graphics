@@ -40,8 +40,8 @@
 import type {AllowedGestures} from '../core/symbology';
 // The subpath's own types, so a consumer of it needs no second import from the root.
 export type {AllowedGestures} from '../core/symbology';
-export type {EditMode, GestureKind, SelectionBox} from '../core/engine';
-import type {EditMode, GestureKind, SelectionBox} from '../core/engine';
+export type {EditMode, GestureKind, SelectedGraphic, SelectionBox} from '../core/engine';
+import type {EditMode, GestureKind, SelectedGraphic, SelectionBox} from '../core/engine';
 
 /** What the controls need from an engine. Every engine returned by `createTacticalGraphics` has it. */
 export interface EditControlsEngine {
@@ -49,6 +49,8 @@ export interface EditControlsEngine {
     selectionGestures(): AllowedGestures | null;
     beginGesture(kind: GestureKind, event: PointerEvent): boolean;
     getInteractionMode?(): EditMode;
+    /** The selected graphic, which an action's `visible` and `onPress` are given. */
+    getSelection?(): SelectedGraphic | null;
 }
 
 /** A button of your own on the selection box, pressed rather than dragged. */
@@ -61,8 +63,15 @@ export interface EditControlAction {
     icon: string | Element;
     /** Which corner of the box it hangs from. Default bottom-left, the one the gestures leave free. */
     corner?: EditControlCorner;
-    /** Called when the button is pressed, while a graphic is selected. */
-    onPress(): void;
+    /**
+     * Whether to show the button for this graphic. Default: for every graphic. Asked whenever
+     * the selection changes, so a button can belong to one kind of graphic only:
+     * `visible: graphic => graphic.name === TacticalGraphicName.WeaponSensorRangeFanCircular`.
+     * An engine without `getSelection` shows the button for every graphic.
+     */
+    visible?(graphic: SelectedGraphic): boolean;
+    /** Called when the button is pressed, with the selected graphic (`null` from an engine without `getSelection`). */
+    onPress(graphic: SelectedGraphic | null): void;
 }
 
 export interface EditControlsOptions {
@@ -85,7 +94,7 @@ export interface EditControlsOptions {
      * that refuses its gesture; this only takes buttons away.
      */
     gestures?: readonly GestureKind[];
-    /** Buttons of your own, shown whenever the box is. Give each its own corner. @see EditControlAction */
+    /** Buttons of your own, shown with the box for the graphics each one's `visible` accepts. Give each its own corner. @see EditControlAction */
     actions?: readonly EditControlAction[];
     /**
      * Whether to add the default stylesheet to the container's document (or shadow root).
@@ -246,21 +255,30 @@ export function attachEditControls(container: HTMLElement, engine: EditControlsE
         button.addEventListener('pointerdown', event => event.stopPropagation());
         button.addEventListener('click', event => {
             event.stopPropagation();
-            action.onPress();
+            action.onPress(engine.getSelection?.() ?? null);
         });
         layer.appendChild(button);
-        return {corner: action.corner ?? ('bottom-left' as Corner), button};
+        return {action, corner: action.corner ?? ('bottom-left' as Corner), button};
     });
     container.appendChild(layer);
 
     // Written only when it changes: the loop runs every frame and most frames change nothing.
     let drawn = '';
+    // Which actions show, and for which graphic that was decided.
+    let shownFor: string | undefined;
+    let shown: boolean[] = actions.map(() => true);
     function update(): void {
         const box = isActive() ? engine.selectionBox() : undefined;
         const gestures = box ? engine.selectionGestures() : null;
         const width = layer.clientWidth;
         const height = layer.clientHeight;
-        const key = box && gestures ? `${box.x},${box.y},${box.width},${box.height},${width},${height},${+gestures.translate}${+gestures.rotate}${+gestures.resize}` : '';
+        // Asked again only when the selection changes: `visible` stays off the per-frame path.
+        const selection = box && gestures ? (engine.getSelection?.() ?? null) : null;
+        if (selection?.id !== shownFor) {
+            shownFor = selection?.id;
+            shown = actions.map(({action}) => !selection || !action.visible || action.visible(selection));
+        }
+        const key = box && gestures ? `${box.x},${box.y},${box.width},${box.height},${width},${height},${+gestures.translate}${+gestures.rotate}${+gestures.resize},${shownFor},${shown.map(Number).join('')}` : '';
         if (key === drawn) return;
         drawn = key;
         if (!box || !gestures) {
@@ -281,8 +299,9 @@ export function attachEditControls(container: HTMLElement, engine: EditControlsE
             button.style.left = `${left}px`;
             button.style.top = `${top}px`;
         }
-        for (const {corner, button} of actions) {
-            button.hidden = false;
+        for (const [i, {corner, button}] of actions.entries()) {
+            button.hidden = !shown[i];
+            if (button.hidden) continue;
             const {left, top} = placeButton(box, corner, {width, height});
             button.style.left = `${left}px`;
             button.style.top = `${top}px`;

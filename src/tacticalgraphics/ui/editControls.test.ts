@@ -5,7 +5,8 @@
  * symbol accepts, each handing its press to the engine.
  */
 import type {AllowedGestures} from '../core/symbology';
-import type {EditMode, GestureKind, SelectionBox} from '../core/engine';
+import type {EditMode, GestureKind, SelectedGraphic, SelectionBox} from '../core/engine';
+import {TacticalGraphicName} from '../core/type';
 import {attachEditControls, placeButton} from './editControls';
 
 function fakeEngine(gestures: Partial<AllowedGestures> = {}) {
@@ -87,6 +88,45 @@ describe('the edit controls', () => {
         controls.destroy();
         size.mockRestore();
         sizeY.mockRestore();
+    });
+
+    it('shows an action only for the graphics its visible check accepts, and hands the press the graphic', () => {
+        const {engine, state} = fakeEngine();
+        let selected: SelectedGraphic | null = {id: 'fan-1', name: TacticalGraphicName.WeaponSensorRangeFanCircular, base: {type: 'Feature', geometry: {type: 'Point', coordinates: [0, 0]}, properties: {}}};
+        const pressed: (string | undefined)[] = [];
+        let asked = 0;
+        const controls = attachEditControls(
+            container,
+            {...engine, getSelection: () => selected},
+            {
+                actions: [
+                    {
+                        id: 'bands',
+                        label: 'Edit range bands',
+                        icon: '<svg></svg>',
+                        visible: graphic => (asked++, graphic.name === TacticalGraphicName.WeaponSensorRangeFanCircular),
+                        onPress: graphic => pressed.push(graphic?.id),
+                    },
+                    {id: 'properties', label: 'Properties', icon: '<svg></svg>', corner: 'top-left', onPress: () => undefined},
+                ],
+            },
+        );
+        controls.update();
+        expect(visibleButtons(container)).toEqual(['Move', 'Rotate', 'Resize', 'Edit range bands', 'Properties']);
+        container.querySelector<HTMLButtonElement>('.tg-edit-button--bands')!.click();
+        expect(pressed).toEqual(['fan-1']);
+
+        // A phase line is selected: the range-band button goes, the one with no check stays.
+        selected = {id: 'pl-1', name: TacticalGraphicName.PhaseLine, base: {type: 'Feature', geometry: {type: 'Point', coordinates: [0, 0]}, properties: {}}};
+        state.box = {x: 10, y: 10, width: 50, height: 20};
+        controls.update();
+        expect(visibleButtons(container)).toEqual(['Move', 'Rotate', 'Resize', 'Properties']);
+
+        // Asked once per selection, not once per frame.
+        controls.update();
+        controls.update();
+        expect(asked).toBe(2);
+        controls.destroy();
     });
 
     it('hands a press to the engine, and keeps it from the map', () => {

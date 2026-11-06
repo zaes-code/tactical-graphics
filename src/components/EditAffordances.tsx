@@ -50,9 +50,8 @@ export default function EditAffordances({engine, active}: EditAffordancesProps) 
                     id: 'properties',
                     label: 'Properties',
                     icon: PROPERTIES_ICON,
-                    onPress: () => {
-                        const selected = engine.getSelection();
-                        if (selected) requestProperties(selected.id);
+                    onPress: graphic => {
+                        if (graphic) requestProperties(graphic.id);
                     },
                 },
             ],

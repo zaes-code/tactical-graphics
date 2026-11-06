@@ -69,8 +69,9 @@ Labels that follow the view and keep clear of each other, on every renderer.
   graphic. Below it the label keeps that size and may run over its outline, so a small area's
   name stays readable from far out. Unset, nothing changes.
 - **Buttons of your own on the edit box.** `attachEditControls` takes **`actions`**: buttons
-  that are pressed rather than dragged, with an id, label, icon and corner, shown whenever the
-  box is. The sample app uses one to open the properties dialog.
+  that are pressed rather than dragged, with an id, label, icon and corner. An action's
+  optional `visible` check picks the graphics it shows for, and `onPress` is handed the
+  selected graphic. The sample app uses one to open the properties dialog.
 
 ### Changed
 
