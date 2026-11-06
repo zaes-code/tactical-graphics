@@ -148,8 +148,10 @@ const drawLine = async (page, box, yOff = 0) => {
     return {mid: [(x1 + x2) / 2, (y1 + y2) / 2]};
 };
 
+/** A click selects the graphic; the dialog opens from the Properties button on its selection box. */
 const openDialogAt = async (page, [x, y]) => {
     await page.mouse.click(x, y);
+    await page.locator('.tg-edit-button--properties').click({timeout: 5000});
     await page.waitForSelector('#name-input', {timeout: 5000});
 };
 
@@ -481,6 +483,9 @@ const main = async () => {
         for (const nudge of [0, -12, 12]) {
             await page.mouse.click((x1 + x2) / 2 + nudge, (y1 + y2) / 2);
             await page.waitForTimeout(500);
+            const properties = page.locator('.tg-edit-button--properties');
+            if (await properties.isVisible()) await properties.click();
+            await page.waitForTimeout(300);
             if (await page.locator('#starttime-input').count()) break;
         }
         await page.fill('#starttime-input', '2007-02-12T06:00');
@@ -803,6 +808,7 @@ const main = async () => {
     // Click the symbol itself, which is what an operator aims at. Cover has no
     // identifier field, so there is no #name-input to wait on here.
     await page.mouse.click(coverAt[0], coverAt[1]);
+    await page.locator('.tg-edit-button--properties').click({timeout: 5000});
     await page.waitForSelector('[role="dialog"]', {timeout: 5000});
     await chooseSelectOption(page, 'Hostility', 'Hostile/Faker');
     await page.getByRole('button', {name: 'OK'}).click();
