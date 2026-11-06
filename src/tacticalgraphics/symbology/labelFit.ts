@@ -127,6 +127,18 @@ export function capLabelToGraphic(
 }
 
 /**
+ * A gap beside a label, in screen pixels, at the size the label is drawn.
+ *
+ * Every such gap is stated for a label at full size. A label shrinks as its graphic does, and
+ * a gap that stayed at its full pixel count while the text shrank came to outgrow the text:
+ * zoomed out, a phase line kept 8 px between its end and a `PL` 7 px wide. Scaled with the
+ * label, the space stays the same share of the text at every size.
+ */
+export function labelGapPx(gapPx: number, scale: number): number {
+    return gapPx * scale;
+}
+
+/**
  * `scale` raised to the host's smallest label size, never past `desired`.
  * @see TacticalGraphicsConfigOptions.minLabelSize
  */

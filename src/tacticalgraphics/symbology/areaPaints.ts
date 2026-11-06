@@ -28,6 +28,7 @@ import {
     topmostSegmentIndex,
 } from './decorations';
 import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
+import {labelGapPx} from './labelFit';
 import {terrainHatchColor} from './sectorModifierPaints';
 
 /** A paint function, in the shape the registry stores. */
@@ -173,7 +174,7 @@ export function groupOrSeriesOfTargetsPaint(): AreaPaint {
         const bestIdx = topmostSegmentIndex(ring);
         const text = (feature.properties.designation ?? '').trim();
         const scale = scaleOf(feature, context);
-        const gapHalfMap = text ? (textWidth(context, text, fontStyle, scale) / 2 + 6) * context.resolution : 0;
+        const gapHalfMap = text ? (textWidth(context, text, fontStyle, scale) / 2 + labelGapPx(6, scale)) * context.resolution : 0;
 
         /*
          * Cut along the ring, and only where the gap fits the run between real corners the top

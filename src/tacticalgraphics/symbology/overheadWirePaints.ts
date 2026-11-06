@@ -11,6 +11,7 @@ import {amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunction
 import {dateRangeLabel} from './midLabelLinePaints';
 import {passageLanePaint} from './mobilityPaints';
 import {midSegmentInView} from './viewFollow';
+import {labelGapPx} from './labelFit';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -229,7 +230,8 @@ export function safeLaneOrGapPaint(): LinePaint {
                 reach = Math.max(reach, (point[0] - entry[0]) * rightX + (point[1] - entry[1]) * rightY);
             }
         }
-        const offset = reach + SAFE_LANE_LABEL_GAP_PX * context.resolution;
+        const scale = scaleOf(feature, context);
+        const offset = reach + labelGapPx(SAFE_LANE_LABEL_GAP_PX, scale) * context.resolution;
         // Centred on the lane, as the plate draws the column between the two points; on the
         // middle of the part in view when the lane's own middle is off screen. @see midSegmentInView
         const {t} = midSegmentInView([entry, exit], {index: 0, t: 0.5}, context);
@@ -270,7 +272,7 @@ export function safeLaneOrGapPaint(): LinePaint {
                     // nearest the lane and the text runs away from it. @see the note above.
                     align,
                     baseline,
-                    scale: scaleOf(feature, context),
+                    scale,
                 },
             },
         ];

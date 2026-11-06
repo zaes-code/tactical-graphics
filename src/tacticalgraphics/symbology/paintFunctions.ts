@@ -50,7 +50,7 @@ import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, getEnemyLabels} from '../core/co
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
-import {capLabelToGraphic, heldTextScale, letterGapClearance, letterInGapScale} from './labelFit';
+import {capLabelToGraphic, heldTextScale, labelGapPx, letterGapClearance, letterInGapScale} from './labelFit';
 // A cycle (movementPaints imports this file), safe because it is only called inside a paint.
 import {approachLetterScale} from './movementPaints';
 import {PLANNED_DASH_PX, strokeParts} from './dashFit';
@@ -208,7 +208,21 @@ export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
         }
         const scale = text.scale ?? 1;
         const px = renderedTextPx(text.font, scale);
-        out.push(px > mainPx ? {...paint, text: {...text, scale: (scale * mainPx) / px}} : paint);
+        if (px <= mainPx) {
+            out.push(paint);
+            continue;
+        }
+        // The offset was measured for the text at its old size, so it shrinks with it. @see labelGapPx
+        const ratio = mainPx / px;
+        out.push({
+            ...paint,
+            text: {
+                ...text,
+                scale: scale * ratio,
+                ...(text.offsetXPx !== undefined ? {offsetXPx: text.offsetXPx * ratio} : {}),
+                ...(text.offsetYPx !== undefined ? {offsetYPx: text.offsetYPx * ratio} : {}),
+            },
+        });
     }
     return out;
 }
@@ -632,7 +646,7 @@ export function enyOutside(text: string, leftOfEnd: boolean): string {
 }
 
 
-/** Screen-pixel gap between the end of the line and the nearest edge of its label. */
+/** Screen-pixel gap between the end of the line and the nearest edge of its label, at full size. @see labelGapPx */
 const PHASE_LINE_GAP_PX = 8;
 
 /** How many places in from its edge a phase line label tries before keeping the first. */
@@ -675,6 +689,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         };
         if (!text) return [lineWork];
         const width = textWidth(context, text, fontStyle, scale);
+        const gapPx = labelGapPx(PHASE_LINE_GAP_PX, scale);
 
         // Which screen-x side is "outside" each endpoint. `offsetXPx` is in screen
         // pixels and is NOT rotated with the text, so the actual x-component of each
@@ -702,8 +717,8 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         });
 
         const atStart = () =>
-            endLabel(start, uprightRotation(start, startNext), 'left', startOutsideRight ? PHASE_LINE_GAP_PX : -PHASE_LINE_GAP_PX - width);
-        const atEnd = () => endLabel(end, uprightRotation(endPrev, end), 'right', endOutsideRight ? PHASE_LINE_GAP_PX + width : -PHASE_LINE_GAP_PX);
+            endLabel(start, uprightRotation(start, startNext), 'left', startOutsideRight ? gapPx : -gapPx - width);
+        const atEnd = () => endLabel(end, uprightRotation(endPrev, end), 'right', endOutsideRight ? gapPx + width : -gapPx);
 
         // An end that is off screen takes its label to where the line leaves the view.
         // @see PaintContext.view
@@ -712,7 +727,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const labelFits = (at: ProjectedPosition, from: ProjectedPosition) => {
             const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
             if (!view || run === 0) return !view || inView(at, view);
-            const reach = (PHASE_LINE_GAP_PX + width) * context.resolution;
+            const reach = (gapPx + width) * context.resolution;
             const far: ProjectedPosition = [at[0] + ((at[0] - from[0]) / run) * reach, at[1] + ((at[1] - from[1]) / run) * reach];
             return inView(at, view) && inView(far, view);
         };
@@ -725,7 +740,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
             const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
             if (run === 0) return true;
             const [ux, uy] = [(at[0] - from[0]) / run, (at[1] - from[1]) / run];
-            const reach = (PHASE_LINE_GAP_PX + width / 2) * context.resolution;
+            const reach = (gapPx + width / 2) * context.resolution;
             return !isTaken([at[0] + ux * reach, at[1] + uy * reach], {alongPx: width / 2, acrossPx}, ux, uy, context);
         };
         const startOut = startShown && outsideClear(start, startNext);
@@ -740,18 +755,18 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         // In the line just inside the view's edge (or the end whose outside is held), reading
         // along it, with the line work cut around it: the label keeps to the line rather than
         // sitting over or under it, and slides on in toward the middle past anything in its way.
-        const halfGap = (width / 2 + PHASE_LINE_GAP_PX / 2) * context.resolution;
+        const halfGap = (width / 2 + gapPx / 2) * context.resolution;
         const gaps: {at: number; halfGap: number}[] = [];
         const middle = distanceAlongPath(coords, stretch[0]) + pathLength(stretch) / 2;
         const inLine = (edge: ProjectedPosition, inward: 1 | -1): Paint => {
             const first = distanceAlongPath(coords, edge) + inward * (width / 2) * context.resolution;
-            const step = (width / 2 + PHASE_LINE_GAP_PX) * context.resolution;
+            const step = (width / 2 + gapPx) * context.resolution;
             let s = first;
             for (let k = 0; k < PHASE_LINE_SLIDES; k++) {
                 const candidate = first + inward * k * step;
                 if (k > 0 && inward * (candidate - middle) > 0) break;
                 const {from, to, at} = pointAlong(coords, candidate);
-                if (!isTaken(at, {alongPx: width / 2 + PHASE_LINE_GAP_PX / 2, acrossPx}, to[0] - from[0], to[1] - from[1], context)) {
+                if (!isTaken(at, {alongPx: width / 2 + gapPx / 2, acrossPx}, to[0] - from[0], to[1] - from[1], context)) {
                     s = candidate;
                     break;
                 }
@@ -764,7 +779,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         const labels = [startOut ? atStart() : inLine(startShown ? start : stretch[0], 1)];
         // Two labels need room for both and the gap between them; short of it, one is enough.
         const roomPx = pathLength(stretch) / context.resolution;
-        if (startShown || endShown || roomPx >= 2 * width + 3 * PHASE_LINE_GAP_PX) {
+        if (startShown || endShown || roomPx >= 2 * width + 3 * gapPx) {
             labels.push(endOut ? atEnd() : inLine(endShown ? end : stretch[stretch.length - 1], -1));
         }
         const runs = splitPathAroundAll(coords, gaps);
@@ -829,7 +844,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         // reach, which sent the label a screen away on a line that doubled back.
         const scale = scaleOf(feature, context);
         const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * scale;
-        const offsetMap = (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * context.resolution;
+        const offsetMap = (halfTextHeightPx + labelGapPx(OBSTACLE_LABEL_GAP_PX, scale)) * context.resolution;
 
         paints.push({
             geometry: {
@@ -1416,7 +1431,7 @@ export function defaultLinePaint(
             context,
             pathLength(coords) / context.resolution,
         );
-        const gap = DEFAULT_LINE_LABEL_GAP_PX;
+        const gap = labelGapPx(DEFAULT_LINE_LABEL_GAP_PX, scale);
         const res = context.resolution;
 
         const label = (

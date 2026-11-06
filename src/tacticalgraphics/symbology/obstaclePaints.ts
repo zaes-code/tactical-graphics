@@ -24,6 +24,7 @@ import {
 import {DEFAULT_WIRE_STYLE, WIRE_MARK_PX, WIRE_STYLES} from '../graphics/WireObstacle';
 import {castellatedPath, centerSegmentIndex, centredRun, crenellatedPath, decorationScale, FORTIFIED_CRENEL_PX, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX, obstacleToothSize, offsetBelow, parallelPath, pathLength, splitAtCorners, uprightRotation, walkPath} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {labelGapPx} from './labelFit';
 import {getFullSizeDecorations} from '../core/config';
 import {midSegmentInView} from './viewFollow';
 
@@ -299,8 +300,9 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
         const b = path[segIdx + 1];
         const mid: ProjectedPosition = [a[0] + (b[0] - a[0]) * along, a[1] + (b[1] - a[1]) * along];
 
+        const labelScale = scaleOf(feature, context);
         paints.push({
-            geometry: {type: 'Point', coordinates: offsetBelow(mid, a, b, context.resolution, 8)},
+            geometry: {type: 'Point', coordinates: offsetBelow(mid, a, b, context.resolution, labelGapPx(8, labelScale))},
             text: {
                 text,
                 font: fontStyle,
@@ -309,7 +311,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
                 rotation: uprightRotation(a, b),
                 align: 'center',
                 baseline: 'top',
-                scale: scaleOf(feature, context),
+                scale: labelScale,
             },
         });
         return paints;

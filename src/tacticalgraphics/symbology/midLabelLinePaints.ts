@@ -19,7 +19,7 @@ import {smoothingKindOf} from '../core/smoothing';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {cutGapAlongPath, offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightFlipped, uprightRotation} from './decorations';
-import {letterGapClearance, letterInGapScale} from './labelFit';
+import {labelGapPx, letterGapClearance, letterInGapScale} from './labelFit';
 import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
 import {endAnchorInView, type LabelFootprint, midSegmentInView} from './viewFollow';
 import {PLANNED_DASH_PX, formatDesignationWithCountry, getFullLabel, legibleDesignation, showsEny, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
@@ -117,9 +117,9 @@ export function hostileEndMarks(feature: PaintFeature, coords: ProjectedPosition
     const end = coords[coords.length - 1];
     const beforeEnd = coords[coords.length - 2];
     return [
-        textMark(feature, offsetAbove(start, start, afterStart, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
+        textMark(feature, offsetAbove(start, start, afterStart, context.resolution, labelGapPx(LABEL_OFFSET_PX, eny.scale)), eny.text, eny.scale,
             uprightRotation(start, afterStart), !uprightFlipped(start, afterStart) ? 'left' : 'right', 'bottom'),
-        textMark(feature, offsetAbove(end, beforeEnd, end, context.resolution, LABEL_OFFSET_PX), eny.text, eny.scale,
+        textMark(feature, offsetAbove(end, beforeEnd, end, context.resolution, labelGapPx(LABEL_OFFSET_PX, eny.scale)), eny.text, eny.scale,
             uprightRotation(beforeEnd, end), !uprightFlipped(beforeEnd, end) ? 'right' : 'left', 'bottom'),
     ];
 }
@@ -142,7 +142,7 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
         const full = getFullLabel(name, formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode));
         const {p1, p2, point} = midpointOf(coords, context, {
             alongPx: textWidth(context, full, fontStyle, scale) / 2,
-            acrossPx: LABEL_OFFSET_PX + BASE_FONT_SIZE_PX * scale,
+            acrossPx: labelGapPx(LABEL_OFFSET_PX, scale) + BASE_FONT_SIZE_PX * scale,
         });
         const rotation = uprightRotation(p1, p2);
         // Too small to read, the name goes and `CFL` stays. The dates keep `scale`. @see legibleDesignation
@@ -152,11 +152,11 @@ export function coordinatedFireLinePaint(name: TacticalGraphicName): LinePaint {
             ...hostileEndMarks(feature, coords, scale, context),
             ...(shown.text
                 ? [
-                    textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), shown.text, shown.scale, rotation, 'center', 'bottom'),
+                    textMark(feature, offsetAbove(point, p1, p2, context.resolution, labelGapPx(LABEL_OFFSET_PX, shown.scale)), shown.text, shown.scale, rotation, 'center', 'bottom'),
                     // The dates go with the name. @see withProportionateAmplifiers
                     textMark(
                         feature,
-                        offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX),
+                        offsetBelow(point, p1, p2, context.resolution, labelGapPx(LABEL_OFFSET_PX, scale)),
                         dateRangeLabel(feature.properties),
                         scale,
                         rotation,
@@ -206,7 +206,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
          */
         const endFootprint: LabelFootprint = {
             alongPx: ends.text ? textWidth(context, ends.text, fontStyle, ends.scale) / 2 : 0,
-            acrossPx: LABEL_OFFSET_PX + BASE_FONT_SIZE_PX * ends.scale,
+            acrossPx: labelGapPx(LABEL_OFFSET_PX, ends.scale) + BASE_FONT_SIZE_PX * ends.scale,
         };
         const movedStart = ends.text ? endAnchorInView(coords, 'start', endFootprint, context) : undefined;
         const movedEnd = ends.text ? endAnchorInView(coords, 'end', endFootprint, context) : undefined;
@@ -219,7 +219,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
             ? [
                 textMark(
                     feature,
-                    offsetAbove(start, startFrom, afterStart, context.resolution, LABEL_OFFSET_PX),
+                    offsetAbove(start, startFrom, afterStart, context.resolution, labelGapPx(LABEL_OFFSET_PX, ends.scale)),
                     ends.text,
                     ends.scale,
                     uprightRotation(startFrom, afterStart),
@@ -228,7 +228,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
                 ),
                 textMark(
                     feature,
-                    offsetAbove(end, beforeEnd, endTo, context.resolution, LABEL_OFFSET_PX),
+                    offsetAbove(end, beforeEnd, endTo, context.resolution, labelGapPx(LABEL_OFFSET_PX, ends.scale)),
                     ends.text,
                     ends.scale,
                     uprightRotation(beforeEnd, endTo),
@@ -249,7 +249,7 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
         // of it, clear of other labels, as each of a corridor's legs does. @see midSegmentInView
         const footprint: LabelFootprint = {
             alongPx: Math.max(midTop ? textWidth(context, midTop, fontStyle, scale) : 0, midBottom ? textWidth(context, midBottom, fontStyle, scale) : 0) / 2,
-            acrossPx: LABEL_OFFSET_PX + BASE_FONT_SIZE_PX * scale,
+            acrossPx: labelGapPx(LABEL_OFFSET_PX, scale) + BASE_FONT_SIZE_PX * scale,
         };
         const spans = smoothed ? [midpointOf(coords, context, footprint)] : coords.slice(1).map((b, i) => {
             const a = coords[i];
@@ -261,12 +261,12 @@ export function engineerWorkLinePaint(name: TacticalGraphicName): LinePaint {
             const rotation = uprightRotation(p1, p2);
             if (midTop) {
                 paints.push(
-                    textMark(feature, offsetAbove(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midTop, scale, rotation, 'center', 'bottom'),
+                    textMark(feature, offsetAbove(point, p1, p2, context.resolution, labelGapPx(LABEL_OFFSET_PX, scale)), midTop, scale, rotation, 'center', 'bottom'),
                 );
             }
             if (midBottom) {
                 paints.push(
-                    textMark(feature, offsetBelow(point, p1, p2, context.resolution, LABEL_OFFSET_PX), midBottom, scale, rotation, 'center', 'top'),
+                    textMark(feature, offsetBelow(point, p1, p2, context.resolution, labelGapPx(LABEL_OFFSET_PX, scale)), midBottom, scale, rotation, 'center', 'top'),
                 );
             }
         }
@@ -344,7 +344,7 @@ export function munitionFlightPathPaint(): LinePaint {
                 const toMiddle = pathLength(coords.slice(0, index + 1)) + segLen * t;
                 const centre = locate(coords, toMiddle / 2);
                 const [a, b] = [coords[centre.index], coords[centre.index + 1]];
-                const below = offsetBelow(centre.at, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + LABEL_OFFSET_PX);
+                const below = offsetBelow(centre.at, a, b, context.resolution, MFP_DATE_HALF_HEIGHT_PX * scale + labelGapPx(LABEL_OFFSET_PX, scale));
                 const spec = textMark(feature, below, dateRangeLabel(feature.properties), scale, uprightRotation(a, b), 'center', 'middle', 'amplifier').text!;
                 const under = offsetPath(coords, [below[0] - centre.at[0], below[1] - centre.at[1]], centre.index);
                 return textOnPath(under, distanceAlongPath(under, below), 'center', spec, context);

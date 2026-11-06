@@ -26,7 +26,7 @@ import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import { TacticalGraphicName} from '../core/type';
 import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
-import {letterGapClearance, letterInGapScale, withLabelFloor} from './labelFit';
+import {labelGapPx, letterGapClearance, letterInGapScale, withLabelFloor} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
@@ -353,9 +353,10 @@ function behindArrowhead(
     const span = Math.hypot(dx, dy);
     if (span === 0 || !value) return [];
 
-    const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
+    const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
+    const clearance = labelGapPx(ARROWHEAD_LABEL_CLEARANCE_PX, scale) * context.resolution;
     const at: ProjectedPosition = [c1[0] - (dx / span) * clearance, c1[1] - (dy / span) * clearance];
-    const straight = text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+    const straight = text(feature, at, value, scale, {
         rotation: uprightRotation(c0, c1),
         align: alignAlong('right', c0, c1),
     });
@@ -410,8 +411,8 @@ function axisAmplifiers(
 
     // Rear to head: the name, then the date.
     const date = areaDateLabel(feature);
-    const dateEnd = total - ARROWHEAD_LABEL_CLEARANCE_PX * res - behindHead;
-    const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - AXIS_NAME_DATE_GAP_PX * res : dateEnd;
+    const dateEnd = total - labelGapPx(ARROWHEAD_LABEL_CLEARANCE_PX, scale) * res - behindHead;
+    const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - labelGapPx(AXIS_NAME_DATE_GAP_PX, scale) * res : dateEnd;
     const name = feature.properties.designation?.trim();
     if (name && date && textWidth(context, name, fontStyle, scale) * res > nameRoom) {
         // Too short for two groups: centring the name in the room left would set it on the date.
@@ -435,7 +436,7 @@ function axisAmplifiers(
         const length = Math.hypot(r1[0] - r0[0], r1[1] - r0[1]);
         if (length > 0) {
             const [ux, uy] = [(r1[0] - r0[0]) / length, (r1[1] - r0[1]) / length];
-            const out = halfWidth + AXIS_ENY_GAP_PX * res;
+            const out = halfWidth + labelGapPx(AXIS_ENY_GAP_PX, scale) * res;
             // A little ahead of the rear, so the mark reads beside the rail rather than off its end.
             const along = Math.min(length / 2, halfWidth);
             const rear: ProjectedPosition = [r0[0] + ux * along, r0[1] + uy * along];
@@ -512,7 +513,7 @@ function avenueHostileMarks(feature: PaintFeature, context: PaintContext, coords
     const midX = (left[0] + right[0]) / 2;
     const midY = (left[1] + right[1]) / 2;
     const scale = spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX);
-    const gap = AVENUE_ADDITIONAL_INFO_GAP_PX * context.resolution;
+    const gap = labelGapPx(AVENUE_ADDITIONAL_INFO_GAP_PX, scale) * context.resolution;
 
     return [left, right].map(rail => {
         // Pushed straight out from the centreline, so each mark clears its own rail whichever
@@ -555,11 +556,13 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             const halfWidthPx = span / context.resolution;
             const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
             const hostile = showsEny(feature);
+            const gapPx = labelGapPx(AVENUE_ADDITIONAL_INFO_GAP_PX, scale);
+            const headClearance = labelGapPx(ARROWHEAD_LABEL_CLEARANCE_PX, scale) * context.resolution;
             const rear: ProjectedPosition = coords.length >= 4
                 ? [(coords[2][0] + coords[3][0]) / 2, (coords[2][1] + coords[3][1]) / 2]
-                : [c1[0] - ((c1[0] - c0[0]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution,
-                    c1[1] - ((c1[1] - c0[1]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution];
-            const outPx = halfWidthPx + AVENUE_ADDITIONAL_INFO_GAP_PX + (hostile ? BASE_FONT_SIZE_PX * scale + AVENUE_ADDITIONAL_INFO_GAP_PX : 0);
+                : [c1[0] - ((c1[0] - c0[0]) / span) * headClearance,
+                    c1[1] - ((c1[1] - c0[1]) / span) * headClearance];
+            const outPx = halfWidthPx + gapPx + (hostile ? BASE_FONT_SIZE_PX * scale + gapPx : 0);
             // Turned to the rear segment of the center line (published from anchor 4), not the head's.
             const [a, b] = coords.length >= 6 ? [coords[4], coords[5]] : [c0, c1];
             const at = offsetAbove(rear, a, b, context.resolution, outPx);
@@ -582,7 +585,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             const res = context.resolution;
             const widthM = textWidth(context, additional, fontStyle, scale) * res;
             const heightM = BASE_FONT_SIZE_PX * scale * res;
-            const gapM = AVENUE_ADDITIONAL_INFO_GAP_PX * res;
+            const gapM = gapPx * res;
             const centre = coords.length >= 6 ? coords.slice(4) : [c0, c1];
             const rail = offsetPath(centre, [(ox / on) * span, (oy / on) * span], 0);
             const boxAt = (p: ProjectedPosition) => {
@@ -1032,7 +1035,7 @@ export function bridgeLabelPaint(): MovementPaint {
         const date = areaDateLabel(feature);
         if (date) {
             const length = Math.hypot(dx, dy) || 1;
-            const gap = BRIDGE_DATE_GAP_PX * context.resolution;
+            const gap = labelGapPx(BRIDGE_DATE_GAP_PX, scale) * context.resolution;
             const at: ProjectedPosition = [c1[0] + (dx / length) * gap, c1[1] + (dy / length) * gap];
             // The box grows away from the end in both directions, so its nearest corner is the
             // anchor: centred on a steep crossing it reached back over the flare tips.

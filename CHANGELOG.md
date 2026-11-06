@@ -86,6 +86,16 @@ Labels that follow the view and keep clear of each other, on every renderer.
   below the smallest legible size, so a hostile area keeps its marker when its name is too
   small to show. Affects the action areas, the generic area and the corps support area.
 
+### Fixed
+
+- **The gap beside a label shrinks with the label.** Zoomed out, a label shrinks to fit its
+  graphic, but the gap between it and the line work kept its full pixel count, so a phase
+  line's `PL` sat a whole word's width off the end of its line. Every such gap is now stated
+  for a full-size label and scaled with the text, across 74 graphics: the line control
+  measures, routes, boundaries, arrows, the fire support areas' dates, the obstacle and mine
+  lines, linear targets, convoys and more. A date capped at its name's size takes its offset
+  down with it. Nothing changes where labels are drawn at full size.
+
 ## [4.7.0] — 2026-11-02
 
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
