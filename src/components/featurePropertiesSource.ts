@@ -61,6 +61,13 @@ export interface FeaturePropertiesSource {
      */
     anchorPixel(selection: SelectedGraphic): [number, number] | undefined;
 
+    /**
+     * The graphic with engine id `id`, as a click on it would have reported it, or `null` if
+     * there is none. How the dialog opens for a graphic chosen some other way than by clicking,
+     * such as the Properties button on the selection box. @see requestProperties
+     */
+    selectionFor(id: string): SelectedGraphic | null;
+
     /** Writes the edited amplifiers back to the graphic and re-renders it. */
     apply(selection: SelectedGraphic, labels: GraphicLabels, echelon: string): void;
 

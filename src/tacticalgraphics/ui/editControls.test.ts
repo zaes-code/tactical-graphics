@@ -64,6 +64,31 @@ describe('the edit controls', () => {
         controls.destroy();
     });
 
+    it('adds a pressed button of its own, bottom-left by default, only while the box shows', () => {
+        const {engine, state} = fakeEngine();
+        let pressed = 0;
+        // jsdom lays nothing out, so give the layer a size or every button clamps to its corner.
+        const size = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+        const sizeY = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+        const controls = attachEditControls(container, engine, {actions: [{id: 'properties', label: 'Properties', icon: '<svg></svg>', onPress: () => pressed++}]});
+        controls.update();
+        const button = container.querySelector<HTMLButtonElement>('.tg-edit-button--properties')!;
+        expect(visibleButtons(container)).toEqual(['Move', 'Rotate', 'Resize', 'Properties']);
+        expect({left: button.style.left, top: button.style.top}).toEqual({left: '54px', top: '218px'});
+        // A press reaches the host and neither the map nor a gesture.
+        let mapSaw = false;
+        container.addEventListener('pointerdown', () => (mapSaw = true));
+        button.dispatchEvent(new Event('pointerdown', {bubbles: true}));
+        button.click();
+        expect([pressed, mapSaw, state.begun]).toEqual([1, false, []]);
+        state.box = undefined;
+        controls.update();
+        expect(button.hidden).toBe(true);
+        controls.destroy();
+        size.mockRestore();
+        sizeY.mockRestore();
+    });
+
     it('hands a press to the engine, and keeps it from the map', () => {
         const {engine, state} = fakeEngine();
         const controls = attachEditControls(container, engine);

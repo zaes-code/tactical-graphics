@@ -22,14 +22,17 @@
  * ```
  *
  * Every button can be swapped: `icons` replaces a button's picture, `labels` its tooltip,
- * `corners` where it hangs, and `gestures` which of the three appear at all. For a design
- * of your own from scratch, skip this and build on the three engine methods directly.
+ * `corners` where it hangs, and `gestures` which of the three appear at all. `actions` adds
+ * buttons of your own that are pressed rather than dragged, such as one that opens a
+ * properties panel for the selection. For a design of your own from scratch, skip this and
+ * build on the three engine methods directly.
  *
  * The look is set with CSS custom properties on the container or any ancestor:
  * `--tg-edit-button-background`, `--tg-edit-button-color`, `--tg-edit-button-border`,
  * `--tg-edit-button-hover`, `--tg-edit-box-color` and `--tg-edit-z-index`. The elements carry
  * the classes `tg-edit-controls`, `tg-edit-box` and `tg-edit-button` (plus
- * `tg-edit-button--translate`, `--rotate` and `--resize`) for anything more.
+ * `tg-edit-button--translate`, `--rotate` and `--resize`, and `tg-edit-button--action` with
+ * `--<id>` on an action) for anything more.
  *
  * @module edit-controls
  */
@@ -46,6 +49,20 @@ export interface EditControlsEngine {
     selectionGestures(): AllowedGestures | null;
     beginGesture(kind: GestureKind, event: PointerEvent): boolean;
     getInteractionMode?(): EditMode;
+}
+
+/** A button of your own on the selection box, pressed rather than dragged. */
+export interface EditControlAction {
+    /** Names the button: it gets the class `tg-edit-button--<id>`. */
+    id: string;
+    /** The tooltip, and the name screen readers read. */
+    label: string;
+    /** The picture: SVG or HTML markup as a string, or an element, which is moved into the button. */
+    icon: string | Element;
+    /** Which corner of the box it hangs from. Default bottom-left, the one the gestures leave free. */
+    corner?: EditControlCorner;
+    /** Called when the button is pressed, while a graphic is selected. */
+    onPress(): void;
 }
 
 export interface EditControlsOptions {
@@ -68,6 +85,8 @@ export interface EditControlsOptions {
      * that refuses its gesture; this only takes buttons away.
      */
     gestures?: readonly GestureKind[];
+    /** Buttons of your own, shown whenever the box is. Give each its own corner. @see EditControlAction */
+    actions?: readonly EditControlAction[];
     /**
      * Whether to add the default stylesheet to the container's document (or shadow root).
      * Default true. Pass false to style the classes yourself.
@@ -130,6 +149,7 @@ const STYLES = `
 .tg-edit-button{position:absolute;box-sizing:border-box;width:${BUTTON_PX}px;height:${BUTTON_PX}px;padding:0;margin:0;display:flex;align-items:center;justify-content:center;border-radius:50%;pointer-events:auto;cursor:grab;touch-action:none;background:var(--tg-edit-button-background,#fff);color:var(--tg-edit-button-color,rgba(0,0,0,.87));border:1px solid var(--tg-edit-button-border,rgba(0,0,0,.12));box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .tg-edit-button:hover{background:var(--tg-edit-button-hover,#f2f2f2)}
 .tg-edit-button:active{cursor:grabbing}
+.tg-edit-button--action,.tg-edit-button--action:active{cursor:pointer}
 .tg-edit-button:focus-visible{outline:2px solid var(--tg-edit-button-color,#1976d2);outline-offset:2px}
 .tg-edit-controls [hidden]{display:none}
 `;
@@ -213,6 +233,24 @@ export function attachEditControls(container: HTMLElement, engine: EditControlsE
         layer.appendChild(button);
         return {spec, button};
     });
+    const actions = (options.actions ?? []).map(action => {
+        const button = doc.createElement('button');
+        button.type = 'button';
+        button.className = `tg-edit-button tg-edit-button--action tg-edit-button--${action.id}`;
+        button.title = action.label;
+        button.setAttribute('aria-label', action.label);
+        if (typeof action.icon === 'string') button.innerHTML = action.icon;
+        else button.appendChild(action.icon);
+        button.hidden = true;
+        // Kept from the map as the gesture buttons are, so the press neither pans nor deselects.
+        button.addEventListener('pointerdown', event => event.stopPropagation());
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            action.onPress();
+        });
+        layer.appendChild(button);
+        return {corner: action.corner ?? ('bottom-left' as Corner), button};
+    });
     container.appendChild(layer);
 
     // Written only when it changes: the loop runs every frame and most frames change nothing.
@@ -228,6 +266,7 @@ export function attachEditControls(container: HTMLElement, engine: EditControlsE
         if (!box || !gestures) {
             boxElement.hidden = true;
             for (const {button} of buttons) button.hidden = true;
+            for (const {button} of actions) button.hidden = true;
             return;
         }
         boxElement.hidden = false;
@@ -239,6 +278,12 @@ export function attachEditControls(container: HTMLElement, engine: EditControlsE
             button.hidden = !gestures[spec.kind];
             if (button.hidden) continue;
             const {left, top} = placeButton(box, spec.corner, {width, height});
+            button.style.left = `${left}px`;
+            button.style.top = `${top}px`;
+        }
+        for (const {corner, button} of actions) {
+            button.hidden = false;
+            const {left, top} = placeButton(box, corner, {width, height});
             button.style.left = `${left}px`;
             button.style.top = `${top}px`;
         }

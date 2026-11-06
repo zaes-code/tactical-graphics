@@ -68,6 +68,10 @@ Labels that follow the view and keep clear of each other, on every renderer.
 - **`minLabelSize`** sets the smallest size, in px, a label is shrunk to while fitting its
   graphic. Below it the label keeps that size and may run over its outline, so a small area's
   name stays readable from far out. Unset, nothing changes.
+- **Buttons of your own on the edit box.** `attachEditControls` takes **`actions`**: buttons
+  that are pressed rather than dragged, with an id, label, icon and corner, shown whenever the
+  box is. The sample app uses one to open the properties dialog.
+
 ### Changed
 
 - **No echelon draws no echelon mark.** A boundary, battle position or strong point with no

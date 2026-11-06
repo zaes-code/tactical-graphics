@@ -80,6 +80,23 @@ attachEditControls(mapContainer, graphics, {
 });
 ```
 
+Buttons of your own go in `actions`. They are pressed rather than dragged, and show whenever
+the box does. One that opens a properties panel for the selection looks like this:
+
+```ts
+import {attachEditControls} from '@zaes/tactical-graphics/edit-controls';
+
+attachEditControls(mapContainer, graphics, {
+    actions: [{
+        id: 'properties',                     // class tg-edit-button--properties
+        label: 'Properties',
+        icon: '<svg>...</svg>',
+        corner: 'bottom-left',                // the default, the corner the gestures leave free
+        onPress: () => console.log(graphics.getSelection()),
+    }],
+});
+```
+
 The colors are CSS custom properties, set on the container or any ancestor:
 `--tg-edit-button-background`, `--tg-edit-button-color`, `--tg-edit-button-border`,
 `--tg-edit-button-hover`, `--tg-edit-box-color` and `--tg-edit-z-index`. For more, style the

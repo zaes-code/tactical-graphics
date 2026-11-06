@@ -139,7 +139,28 @@ export function createOpenLayersPropertiesSource(
      */
     const selected = new globalThis.Map<string, Feature>();
 
+    /** What the dialog needs, read off any one of the graphic's features. */
+    const selectionOf = (feature: Feature) => {
+        const id = String(feature.get('symbolId') ?? '');
+        selected.set(id, feature);
+        return {
+            id,
+            graphicName: feature.get('graphicName') as TacticalGraphicName,
+            labels: readGraphicLabels(feature),
+            echelon: (feature.get('echelon') as string) || '',
+            measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id), ...frameOfSelection(manager, id)},
+            graphicSize: feature.get('graphicSize') as number | undefined,
+        };
+    };
+
     return {
+        selectionFor(id) {
+            // The line work, as a click would usually hit; every feature carries the amplifiers.
+            const features = featuresOf(map, id);
+            const feature = features.find(f => f.get('role') === 'graphic') ?? features[0];
+            return feature ? selectionOf(feature) : null;
+        },
+
         suppressed() {
             if (manager.isDrawing()) return true;
             /*
@@ -168,16 +189,7 @@ export function createOpenLayersPropertiesSource(
                         return;
                     }
 
-                    const id = String(feature.get('symbolId') ?? '');
-                    selected.set(id, feature);
-                    callback({
-                        id,
-                        graphicName: feature.get('graphicName') as TacticalGraphicName,
-                        labels: readGraphicLabels(feature),
-                        echelon: (feature.get('echelon') as string) || '',
-                        measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id), ...frameOfSelection(manager, id)},
-                        graphicSize: feature.get('graphicSize') as number | undefined,
-                    });
+                    callback(selectionOf(feature));
                 }, HIT_TEST_DELAY_MS);
             };
 
