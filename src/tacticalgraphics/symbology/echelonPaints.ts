@@ -16,6 +16,7 @@ import {TacticalGraphicEchelon, TacticalGraphicStatus} from '../core/type';
 import {cutGapAlongPath, decorationScale, gapFits, joinedAtSeam, pathLength, runVector, splitAtCorners, splitPathAroundAll} from './decorations';
 import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {midSegmentInView} from './viewFollow';
+import {labelGapPx} from './labelFit';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -146,6 +147,8 @@ function openRing(
     resolution: number,
     /** Half the hole to cut, in screen pixels — the glyph's own half-width. @see echelonWidthPx */
     halfGapPx: number,
+    /** The scale the glyph is drawn at, which its clearance follows. @see labelGapPx */
+    scale: number,
 ): OpenedRing | null {
     if (ring.length < 2) return null;
     const openIndex = openingIndex(ring, facing);
@@ -168,7 +171,7 @@ function openRing(
     const m = closed.length - 1;
     const k = Math.floor(m / 2);
     const walk = Array.from({length: m + 1}, (_, j) => closed[(((openIndex - k + j) % m) + m) % m]);
-    const cut = cutGapAlongPath(walk, k, ECHELON_OPENING_MIDPOINT, (halfGapPx + ECHELON_GAP_PX) * resolution);
+    const cut = cutGapAlongPath(walk, k, ECHELON_OPENING_MIDPOINT, (halfGapPx + labelGapPx(ECHELON_GAP_PX, scale)) * resolution);
     const outline = splitAtCorners([...cut.after, ...cut.before.slice(1)]).filter(run => run.length > 1);
 
     return {outline, midGap: cut.center, dx, dy};
@@ -543,7 +546,7 @@ export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPa
         const halfGlyphPx = opening
             ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
             : 0;
-        const opened = openRing(ring, facing, context.resolution, halfGlyphPx);
+        const opened = openRing(ring, facing, context.resolution, halfGlyphPx, scaleOf(feature, context));
         if (!opened) return [];
 
         const color = lineColorOf(feature);
@@ -577,7 +580,7 @@ export function strongPointPaint(): AreaPaint {
         const halfGlyphPx = opening
             ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
             : 0;
-        const opened = openRing(ring, facing, context.resolution, halfGlyphPx);
+        const opened = openRing(ring, facing, context.resolution, halfGlyphPx, scaleOf(feature, context));
         if (!opened) return [];
 
         const color = lineColorOf(feature);

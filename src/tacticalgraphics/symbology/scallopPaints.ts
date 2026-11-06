@@ -40,6 +40,7 @@ import {
 } from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {endAnchorInView} from './viewFollow';
+import {labelGapPx} from './labelFit';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -132,7 +133,7 @@ export function lineOfContactPaint(): LinePaint {
                 rotation,
                 align,
                 baseline: 'middle',
-                offsetXPx: sign * LC_LABEL_PAD_PX,
+                offsetXPx: sign * labelGapPx(LC_LABEL_PAD_PX, scale2),
                 scale: scale2,
             },
         });
@@ -160,7 +161,7 @@ export function lineOfContactPaint(): LinePaint {
          * the view, reading inward from there along the line. @see endAnchorInView
          */
         function lcAt(at: ProjectedPosition, which: 'start' | 'end'): Paint {
-            const footprint = {alongPx: textWidth(context, 'LC', fontStyle, scale2) / 2 + LC_LABEL_PAD_PX, acrossPx: (amplitudeMap + offsetMap) / res};
+            const footprint = {alongPx: textWidth(context, 'LC', fontStyle, scale2) / 2 + labelGapPx(LC_LABEL_PAD_PX, scale2), acrossPx: (amplitudeMap + offsetMap) / res};
             const moved = endAnchorInView(coords, which, footprint, context);
             if (!moved) {
                 return which === 'start'

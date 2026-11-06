@@ -17,7 +17,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {RouteDirection, TacticalGraphicName, getLabel} from '../core/type';
 import {offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
-import {capLabelToSpan} from './labelFit';
+import {capLabelToSpan, labelGapPx} from './labelFit';
 import {midSegmentInView} from './viewFollow';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 
@@ -143,8 +143,8 @@ function routeBlockPaints(
     }
 
     // The identifier clears the top arrow row; with no arrows it falls back to the
-    // plain 8 px every other line graphic uses.
-    const labelOffsetPx = rows > 0 ? row(rows - 1) + headHalfPx + 11 * scale : 8;
+    // plain 8 px every other line graphic uses, at the label's size. @see labelGapPx
+    const labelOffsetPx = rows > 0 ? row(rows - 1) + headHalfPx + 11 * scale : labelGapPx(8, textScale);
     if (!text) return paints;
     paints.push(amplifier(feature, at(labelOffsetPx, 0), text, textScale, {rotation, align: 'center', baseline: 'bottom'}));
 

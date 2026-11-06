@@ -28,7 +28,7 @@ import { TacticalGraphicName, getLabel} from '../core/type';
 import {uprightRotation} from './decorations';
 import {amplifierText, asAmplifier, showsEny, formatDesignationWithCountry, getFullLabel, labelColorOf, legibleDesignation} from './paintFunctions';
 import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
-import {capLabelToGraphic, fitLabelScale} from './labelFit';
+import {capLabelToGraphic, fitLabelScale, labelGapPx} from './labelFit';
 import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
 import {insetView} from './viewFollow';
 
@@ -235,7 +235,8 @@ export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
          * **Under the middle, or along under the shape to the view** when the middle is off to
          * one side and the line under the shape is on screen. @see PaintContext.view
          */
-        const y = box.minY - BELOW_SHAPE_GAP_PX * context.resolution;
+        const scale = outsideScaleOf(feature, context);
+        const y = box.minY - labelGapPx(BELOW_SHAPE_GAP_PX, scale) * context.resolution;
         let x = (box.minX + box.maxX) / 2;
         const view = insetView(context);
         if (view && y >= view.minY && y <= view.maxY && (x < view.minX || x > view.maxX)) {
@@ -251,7 +252,7 @@ export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'top',
-                scale: outsideScaleOf(feature, context),
+                scale,
             },
         }];
     };
@@ -597,7 +598,7 @@ export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): A
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'right',
                 baseline: 'top',
-                offsetXPx: -10,
+                offsetXPx: -labelGapPx(10, scale),
                 scale,
             },
         });
@@ -624,6 +625,7 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
 
         const at = outsideCornerAnchor(feature, irregular);
         if (!at) return [];
+        const scale = outsideScaleOf(feature, context);
 
         return [{
             geometry: {type: 'Point', coordinates: at},
@@ -635,8 +637,8 @@ export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'right',
                 baseline: 'bottom',
-                offsetXPx: -6,
-                scale: outsideScaleOf(feature, context),
+                offsetXPx: -labelGapPx(6, scale),
+                scale,
             },
         }];
     };

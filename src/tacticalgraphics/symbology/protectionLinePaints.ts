@@ -21,6 +21,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import { TacticalGraphicMineType, TacticalGraphicName} from '../core/type';
 import {getFullSizeDecorations} from '../core/config';
 import {MINE_GLYPH_GAP_PX, mineGlyph, mineGlyphExtent, mineGlyphPitch} from './minePaints';
+import {labelGapPx} from './labelFit';
 import {
     DECORATION_MIN_PX,
     endFrame,
@@ -122,7 +123,7 @@ function enyBeyondEnds(
     const afterStart = path[1];
     const end = path[path.length - 1];
     const beforeEnd = path[path.length - 2];
-    const labelGap = clearPx * resolution;
+    const labelGap = labelGapPx(clearPx, scale) * resolution;
     const outward = (from: ProjectedPosition, to: ProjectedPosition): ProjectedPosition => {
         const dx = to[0] - from[0];
         const dy = to[1] - from[1];
@@ -386,7 +387,7 @@ export function minefieldStaticPaint(): ProtectionPaint {
         const a = mid.point;
         const b: ProjectedPosition = [a[0] + mid.tangent[0], a[1] + mid.tangent[1]];
         const up = offsetAbove([0, 0], a, b, 1, 1);
-        const reach = layout.halfHeight + LABEL_OFFSET_PX * context.resolution;
+        const reach = layout.halfHeight + labelGapPx(LABEL_OFFSET_PX, scale) * context.resolution;
         const rotation = uprightRotation(a, b);
         const texts: [string, number, 'bottom' | 'top'][] = [
             [amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()), 1, 'bottom'],

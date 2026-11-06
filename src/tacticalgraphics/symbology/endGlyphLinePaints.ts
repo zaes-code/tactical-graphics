@@ -30,6 +30,7 @@ import {
 import {amplifierDash, amplifierText, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {insetView, midSegmentInView, visibleStretch} from './viewFollow';
 import {BASE_FONT_SIZE_PX} from '../core/config';
+import {labelGapPx} from './labelFit';
 
 type EndGlyphPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -349,7 +350,7 @@ export function mobilityCorridorPaint(): EndGlyphPaint {
         paints.push({
             geometry: {
                 type: 'Point',
-                coordinates: offsetAbove(anchor, along[0], along[1], context.resolution, LABEL_OFFSET_PX + 4),
+                coordinates: offsetAbove(anchor, along[0], along[1], context.resolution, labelGapPx(LABEL_OFFSET_PX + 4, scale)),
             },
             text: {
                 text,
