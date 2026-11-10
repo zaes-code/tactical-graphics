@@ -19,6 +19,11 @@ Labels that follow the view and keep clear of each other, on every renderer.
 
 ### Added
 
+- **A unit symbol on Search Area, Capture, Evacuate and Recover.** Their plates carry field A, a
+  unit symbol the host supplies; it is now drawn from the same center-symbol provider as Cover,
+  Guard and Screen: on Search Area's vertex, and inside the swept-arc tasks' circle, sized to it.
+  `CENTER_SYMBOL_GRAPHICS` has ten members, and the four take hostility, as a unit's frame is its
+  identity. New exports: `searchAreaSymbol`, `sweptArcTaskSymbol`, `UNIT_SYMBOL_GRAPHICS`.
 - **Labels follow the view.** A label whose usual place is off screen moves onto the visible
   part of its graphic: phase line and axis labels, boundary and mid-line labels, linear target
   and FPF labels, and area labels. Every renderer hands the paint functions its view through
