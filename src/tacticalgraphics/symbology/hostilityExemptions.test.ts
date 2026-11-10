@@ -40,7 +40,7 @@ const HOSTILE_RED = getColorByHostility(TacticalGraphicHostility.hostileFaker);
 const UNAFFILIATED = getColorByHostility(TacticalGraphicHostility.unknown);
 
 describe('supportsHostility', () => {
-    it('is false for every Chapter 6 tactical mission task but the exfiltration and the three that carry a unit symbol', () => {
+    it('is false for every Chapter 6 tactical mission task but the exfiltration and the six that carry a unit symbol', () => {
         const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
             .filter(name => GRAPHIC_CATEGORIES[name] === TacticalGraphicCategory.TacticalMissionTasks);
 
@@ -54,13 +54,17 @@ describe('supportsHostility', () => {
         // The escort and the two follow tasks join it on a different reading: each draws a
         // host-supplied entity symbol, and an entity symbol's frame *is* its standard
         // identity, so the affiliation decides what is drawn rather than merely tinting it.
-        // (User's call, 2026-08-28.) @see CENTER_SYMBOL_GRAPHICS
+        // (User's call, 2026-08-28.) Capture, evacuate and recover joined them on 2026-11-10, when
+        // their circle's unit symbol was drawn. @see CENTER_SYMBOL_GRAPHICS
         expect(new Set(missionTasks.filter(supportsHostility))).toEqual(
             new Set([
                 TacticalGraphicName.Exfiltrate,
                 TacticalGraphicName.Escort,
                 TacticalGraphicName.FollowAndAssume,
                 TacticalGraphicName.FollowAndSupport,
+                TacticalGraphicName.Capture,
+                TacticalGraphicName.Evacuate,
+                TacticalGraphicName.Recover,
             ]),
         );
         expect(supportsHostility(TacticalGraphicName.Infiltration)).toBe(true);
@@ -70,7 +74,7 @@ describe('supportsHostility', () => {
         // Not listed twice: the rule reads the set, so a graphic cannot gain a unit symbol
         // without gaining the identity that frames it.
         CENTER_SYMBOL_GRAPHICS.forEach(name => expect(supportsHostility(name)).toBe(true));
-        expect(CENTER_SYMBOL_GRAPHICS.size).toBe(6);
+        expect(CENTER_SYMBOL_GRAPHICS.size).toBe(10);
     });
 
     it('is false for every CBRN contaminated area, subtypes included', () => {

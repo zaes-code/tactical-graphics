@@ -65,7 +65,7 @@ import {writeGraphicProperties} from './graphicProperties';
 import {getColorByHostility} from './openlayerStyles';
 import {clearAllGraphics} from './persistence';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
-import ms from 'milsymbol';
+import {symbolImageProvider} from '@zaes/military-symbols';
 
 /**
  * A different unit symbol in the center of each security operation.
@@ -76,18 +76,18 @@ import ms from 'milsymbol';
  * once for the whole app and cannot, by itself, give two Screens different
  * symbols.
  *
- * **Illustrative, not doctrinal.** These are the MIL-STD-2525E land-unit function
- * IDs for reconnaissance, armoured cavalry and armour, in ascending combat power
- * to match the three tasks; FM 1-02.2 does not prescribe which unit performs
- * which, and a real deployment supplies its own. They were picked by rendering the
- * symbol-set-10 entity range and reading the icons, since milsymbol carries no
- * entity names to look them up by.
+ * **Illustrative, not doctrinal.** These are MIL-STD-2525E land-unit entities in
+ * ascending combat power to match the three tasks; FM 1-02.2 does not prescribe which
+ * unit performs which, and a real deployment supplies its own.
  */
 const SAMPLE_UNIT_FUNCTION_ID: Partial<Record<TacticalGraphicName, string>> = {
-    [TacticalGraphicName.Screen]: '121300', // single diagonal — reconnaissance
-    [TacticalGraphicName.Guard]: '121000', // oval with a diagonal — armoured cavalry
-    [TacticalGraphicName.Cover]: '120500', // oval — armour
+    [TacticalGraphicName.Screen]: '121300', // Reconnaissance/Cavalry/Scout
+    [TacticalGraphicName.Guard]: '121000', // Combined Arms
+    [TacticalGraphicName.Cover]: '120500', // Armor/Mechanized
 };
+
+/** Draws each sample's unit; `sizePx` is the size it draws at. */
+const drawUnit = symbolImageProvider();
 
 /**
  * Bigger than the library's 25px default, because a sample sits in a dense grid
@@ -111,13 +111,7 @@ function sampleUnitProvider(name: TacticalGraphicName): SecuritySymbolProvider |
     if (!functionId) return undefined;
     return ({sidc}) => {
         const unit = sidc.slice(0, 10) + functionId + sidc.slice(16);
-        // `size` here is the SVG's internal resolution — 2x for a crisp HiDPI
-        // render. `sizePx` is what it actually draws at.
-        const svg = new ms.Symbol(unit, {size: SAMPLE_UNIT_SIZE_PX * 2}).asSVG();
-        return {
-            src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
-            sizePx: SAMPLE_UNIT_SIZE_PX,
-        };
+        return drawUnit({sidc: unit, sizePx: SAMPLE_UNIT_SIZE_PX});
     };
 }
 

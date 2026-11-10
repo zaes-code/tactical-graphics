@@ -67,6 +67,7 @@ import {
     useMilsymbolSecuritySymbols,
     followTaskSymbol,
     securityOperationSymbol,
+    type searchAreaSymbol,
 } from '@zaes/tactical-graphics';
 import type {SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from '@zaes/tactical-graphics';
 import {paintContext, setPaintCenterSymbolProvider, toPaintFeature} from './paintToOpenLayers';
@@ -533,6 +534,44 @@ export function securityOperationCentreSymbolStyle(feature: FeatureLike, resolut
     if (!paintFeature) return undefined;
 
     const placement = securityOperationSymbol(paintFeature, paintContext(resolution));
+    if (!placement) return undefined;
+
+    const labels = readGraphicLabels(feature);
+    const hostility = labels.hostility ?? TacticalGraphicHostility.pending;
+    const active =
+        (feature.get('symbolId') ? getGraphicSecuritySymbolProvider(feature.get('symbolId') as string) : undefined)
+        ?? provider
+        ?? getSecuritySymbolProvider();
+
+    const style = resolve(
+        {
+            name: feature.get('graphicName') as TacticalGraphicName,
+            graphicId: (feature.get('symbolId') as string) || undefined,
+            hostility,
+            sidc: securitySymbolSidc(hostility),
+            sizePx: placement.sizePx,
+            labels,
+        },
+        active,
+    );
+    if (!style) return undefined;
+
+    const placed = style.clone();
+    placed.setGeometry(new Point(placement.at as number[]));
+    const opacity = graphicOpacityOf(feature);
+    if (opacity < 1) placed.getImage()?.setOpacity(opacity);
+    return placed;
+}
+
+/**
+ * Search Area's and the swept-arc tasks' unit symbol: the same provider chain, placed and sized by
+ * the library (`place`), as the follow tasks are. @see unitSymbolPaints
+ */
+export function unitSymbolStyle(feature: FeatureLike, resolution: number, place: typeof searchAreaSymbol): Style | undefined {
+    const paintFeature = toPaintFeature(feature as Feature);
+    if (!paintFeature) return undefined;
+
+    const placement = place(paintFeature, paintContext(resolution));
     if (!placement) return undefined;
 
     const labels = readGraphicLabels(feature);
