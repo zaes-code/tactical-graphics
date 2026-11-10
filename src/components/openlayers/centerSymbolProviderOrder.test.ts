@@ -24,7 +24,7 @@ import {
     setGraphicSecuritySymbolProvider,
     setSecuritySymbolProvider,
 } from '@zaes/tactical-graphics';
-import {escortOrDemonstrationStyleFunc, followTaskStyleFunc, securityOperationStyleFunc} from './openlayerStyles';
+import {escortOrDemonstrationStyleFunc, followTaskStyleFunc, searchAreaStyleFunc, securityOperationStyleFunc, sweptArcTaskStyleFunc} from './openlayerStyles';
 import {setSecurityOperationSymbolProvider} from './securityOperationSymbol';
 
 const RESOLUTION = 40;
@@ -44,6 +44,19 @@ function geometryFor(name: TacticalGraphicName) {
             ]);
         case TacticalGraphicName.Escort:
             return new LineString([[0, 2000], [0, 0], [8000, 0], [8000, 2000]]);
+        case TacticalGraphicName.SearchArea:
+            // Two arms from the vertex at the origin.
+            return new MultiLineString([
+                [[0, 0], [4000, 3000]],
+                [[0, 0], [4000, -3000]],
+            ]);
+        case TacticalGraphicName.Capture:
+        case TacticalGraphicName.Evacuate:
+        case TacticalGraphicName.Recover: {
+            // [circle, arc]: a 2 km circle round the origin, and an arc beyond it.
+            const ring = Array.from({length: 33}, (_, i) => [2000 * Math.cos((i / 32) * 2 * Math.PI), 2000 * Math.sin((i / 32) * 2 * Math.PI)]);
+            return new MultiLineString([ring, [[2500, 0], [4000, 2000], [2500, 4000]]]);
+        }
         default:
             return new LineString([[0, 0], [8000, 0]]);
     }
@@ -60,6 +73,8 @@ function feature(name: TacticalGraphicName, designation?: string): Feature {
 function styleFuncFor(name: TacticalGraphicName) {
     if (name === TacticalGraphicName.Escort) return escortOrDemonstrationStyleFunc(name);
     if (name === TacticalGraphicName.FollowAndAssume || name === TacticalGraphicName.FollowAndSupport) return followTaskStyleFunc(name);
+    if (name === TacticalGraphicName.SearchArea) return searchAreaStyleFunc();
+    if (name === TacticalGraphicName.Capture || name === TacticalGraphicName.Evacuate || name === TacticalGraphicName.Recover) return sweptArcTaskStyleFunc(name);
     return securityOperationStyleFunc(name);
 }
 
@@ -80,8 +95,8 @@ afterEach(() => {
     SIX.forEach(name => setGraphicSecuritySymbolProvider(`id-${name}`, undefined));
 });
 
-it('covers the six graphics that carry a center symbol', () => {
-    expect(SIX).toHaveLength(6);
+it('covers the ten graphics that carry a center symbol', () => {
+    expect(SIX).toHaveLength(10);
 });
 
 describe.each(SIX)('%s', name => {
