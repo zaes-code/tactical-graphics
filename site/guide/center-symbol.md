@@ -1,15 +1,29 @@
 # The center symbol
 
-Six graphics draw a single-point 2525E unit symbol as part of themselves. That is
-[milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this library's —
-so this library **never imports milsymbol**. It asks a provider, and you register one:
+Six graphics draw a single-point 2525E unit symbol as part of themselves. That is a
+symbol library's job, not this one's — so this library **imports none**. It asks a
+provider, and you register one, from either of two libraries:
 
 ```ts
+// @zaes/military-symbols: 2525E, D, C, B and APP-6(B), drawn from the standards
+import {symbolImageProvider} from '@zaes/military-symbols';
+import {setSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+setSecuritySymbolProvider(symbolImageProvider());   // once, at startup
+```
+
+```ts
+// milsymbol
 import ms from 'milsymbol';
 import {useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
 
 useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
+
+`symbolImageProvider` takes the same display options as the rest of
+[@zaes/military-symbols](https://www.zaes.com/docs/military-symbols/) (`symbolImageProvider({fillOpacity: 0.5})`),
+so the center symbol matches the units on the rest of your map. Either way the provider
+is handed the code and the size; nothing else changes.
 
 From the **root** entry point, because a center symbol is symbology rather than
 rendering: one registration serves whichever engine is drawing, and both read it. One
@@ -36,9 +50,9 @@ as before. Every one of the six sizes its symbol from the graphic it sits in —
 them holds a fixed pixel size — and all six stop growing at the same 96 px ceiling.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
-missing module. That is what makes `milsymbol` an *actually* optional peer
+missing module. That is what makes the symbol library an *actually* optional peer
 dependency: a consumer who wants the geometry, or the other 317 graphics, never
-resolves it.
+resolves one.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
 hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
@@ -80,7 +94,7 @@ library derives, not to one a provider returns.
 
 ## Choosing the symbol
 
-Register a provider of your own instead of `useMilsymbolSecuritySymbols`. It can return
+Register a provider of your own instead of the two above. It can return
 three things, in ascending order of control:
 
 | Return | You get |
@@ -119,6 +133,27 @@ handler (its features carry it as `symbolId`), `id` on a `MapLibreTacticalGraphi
 away. `clearGraphicSecuritySymbolProviders()`
 forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
+
+### A unit for one graphic
+
+Most of the time what differs between two graphics of a kind is just *which unit*, and
+the symbol library you registered already knows how to draw any unit. Give the graphic its
+unit's code and the global provider draws it:
+
+```ts
+import {setGraphicUnitSymbol} from '@zaes/tactical-graphics';
+
+setGraphicUnitSymbol(screenId, '121300');                          // entity only: reconnaissance
+setGraphicUnitSymbol(guardId, '130310001412110000000000000000');   // a whole SIDC, drawn as given
+setGraphicUnitSymbol(screenId, undefined);                         // back to the doctrinal symbol
+```
+
+Six digits are the **entity**, SIDC positions 11-16: the rest of the code is the
+graphic's own, so the standard identity its `hostility` gives survives, and a hostile
+Screen stays hostile-framed whichever unit goes in. A 20- or 30-digit code is drawn as it
+is. It works the same with either library, reads the provider when it draws (so the order
+of the two calls does not matter), and is one of the per-graphic providers above, so it
+replaces one bound to that graphic.
 
 ### Worked example: three security operations, three units
 

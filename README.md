@@ -2,7 +2,7 @@
 
 Render **MIL-STD-2525E, FM 1-02.2 and APP-06 tactical graphics** (axis-of-advance arrows, phase lines, mission tasks, range fans, boundaries) as plain **GeoJSON**, and draw and edit them on **OpenLayers** or **MapLibre**.
 
-It complements [milsymbol](https://github.com/spatialillusions/milsymbol), which draws single-point unit symbols: this library draws the multi-point graphics milsymbol does not.
+It complements the single-point unit symbol libraries, [@zaes/military-symbols](https://www.zaes.com/docs/military-symbols/) and [milsymbol](https://github.com/spatialillusions/milsymbol): this library draws the multi-point graphics they do not.
 
 **[Documentation](https://zaes.com/docs/tactical-graphics/)** · **[Live demo](https://zaes-code.github.io/tactical-graphics/)** · [Changelog](CHANGELOG.md)
 
@@ -14,7 +14,7 @@ It complements [milsymbol](https://github.com/spatialillusions/milsymbol), which
 npm install @zaes/tactical-graphics
 ```
 
-Add `ol` or `maplibre-gl` to draw on a map, and `milsymbol` for the few graphics with a center symbol. All three are optional peers.
+Add `ol` or `maplibre-gl` to draw on a map, and a unit symbol library (`@zaes/military-symbols` or `milsymbol`) for the six graphics with a center symbol. All are optional; nothing here imports them.
 
 ## Quick start
 

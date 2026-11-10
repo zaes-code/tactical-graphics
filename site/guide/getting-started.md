@@ -13,20 +13,21 @@ Four entry points ship, and you can use any of them on its own:
 | Import | What it gives you | Needs |
 |---|---|---|
 | `@zaes/tactical-graphics` | The geometry, **and how a symbol is painted**. GeoJSON in, GeoJSON out — no map library, no DOM. | individual `@turf/*` modules only |
-| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; `milsymbol` only if you want the [center symbol](/guide/center-symbol) |
-| `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; `milsymbol` for the center symbol |
+| `@zaes/tactical-graphics/openlayers` | The OpenLayers renderer: the 4326 → 3857 adapter, the feature holders and controllers, and the draw and edit interactions. | `ol` as a peer; a symbol library only if you want the [center symbol](/guide/center-symbol) |
+| `@zaes/tactical-graphics/maplibre` | The MapLibre renderer: native GeoJSON layers, draw and edit interactions, and the same editor chrome. Exposes the **same `createTacticalGraphics`** as the OpenLayers entry point. | `maplibre-gl` as a peer; a symbol library for the center symbol |
 | `@zaes/tactical-graphics/thumbnails` | One small SVG per graphic, for a menu or picker that has to show what the user is about to add. Inline markup or a `data:` URI — no network, no loader. | nothing |
 
 ```bash
 npm install ol             # only for the OpenLayers entry point
 npm install maplibre-gl    # only for the MapLibre entry point
-npm install milsymbol      # only for the center symbol — six graphics carry one
+npm install @zaes/military-symbols   # or milsymbol: only for the center symbol, six graphics carry one
 ```
 
 `ol`, `maplibre-gl` and `milsymbol` are peer dependencies and all are optional, so
 installing the package for its geometry alone pulls in none of them. The thumbnails
 subpath has no dependency at all — it is inline markup. Nothing in this package imports
-`milsymbol` — you hand it in, once, if you want it. See
+a symbol library: you register one, `@zaes/military-symbols` or `milsymbol`, once, if you
+want the center symbol. See
 [The center symbol](/guide/center-symbol).
 
 **The same names, from either subpath.** `createTacticalGraphics` and the library's own
@@ -35,7 +36,7 @@ so moving a program from one engine to the other changes the import path and not
 A test asserts the two keep matching.
 
 The **center-symbol controls are the exception**, and they are not a subpath's to offer:
-`setSecuritySymbolProvider` and `useMilsymbolSecuritySymbols` live on the **root** entry,
+`setSecuritySymbolProvider`, `setGraphicUnitSymbol` and `useMilsymbolSecuritySymbols` live on the **root** entry,
 because which symbol a graphic draws is symbology rather than rendering. Import them from
 `@zaes/tactical-graphics` whichever engine you use. @see [The center symbol](/guide/center-symbol)
 
