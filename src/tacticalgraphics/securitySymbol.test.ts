@@ -18,6 +18,7 @@ import {
     clearGraphicSecuritySymbolProviders,
     getGraphicSecuritySymbolProvider,
     setGraphicSecuritySymbolProvider,
+    setGraphicUnitSymbol,
     subscribeSecuritySymbolChange,
     MAX_SYMBOL_SIZE_PX,
     MIN_SYMBOL_SIZE_PX,
@@ -255,5 +256,42 @@ describe('the change notification', () => {
         clearGraphicSecuritySymbolProviders();
         stop();
         expect(fired).toBe(0);
+    });
+});
+
+describe('a unit for one graphic', () => {
+    // The global provider stands in for any symbol library: it echoes the code it is asked for.
+    const echo = () => setSecuritySymbolProvider(({sidc}) => `img:${sidc}`);
+
+    it('swaps the entity and keeps the identity the hostility gave', () => {
+        echo();
+        setGraphicUnitSymbol('screen-1', '121300');
+        const hostile = securitySymbolSidc(TacticalGraphicHostility.hostileFaker);
+        const answer = resolveSecuritySymbol(request({graphicId: 'screen-1', sidc: hostile}));
+        expect(answer?.src).toBe(`img:${hostile.slice(0, 10)}121300${hostile.slice(16)}`);
+        expect(answer?.src.slice(4, 8)).toBe(hostile.slice(0, 4));
+    });
+
+    it('draws a whole SIDC as given, and leaves other graphics on the doctrinal symbol', () => {
+        echo();
+        const cavalry = '130310001412110000000000000000';
+        setGraphicUnitSymbol('guard-1', cavalry);
+        expect(resolveSecuritySymbol(request({graphicId: 'guard-1'}))?.src).toBe(`img:${cavalry}`);
+        expect(resolveSecuritySymbol(request({graphicId: 'guard-2'}))?.src).toBe(`img:${securitySymbolSidc(TacticalGraphicHostility.friend)}`);
+    });
+
+    it('reads the global provider when drawing, so it may be registered afterwards', () => {
+        setGraphicUnitSymbol('cover-1', '120500');
+        expect(resolveSecuritySymbol(request({graphicId: 'cover-1'}))).toBeUndefined();
+        echo();
+        expect(resolveSecuritySymbol(request({graphicId: 'cover-1'}))?.src).toContain('120500');
+    });
+
+    it('goes back to the doctrinal symbol on undefined, and refuses what is not a code', () => {
+        echo();
+        setGraphicUnitSymbol('screen-1', '121300');
+        setGraphicUnitSymbol('screen-1', undefined);
+        expect(getGraphicSecuritySymbolProvider('screen-1')).toBeUndefined();
+        expect(() => setGraphicUnitSymbol('screen-1', 'SFGPUCR---')).toThrow(/neither an entity/);
     });
 });

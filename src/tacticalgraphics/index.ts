@@ -570,6 +570,7 @@ export {
     securitySymbolRevision,
     securitySymbolSidc,
     setGraphicSecuritySymbolProvider,
+    setGraphicUnitSymbol,
     setSecuritySymbolProvider,
     setSecuritySymbolSize,
     subscribeSecuritySymbolChange,

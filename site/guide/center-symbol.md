@@ -1,27 +1,43 @@
 # The center symbol
 
-Six graphics draw a single-point 2525E unit symbol as part of themselves. That is
-[milsymbol](https://github.com/spatialillusions/milsymbol)'s job, not this library's —
-so this library **never imports milsymbol**. It asks a provider, and you register one:
+Ten graphics draw a single-point 2525E unit symbol as part of themselves. That is a
+symbol library's job, not this one's — so this library **imports none**. It asks a
+provider, and you register one, from either of two libraries:
 
 ```ts
+// @zaes/military-symbols: 2525E, D, C, B and APP-6(B), drawn from the standards
+import {symbolImageProvider} from '@zaes/military-symbols';
+import {setSecuritySymbolProvider} from '@zaes/tactical-graphics';
+
+setSecuritySymbolProvider(symbolImageProvider());   // once, at startup
+```
+
+```ts
+// milsymbol
 import ms from 'milsymbol';
 import {useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
 
 useMilsymbolSecuritySymbols(ms);   // once, at startup
 ```
 
+`symbolImageProvider` takes the same display options as the rest of
+[@zaes/military-symbols](https://www.zaes.com/docs/military-symbols/) (`symbolImageProvider({fillOpacity: 0.5})`),
+so the center symbol matches the units on the rest of your map. Either way the provider
+is handed the code and the size; nothing else changes.
+
 From the **root** entry point, because a center symbol is symbology rather than
 rendering: one registration serves whichever engine is drawing, and both read it. One
-call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
+call covers all ten, and `CENTER_SYMBOL_GRAPHICS` is the set:
 
 | Graphic | Where the symbol goes | How big |
 |---|---|---|
 | Cover, Guard, Screen | between the two arms | a share of the gap between them, so a resize scales it with the symbol |
 | Escort | in the break in its bar | a share of the bar's on-screen span, so the two read as one group |
 | Follow And Assume, Follow And Support | inside the body, **in place of field T** | a share of the body, which is what a resize scales |
+| Search Area | on the vertex, over the arms, as its plate draws it (field A) | the library's size, `setSecuritySymbolSize` |
+| Capture, Evacuate, Recover | inside the circle, which is there to contain the unit (field A) | a share of the circle's radius, so it stays inside it |
 
-All of them stop at 96 px however far the map zooms in. A framed 2525E symbol
+The first six stop at 96 px however far the map zooms in. A framed 2525E symbol
 carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
 the screen would be a badge the size of a hand. It is the ceiling
 `setSecuritySymbolSize` is clamped to, so every center symbol agrees on how large it ever
@@ -32,18 +48,18 @@ which can be short while the graphic is still plainly visible.
 
 On the two follow tasks the symbol **replaces** the designation: a picture of the unit
 says more than its name. Type a designation and register no provider, and the text draws
-as before. Every one of the six sizes its symbol from the graphic it sits in — none of
+as before. Every one of those six sizes its symbol from the graphic it sits in — none of
 them holds a fixed pixel size — and all six stop growing at the same 96 px ceiling.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
-missing module. That is what makes `milsymbol` an *actually* optional peer
+missing module. That is what makes the symbol library an *actually* optional peer
 dependency: a consumer who wants the geometry, or the other 317 graphics, never
-resolves it.
+resolves one.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
 hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
 `securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
-it. All six offer the affiliation for that reason — the escort and the two follow tasks
+it. All ten offer the affiliation for that reason — the escort and the two follow tasks
 are tactical mission tasks, which otherwise carry little (the escort nothing, the follow
 tasks only a designation), and an entity symbol's frame *is* its standard identity.
 
@@ -55,9 +71,10 @@ so a much taller image would overflow the body it sits in.
 
 ## Sizing the symbol
 
-**Every one of the six sizes itself from the graphic it sits in**, and stops at 96 px so
-zooming in cannot inflate it. `setSecuritySymbolSize` no longer governs any of them — it
-is the size for a symbol a host places itself, and it is clamped to the same 96 px ceiling
+**The six security operations and mission tasks size themselves from the graphic they sit
+in**, and stop at 96 px so zooming in cannot inflate them; Capture, Evacuate and Recover
+size theirs to their circle. `setSecuritySymbolSize` governs Search Area's symbol, and is
+the size for a symbol a host places itself; it is clamped to the same 96 px ceiling
 the six share (`MAX_SYMBOL_SIZE_PX`, a constant). On MapLibre it is also the fallback width
 for an image that could not be rasterized:
 
@@ -80,7 +97,7 @@ library derives, not to one a provider returns.
 
 ## Choosing the symbol
 
-Register a provider of your own instead of `useMilsymbolSecuritySymbols`. It can return
+Register a provider of your own instead of the two above. It can return
 three things, in ascending order of control:
 
 | Return | You get |
@@ -119,6 +136,27 @@ handler (its features carry it as `symbolId`), `id` on a `MapLibreTacticalGraphi
 away. `clearGraphicSecuritySymbolProviders()`
 forgets the lot when a map is torn down:
 the registry is keyed by id and the library is never told when an id stops existing.
+
+### A unit for one graphic
+
+Most of the time what differs between two graphics of a kind is just *which unit*, and
+the symbol library you registered already knows how to draw any unit. Give the graphic its
+unit's code and the global provider draws it:
+
+```ts
+import {setGraphicUnitSymbol} from '@zaes/tactical-graphics';
+
+setGraphicUnitSymbol(screenId, '121300');                          // entity only: reconnaissance
+setGraphicUnitSymbol(guardId, '130310001412110000000000000000');   // a whole SIDC, drawn as given
+setGraphicUnitSymbol(screenId, undefined);                         // back to the doctrinal symbol
+```
+
+Six digits are the **entity**, SIDC positions 11-16: the rest of the code is the
+graphic's own, so the standard identity its `hostility` gives survives, and a hostile
+Screen stays hostile-framed whichever unit goes in. A 20- or 30-digit code is drawn as it
+is. It works the same with either library, reads the provider when it draws (so the order
+of the two calls does not matter), and is one of the per-graphic providers above, so it
+replaces one bound to that graphic.
 
 ### Worked example: three security operations, three units
 

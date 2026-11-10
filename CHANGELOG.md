@@ -24,6 +24,11 @@ Labels that follow the view and keep clear of each other, on every renderer.
   Guard and Screen: on Search Area's vertex, and inside the swept-arc tasks' circle, sized to it.
   `CENTER_SYMBOL_GRAPHICS` has ten members, and the four take hostility, as a unit's frame is its
   identity. New exports: `searchAreaSymbol`, `sweptArcTaskSymbol`, `UNIT_SYMBOL_GRAPHICS`.
+- **`setGraphicUnitSymbol(graphicId, unit)`**, from the root: gives one center-symbol graphic its
+  own unit, by entity (SIDC positions 11-16, keeping the identity its `hostility` gives) or by a
+  whole SIDC, drawn by whatever global provider is registered. The center-symbol guide now shows
+  `@zaes/military-symbols` (`setSecuritySymbolProvider(symbolImageProvider())`) beside milsymbol;
+  neither is imported.
 - **Labels follow the view.** A label whose usual place is off screen moves onto the visible
   part of its graphic: phase line and axis labels, boundary and mid-line labels, linear target
   and FPF labels, and area labels. Every renderer hands the paint functions its view through

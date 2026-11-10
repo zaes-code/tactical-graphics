@@ -250,6 +250,34 @@ export function getGraphicSecuritySymbolProvider(graphicId: string): SecuritySym
 }
 
 /**
+ * Gives one graphic its own unit: the global provider draws it, asked for `unit` instead of the
+ * doctrinal code.
+ *
+ * `unit` is either the **entity**, SIDC positions 11-16 (`'121300'`, reconnaissance), which keeps
+ * the rest of the code, so the standard identity the graphic's `hostility` gives survives the swap,
+ * or a **whole 20- or 30-digit SIDC**, drawn as given. `undefined` puts the graphic back on the
+ * doctrinal symbol.
+ *
+ * Whatever draws the symbol is the global provider's business, so this works the same with any
+ * symbol library registered there; the provider is read when the symbol is drawn, so registering
+ * it later is fine. A provider bound to the graphic with `setGraphicSecuritySymbolProvider`
+ * is replaced, as this is one.
+ */
+export function setGraphicUnitSymbol(graphicId: string, unit: string | undefined): void {
+    if (unit === undefined) {
+        setGraphicSecuritySymbolProvider(graphicId, undefined);
+        return;
+    }
+    if (!/^(\d{6}|\d{20}|\d{30})$/.test(unit)) {
+        throw new Error(`setGraphicUnitSymbol: ${unit} is neither an entity (6 digits) nor a 20- or 30-digit SIDC`);
+    }
+    setGraphicSecuritySymbolProvider(graphicId, request => {
+        const sidc = unit.length === 6 ? request.sidc.slice(0, 10) + unit + request.sidc.slice(16) : unit;
+        return provider?.({...request, sidc});
+    });
+}
+
+/**
  * Forgets every per-graphic provider.
  *
  * For a host tearing down a map: the registry is keyed by id and nothing in the
