@@ -14,7 +14,7 @@ It complements the single-point unit symbol libraries, [@zaes/military-symbols](
 npm install @zaes/tactical-graphics
 ```
 
-Add `ol` or `maplibre-gl` to draw on a map, and a unit symbol library (`@zaes/military-symbols` or `milsymbol`) for the six graphics with a center symbol. All are optional; nothing here imports them.
+Add `ol` or `maplibre-gl` to draw on a map, and a unit symbol library (`@zaes/military-symbols` or `milsymbol`) for the ten graphics with a center symbol. All are optional; nothing here imports them.
 
 ## Quick start
 

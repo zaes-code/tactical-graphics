@@ -187,6 +187,12 @@ export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set(
     // does not. @see followTaskSymbol
     TacticalGraphicName.FollowAndAssume,
     TacticalGraphicName.FollowAndSupport,
+    // Field A on four more plates: Search Area's tactical symbol indicator, centred over the
+    // vertex, and the unit inside Capture, Evacuate and Recover's circle. @see unitSymbolPaints
+    TacticalGraphicName.SearchArea,
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
 ]);
 
 /**

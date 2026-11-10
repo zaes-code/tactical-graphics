@@ -19,6 +19,11 @@ Labels that follow the view and keep clear of each other, on every renderer.
 
 ### Added
 
+- **A unit symbol on Search Area, Capture, Evacuate and Recover.** Their plates carry field A, a
+  unit symbol the host supplies; it is now drawn from the same center-symbol provider as Cover,
+  Guard and Screen: on Search Area's vertex, and inside the swept-arc tasks' circle, sized to it.
+  `CENTER_SYMBOL_GRAPHICS` has ten members, and the four take hostility, as a unit's frame is its
+  identity. New exports: `searchAreaSymbol`, `sweptArcTaskSymbol`, `UNIT_SYMBOL_GRAPHICS`.
 - **`setGraphicUnitSymbol(graphicId, unit)`**, from the root: gives one center-symbol graphic its
   own unit, by entity (SIDC positions 11-16, keeping the identity its `hostility` gives) or by a
   whole SIDC, drawn by whatever global provider is registered. The center-symbol guide now shows

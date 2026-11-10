@@ -14,6 +14,8 @@ node_modules
 # published library build output
 /dist
 *.tgz
+# Unpublished sibling packages the demo installs (see vendor/README.md)
+!vendor/*.tgz
 
 # misc
 .DS_Store

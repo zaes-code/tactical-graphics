@@ -1,7 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import '../styles/map.css';
-import ms from 'milsymbol';
-import {useMilsymbolSecurityOperationSymbols} from './openlayers/securityOperationSymbol';
+import {symbolImageProvider} from '@zaes/military-symbols';
 import OpenLayersMap from './openlayers/OpenLayers';
 import MapLibreMap from './maplibre/MapLibre';
 import {AppBar, Box, IconButton, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography} from '@mui/material';
@@ -12,7 +11,7 @@ import MapControls, {thumbnailInkFor} from './MapControls';
 import EditAffordances from './EditAffordances';
 import ViewControls from './ViewControls';
 import AddonErrorBoundary from './AddonErrorBoundary';
-import type {EditMode} from '@zaes/tactical-graphics';
+import {setSecuritySymbolProvider, type EditMode} from '@zaes/tactical-graphics';
 import type {FeatureCollection} from 'geojson';
 import type {MapEngineHandle} from './mapEngine';
 // Both empty except under `npm run start:addons` on a developer's machine. @see demoAddons.ts
@@ -95,9 +94,11 @@ const DARK_PALETTE: TacticalGraphicsConfigOptions = {
 };
 
 // The demo is a consumer, so it supplies the center symbol for Cover / Guard /
-// Screen the way any consumer would — by handing over the milsymbol it already
-// depends on. The library names milsymbol nowhere, which is what makes the optional
-// peer dependency actually optional; this is the other half of that.
+// Screen the way any consumer would: by registering a provider. It uses
+// @zaes/military-symbols, whose `symbolImageProvider` answers the shared provider's
+// `{sidc, sizePx}` request with `{src, sizePx}`. The library names no symbol renderer,
+// which is what keeps every provider optional; this is the other half of that. The
+// shared registry reaches both engines with one call.
 //
 // **Registered by the host, not by one of the engines.** It used to run at module
 // scope inside `OpenLayers.tsx`, so MapLibre only had a center symbol because the
@@ -105,7 +106,7 @@ const DARK_PALETTE: TacticalGraphicsConfigOptions = {
 // drawn all three with an empty middle. Module scope rather than an effect: it is
 // global, idempotent, and a graphic drawn before the first render would otherwise
 // come up empty.
-useMilsymbolSecurityOperationSymbols(ms);
+setSecuritySymbolProvider(symbolImageProvider());
 
 const paletteFor = (dark: boolean): TacticalGraphicsConfigOptions => dark ? DARK_PALETTE : DEFAULT_PALETTE;
 

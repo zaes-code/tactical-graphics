@@ -406,6 +406,7 @@ export type {StaticMinefieldLayout} from './symbology/protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
 export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
 export {followTaskPaint, followTaskSymbol} from './symbology/followTaskPaints';
+export {searchAreaSymbol, sweptArcTaskSymbol, UNIT_SYMBOL_GRAPHICS, type UnitSymbolPlacement} from './symbology/unitSymbolPaints';
 export type {FollowVariant} from './symbology/followTaskPaints';
 export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';

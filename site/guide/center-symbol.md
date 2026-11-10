@@ -1,6 +1,6 @@
 # The center symbol
 
-Six graphics draw a single-point 2525E unit symbol as part of themselves. That is a
+Ten graphics draw a single-point 2525E unit symbol as part of themselves. That is a
 symbol library's job, not this one's — so this library **imports none**. It asks a
 provider, and you register one, from either of two libraries:
 
@@ -27,15 +27,17 @@ is handed the code and the size; nothing else changes.
 
 From the **root** entry point, because a center symbol is symbology rather than
 rendering: one registration serves whichever engine is drawing, and both read it. One
-call covers all six, and `CENTER_SYMBOL_GRAPHICS` is the set:
+call covers all ten, and `CENTER_SYMBOL_GRAPHICS` is the set:
 
 | Graphic | Where the symbol goes | How big |
 |---|---|---|
 | Cover, Guard, Screen | between the two arms | a share of the gap between them, so a resize scales it with the symbol |
 | Escort | in the break in its bar | a share of the bar's on-screen span, so the two read as one group |
 | Follow And Assume, Follow And Support | inside the body, **in place of field T** | a share of the body, which is what a resize scales |
+| Search Area | on the vertex, over the arms, as its plate draws it (field A) | the library's size, `setSecuritySymbolSize` |
+| Capture, Evacuate, Recover | inside the circle, which is there to contain the unit (field A) | a share of the circle's radius, so it stays inside it |
 
-All of them stop at 96 px however far the map zooms in. A framed 2525E symbol
+The first six stop at 96 px however far the map zooms in. A framed 2525E symbol
 carries a fixed amount of information, and one that kept pace with a graphic zoomed to fill
 the screen would be a badge the size of a hand. It is the ceiling
 `setSecuritySymbolSize` is clamped to, so every center symbol agrees on how large it ever
@@ -46,7 +48,7 @@ which can be short while the graphic is still plainly visible.
 
 On the two follow tasks the symbol **replaces** the designation: a picture of the unit
 says more than its name. Type a designation and register no provider, and the text draws
-as before. Every one of the six sizes its symbol from the graphic it sits in — none of
+as before. Every one of those six sizes its symbol from the graphic it sits in — none of
 them holds a fixed pixel size — and all six stop growing at the same 96 px ceiling.
 
 Register nothing and the arms and labels draw with an empty center — no error, no
@@ -57,7 +59,7 @@ resolves one.
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
 hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
 `securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
-it. All six offer the affiliation for that reason — the escort and the two follow tasks
+it. All ten offer the affiliation for that reason — the escort and the two follow tasks
 are tactical mission tasks, which otherwise carry little (the escort nothing, the follow
 tasks only a designation), and an entity symbol's frame *is* its standard identity.
 
@@ -69,9 +71,10 @@ so a much taller image would overflow the body it sits in.
 
 ## Sizing the symbol
 
-**Every one of the six sizes itself from the graphic it sits in**, and stops at 96 px so
-zooming in cannot inflate it. `setSecuritySymbolSize` no longer governs any of them — it
-is the size for a symbol a host places itself, and it is clamped to the same 96 px ceiling
+**The six security operations and mission tasks size themselves from the graphic they sit
+in**, and stop at 96 px so zooming in cannot inflate them; Capture, Evacuate and Recover
+size theirs to their circle. `setSecuritySymbolSize` governs Search Area's symbol, and is
+the size for a symbol a host places itself; it is clamped to the same 96 px ceiling
 the six share (`MAX_SYMBOL_SIZE_PX`, a constant). On MapLibre it is also the fallback width
 for an image that could not be rasterized:
 

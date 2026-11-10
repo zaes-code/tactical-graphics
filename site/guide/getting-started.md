@@ -20,7 +20,7 @@ Four entry points ship, and you can use any of them on its own:
 ```bash
 npm install ol             # only for the OpenLayers entry point
 npm install maplibre-gl    # only for the MapLibre entry point
-npm install @zaes/military-symbols   # or milsymbol: only for the center symbol, six graphics carry one
+npm install @zaes/military-symbols   # or milsymbol: only for the center symbol, ten graphics carry one
 ```
 
 `ol`, `maplibre-gl` and `milsymbol` are peer dependencies and all are optional, so

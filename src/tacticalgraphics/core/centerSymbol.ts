@@ -1,5 +1,6 @@
 import {followTaskSymbol} from '../symbology/followTaskPaints';
 import {securityOperationSymbol} from '../symbology/securityPaints';
+import {searchAreaSymbol, sweptArcTaskSymbol} from '../symbology/unitSymbolPaints';
 import type {PaintContext} from './paint';
 import {CENTER_SYMBOL_GRAPHICS, escortSymbolSizePx} from './securitySymbol';
 import {TacticalGraphicName} from './type';
@@ -71,6 +72,10 @@ export function centerSymbolPlacement(
     if (graphic.name === TacticalGraphicName.FollowAndAssume || graphic.name === TacticalGraphicName.FollowAndSupport) {
         return followTaskCenter(graphic, context);
     }
+    if (graphic.name === TacticalGraphicName.SearchArea) return unitSymbolCenter(graphic, context, searchAreaSymbol);
+    if (graphic.name === TacticalGraphicName.Capture || graphic.name === TacticalGraphicName.Evacuate || graphic.name === TacticalGraphicName.Recover) {
+        return unitSymbolCenter(graphic, context, sweptArcTaskSymbol);
+    }
     return securityOperationCenter(graphic, context);
 }
 
@@ -126,6 +131,20 @@ export function securityOperationCenter(
         {geometry: graphic.graphic.geometry, properties: {...graphic.properties, symbolId: graphic.id}} as never,
         context,
     );
+    if (!placement) return undefined;
+    return {at: toLonLat([placement.at[0], placement.at[1]]), sizePx: placement.sizePx};
+}
+
+/**
+ * Search Area's and the swept-arc tasks' unit symbol, from the drawn line work (projected metres,
+ * as the follow tasks read it). @see unitSymbolPaints
+ */
+function unitSymbolCenter(
+    graphic: PaintedGraphic,
+    context: PaintContext,
+    place: typeof searchAreaSymbol,
+): {at: number[]; sizePx: number} | undefined {
+    const placement = place({geometry: graphic.graphic.geometry, properties: {...graphic.properties, symbolId: graphic.id}} as never, context);
     if (!placement) return undefined;
     return {at: toLonLat([placement.at[0], placement.at[1]]), sizePx: placement.sizePx};
 }

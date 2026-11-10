@@ -76,7 +76,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | call for fire zone irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241201 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | call for fire zone rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241202 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 | canalize | MIL-STD-2525 + FM 1-02.2 + APP-06 | 340400 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| capture | APP-06 | 343000 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| capture | APP-06 | 343000 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | censor zone circular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241303 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  | Y |  |  |  |
 | censor zone irregular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241301 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | censor zone rectangular | MIL-STD-2525 + FM 1-02.2 + APP-06 | 241302 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
@@ -124,7 +124,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | engineer work line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 110300 | Y | Y | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | envelopment | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | escort | APP-06 | 343600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| evacuate | MIL-STD-2525 + APP-06 | 344500 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| evacuate | MIL-STD-2525 + APP-06 | 344500 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | exfiltrate | FM 1-02.2 + APP-06 | 343700 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | exploitation | MIL-STD-2525 + FM 1-02.2 + APP-06 | 343100 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | Explosives, Planned State of Readiness | MIL-STD-2525 + FM 1-02.2 + APP-06 | 271201 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -257,7 +257,7 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | radiological contaminated area, toxic industrial material | APP-06 | 272001 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | raft site | MIL-STD-2525 + APP-06 | 290800 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | rearward passage of lines | MIL-STD-2525 + FM 1-02.2 + APP-06 | 344200 |  |  |  |  | Y |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| recover | APP-06 | 344600 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| recover | APP-06 | 344600 |  |  |  |  | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | refugee holding area | MIL-STD-2525 + FM 1-02.2 + APP-06 | 310400 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | regimental support area | MIL-STD-2525 + APP-06 | 310500 |  |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | release line | MIL-STD-2525 + FM 1-02.2 + APP-06 | 141600 | Y |  |  |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
@@ -332,4 +332,4 @@ offered; blank means it is not. Regenerate after touching `graphicFieldRegistry.
 | zone of responsibility irregular | MIL-STD-2525 + APP-06 | 241901 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | zone of responsibility rectangular | MIL-STD-2525 + APP-06 | 241902 | Y |  |  |  | Y |  | Y | Y |  |  |  |  |  |  |  | Y |  |  |  |  |  |
 
-| **Totals** | | | 176 | 6 | 20 | 28 | 272 | 84 | 118 | 112 | 5 | 3 | 5 | 3 | 2 | 23 | 23 | 46 | 5 | 29 | 3 | 3 | 3 |
+| **Totals** | | | 176 | 6 | 20 | 28 | 275 | 84 | 118 | 112 | 5 | 3 | 5 | 3 | 2 | 23 | 23 | 46 | 5 | 29 | 3 | 3 | 3 |
