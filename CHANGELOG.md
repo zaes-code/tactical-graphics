@@ -111,6 +111,10 @@ Labels that follow the view and keep clear of each other, on every renderer.
   lines, linear targets, convoys and more. A date capped at its name's size takes its offset
   down with it. Nothing changes where labels are drawn at full size.
 
+- **`/maplibre` ships no development notes.** The sample gallery behind `sampleBase` carried
+  comments about where a fix came from and when; they are gone, and the build now fails if any
+  emitted module or declaration carries such a note.
+
 ## [4.7.0] — 2026-11-02
 
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in

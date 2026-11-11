@@ -314,6 +314,35 @@ assertNoImport(mlbDirs, 'ol', 'the MapLibre entry point');
 assertNoImport(olDirs, 'maplibre-gl', 'the OpenLayers entry point');
 
 /**
+ * Nothing internal ships. Comments survive into the emitted JS and the declarations, so
+ * a note meant for this repo (whose report a fix came from and when, a pointer into its
+ * private notes, a sibling repo's name) reaches every consumer. The sample gallery
+ * became public with `sampleBase` and carried three such notes out before this check.
+ */
+const INTERNAL = [
+    [/\b[Uu]ser'?s report\b/, "a user's report"],
+    [/\bthe user\b/, '"the user"'],
+    [/[Cc]laude|[Aa]nthropic/, 'an assistant'],
+    [/\bai\/[\w./-]+/, 'a pointer into ai/'],
+    [/\b(?:tactical-graphics|military-symbols)-addons\b/, 'a private repository'],
+    [/\b20\d\d-[01]\d-[0-3]\d\b/, 'a date'],
+];
+(() => {
+    const found = [];
+    for (const file of walk(dist)) {
+        if (!/\.(js|d\.ts)$/.test(file)) continue;
+        const lines = fs.readFileSync(file, 'utf8').split('\n');
+        lines.forEach((line, i) => {
+            for (const [pattern, what] of INTERNAL) {
+                if (pattern.test(line)) found.push(`${path.relative(dist, file)}:${i + 1}: ${what}: ${line.trim().slice(0, 100)}`);
+            }
+        });
+    }
+    if (found.length) throw new Error(`internal notes in dist/:\n  ${found.join('\n  ')}`);
+    console.log('  verified: no internal notes in dist/');
+})();
+
+/**
  * No published module may touch `process` unguarded.
  *
  * `process` is a Node and bundler-time global with no equivalent in a plain browser

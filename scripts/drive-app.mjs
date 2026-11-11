@@ -181,7 +181,9 @@ const main = async () => {
     const page = await browser.newPage({viewport: {width: 1600, height: 1000}});
 
     const consoleErrors = [];
-    page.on('console', m => m.type() === 'error' && consoleErrors.push(m.text()));
+    // A failed load names its URL only in its location; keep it, so base-map tiles the
+    // network drops can be told from the app's own errors.
+    page.on('console', m => m.type() === 'error' && consoleErrors.push(`${m.text()}${m.location()?.url ? ` (${m.location().url})` : ''}`));
     page.on('pageerror', e => consoleErrors.push(String(e)));
 
     // Pin the library config to its defaults before the app boots.
@@ -315,7 +317,9 @@ const main = async () => {
     // FM 1-02.2 Table 5-17 stacks the figure above the route line: arrows for
     // one-way / two-way, and `←— ALT —→` for alternating. The figure is drawn
     // geometry (shaft LineString + filled arrowhead Polygon), not an icon
-    // sprite, so this reads the shapes rather than an Icon src.
+    // sprite, so this reads the shapes rather than an Icon src. There is one figure,
+    // in the one identifier block centred over the line (APP-06 330300-330500 and
+    // Table 5-17 draw it once; it was drawn at both ends before 4.8.0).
     console.log('\n4. Route direction renders the traffic-direction figure');
     await selectGraphic(page, 'route');
     const {mid: routeMid} = await drawLine(page, box, 0.45);
@@ -399,10 +403,10 @@ const main = async () => {
     await page.waitForTimeout(400);
     await page.screenshot({path: join(SHOTS, '04-route-direction.png')});
 
-    // One arrow per end of the route: a shaft and a solid head each.
+    // One arrow: a shaft and a solid head.
     const oneWay = await readRouteFigure();
-    check('one-way draws one arrowhead per end', oneWay?.heads === 2, `${oneWay?.heads} head(s)`);
-    check('each arrowhead has a shaft', oneWay?.shafts === 2, `${oneWay?.shafts} shaft(s)`);
+    check('one-way draws one arrowhead', oneWay?.heads === 1, `${oneWay?.heads} head(s)`);
+    check('the arrowhead has a shaft', oneWay?.shafts === 1, `${oneWay?.shafts} shaft(s)`);
     check('identifier survives the direction change', oneWay?.texts.some(t => t.includes('MSR1')), JSON.stringify(oneWay?.texts));
 
     await openDialogAt(page, routeMid);
@@ -410,7 +414,7 @@ const main = async () => {
     await applyAndCloseDialog(page);
     await page.waitForTimeout(400);
     const twoWay = await readRouteFigure();
-    check('two-way stacks two opposed arrows per end', twoWay?.heads === 4, `${twoWay?.heads} head(s)`);
+    check('two-way stacks two opposed arrows', twoWay?.heads === 2, `${twoWay?.heads} head(s)`);
 
     // The one the plate is explicit about: ALT sits *between* two outward arrows.
     await openDialogAt(page, routeMid);
@@ -420,8 +424,8 @@ const main = async () => {
     await page.waitForTimeout(400);
     await page.screenshot({path: join(SHOTS, '04b-route-alternating.png')});
     const alternating = await readRouteFigure();
-    check('alternating renders the ALT amplifier', alternating?.texts.filter(t => t === 'ALT').length === 2, JSON.stringify(alternating?.texts));
-    check('ALT is flanked by an arrow on each side', alternating?.heads === 4, `${alternating?.heads} head(s)`);
+    check('alternating renders the ALT amplifier', alternating?.texts.filter(t => t === 'ALT').length === 1, JSON.stringify(alternating?.texts));
+    check('ALT is flanked by an arrow on each side', alternating?.heads === 2, `${alternating?.heads} head(s)`);
     check('planned dashes the route line', (alternating?.dashes.length ?? 0) > 0, JSON.stringify(alternating?.dashes));
     check(
         'only the route line dashes — the traffic arrows stay solid',
@@ -461,7 +465,8 @@ const main = async () => {
                 const text = (Array.isArray(result) ? result : [result])
                     .map(s => s?.getText?.())
                     .find(t => t && t.getText());
-                if (text) return text.getRotation();
+                // A label set level carries no rotation at all: that is upright.
+                if (text) return text.getRotation() ?? 0;
             }
             return null;
         });
@@ -831,14 +836,19 @@ const main = async () => {
     // changed -- and an entity symbol with no identity is stuck on `pending`.
     await selectGraphic(page, 'escort');
     const escortY = box.y + box.height * 0.5;
+    // Three points: where the symbol goes, then the two ends of its bar. The third ends
+    // the draw; with two, the escort was still a sketch and the next click finished it.
+    await page.mouse.click(box.x + box.width * 0.46, escortY);
     await page.mouse.click(box.x + box.width * 0.3, escortY);
-    await page.mouse.dblclick(box.x + box.width * 0.62, escortY);
+    await page.mouse.click(box.x + box.width * 0.62, escortY);
     await page.waitForTimeout(DRAW_END_GUARD_MS);
 
     const escortBefore = (await readDrawnStyles(page, 'Escort')).styles.find(s => s.src);
     check('an Escort draws a symbol in its bar', !!escortBefore, escortBefore ? `${escortBefore.imageWidth?.toFixed(1)}px wide` : 'none');
 
-    await page.mouse.click(box.x + box.width * 0.46, escortY);
+    // A click selects; the dialog opens from the selection box, as for the Cover above.
+    await page.mouse.click(box.x + box.width * 0.38, escortY);
+    await page.locator('.tg-edit-button--properties').click({timeout: 5000});
     await page.waitForSelector('[role="dialog"]', {timeout: 5000});
     await chooseSelectOption(page, 'Hostility', 'Hostile/Faker');
     await page.getByRole('button', {name: 'OK'}).click();
@@ -966,7 +976,9 @@ const main = async () => {
 
     // ── 9. No console errors ────────────────────────────────────────────────────
     console.log('\n9. Console is clean');
-    const realErrors = consoleErrors.filter(e => !/favicon|ResizeObserver|Download the React DevTools/i.test(e));
+    const realErrors = consoleErrors.filter(
+        e => !/favicon|ResizeObserver|Download the React DevTools/i.test(e) && !/^Failed to load resource.*\(https:\/\/tile\.openstreetmap\.org\//.test(e),
+    );
     check('no console/page errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
     console.log(`\nScreenshots: ${SHOTS}`);
