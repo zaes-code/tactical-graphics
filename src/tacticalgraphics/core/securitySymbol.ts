@@ -2,9 +2,9 @@
  * # The center symbol of a security operation, described without a renderer
  *
  * Cover, Guard and Screen each render a unit symbol between their two arms. That
- * symbol is a *single-point* icon, which is milsymbol's job and not this
- * library's — so the library does not draw it and does not import milsymbol to
- * draw it. It asks a provider, and a host registers one.
+ * symbol is a *single-point* icon, which is a unit symbol library's job
+ * (@zaes/military-symbols, milsymbol) and not this library's — so the library does
+ * not draw it and imports neither. It asks a provider, and a host registers one.
  *
  * ## Why this is here and not only in the OpenLayers half
  *

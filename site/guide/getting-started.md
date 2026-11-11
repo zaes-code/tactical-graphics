@@ -23,7 +23,7 @@ npm install maplibre-gl    # only for the MapLibre entry point
 npm install @zaes/military-symbols   # or milsymbol: only for the center symbol, ten graphics carry one
 ```
 
-`ol`, `maplibre-gl` and `milsymbol` are peer dependencies and all are optional, so
+`ol`, `maplibre-gl`, `@zaes/military-symbols` and `milsymbol` are peer dependencies and all are optional, so
 installing the package for its geometry alone pulls in none of them. The thumbnails
 subpath has no dependency at all — it is inline markup. Nothing in this package imports
 a symbol library: you register one, `@zaes/military-symbols` or `milsymbol`, once, if you

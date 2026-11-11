@@ -84,8 +84,9 @@ import {setSecuritySymbolSize} from '@zaes/tactical-graphics';
 setSecuritySymbolSize(40);   // CSS px, default 25, clamped to [8, 96]; both engines repaint
 ```
 
-**Not** milsymbol's own `size` option. That sets the SVG's internal resolution; the
-image built around it still draws at the library's size, so passing `{size: 40}` to
+**Not** a symbol library's own size. `symbolImageProvider` draws at the size it is
+handed. milsymbol's `size` option sets the SVG's internal resolution; the image built
+around it still draws at the library's size, so passing `{size: 40}` to
 `useMilsymbolSecuritySymbols` changes the sharpness and nothing you can see. The size
 belongs to the library because the library is what places the image around a provider
 that returns a `src` string.
@@ -169,7 +170,7 @@ three graphics are three *kinds*; reach for `setGraphicSecuritySymbolProvider` o
 two graphics of the **same** kind need different symbols.
 
 ```ts
-import ms from 'milsymbol';
+import {symbolImageProvider} from '@zaes/military-symbols';
 import {SNAPSHOT_VERSION, TacticalGraphicHostility, TacticalGraphicName, setSecuritySymbolProvider} from '@zaes/tactical-graphics';
 
 // Entity digits — SIDC positions 11-16. Digits 1-10 are kept, so the standard identity
@@ -182,14 +183,18 @@ const UNIT = {
 };
 const UNIT_SIZE_PX = 34;   // bigger than the library's 25px default
 
+const draw = symbolImageProvider();
 setSecuritySymbolProvider(({name, sidc}) => {
     const entity = UNIT[name];
     if (!entity) return undefined;                    // no symbol for anything else
-    // milsymbol's `size` is the SVG's internal resolution — 2x for a crisp HiDPI render.
-    // `sizePx` is what it actually draws at; return a bare string to take the library's.
-    const svg = new ms.Symbol(sidc.slice(0, 10) + entity + sidc.slice(16), {size: UNIT_SIZE_PX * 2}).asSVG();
-    return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
+    // `sizePx` is what it draws at; return a bare string to take the library's.
+    return draw({sidc: sidc.slice(0, 10) + entity + sidc.slice(16), sizePx: UNIT_SIZE_PX});
 });
+
+// Or with milsymbol (`import ms from 'milsymbol'`), whose `size` is the SVG's internal
+// resolution, 2x for a crisp HiDPI render:
+//     const svg = new ms.Symbol(code, {size: UNIT_SIZE_PX * 2}).asSVG();
+//     return {src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, sizePx: UNIT_SIZE_PX};
 
 // Placed from data rather than drawn. `hostility` is the only amplifier these three
 // take: the letter between the arms is `getLabel(name)`, fixed by doctrine as C/G/S,

@@ -155,11 +155,15 @@
     "@types/geojson": "^7946.0.16"
   },
   "peerDependencies": {
+    "@zaes/military-symbols": ">=0.1",
     "maplibre-gl": ">=4",
     "milsymbol": ">=3",
     "ol": ">=9"
   },
   "peerDependenciesMeta": {
+    "@zaes/military-symbols": {
+      "optional": true
+    },
     "maplibre-gl": {
       "optional": true
     },

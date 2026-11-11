@@ -4,7 +4,7 @@ Render **MIL-STD-2525E, FM 1-02.2 and APP-06 tactical graphics** (axis-of-advanc
 
 Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON feature's `properties`. Call one function. Get GeoJSON back. Draw it with OpenLayers, MapLibre, or anything else that reads GeoJSON.
 
-This library complements [milsymbol](https://github.com/spatialillusions/milsymbol), which renders single-point unit symbols. Tactical Graphics handles the multi-point geometries milsymbol doesn't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in meters.
+This library complements the single-point unit symbol libraries, [@zaes/military-symbols](https://www.zaes.com/docs/military-symbols/) and [milsymbol](https://github.com/spatialillusions/milsymbol). Tactical Graphics handles the multi-point geometries they don't: arrows that bend along a drawn path, corridors with parallel rails, arcs and fans sized in meters.
 
 **[▶ Try the live demo](https://zaes-code.github.io/tactical-graphics/)** — draw any graphic, edit its handles, and set its amplifiers in the browser. No install, no sign-up.
 
