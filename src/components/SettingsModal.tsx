@@ -22,6 +22,7 @@ import {
     MAX_LABEL_SIZE,
     MAX_LINE_WIDTH,
     MIN_LABEL_SIZE,
+    MIN_LEGIBLE_TEXT_PX,
     MIN_LINE_WIDTH,
     TacticalGraphicHostility,
     TacticalGraphicsConfigOptions,
@@ -98,6 +99,9 @@ const stepperButtonSx = {
     color: 'text.secondary',
     '&:hover': {color: 'text.primary', backgroundColor: 'transparent'},
 } as const;
+
+/** The smallest label size the toggle starts at. */
+const MIN_LABEL_SIZE_DEFAULT = 11;
 
 interface NumberSettingProps {
     label: string;
@@ -346,6 +350,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 hint="Curve free-drawn lines, areas and arrows"
                 checked={settings.smoothLines === true}
                 onChange={smoothLines => onChange({smoothLines})}
+            />
+            <ToggleSetting
+                label="Min Label Size"
+                hint="Stop labels shrinking below a size to fit their graphic"
+                checked={settings.minLabelSize !== undefined}
+                onChange={on => onChange({minLabelSize: on ? MIN_LABEL_SIZE_DEFAULT : undefined})}
+            />
+            {settings.minLabelSize !== undefined && (
+                <NumberSetting
+                    label="Smallest Label"
+                    hint="Labels may run over a small outline instead"
+                    value={settings.minLabelSize}
+                    min={MIN_LEGIBLE_TEXT_PX}
+                    max={MAX_LABEL_SIZE}
+                    onChange={minLabelSize => onChange({minLabelSize})}
+                />
+            )}
+            <ToggleSetting
+                label="Auto-place Labels"
+                hint="Slide labels onto the screen and clear of each other"
+                checked={settings.autoPlaceLabels === true}
+                onChange={autoPlaceLabels => onChange({autoPlaceLabels})}
             />
 
             <Divider/>

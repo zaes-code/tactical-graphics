@@ -13,6 +13,17 @@ const OUT = process.env.OUT_DIR ?? '.';
 const failures = [];
 const notes = [];
 
+/**
+ * The map rests in edit mode: there is no Edit button, and clicking a graphic selects it. What
+ * used to press the button now puts the engine back in edit mode, for the steps that leave it.
+ */
+const editMode = page => ({
+    click: () => page.evaluate(() => {
+        const engine = window.__tacticalEngine;
+        if (engine.getInteractionMode() !== 'edit') engine.setInteractionMode('edit');
+    }),
+});
+
 function check(name, ok, detail = '') {
     if (ok) notes.push(`  PASS  ${name}${detail ? ' — ' + detail : ''}`);
     else failures.push(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`);
@@ -20,11 +31,9 @@ function check(name, ok, detail = '') {
 
 async function drawGraphic(page, displayName, points) {
     // The list is virtualised/long, so it has to be filtered before the name is on
-    // screen — the same two steps `drive-app.mjs` uses.
+    // screen. Clicking the name arms the draw; there is no Add Graphic button.
     await page.getByPlaceholder('Filter graphics').fill(displayName);
     await page.getByText(displayName, {exact: true}).first().click();
-    const drawBtn = page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first();
-    await drawBtn.click();
     const box = await page.locator('.map-container').boundingBox();
     for (let i = 0; i < points.length - 1; i++) {
         await page.mouse.click(box.x + points[i][0], box.y + points[i][1]);
@@ -51,8 +60,10 @@ async function run(engine) {
     }
 
     // ---- 1. The panel offers ONE edit button, not four ----
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
-    check(`${engine}: a single Edit button exists`, await editBtn.count() > 0);
+    const editBtn = editMode(page);
+    check(`${engine}: there is no Edit button; the map rests in edit mode`,
+        (await page.locator('button').filter({hasText: /^Edit$|^Editing/}).count()) === 0 &&
+        (await page.evaluate(() => window.__tacticalEngine.getInteractionMode())) === 'edit');
     const rotateToggle = page.locator('[value="rotate"]');
     check(`${engine}: the four global mode toggles are gone`, await rotateToggle.count() === 0,
         `found ${await rotateToggle.count()}`);
@@ -198,7 +209,7 @@ async function runResizeSweep(engine) {
         await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
         await page.waitForTimeout(2500);
     }
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editBtn = editMode(page);
 
     for (const {filter, pts} of RESIZE_CASES) {
         await page.evaluate(() => window.__tacticalEngine.clearAll());
@@ -335,7 +346,7 @@ async function runWidthSweep(engine) {
         await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
         await page.waitForTimeout(2500);
     }
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editBtn = editMode(page);
 
     for (const {filter, pts} of WIDTH_CASES) {
         await page.evaluate(() => window.__tacticalEngine.clearAll());
@@ -460,7 +471,7 @@ async function runChromeChecks() {
     const page = await browser.newPage({viewport: {width: 1500, height: 950}});
     await page.goto(URL, {waitUntil: 'networkidle'});
     await page.waitForTimeout(1500);
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editBtn = editMode(page);
 
     const measureState = () => page.evaluate(() => {
         const src = window.__tacticalGraphics.manager.renderingVectorSource;
@@ -621,7 +632,6 @@ async function runDrawPreview(engine) {
 
     await page.getByPlaceholder('Filter graphics').fill('air space coordination area circular');
     await page.getByText('air space coordination area circular', {exact: true}).first().click();
-    await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
     const box = await page.locator(engine === 'maplibre' ? 'canvas' : '.map-container').first().boundingBox();
 
     const DRAG_PX = 120;
@@ -675,7 +685,6 @@ async function runDrawPreview(engine) {
         await page.getByPlaceholder('Filter graphics').fill(filter);
         await page.waitForTimeout(250);
         await page.getByText(filter, {exact: true}).first().click();
-        await page.locator('button').filter({hasText: /Add Graphic|Drawing…/}).first().click();
         for (const [x, y] of clicks) {
             await page.mouse.click(box.x + x, box.y + y);
             await page.waitForTimeout(120);
@@ -768,7 +777,7 @@ async function runLatitudeSweep(engine) {
      * on the equator the two are the same number.
      */
     const DRAG_PX = 120;
-    const editButton = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editButton = editMode(page);
     for (const filter of ['assembly area', 'air corridor']) {
         await page.evaluate(() => window.__tacticalEngine.clearAll());
         await page.waitForTimeout(250);
@@ -943,7 +952,7 @@ async function runDrawSizes(engine) {
     drawnSizes[engine] = {};
     drawnAmplifiers[engine] = {};
     resizedSizes[engine] = {};
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editBtn = editMode(page);
 
     // Same centre, same metres-per-pixel. MapLibre's zoom runs one behind OpenLayers'
     // because its tiles are 512 px; both land on 2445.98 m/px here.
@@ -1055,7 +1064,7 @@ async function runMirrorCheck(engine) {
         await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
         await page.waitForTimeout(2500);
     }
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editBtn = editMode(page);
 
     try {
         await drawGraphic(page, 'pursuit', [[700, 500], [820, 500]]);
@@ -1272,7 +1281,7 @@ async function runMirrorSide(engine) {
         await page.getByRole('button', {name: 'MapLibre', exact: true}).click();
         await page.waitForTimeout(2500);
     }
-    const editBtn = page.locator('button').filter({hasText: /^Edit$|^Editing/}).first();
+    const editBtn = editMode(page);
 
     // How far the symbol's ink sits above (+) or below (-) its own drawn line, in metres.
     const inkSide = () => page.evaluate(() => {

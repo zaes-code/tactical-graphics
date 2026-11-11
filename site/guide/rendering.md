@@ -80,6 +80,37 @@ attachEditControls(mapContainer, graphics, {
 });
 ```
 
+Buttons of your own go in `actions`. They are pressed rather than dragged, and show with the
+box. `onPress` is handed the selected graphic. `visible` decides which graphics a button shows
+for; leave it out and the button shows for every one:
+
+```ts
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {attachEditControls} from '@zaes/tactical-graphics/edit-controls';
+
+attachEditControls(mapContainer, graphics, {
+    actions: [
+        {
+            id: 'properties',                 // class tg-edit-button--properties
+            label: 'Properties',
+            icon: '<svg>...</svg>',
+            corner: 'bottom-left',            // the default, the corner the gestures leave free
+            onPress: graphic => console.log(graphic?.id),
+        },
+        {
+            id: 'bands',
+            label: 'Edit range bands',
+            icon: '<svg>...</svg>',
+            corner: 'top-left',
+            visible: graphic => graphic.name === TacticalGraphicName.WeaponSensorRangeFanCircular,
+            onPress: graphic => console.log(graphic?.base),
+        },
+    ],
+});
+```
+
+`visible` is asked when the selection changes, not on every frame.
+
 The colors are CSS custom properties, set on the container or any ancestor:
 `--tg-edit-button-background`, `--tg-edit-button-color`, `--tg-edit-button-border`,
 `--tg-edit-button-hover`, `--tg-edit-box-color` and `--tg-edit-z-index`. For more, style the
@@ -281,7 +312,7 @@ after a restore: a restore keeps each graphic's saved `symbolId`, so the same id
 
 ## A picture for a menu
 
-A list of names does not tell an operator what is about to land on their map, and 323 of
+A list of names does not tell an operator what is about to land on their map, and 324 of
 them do not tell them apart. `@zaes/tactical-graphics/thumbnails` carries one small SVG
 per graphic for exactly that:
 
@@ -359,7 +390,7 @@ const {graphic, labels} = prepareFeatures(rendered);
 
 source.addFeature(graphic);
 
-// `labels` is undefined for 118 of the 323 graphics — the ones that keep every glyph
+// `labels` is undefined for the graphics that keep every glyph
 // on the graphic feature, like a phase line whose "PL ALPHA" rides its own line work.
 // Adding a label feature for one of those draws its designation twice.
 if (labels) source.addFeature(labels);

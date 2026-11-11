@@ -992,3 +992,22 @@ export function clearAllGraphics(manager: TacticalGraphicsManager): void {
     manager.graphicControllers.length = 0;
     manager.releaseAllGraphics();
 }
+
+/**
+ * Removes one graphic: its features, its controller and its zoom subscription, the same
+ * three a failed restore rolls back. Deselects it first if it held the selection. True
+ * when there was a graphic with that id. @see clearAllGraphics
+ */
+export function removeGraphic(manager: TacticalGraphicsManager, symbolId: string): boolean {
+    const controller = manager.getFeatureControllerBySymbolId(symbolId);
+    if (!controller) return false;
+    if (manager.getSelection() === controller) manager.setSelection(undefined);
+    for (const feature of controller.getFeatures()) {
+        if (manager.renderingVectorSource.hasFeature(feature)) manager.renderingVectorSource.removeFeature(feature);
+    }
+    const index = manager.graphicControllers.indexOf(controller);
+    if (index >= 0) manager.graphicControllers.splice(index, 1);
+    manager.unwatchResolution(controller);
+    GraphicLinkRegistry.unregister(symbolId);
+    return true;
+}

@@ -25,6 +25,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {amplifierText, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {textWidth} from './decorations';
 import {heldTextScale, letterInGapScale} from './labelFit';
+import {ringDirectionInView} from './viewFollow';
 
 type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -320,7 +321,11 @@ export function nestedZonePaint(): CardinalPaint {
             // radially and the numbers read outward as a pair rather than drifting apart
             // on an off-centre outer ring.
             const center = ringCenter(geometry.coordinates[0]);
-            const {runs, spots} = breakRingAt(ring, center, EAST, halfBreak(context, text, scale));
+            // East, unless that part of the ring is off screen: then the nearest part in view,
+            // the gap and its number together. @see ringDirectionInView
+            const [dx, dy] = ringDirectionInView(ring, center, [1, 0], context);
+            const angles = dx === 1 && dy === 0 ? EAST : [Math.atan2(dy, dx)];
+            const {runs, spots} = breakRingAt(ring, center, angles, halfBreak(context, text, scale));
             paints.push({geometry: {type: 'MultiLineString', coordinates: runs}, stroke});
             // `color` is the LINE colour and belongs to the ring, not to the number set
             // in its gap. The zone numbers are text, so they follow the host's setting like

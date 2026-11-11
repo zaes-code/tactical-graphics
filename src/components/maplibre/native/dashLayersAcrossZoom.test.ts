@@ -197,7 +197,9 @@ describe('the MapLibre dash layers, across repeated zooming', () => {
         const {before, after} = driven(4);
         expect(before.length).toBeGreaterThan(0);
         expect(after.sort()).toEqual(before.sort());
-        expect(after.some(t => t.includes('ALPHA'))).toBe(true);
+        // The counterattack's name runs on past its bend when it comes along the shaft onto the
+        // view, and is then set letter by letter along the shaft: one label or its letters.
+        expect(after.some(t => t.includes('ALPHA')) || ['A', 'L', 'P', 'H'].every(letter => after.includes(letter))).toBe(true);
         expect(after.some(t => t.includes('BRAVO'))).toBe(true);
     });
 });

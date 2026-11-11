@@ -2,9 +2,9 @@
  * # The center symbol of a security operation, described without a renderer
  *
  * Cover, Guard and Screen each render a unit symbol between their two arms. That
- * symbol is a *single-point* icon, which is milsymbol's job and not this
- * library's — so the library does not draw it and does not import milsymbol to
- * draw it. It asks a provider, and a host registers one.
+ * symbol is a *single-point* icon, which is a unit symbol library's job
+ * (@zaes/military-symbols, milsymbol) and not this library's — so the library does
+ * not draw it and imports neither. It asks a provider, and a host registers one.
  *
  * ## Why this is here and not only in the OpenLayers half
  *
@@ -187,6 +187,12 @@ export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set(
     // does not. @see followTaskSymbol
     TacticalGraphicName.FollowAndAssume,
     TacticalGraphicName.FollowAndSupport,
+    // Field A on four more plates: Search Area's tactical symbol indicator, centred over the
+    // vertex, and the unit inside Capture, Evacuate and Recover's circle. @see unitSymbolPaints
+    TacticalGraphicName.SearchArea,
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
 ]);
 
 /**
@@ -241,6 +247,34 @@ export function setGraphicSecuritySymbolProvider(graphicId: string, next: Securi
 /** The provider bound to one graphic, or `undefined` if it uses the global one. */
 export function getGraphicSecuritySymbolProvider(graphicId: string): SecuritySymbolProvider | undefined {
     return graphicProviders.get(graphicId);
+}
+
+/**
+ * Gives one graphic its own unit: the global provider draws it, asked for `unit` instead of the
+ * doctrinal code.
+ *
+ * `unit` is either the **entity**, SIDC positions 11-16 (`'121300'`, reconnaissance), which keeps
+ * the rest of the code, so the standard identity the graphic's `hostility` gives survives the swap,
+ * or a **whole 20- or 30-digit SIDC**, drawn as given. `undefined` puts the graphic back on the
+ * doctrinal symbol.
+ *
+ * Whatever draws the symbol is the global provider's business, so this works the same with any
+ * symbol library registered there; the provider is read when the symbol is drawn, so registering
+ * it later is fine. A provider bound to the graphic with `setGraphicSecuritySymbolProvider`
+ * is replaced, as this is one.
+ */
+export function setGraphicUnitSymbol(graphicId: string, unit: string | undefined): void {
+    if (unit === undefined) {
+        setGraphicSecuritySymbolProvider(graphicId, undefined);
+        return;
+    }
+    if (!/^(\d{6}|\d{20}|\d{30})$/.test(unit)) {
+        throw new Error(`setGraphicUnitSymbol: ${unit} is neither an entity (6 digits) nor a 20- or 30-digit SIDC`);
+    }
+    setGraphicSecuritySymbolProvider(graphicId, request => {
+        const sidc = unit.length === 6 ? request.sidc.slice(0, 10) + unit + request.sidc.slice(16) : unit;
+        return provider?.({...request, sidc});
+    });
 }
 
 /**

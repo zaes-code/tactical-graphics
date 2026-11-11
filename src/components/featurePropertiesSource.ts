@@ -61,6 +61,13 @@ export interface FeaturePropertiesSource {
      */
     anchorPixel(selection: SelectedGraphic): [number, number] | undefined;
 
+    /**
+     * The graphic with engine id `id`, as a click on it would have reported it, or `null` if
+     * there is none. How the dialog opens for a graphic chosen some other way than by clicking,
+     * such as the Properties button on the selection box. @see requestProperties
+     */
+    selectionFor(id: string): SelectedGraphic | null;
+
     /** Writes the edited amplifiers back to the graphic and re-renders it. */
     apply(selection: SelectedGraphic, labels: GraphicLabels, echelon: string): void;
 
@@ -73,6 +80,19 @@ export interface FeaturePropertiesSource {
      * `TacticalGraphicsEngine.setAmplifiersHidden`, `PaintFeature.hideAmplifiers`
      */
     setAmplifiersHidden(selection: SelectedGraphic, hidden: boolean): void;
+
+    /** Takes this graphic off the map. @see `TacticalGraphicsEngine.remove` */
+    remove(selection: SelectedGraphic): void;
+
+    /**
+     * Draws this graphic at `opacity`, 0 to 1, or fully opaque again at 1. View state like
+     * {@link setAmplifiersHidden}: the graphic itself does not change.
+     * @see `TacticalGraphicsEngine.setOpacity`
+     */
+    setOpacity(selection: SelectedGraphic, opacity: number): void;
+
+    /** The opacity this graphic is drawn at, 1 unless dimmed. */
+    opacityOf(selection: SelectedGraphic): number;
 
     /**
      * Whether a click should be ignored right now — mid-draw, most often.

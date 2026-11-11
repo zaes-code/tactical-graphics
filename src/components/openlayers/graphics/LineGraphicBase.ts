@@ -197,6 +197,7 @@ export class LineGraphicBase implements LineGraphic {
                 case TacticalGraphicName.MobilityCorridor:
                     return endGlyphLineStyleFunc(name)(feature, resolution);
                 case TacticalGraphicName.Mineline:
+                case TacticalGraphicName.MinefieldStaticDepiction:
                 case TacticalGraphicName.MineCluster:
                 case TacticalGraphicName.TripWire:
                 case TacticalGraphicName.RaftSite:

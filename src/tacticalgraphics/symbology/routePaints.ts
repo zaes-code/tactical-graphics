@@ -17,7 +17,9 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {RouteDirection, TacticalGraphicName, getLabel} from '../core/type';
 import {offsetAbove, offsetBelow, pathLength, projectedMidSegment, textWidth, uprightRotation} from './decorations';
 import {amplifierDash, getFullLabel, legibleDesignation, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
-import {capLabelToSpan} from './labelFit';
+import {capLabelToSpan, labelGapPx} from './labelFit';
+import {midSegmentInView} from './viewFollow';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 
 /** Stroke weight of the traffic arrows — half the line weight, never under 1 px. */
 const routeArrowWidth = (): number => Math.max(1, LINE_WIDTH() / 2);
@@ -141,8 +143,8 @@ function routeBlockPaints(
     }
 
     // The identifier clears the top arrow row; with no arrows it falls back to the
-    // plain 8 px every other line graphic uses.
-    const labelOffsetPx = rows > 0 ? row(rows - 1) + headHalfPx + 11 * scale : 8;
+    // plain 8 px every other line graphic uses, at the label's size. @see labelGapPx
+    const labelOffsetPx = rows > 0 ? row(rows - 1) + headHalfPx + 11 * scale : labelGapPx(8, textScale);
     if (!text) return paints;
     paints.push(amplifier(feature, at(labelOffsetPx, 0), text, textScale, {rotation, align: 'center', baseline: 'bottom'}));
 
@@ -174,7 +176,10 @@ export function routeControlMeasurePaint(name: TacticalGraphicName): (f: PaintFe
         // least twice it. The arrow figure keeps `scale`. @see legibleDesignation
         const {text, scale: textScale} = legibleDesignation(full, getLabel(name), scale, fontStyle, context, routePx);
 
-        const {index, t} = projectedMidSegment(coords);
+        // The route's middle, or the middle of what is in view of it when that is off screen,
+        // clear of other labels. @see midSegmentInView
+        const footprint = {alongPx: (text ? textWidth(context, text, fontStyle, textScale) : 0) / 2, acrossPx: BASE_FONT_SIZE_PX * textScale};
+        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context, footprint);
         const a = coords[index];
         const b = coords[index + 1];
         const middle: ProjectedPosition = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];

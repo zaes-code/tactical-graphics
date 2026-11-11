@@ -20,7 +20,7 @@ import {
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicGeometryState, readGraphicLabels} from './graphicProperties';
-import {escortSymbolStyle, followTaskSymbolStyle, securityOperationCentreSymbolStyle} from './securityOperationSymbol';
+import {escortSymbolStyle, followTaskSymbolStyle, securityOperationCentreSymbolStyle, unitSymbolStyle} from './securityOperationSymbol';
 import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The color table, the line weight and the three label-scale formulas now live in the
@@ -190,7 +190,10 @@ import {
     escortPaint,
     followTaskPaint,
     sweptArcTaskPaint,
+    sweptArcTaskSymbol,
+    searchAreaSymbol,
     mineClusterPaint,
+    minefieldStaticPaint,
     minelinePaint,
     raftSitePaint,
     tripWirePaint,
@@ -1911,9 +1914,19 @@ export function escortOrDemonstrationStyleFunc(name: TacticalGraphicName): Style
     };
 }
 
-/** Capture, evacuate and recover. @see sweptArcTaskPaints.ts */
+/** Capture, evacuate and recover, and the host's unit symbol in the circle. @see sweptArcTaskPaints.ts, unitSymbolPaints.ts */
 export function sweptArcTaskStyleFunc(name: TacticalGraphicName): StyleFunction {
-    return asStyleFunction(sweptArcTaskPaint(getLabel(name)), name);
+    return withUnitSymbol(asStyleFunction(sweptArcTaskPaint(getLabel(name)), name), sweptArcTaskSymbol);
+}
+
+/** A style function with the host's unit symbol appended, placed by `place`. @see unitSymbolStyle */
+function withUnitSymbol(styled: StyleFunction, place: typeof searchAreaSymbol): StyleFunction {
+    return (feature, resolution) => {
+        const drawn = styled(feature, resolution);
+        const styles = Array.isArray(drawn) ? drawn : drawn ? [drawn] : [];
+        const symbol = unitSymbolStyle(feature, resolution, place);
+        return symbol ? [...styles, symbol] : styles;
+    };
 }
 
 /**
@@ -1983,6 +1996,8 @@ export function protectionLineStyleFunc(name: TacticalGraphicName): StyleFunctio
             return asStyleFunction(raftSitePaint(), name);
         case TacticalGraphicName.FortifiedPosition:
             return asStyleFunction(fortifiedPositionPaint(), name);
+        case TacticalGraphicName.MinefieldStaticDepiction:
+            return asStyleFunction(minefieldStaticPaint(), name);
         default:
             return asStyleFunction(minelinePaint(name), name);
     }
@@ -2718,9 +2733,9 @@ export function convoyStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(convoyPaint(name), name);
 }
 
-/** **Ported.** @see searchAreaPaints.ts, `searchAreaPaint`. */
+/** **Ported.** @see searchAreaPaints.ts, `searchAreaPaint`; and the host's unit symbol on the vertex. */
 export function searchAreaStyleFunc(): StyleFunction {
-    return asStyleFunction(searchAreaPaint(), TacticalGraphicName.SearchArea);
+    return withUnitSymbol(asStyleFunction(searchAreaPaint(), TacticalGraphicName.SearchArea), searchAreaSymbol);
 }
 
 /** **Ported.** @see maritimeLinePaints.ts, `bearingLinePaint`. */

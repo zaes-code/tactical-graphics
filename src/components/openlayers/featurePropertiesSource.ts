@@ -16,7 +16,9 @@ import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
 import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByHostility, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
-import {stampAmplifierVisibility} from './amplifierVisibility';
+import {featuresOf, stampAmplifierVisibility} from './amplifierVisibility';
+import {graphicOpacityOf, stampGraphicOpacity} from './graphicOpacity';
+import {removeGraphic} from './persistence';
 import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
 import {readGraphicGeometryState, readGraphicLabels, writeGraphicProperties} from './graphicProperties';
@@ -137,7 +139,28 @@ export function createOpenLayersPropertiesSource(
      */
     const selected = new globalThis.Map<string, Feature>();
 
+    /** What the dialog needs, read off any one of the graphic's features. */
+    const selectionOf = (feature: Feature) => {
+        const id = String(feature.get('symbolId') ?? '');
+        selected.set(id, feature);
+        return {
+            id,
+            graphicName: feature.get('graphicName') as TacticalGraphicName,
+            labels: readGraphicLabels(feature),
+            echelon: (feature.get('echelon') as string) || '',
+            measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id), ...frameOfSelection(manager, id)},
+            graphicSize: feature.get('graphicSize') as number | undefined,
+        };
+    };
+
     return {
+        selectionFor(id) {
+            // The line work, as a click would usually hit; every feature carries the amplifiers.
+            const features = featuresOf(map, id);
+            const feature = features.find(f => f.get('role') === 'graphic') ?? features[0];
+            return feature ? selectionOf(feature) : null;
+        },
+
         suppressed() {
             if (manager.isDrawing()) return true;
             /*
@@ -166,16 +189,7 @@ export function createOpenLayersPropertiesSource(
                         return;
                     }
 
-                    const id = String(feature.get('symbolId') ?? '');
-                    selected.set(id, feature);
-                    callback({
-                        id,
-                        graphicName: feature.get('graphicName') as TacticalGraphicName,
-                        labels: readGraphicLabels(feature),
-                        echelon: (feature.get('echelon') as string) || '',
-                        measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id), ...frameOfSelection(manager, id)},
-                        graphicSize: feature.get('graphicSize') as number | undefined,
-                    });
+                    callback(selectionOf(feature));
                 }, HIT_TEST_DELAY_MS);
             };
 
@@ -246,5 +260,15 @@ export function createOpenLayersPropertiesSource(
             if (!selection.id) return;
             stampAmplifierVisibility(map, selection.id, hidden);
         },
+
+        remove(selection) {
+            if (selection.id) removeGraphic(manager, selection.id);
+        },
+
+        setOpacity(selection, opacity) {
+            if (selection.id) stampGraphicOpacity(map, selection.id, opacity);
+        },
+
+        opacityOf: selection => (selection.id ? graphicOpacityOf(featuresOf(map, selection.id)[0]) : 1),
     };
 }

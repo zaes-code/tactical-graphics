@@ -15,6 +15,7 @@ import {
     Paper,
     Select,
     SelectChangeEvent,
+    Slider,
     Switch,
     Typography,
 } from '@mui/material';
@@ -25,6 +26,7 @@ import type {GraphicGeometryState} from './openlayers/graphicProperties';
 import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
 import {rememberAmplifiersHidden, rememberedAmplifiersHidden} from './amplifierVisibility';
 import {dateTimeLocalToDtg, dtgToDateTimeLocal} from './dtg';
+import {onPropertiesRequest} from './propertiesRequest';
 import {
     getDisplayName,
     RangeFanBand,
@@ -259,36 +261,59 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
         rememberAmplifiersHidden(target.id, hidden);
         source.setAmplifiersHidden(target, hidden);
     };
+    /**
+     * How opaque the selected graphic is drawn, and what it was when the dialog opened. View
+     * state like `nameOnly`, applied the moment the slider moves, so Cancel puts it back.
+     */
+    const [opacity, setOpacity] = useState(1);
+    const [openedOpacity, setOpenedOpacity] = useState(1);
     const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
     const paperRef = useRef<HTMLDivElement | null>(null);
     const lineRef = useRef<SVGLineElement | null>(null);
 
-    // Open dialog on feature click
+    /** Opens the dialog on `next`. */
+    const open = (next: SelectedGraphic) => {
+        setSelection(next);
+        // Read-only: the geometry inputs the user set by dragging. Kept out of
+        // `pendingChanges` because nothing in this dialog can change them.
+        setMeasured(next.measured);
+
+        const curr = {
+            echelon: next.echelon,
+            labels: shownLabels(next),
+        };
+        setCurrentProperties(curr);
+        setPendingChanges(curr);
+        // View state, not an amplifier: it comes from this app's store rather than
+        // from the graphic. @see amplifierVisibility
+        setNameOnly(rememberedAmplifiersHidden(next.id));
+        setOpenedNameOnly(rememberedAmplifiersHidden(next.id));
+        setOpacity(source.opacityOf(next));
+        setOpenedOpacity(source.opacityOf(next));
+        setDialogPosition({x: 0, y: 0});
+    };
+
+    // A click on a graphic opens the dialog where the engine does not take that click to
+    // select; in edit mode it is the Properties button on the selection box. @see requestProperties
     useEffect(() => {
-        return source.onSelect(next => {
+        const stopClicks = source.onSelect(next => {
             if (!next) {
                 setSelection(null);
                 return;
             }
             if (source.suppressed?.()) return;
-
-            setSelection(next);
-            // Read-only: the geometry inputs the user set by dragging. Kept out of
-            // `pendingChanges` because nothing in this dialog can change them.
-            setMeasured(next.measured);
-
-            const curr = {
-                echelon: next.echelon,
-                labels: shownLabels(next),
-            };
-            setCurrentProperties(curr);
-            setPendingChanges(curr);
-            // View state, not an amplifier: it comes from this app's store rather than
-            // from the graphic. @see amplifierVisibility
-            setNameOnly(rememberedAmplifiersHidden(next.id));
-            setOpenedNameOnly(rememberedAmplifiersHidden(next.id));
-            setDialogPosition({x: 0, y: 0});
+            open(next);
         });
+        const stopRequests = onPropertiesRequest(id => {
+            const next = source.selectionFor(id);
+            if (next) open(next);
+        });
+        return () => {
+            stopClicks();
+            stopRequests();
+        };
+        // `open` only calls state setters and reads `source`.
+        // eslint-disable-next-line
     }, [source]);
 
     /**
@@ -368,6 +393,18 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
             applyNameOnly(selection, openedNameOnly);
             setNameOnly(openedNameOnly);
         }
+        if (selection && opacity !== openedOpacity) {
+            source.setOpacity(selection, openedOpacity);
+            setOpacity(openedOpacity);
+        }
+        setSelection(null);
+    };
+
+    /** Takes the graphic off the map and forgets its "name only" choice with it. */
+    const deleteGraphic = () => {
+        if (!selection) return;
+        source.remove(selection);
+        rememberAmplifiersHidden(selection.id, false);
         setSelection(null);
     };
 
@@ -395,7 +432,7 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
     // The toggle is a change like any other, even though it applies on the spot: `OK` has to
     // be reachable after switching it, and `Cancel` has to put it back.
     const hasChanges =
-        JSON.stringify(pendingChanges) !== JSON.stringify(currentProperties) || nameOnly !== openedNameOnly;
+        JSON.stringify(pendingChanges) !== JSON.stringify(currentProperties) || nameOnly !== openedNameOnly || opacity !== openedOpacity;
 
     return (
         <>
@@ -648,6 +685,25 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                     />
                                 </Box>
                                 )}
+
+                                {/* Every graphic can be drawn fainter: it is a choice about the map, not the symbol. */}
+                                <Box sx={{mt: 1, px: 1}}>
+                                    <Typography variant="body2" id="graphic-opacity-label">
+                                        Opacity {Math.round(opacity * 100)}%
+                                    </Typography>
+                                    <Slider
+                                        aria-labelledby="graphic-opacity-label"
+                                        value={opacity}
+                                        min={0.1}
+                                        max={1}
+                                        step={0.05}
+                                        onChange={(_e, value) => {
+                                            const next = value as number;
+                                            setOpacity(next);
+                                            if (selection) source.setOpacity(selection, next);
+                                        }}
+                                    />
+                                </Box>
 
                                 {/* APP-06 242600 Note 2: the zone of fire's boundary can be switched off. */}
                                 {fields.boundarySwitch && (
@@ -1487,6 +1543,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                 </DialogContent>
 
                 <DialogActions>
+                    <Button onClick={deleteGraphic} color="error" sx={{mr: 'auto'}}>
+                        Delete
+                    </Button>
                     <Button onClick={applyChanges} variant="contained" disabled={!hasChanges}>
                         OK
                     </Button>

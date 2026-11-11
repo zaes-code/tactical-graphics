@@ -1,6 +1,6 @@
 import {HALO_WIDTH} from '@zaes/tactical-graphics';
 import type {Feature, FeatureCollection, Geometry} from 'geojson';
-import type {LayerSpecification} from 'maplibre-gl';
+import type {ExpressionSpecification, LayerSpecification} from 'maplibre-gl';
 import {hatchTileSegments, mapPaintGeometry, type HatchSpec, type Paint, type ProjectedGeometry, type ProjectedPosition, type StrokeSpec} from '@zaes/tactical-graphics';
 import {toLonLat} from '../projection';
 
@@ -219,17 +219,30 @@ export function renderHatchImage(spec: HatchSpec, rasterPx = spec.sizePx): Image
 export const GRAPHIC_ID_PROPERTY = 'tgId';
 
 /**
+ * The property carrying a graphic's display opacity, 0 to 1, on every feature it drew.
+ * Absent means fully opaque, so a graphic the host never dimmed carries nothing extra.
+ * @see NativeLayerRenderer.setOpacity
+ */
+export const OPACITY_PROPERTY = 'opacity';
+
+/** Every layer's opacity: the feature's own, or opaque. @see OPACITY_PROPERTY */
+const OPACITY: ExpressionSpecification = ['coalesce', ['get', OPACITY_PROPERTY], 1];
+
+/**
  * Splits a paint list into per-layer-type GeoJSON features.
  *
  * `graphicId`, when given, is stamped on every feature so a rendered mark can be
  * traced back to its graphic. @see GRAPHIC_ID_PROPERTY
+ *
+ * `opacity`, when given and below 1, is stamped the same way, so every mark of a dimmed
+ * graphic fades together. @see OPACITY_PROPERTY
  */
 export function emptyBuckets(hatchGrowth = 1): LayerBuckets {
     return {lines: new Map(), fills: [], circles: [], symbols: [], hatches: new Map(), hatchGrowth};
 }
 
-export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets {
-    return bucketPaintsInto(emptyBuckets(), paints, graphicId);
+export function bucketPaints(paints: Paint[], graphicId?: string, opacity?: number): LayerBuckets {
+    return bucketPaintsInto(emptyBuckets(), paints, graphicId, opacity);
 }
 
 /**
@@ -241,10 +254,13 @@ export function bucketPaints(paints: Paint[], graphicId?: string): LayerBuckets 
  * 215 Maps and 645 arrays per frame, then merged them. At gallery scale that
  * *was* the frame: 24.8 ms of a 27.2 ms realization.
  */
-export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphicId?: string): LayerBuckets {
+export function bucketPaintsInto(buckets: LayerBuckets, paints: Paint[], graphicId?: string, opacity?: number): LayerBuckets {
+    const owner = {
+        ...(graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId}),
+        ...(opacity === undefined || opacity >= 1 ? {} : {[OPACITY_PROPERTY]: opacity}),
+    };
     for (const paint of paints) {
         const {geometry, stroke, fill, text, circle, zIndex} = paint;
-        const owner = graphicId === undefined ? {} : {[GRAPHIC_ID_PROPERTY]: graphicId};
 
         if (stroke) {
             const key = dashKey(stroke.dashPx, stroke.widthPx, stroke.cap);
@@ -406,6 +422,7 @@ export function lineLayer(id: string, source: string, dashPx: number[] | undefin
         paint: {
             'line-color': ['get', 'color'],
             'line-width': ['get', 'width'],
+            'line-opacity': OPACITY,
             // Already in line-widths: the layer key carries the divided array and the
             // renderer parses it back out of that key. @see dashKey, dashInWidths
             ...(dashPx && dashPx.length ? {'line-dasharray': dashPx} : {}),
@@ -444,7 +461,7 @@ export function fillLayer(id: string, source: string): LayerSpecification {
         type: 'fill',
         source,
         filter: ['==', ['get', 'pattern'], ''],
-        paint: {'fill-color': ['get', 'color']},
+        paint: {'fill-color': ['get', 'color'], 'fill-opacity': OPACITY},
     } as LayerSpecification;
 }
 
@@ -460,6 +477,7 @@ export function patternFillLayer(id: string, source: string): LayerSpecification
             // Kept as the documented degradation for a pattern that fails to
             // rasterise — a flat wash is wrong-looking, invisible is worse.
             'fill-color': ['get', 'color'],
+            'fill-opacity': OPACITY,
         },
     } as LayerSpecification;
 }
@@ -474,6 +492,8 @@ export function circleLayer(id: string, source: string): LayerSpecification {
             'circle-color': ['get', 'color'],
             'circle-stroke-color': ['get', 'strokeColor'],
             'circle-stroke-width': ['get', 'strokeWidth'],
+            'circle-opacity': OPACITY,
+            'circle-stroke-opacity': OPACITY,
         },
     } as LayerSpecification;
 }
@@ -535,6 +555,7 @@ export function symbolLayer(id: string, source: string, fontStack: FontStack): L
             'text-color': ['get', 'color'],
             'text-halo-color': ['get', 'haloColor'],
             'text-halo-width': ['get', 'haloWidth'],
+            'text-opacity': OPACITY,
         },
     } as LayerSpecification;
 }
@@ -768,5 +789,6 @@ export function iconLayer(id: string, source: string): LayerSpecification {
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
         },
+        paint: {'icon-opacity': OPACITY},
     } as LayerSpecification;
 }

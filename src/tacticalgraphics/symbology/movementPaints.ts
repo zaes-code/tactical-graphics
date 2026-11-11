@@ -26,11 +26,12 @@ import {maxGraphicLabelScale} from '../core/symbology';
 import {HALO_WIDTH, LINE_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
 import { TacticalGraphicName} from '../core/type';
 import {alignAlong, offsetAbove, textWidth, uprightRotation} from './decorations';
-import {letterGapClearance, letterInGapScale} from './labelFit';
+import {labelGapPx, letterGapClearance, letterInGapScale, withLabelFloor} from './labelFit';
 import {areaDateLabel} from './areaLabelPaints';
 import { lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, readsAlongPath, textAlongPath, type PathTextAlign} from './curvedText';
+import {distanceInView, inView, insetView, isTaken, midSegmentInView, pathUpTo, pointAlong, visibleStretch} from './viewFollow';
 
 type MovementPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -82,7 +83,8 @@ export function spanProportionalScale(
     fontPx: number,
 ): number {
     const spanPx = Math.hypot(b[0] - a[0], b[1] - a[1]) / resolution;
-    return Math.min(maxGraphicLabelScale(), (spanPx * 0.7) / fontPx);
+    const ceiling = maxGraphicLabelScale();
+    return withLabelFloor(Math.min(ceiling, (spanPx * 0.7) / fontPx), ceiling, fontPx);
 }
 
 /** The divisor the default movement label uses — a 24 px font literal. */
@@ -145,8 +147,17 @@ function nameAndDate(feature: PaintFeature): string {
 function onArrow(context: PaintContext, coords: ProjectedPosition[], pathFrom: number, straight: Paint, align: PathTextAlign): Paint[] {
     const path = coords.slice(pathFrom);
     if (path.length < 2 || !straight.text || straight.geometry.type !== 'Point') return [straight];
-    const at = distanceAlongPath(path, straight.geometry.coordinates);
-    return textAlongPath(path, at, align, straight.text, context) ?? [straight];
+    const natural = distanceAlongPath(path, straight.geometry.coordinates);
+    /*
+     * **Along the arrow to the nearest place in view, when its own place is off screen.** The
+     * run is measured from its middle, which `align` puts behind, ahead of or on the anchor.
+     * @see distanceInView
+     */
+    const halfPx = textWidth(context, straight.text.text, straight.text.font, straight.text.scale ?? 1) / 2;
+    const toMiddle = (align === 'end' ? -halfPx : align === 'start' ? halfPx : 0) * context.resolution;
+    const at = distanceInView(path, natural + toMiddle, halfPx, context) - toMiddle;
+    const moved: Paint = at === natural ? straight : {...straight, geometry: {type: 'Point', coordinates: pointAlong(path, at).at}};
+    return textAlongPath(path, at, align, moved.text!, context) ?? [moved];
 }
 
 /**
@@ -342,28 +353,14 @@ function behindArrowhead(
     const span = Math.hypot(dx, dy);
     if (span === 0 || !value) return [];
 
-    const clearance = ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution;
+    const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
+    const clearance = labelGapPx(ARROWHEAD_LABEL_CLEARANCE_PX, scale) * context.resolution;
     const at: ProjectedPosition = [c1[0] - (dx / span) * clearance, c1[1] - (dy / span) * clearance];
-    const straight = text(feature, at, value, spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX), {
+    const straight = text(feature, at, value, scale, {
         rotation: uprightRotation(c0, c1),
         align: alignAlong('right', c0, c1),
     });
     return onArrow(context, coords, pathFrom, straight, 'end');
-}
-
-/** A point `d` along `path`, and the segment it lies on. */
-function pointAlong(path: ProjectedPosition[], d: number): {at: ProjectedPosition; a: ProjectedPosition; b: ProjectedPosition} {
-    let left = Math.max(0, d);
-    for (let i = 0; i < path.length - 1; i++) {
-        const [a, b] = [path[i], path[i + 1]];
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (left <= length || i === path.length - 2) {
-            const t = length === 0 ? 0 : Math.min(1, left / length);
-            return {at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], a, b};
-        }
-        left -= length;
-    }
-    return {at: path[0], a: path[0], b: path[path.length - 1]};
 }
 
 /** Clear space between field T and the date-time group set ahead of it, in screen pixels. */
@@ -407,15 +404,15 @@ function axisAmplifiers(
     let scale = spanProportionalScale(c0, c1, res, BASE_FONT_SIZE_PX);
     const paints: Paint[] = [];
     const place = (d: number, value: string, align: 'left' | 'center' | 'right', pathAlign: PathTextAlign, kind?: TextKind) => {
-        const {at, a, b} = pointAlong(path, d);
+        const {at, from: a, to: b} = pointAlong(path, d);
         const straight = text(feature, at, value, scale, {rotation: uprightRotation(a, b), align: alignAlong(align, a, b), kind});
         paints.push(...onArrow(context, coords, pathFrom, straight, pathAlign));
     };
 
     // Rear to head: the name, then the date.
     const date = areaDateLabel(feature);
-    const dateEnd = total - ARROWHEAD_LABEL_CLEARANCE_PX * res - behindHead;
-    const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - AXIS_NAME_DATE_GAP_PX * res : dateEnd;
+    const dateEnd = total - labelGapPx(ARROWHEAD_LABEL_CLEARANCE_PX, scale) * res - behindHead;
+    const nameRoom = date ? dateEnd - textWidth(context, date, fontStyle, scale) * res - labelGapPx(AXIS_NAME_DATE_GAP_PX, scale) * res : dateEnd;
     const name = feature.properties.designation?.trim();
     if (name && date && textWidth(context, name, fontStyle, scale) * res > nameRoom) {
         // Too short for two groups: centring the name in the room left would set it on the date.
@@ -439,7 +436,7 @@ function axisAmplifiers(
         const length = Math.hypot(r1[0] - r0[0], r1[1] - r0[1]);
         if (length > 0) {
             const [ux, uy] = [(r1[0] - r0[0]) / length, (r1[1] - r0[1]) / length];
-            const out = halfWidth + AXIS_ENY_GAP_PX * res;
+            const out = halfWidth + labelGapPx(AXIS_ENY_GAP_PX, scale) * res;
             // A little ahead of the rear, so the mark reads beside the rail rather than off its end.
             const along = Math.min(length / 2, halfWidth);
             const rear: ProjectedPosition = [r0[0] + ux * along, r0[1] + uy * along];
@@ -516,7 +513,7 @@ function avenueHostileMarks(feature: PaintFeature, context: PaintContext, coords
     const midX = (left[0] + right[0]) / 2;
     const midY = (left[1] + right[1]) / 2;
     const scale = spanProportionalScale(coords[0], coords[1], context.resolution, BASE_FONT_SIZE_PX);
-    const gap = AVENUE_ADDITIONAL_INFO_GAP_PX * context.resolution;
+    const gap = labelGapPx(AVENUE_ADDITIONAL_INFO_GAP_PX, scale) * context.resolution;
 
     return [left, right].map(rail => {
         // Pushed straight out from the centreline, so each mark clears its own rail whichever
@@ -559,11 +556,13 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             const halfWidthPx = span / context.resolution;
             const scale = spanProportionalScale(c0, c1, context.resolution, BASE_FONT_SIZE_PX);
             const hostile = showsEny(feature);
+            const gapPx = labelGapPx(AVENUE_ADDITIONAL_INFO_GAP_PX, scale);
+            const headClearance = labelGapPx(ARROWHEAD_LABEL_CLEARANCE_PX, scale) * context.resolution;
             const rear: ProjectedPosition = coords.length >= 4
                 ? [(coords[2][0] + coords[3][0]) / 2, (coords[2][1] + coords[3][1]) / 2]
-                : [c1[0] - ((c1[0] - c0[0]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution,
-                    c1[1] - ((c1[1] - c0[1]) / span) * ARROWHEAD_LABEL_CLEARANCE_PX * context.resolution];
-            const outPx = halfWidthPx + AVENUE_ADDITIONAL_INFO_GAP_PX + (hostile ? BASE_FONT_SIZE_PX * scale + AVENUE_ADDITIONAL_INFO_GAP_PX : 0);
+                : [c1[0] - ((c1[0] - c0[0]) / span) * headClearance,
+                    c1[1] - ((c1[1] - c0[1]) / span) * headClearance];
+            const outPx = halfWidthPx + gapPx + (hostile ? BASE_FONT_SIZE_PX * scale + gapPx : 0);
             // Turned to the rear segment of the center line (published from anchor 4), not the head's.
             const [a, b] = coords.length >= 6 ? [coords[4], coords[5]] : [c0, c1];
             const at = offsetAbove(rear, a, b, context.resolution, outPx);
@@ -586,7 +585,7 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
             const res = context.resolution;
             const widthM = textWidth(context, additional, fontStyle, scale) * res;
             const heightM = BASE_FONT_SIZE_PX * scale * res;
-            const gapM = AVENUE_ADDITIONAL_INFO_GAP_PX * res;
+            const gapM = gapPx * res;
             const centre = coords.length >= 6 ? coords.slice(4) : [c0, c1];
             const rail = offsetPath(centre, [(ox / on) * span, (oy / on) * span], 0);
             const boxAt = (p: ProjectedPosition) => {
@@ -625,12 +624,64 @@ export function avenueOfApproachLabelPaint(): MovementPaint {
     };
 }
 
+/**
+ * The axis label's anchors moved back along the arrow when the arrowhead is off screen.
+ *
+ * The head span is re-cut at the last point of the centerline that is in view, at the
+ * span's own length, so the label keeps its size and its bend along the arrow; the
+ * centerline after it is dropped. `coords` comes back unchanged when the label's own spot
+ * is visible, or when no part of the centerline is. @see PaintContext.view
+ */
+function headSpanInView(context: PaintContext, coords: ProjectedPosition[], pathFrom: number): ProjectedPosition[] {
+    const view = insetView(context);
+    const path = coords.slice(pathFrom);
+    if (!view || path.length < 2) return coords;
+    const span = Math.hypot(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]);
+    const onScreen = inView(coords[1], view);
+    const clear = (tail: ProjectedPosition, head: ProjectedPosition) =>
+        !isTaken(
+            [(tail[0] + head[0]) / 2, (tail[1] + head[1]) / 2],
+            {alongPx: span / 2 / context.resolution, acrossPx: AXIS_LABEL_ACROSS_PX},
+            head[0] - tail[0],
+            head[1] - tail[1],
+            context,
+        );
+    if (onScreen && clear(coords[0], coords[1])) return coords;
+
+    const stretch = onScreen ? path : visibleStretch(path, view);
+    if (!stretch) return coords;
+    // The last visible point of the centerline, then steps back along it until the label is clear.
+    const last = distanceAlongPath(path, onScreen ? coords[1] : stretch[stretch.length - 1]);
+    const first = distanceAlongPath(path, stretch[0]);
+    const cut = (s: number): ProjectedPosition[] | undefined => {
+        const {at: head, from, to} = pointAlong(path, s);
+        const run = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        if (run === 0) return undefined;
+        const tail: ProjectedPosition = [head[0] - ((to[0] - from[0]) / run) * span, head[1] - ((to[1] - from[1]) / run) * span];
+        return [tail, head, ...pathUpTo(path, head)];
+    };
+    for (let k = onScreen ? 1 : 0; k <= AXIS_LABEL_SLIDES; k++) {
+        const s = last - k * span * 0.6;
+        if (s - span < first) break;
+        const moved = cut(s);
+        if (moved && inView(moved[1], view) && clear(moved[0], moved[1])) return moved;
+    }
+    return onScreen ? coords : (cut(last) ?? coords);
+}
+
+/** Half the axis label's height in screen pixels, for keeping it clear of other labels. */
+const AXIS_LABEL_ACROSS_PX = 9;
+
+/** How many steps back along the arrow an axis label tries before keeping its place. */
+const AXIS_LABEL_SLIDES = 6;
+
 export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPaint {
     const centered = name === TacticalGraphicName.InfiltrationLane;
 
     return (feature, context) => {
-        const coords = anchors(feature);
-        if (coords.length < 2) return [];
+        const placed = anchors(feature);
+        if (placed.length < 2) return [];
+        const coords = centered ? placed : headSpanInView(context, placed, 2);
 
         const [c0, c1] = coords;
         const dx = c1[0] - c0[0];
@@ -647,8 +698,11 @@ export function axisOfAdvanceLabelPaint(name: TacticalGraphicName): MovementPain
         const uy = dy / segLenMap;
         const clearance = 10 * context.resolution;
 
+        // Centred on its span, or on the part of the span in view when the middle is off screen.
+        // @see midSegmentInView
+        const {t: along} = centered ? midSegmentInView([c0, c1], {index: 0, t: 0.5}, context) : {t: 0.5};
         const at: ProjectedPosition = centered
-            ? [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2]
+            ? [c0[0] + (c1[0] - c0[0]) * along, c0[1] + (c1[1] - c0[1]) * along]
             : [c1[0] - ux * clearance, c1[1] - uy * clearance];
 
         const align: 'left' | 'center' | 'right' = centered ? 'center' : alignAlong('right', c0, c1);
@@ -981,7 +1035,7 @@ export function bridgeLabelPaint(): MovementPaint {
         const date = areaDateLabel(feature);
         if (date) {
             const length = Math.hypot(dx, dy) || 1;
-            const gap = BRIDGE_DATE_GAP_PX * context.resolution;
+            const gap = labelGapPx(BRIDGE_DATE_GAP_PX, scale) * context.resolution;
             const at: ProjectedPosition = [c1[0] + (dx / length) * gap, c1[1] + (dy / length) * gap];
             // The box grows away from the end in both directions, so its nearest corner is the
             // anchor: centred on a steep crossing it reached back over the flare tips.

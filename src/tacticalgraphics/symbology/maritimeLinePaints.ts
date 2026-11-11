@@ -21,6 +21,7 @@ import {TacticalGraphicName, getLabel} from '../core/type';
 import {DECORATION_MIN_PX, textWidth, uprightFlipped, uprightRotation} from './decorations';
 import {amplifierDash, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {letterInGapScale} from './labelFit';
+import {midSegmentInView} from './viewFollow';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -151,14 +152,21 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
               )
             : 0;
 
+        // The letter and its gap at the middle, or at the middle of what is in view of the line
+        // when that is off screen. @see midSegmentInView
+        const {t: middle} = midSegmentInView([from, to], {index: 0, t: 0.5}, context, {
+            alongPx: halfGap / context.resolution,
+            acrossPx: (BASE_FONT_SIZE_PX / 2) * (letterScale || scale),
+        });
+        const along = (t: number): ProjectedPosition => [from[0] + dx * t, from[1] + dy * t];
+
         const paints: Paint[] = [];
         if (halfGap > 0 && length > 0) {
             // Two stubs with the letter between them. Both carry the same stroke, so the
             // dash that separates 220104 from 220103 survives the break.
-            const along = (t: number): ProjectedPosition => [from[0] + dx * t, from[1] + dy * t];
-            const half = 0.5 - halfGap / length;
-            paints.push({geometry: {type: 'LineString', coordinates: [from, along(half)]}, stroke});
-            paints.push({geometry: {type: 'LineString', coordinates: [along(1 - half), to]}, stroke});
+            const share = halfGap / length;
+            paints.push({geometry: {type: 'LineString', coordinates: [from, along(Math.max(0, middle - share))]}, stroke});
+            paints.push({geometry: {type: 'LineString', coordinates: [along(Math.min(1, middle + share)), to]}, stroke});
         } else {
             paints.push({geometry: {type: 'LineString', coordinates: [from, to]}, stroke});
         }
@@ -187,7 +195,7 @@ export function bearingLinePaint(name: TacticalGraphicName): LinePaint {
          */
         // Gone with its gap once it would be under the legibility floor, or the line is too short
         // to carry it. @see letterInGapScale
-        if (letterScale) paints.push(text([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], letter, 'center', undefined, letterScale));
+        if (letterScale) paints.push(text(along(middle), letter, 'center', undefined, letterScale));
 
         /*
          * `H` is **right-justified against point 2**, so it ends where the line ends and
@@ -396,6 +404,9 @@ export function rhumbLinePaint(): LinePaint {
         const run = ends(feature);
         if (!run) return [];
         const [from, to] = run;
+        // The bearing and the name at the middle, or at the middle of what is in view of the line
+        // when that is off screen. @see midSegmentInView
+        const middle = midSegmentInView([from, to], {index: 0, t: 0.5}, context).t;
 
         const color = lineColorOf(feature);
         const paints: Paint[] = [{
@@ -442,7 +453,7 @@ export function rhumbLinePaint(): LinePaint {
          * small-angle stand-in for it — which is why this is one of the few places in the
          * repository where working in EPSG:3857 is more correct than turf would be.
          */
-        const at = beside(from, to, 0.5, 11 * scale * northSign, context.resolution);
+        const at = beside(from, to, middle, 11 * scale * northSign, context.resolution);
         if (at) {
             paints.push({
                 geometry: {type: 'Point', coordinates: at},
@@ -478,7 +489,7 @@ export function rhumbLinePaint(): LinePaint {
             const ny = dx / (length || 1);
             const offsetPx = boxSupportPx(nx, ny, halfWpx, halfHpx) + BOX_CLEARANCE_PX * scale;
 
-            const at = beside(from, to, 0.5, -offsetPx * northSign, context.resolution);
+            const at = beside(from, to, middle, -offsetPx * northSign, context.resolution);
             if (at) {
                 const halfW = halfWpx * context.resolution;
                 const halfH = halfHpx * context.resolution;

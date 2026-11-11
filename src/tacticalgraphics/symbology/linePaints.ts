@@ -18,6 +18,8 @@ import {amplifierDash, asAmplifier, getFullLabel, showsEny, legibleDesignation, 
 import {areaDateLabel} from './areaLabelPaints';
 import {strokeParts} from './dashFit';
 import {distanceAlongPath, offsetPath, textOnPath} from './curvedText';
+import {distanceInView, pointAlong} from './viewFollow';
+import {labelGapPx} from './labelFit';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -128,14 +130,15 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         // `computeArrowheadPoints` returns [leftWing, tip, rightWing].
         const leftWing = arrowCoords[0];
         const rightWing = arrowCoords[2];
-        const clearance = ARROW_LABEL_CLEARANCE_PX * context.resolution;
-        const anchor: ProjectedPosition = [
+        const rotation = uprightRotation(p1, p2);
+        const scale = scaleOf(feature, context);
+        // Gaps beside the text shrink with it. @see labelGapPx
+        const clearance = labelGapPx(ARROW_LABEL_CLEARANCE_PX, scale) * context.resolution;
+        const enyGapPx = labelGapPx(ARROW_ENY_GAP_PX, scale);
+        const behindHead: ProjectedPosition = [
             (leftWing[0] + rightWing[0]) / 2 - ux * clearance,
             (leftWing[1] + rightWing[1]) / 2 - uy * clearance,
         ];
-
-        const rotation = uprightRotation(p1, p2);
-        const scale = scaleOf(feature, context);
         const align: 'left' | 'right' = !uprightFlipped(p1, p2) ? 'right' : 'left';
 
         const nameText = getFullLabel(name, feature.properties.designation ?? '');
@@ -152,7 +155,21 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             ? legibleDesignation(enyFull, 'ENY', scale, fontStyle, context, pathLength(baseCoords) / context.resolution)
             : {text: enyFull, scale};
         const prefixOnly = shown.text !== enyFull;
-        const fromEnd = (p2[0] - anchor[0]) * ux + (p2[1] - anchor[1]) * uy;
+        /*
+         * **Behind the head, unless that is off screen**, when the words come along the shaft to
+         * the nearest place in view; the breaks and the dates are measured from the same place,
+         * so they come with them. @see distanceInView
+         */
+        const labelPx = prefixOnly
+            ? (shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0)
+            : (nameText ? textWidth(context, nameText, fontStyle, scale) : 0) +
+              (showEny ? enyGapPx + textWidth(context, 'ENY', fontStyle, scale) : 0);
+        const total = pathLength(baseCoords);
+        const naturalFromEnd = (p2[0] - behindHead[0]) * ux + (p2[1] - behindHead[1]) * uy;
+        const naturalCenter = total - naturalFromEnd - (labelPx * context.resolution) / 2;
+        const center = distanceInView(baseCoords, naturalCenter, labelPx / 2, context);
+        const fromEnd = total - center - (labelPx * context.resolution) / 2;
+        const anchor: ProjectedPosition = center === naturalCenter ? behindHead : pointAlong(baseCoords, total - fromEnd).at;
         /*
          * **On the shaft, bending with it.** A word ending `backPx` behind the anchor is laid
          * along the drawn route, so on a short last leg it follows the turn rather than running
@@ -167,7 +184,7 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
             paints.push(...onShaft(label(feature, anchor, nameText, scale, {rotation, align}), 0));
         }
 
-        const pad = ARROW_TEXT_BREAK_PAD_PX * context.resolution;
+        const pad = labelGapPx(ARROW_TEXT_BREAK_PAD_PX, scale) * context.resolution;
         // One break in the shaft, `widthPx` of text ending `backPx` behind the anchor, on `path`
         // whose far end is the shaft's end.
         const cut = (path: ProjectedPosition[], backPx: number, widthPx: number) => {
@@ -179,14 +196,14 @@ export function directionArrowPaint(name: TacticalGraphicName): LinePaint {
         if (showEny && !prefixOnly) {
             const nameWidthPx = nameText ? textWidth(context, nameText, fontStyle, scale) : 0;
             const enyWidthPx = textWidth(context, 'ENY', fontStyle, scale);
-            const back = (nameWidthPx + ARROW_ENY_GAP_PX) * context.resolution;
-            paints.push(...onShaft(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}), nameWidthPx + ARROW_ENY_GAP_PX));
+            const back = (nameWidthPx + enyGapPx) * context.resolution;
+            paints.push(...onShaft(label(feature, [anchor[0] - ux * back, anchor[1] - uy * back], 'ENY', scale, {rotation, align}), nameWidthPx + enyGapPx));
             /*
              * **Two breaks, with the shaft running between them.** Each of 140601-140605 boxes
              * N and T separately on the line, `A —N—T—>`, so `ENY` and the name are two words
              * on the shaft rather than one gap with nothing in its middle.
              */
-            const eny = cut(baseCoords, nameWidthPx + ARROW_ENY_GAP_PX, enyWidthPx);
+            const eny = cut(baseCoords, nameWidthPx + enyGapPx, enyWidthPx);
             const outline = [...splitAtCorners(eny.before)];
             if (nameText) outline.push(...cut(eny.after, 0, nameWidthPx).outline);
             else outline.push(eny.after);

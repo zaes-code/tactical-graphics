@@ -52,6 +52,7 @@ import {targetAttitudeMils} from '../graphics/RectangularTarget';
 // module paints takes its colour from its own plate rather than from an affiliation.
 // @see COLOUR_NAMED_AREAS
 import {axisRotation, labelColorOf, scaleOf} from './paintFunctions';
+import {labelGapPx} from './labelFit';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -270,10 +271,11 @@ export function axisAmplifierPaint(): AreaPaint {
         }
         if (!lines.length) return [];
 
+        const scale = scaleOf(feature, context);
         return [{
             geometry: {
                 type: 'Point',
-                coordinates: [(box.minX + box.maxX) / 2, box.minY - AXIS_BLOCK_GAP_PX * context.resolution],
+                coordinates: [(box.minX + box.maxX) / 2, box.minY - labelGapPx(AXIS_BLOCK_GAP_PX, scale) * context.resolution],
             },
             text: {
                 text: lines.join('\n'),
@@ -282,7 +284,7 @@ export function axisAmplifierPaint(): AreaPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'center',
                 baseline: 'top',
-                scale: scaleOf(feature, context),
+                scale,
                 kind: 'amplifier',
             },
         }];

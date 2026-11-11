@@ -771,6 +771,7 @@ const CONTROLLER_REGISTRY: Record<TacticalGraphicName, ControllerFactory> = {
     [TacticalGraphicName.ObstacleBypassDifficult]:          vertexLine(3, 3),
     [TacticalGraphicName.ObstacleBypassImpossible]:         vertexLine(3, 3),
     [TacticalGraphicName.Mineline]:                         line(),
+    [TacticalGraphicName.MinefieldStaticDepiction]:         line(),
     [TacticalGraphicName.MineCluster]:                      line(2),
     [TacticalGraphicName.TripWire]:                         line(2),
     [TacticalGraphicName.RaftSite]:                         line(2),

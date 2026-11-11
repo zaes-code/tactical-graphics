@@ -184,7 +184,7 @@ function layout(feature: PaintFeature, context: PaintContext) {
      * **A unit symbol takes the place of field T, and the body makes room for it.**
      *
      * The host supplies it through the same provider the security operations and the escort
-     * use; nothing here imports milsymbol, and a host that registers nothing gets the
+     * use; nothing here imports a symbol library, and a host that registers nothing gets the
      * designation the operator typed. The symbol wins when both are available — a picture of the
      * unit says more than its name, which is review for this pair.
      *

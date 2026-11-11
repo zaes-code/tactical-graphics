@@ -19,7 +19,8 @@ and anchoring are yours. `setSecurityOperationSymbolProvider` from the OpenLayer
 accepts this fourth return where the shared `setSecuritySymbolProvider` accepts three.
 `useMilsymbolSecurityOperationSymbols(ms)` registers milsymbol as both this provider and
 the shared one. On its own it is enough on OpenLayers: all six center-symbol graphics draw
-from it. Changing any provider or the size repaints on its own;
+from it. With @zaes/military-symbols, the shared `setSecuritySymbolProvider(symbolImageProvider())`
+on the root entry is enough for both engines. Changing any provider or the size repaints on its own;
 `subscribeSecurityOperationSymbolChange(listener)` tells a host when that happens.
 
 Everything *else* about the provider is shared, and a provider is resolved most-specific

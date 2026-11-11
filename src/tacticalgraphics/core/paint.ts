@@ -320,6 +320,43 @@ export interface PaintContext {
      * @see resolveSecuritySymbol, CENTER_SYMBOL_GRAPHICS
      */
     centerSymbolProvider?: SecuritySymbolProvider;
+
+    /**
+     * The visible part of the map, in projected meters, when the renderer knows it.
+     *
+     * With it, a label whose place on the symbol is off screen moves onto the part of its
+     * line that is visible: a phase line's name to where the line leaves the view, an
+     * axis of advance's designation back along the arrow from an arrowhead that is out of
+     * sight. Without it every label sits exactly where the symbol puts it.
+     *
+     * A renderer that supplies it must repaint after a pan as well as after a zoom, or a
+     * moved label stays where the previous view left it.
+     */
+    view?: ProjectedBounds;
+
+    /**
+     * Screen areas other labels already hold, in projected meters.
+     *
+     * With it, a label that would land on one of them slides along the visible part of its line,
+     * or across its area, to the first clear place, and the line is cut where the label is. A host
+     * painting several graphics supplies the labels of those it has already painted. Read only
+     * together with `view`; without either, every label sits where the symbol puts it.
+     */
+    avoid?: ProjectedBounds[];
+
+    /**
+     * Other graphics' line work, in projected meters, which labels keep off the same way they
+     * keep off `avoid`. A graphic's own lines are not in it: its labels sit on those by design.
+     */
+    avoidLines?: ProjectedPosition[][];
+}
+
+/** An axis-aligned box in projected meters. */
+export interface ProjectedBounds {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
 }
 
 /**
@@ -400,7 +437,7 @@ export interface PaintFeature {
      * vertex; a circle has none, so the square hugging it is the sensible stand-in),
      * and the position-area-artillery symbol puts a "PAA" at each edge midpoint.
      */
-    bounds?: {minX: number; minY: number; maxX: number; maxY: number};
+    bounds?: ProjectedBounds;
 
     /**
      * The drawn polygon's outer ring, in projected meters.
@@ -444,7 +481,7 @@ export interface PaintFeature {
      * lives: the demo's properties dialog stamps `echelon` straight onto the
      * OpenLayers feature and does **not** put it in `properties.tacticalGraphic`,
      * so a paint function that read only the bag would silently render every
-     * position as a squad. Falls back to the bag, then to squad.
+     * position as a squad. Falls back to the bag; with neither, no glyph is drawn.
      *
      * Worth fixing at the source one day — the bag is meant to be the single
      * description a graphic carries, and an echelon that never gets saved is a

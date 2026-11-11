@@ -149,8 +149,11 @@ export {
     getDefaultLabelSize,
     getDefaultLineWidth,
     geometryConfigKey,
+    getFullSizeDecorations,
     getSmoothLines,
     getEnemyLabels,
+    getMinLabelSize,
+    getAutoPlaceLabels,
     getTacticalGraphicsConfig,
     resetTacticalGraphicsConfig,
     setDefaultLabelSize,
@@ -267,6 +270,7 @@ export type {TextKind,
     PaintContext,
     PaintFeature,
     PaintFunction,
+    ProjectedBounds,
     ProjectedGeometry,
     ProjectedInputGeometry,
     ProjectedPosition,
@@ -354,6 +358,8 @@ export {
     phaseLinePaint,
 } from './symbology/paintFunctions';
 export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {addGraphicLines, emptyLabelSpace, paintWithClearance, takeLabels, textBounds, withClearance} from './symbology/labelClearance';
+export type {ClearanceItem, LabelSpace} from './symbology/labelClearance';
 export {CARDINAL_LABEL_AREAS, CBRN_AREAS, CBRN_TOXIC_AREAS, CORRIDOR_GRAPHICS} from './symbology/registry';
 export {
     breakRingAt,
@@ -390,13 +396,17 @@ export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstacleP
 export {
     fortifiedPositionPaint,
     mineClusterPaint,
+    minefieldStaticPaint,
     minelinePaint,
     raftSitePaint,
+    staticMinefieldLayout,
     tripWirePaint,
 } from './symbology/protectionLinePaints';
+export type {StaticMinefieldLayout} from './symbology/protectionLinePaints';
 export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
 export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
 export {followTaskPaint, followTaskSymbol} from './symbology/followTaskPaints';
+export {searchAreaSymbol, sweptArcTaskSymbol, UNIT_SYMBOL_GRAPHICS, type UnitSymbolPlacement} from './symbology/unitSymbolPaints';
 export type {FollowVariant} from './symbology/followTaskPaints';
 export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
 export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
@@ -560,6 +570,7 @@ export {
     securitySymbolRevision,
     securitySymbolSidc,
     setGraphicSecuritySymbolProvider,
+    setGraphicUnitSymbol,
     setSecuritySymbolProvider,
     setSecuritySymbolSize,
     subscribeSecuritySymbolChange,
@@ -571,7 +582,7 @@ export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mob
 export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
 export type {GraphicPainters} from './symbology/registry';
 
-export {amplifierText, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from './symbology/paintFunctions';
+export {amplifierText, withFadedPaints, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from './symbology/paintFunctions';
 
 /**
  * ## Building a graphic's paint input, for any renderer
@@ -588,6 +599,7 @@ export {
     DEFAULT_OFFSET_PX,
     descriptionOf,
     paintGraphic,
+    placeAreaLabel,
     projectToMercator,
     rebuildPaintedGraphic,
     withDrawingResolution,

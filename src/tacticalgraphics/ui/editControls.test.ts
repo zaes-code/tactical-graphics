@@ -5,7 +5,8 @@
  * symbol accepts, each handing its press to the engine.
  */
 import type {AllowedGestures} from '../core/symbology';
-import type {EditMode, GestureKind, SelectionBox} from '../core/engine';
+import type {EditMode, GestureKind, SelectedGraphic, SelectionBox} from '../core/engine';
+import {TacticalGraphicName} from '../core/type';
 import {attachEditControls, placeButton} from './editControls';
 
 function fakeEngine(gestures: Partial<AllowedGestures> = {}) {
@@ -61,6 +62,70 @@ describe('the edit controls', () => {
         state.box = undefined;
         controls.update();
         expect(visibleButtons(container)).toEqual([]);
+        controls.destroy();
+    });
+
+    it('adds a pressed button of its own, bottom-left by default, only while the box shows', () => {
+        const {engine, state} = fakeEngine();
+        let pressed = 0;
+        // jsdom lays nothing out, so give the layer a size or every button clamps to its corner.
+        const size = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+        const sizeY = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+        const controls = attachEditControls(container, engine, {actions: [{id: 'properties', label: 'Properties', icon: '<svg></svg>', onPress: () => pressed++}]});
+        controls.update();
+        const button = container.querySelector<HTMLButtonElement>('.tg-edit-button--properties')!;
+        expect(visibleButtons(container)).toEqual(['Move', 'Rotate', 'Resize', 'Properties']);
+        expect({left: button.style.left, top: button.style.top}).toEqual({left: '54px', top: '218px'});
+        // A press reaches the host and neither the map nor a gesture.
+        let mapSaw = false;
+        container.addEventListener('pointerdown', () => (mapSaw = true));
+        button.dispatchEvent(new Event('pointerdown', {bubbles: true}));
+        button.click();
+        expect([pressed, mapSaw, state.begun]).toEqual([1, false, []]);
+        state.box = undefined;
+        controls.update();
+        expect(button.hidden).toBe(true);
+        controls.destroy();
+        size.mockRestore();
+        sizeY.mockRestore();
+    });
+
+    it('shows an action only for the graphics its visible check accepts, and hands the press the graphic', () => {
+        const {engine, state} = fakeEngine();
+        let selected: SelectedGraphic | null = {id: 'fan-1', name: TacticalGraphicName.WeaponSensorRangeFanCircular, base: {type: 'Feature', geometry: {type: 'Point', coordinates: [0, 0]}, properties: {}}};
+        const pressed: (string | undefined)[] = [];
+        let asked = 0;
+        const controls = attachEditControls(
+            container,
+            {...engine, getSelection: () => selected},
+            {
+                actions: [
+                    {
+                        id: 'bands',
+                        label: 'Edit range bands',
+                        icon: '<svg></svg>',
+                        visible: graphic => (asked++, graphic.name === TacticalGraphicName.WeaponSensorRangeFanCircular),
+                        onPress: graphic => pressed.push(graphic?.id),
+                    },
+                    {id: 'properties', label: 'Properties', icon: '<svg></svg>', corner: 'top-left', onPress: () => undefined},
+                ],
+            },
+        );
+        controls.update();
+        expect(visibleButtons(container)).toEqual(['Move', 'Rotate', 'Resize', 'Edit range bands', 'Properties']);
+        container.querySelector<HTMLButtonElement>('.tg-edit-button--bands')!.click();
+        expect(pressed).toEqual(['fan-1']);
+
+        // A phase line is selected: the range-band button goes, the one with no check stays.
+        selected = {id: 'pl-1', name: TacticalGraphicName.PhaseLine, base: {type: 'Feature', geometry: {type: 'Point', coordinates: [0, 0]}, properties: {}}};
+        state.box = {x: 10, y: 10, width: 50, height: 20};
+        controls.update();
+        expect(visibleButtons(container)).toEqual(['Move', 'Rotate', 'Resize', 'Properties']);
+
+        // Asked once per selection, not once per frame.
+        controls.update();
+        controls.update();
+        expect(asked).toBe(2);
         controls.destroy();
     });
 

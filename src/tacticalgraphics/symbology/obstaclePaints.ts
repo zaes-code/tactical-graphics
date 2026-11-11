@@ -24,6 +24,9 @@ import {
 import {DEFAULT_WIRE_STYLE, WIRE_MARK_PX, WIRE_STYLES} from '../graphics/WireObstacle';
 import {castellatedPath, centerSegmentIndex, centredRun, crenellatedPath, decorationScale, FORTIFIED_CRENEL_PX, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX, obstacleToothSize, offsetBelow, parallelPath, pathLength, splitAtCorners, uprightRotation, walkPath} from './decorations';
 import {amplifierDash, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {labelGapPx} from './labelFit';
+import {getFullSizeDecorations} from '../core/config';
+import {midSegmentInView} from './viewFollow';
 
 type ObstaclePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -197,13 +200,16 @@ export function antiTankDitchPaint(name: TacticalGraphicName): ObstaclePaint {
         const paints: Paint[] = [{geometry: {type: 'LineString', coordinates: path}, stroke}];
 
         const scale = decorationScale(path, false, context.resolution, ANTI_TANK_TOOTH_PX * ANTI_TANK_HEIGHT_RATIO);
-        const width = ANTI_TANK_TOOTH_PX * scale * context.resolution;
+        const total = pathLength(path);
+        // A tooth's slot, and for the mined ditch the gap a mine sits in after it, as a share of the tooth.
+        const slot = mines ? 1 + MINE_GAP : 1;
+        // Kept whole on a line too short for one slot, the tooth narrows to fit rather than
+        // vanish. @see getFullSizeDecorations
+        const width = Math.min(ANTI_TANK_TOOTH_PX * scale * context.resolution, getFullSizeDecorations() ? (total / slot) * 0.999 : Infinity);
         if (width <= 0) return paints;
 
         const depth = width * ANTI_TANK_HEIGHT_RATIO;
-        const total = pathLength(path);
-        // A tooth's slot, and for the mined ditch the gap a mine sits in after it.
-        const pitch = mines ? width * (1 + MINE_GAP) : width;
+        const pitch = width * slot;
 
         const teeth = Math.floor(total / pitch);
         if (teeth < 1) return paints;
@@ -287,13 +293,16 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
         // Under the center-most drawn segment: the merlons take the upper side, so the
         // two never compete. `offsetBelow` normalizes against the map's down, so the
         // label stays beneath whichever way the line was drawn.
-        const segIdx = centerSegmentIndex(path);
+        // The middle segment, or the part of the line in view when its middle is off screen.
+        // @see midSegmentInView
+        const {index: segIdx, t: along} = midSegmentInView(path, {index: centerSegmentIndex(path), t: 0.5}, context);
         const a = path[segIdx];
         const b = path[segIdx + 1];
-        const mid: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const mid: ProjectedPosition = [a[0] + (b[0] - a[0]) * along, a[1] + (b[1] - a[1]) * along];
 
+        const labelScale = scaleOf(feature, context);
         paints.push({
-            geometry: {type: 'Point', coordinates: offsetBelow(mid, a, b, context.resolution, 8)},
+            geometry: {type: 'Point', coordinates: offsetBelow(mid, a, b, context.resolution, labelGapPx(8, labelScale))},
             text: {
                 text,
                 font: fontStyle,
@@ -302,7 +311,7 @@ export function fortifiedLinePaint(name: TacticalGraphicName): ObstaclePaint {
                 rotation: uprightRotation(a, b),
                 align: 'center',
                 baseline: 'top',
-                scale: scaleOf(feature, context),
+                scale: labelScale,
             },
         });
         return paints;

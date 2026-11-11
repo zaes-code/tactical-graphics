@@ -9,8 +9,9 @@
  * from the demo app.
  *
  * `ol` is a **peer** dependency: you bring your own OpenLayers and share the one copy the
- * rest of your map already uses. `milsymbol` is peer too, and **optional in a stronger
- * sense**: nothing in this package imports it. Six graphics draw a centre symbol, and a
+ * rest of your map already uses. A unit symbol library (`@zaes/military-symbols` or
+ * `milsymbol`) is peer too, and **optional in a stronger sense**: nothing in this package
+ * imports either. Six graphics draw a centre symbol, and a
  * host supplies it by registering a provider — register nothing and the centre is simply
  * empty. @see setSecuritySymbolProvider, on the root entry
  *
@@ -169,14 +170,14 @@ export {MissionTaskController, PointDropController} from './controllers/MissionT
 export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
 
 // The center symbol a security operation draws between its arms. A single-point
-// 2525E icon, which is milsymbol's job — so this package asks a provider for it
-// and never imports milsymbol itself. Register one with
-// `useMilsymbolSecurityOperationSymbols(ms)` if you already depend on milsymbol,
-// or `setSecurityOperationSymbolProvider` to draw it yourself. Register nothing
+// 2525E icon, which is a unit symbol library's job — so this package asks a provider
+// for it and imports none. Register `symbolImageProvider()` from @zaes/military-symbols
+// with `setSecuritySymbolProvider`, `useMilsymbolSecurityOperationSymbols(ms)` for
+// milsymbol, or `setSecurityOperationSymbolProvider` to draw it yourself. Register nothing
 // and the arms and labels draw with an empty center.
 // Its on-screen size is the library's rather than the provider's, because the
 // library is what builds the Icon around a provider that returns a `src` string:
-// `setSecurityOperationSymbolSize`, not milsymbol's own `size` option.
+// `setSecurityOperationSymbolSize`, not a symbol library's own size option.
 // A provider bound to one graphic wins over this one, and this one over the shared
 // provider on the root entry. The manager repaints its graphics when any of them
 // changes; `subscribeSecurityOperationSymbolChange` is for a host drawing on a layer

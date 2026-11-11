@@ -6,7 +6,7 @@ import {labelColorOf, lineColorOf} from './paintFunctions';
  * the operation's letter at the outer end of each arm.
  *
  * **Only the line work and the letters are here.** The center symbol is injected
- * by the host — nothing in this package names milsymbol — so a renderer draws it
+ * by the host — this package imports no symbol library — so a renderer draws it
  * through the registered provider or draws nothing.
  */
 
@@ -101,7 +101,7 @@ const SYMBOL_GAP_SHARE = 0.46;
 /**
  * The host-supplied unit symbol at the centre, placed and sized — or nothing.
  *
- * The same seam as the escort and the follow tasks: nothing here imports milsymbol, a host
+ * The same seam as the escort and the follow tasks: nothing here imports a symbol library, a host
  * registers a provider, and registering nothing draws an empty centre. The provider is
  * looked up in the renderer's order — this graphic's own, then the renderer's
  * (`context.centerSymbolProvider`), then the shared one — so the placement exists exactly

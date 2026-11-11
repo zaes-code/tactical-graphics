@@ -15,7 +15,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {TacticalGraphicName} from '../core/type';
 import {getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 import {fitSymbolScale, sampleSegments} from './symbolFit';
-import { liftedAnchor} from './labelFit';
+import {labelGapPx, liftedAnchor} from './labelFit';
 
 /** A paint function, in the shape the registry stores. */
 type AirfieldPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -92,8 +92,9 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
             : feature.bounds?.maxX;
         if (east === undefined) return paints;
 
+        const infoScale = scaleOf(feature, context);
         paints.push({
-            geometry: {type: 'Point', coordinates: [east + INFO_GAP_PX * context.resolution, center[1]]},
+            geometry: {type: 'Point', coordinates: [east + labelGapPx(INFO_GAP_PX, infoScale) * context.resolution, center[1]]},
             text: {
                 text: info,
                 kind: 'amplifier',
@@ -102,7 +103,7 @@ export function airfieldPaint(label: AirfieldPaint): AirfieldPaint {
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'left',
                 baseline: 'middle',
-                scale: scaleOf(feature, context),
+                scale: infoScale,
             },
         });
         return paints;
@@ -188,8 +189,9 @@ export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPain
         // The runway's reach is metres, so the clearance is the only part in pixels — a gap
         // that shrank with the zoom would close up long before the glyph did.
         const east = feature.bounds ? feature.bounds.maxX : center[0] + reach;
+        const scale = scaleOf(feature, context);
         return [{
-            geometry: {type: 'Point', coordinates: [east + AIRFIELD_LABEL_GAP_PX * context.resolution, center[1]]},
+            geometry: {type: 'Point', coordinates: [east + labelGapPx(AIRFIELD_LABEL_GAP_PX, scale) * context.resolution, center[1]]},
             text: {
                 text,
                 font: fontStyle,
@@ -197,7 +199,7 @@ export function airfieldPointLabelPaint(name: TacticalGraphicName): AirfieldPain
                 halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
                 align: 'left',
                 baseline: 'middle',
-                scale: scaleOf(feature, context),
+                scale,
             },
         }];
     };

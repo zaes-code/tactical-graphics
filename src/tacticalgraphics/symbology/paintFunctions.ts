@@ -35,6 +35,7 @@ import {
     RATIO_LOCKED_LABEL_FONT_PX,
     RATIO_LOCKED_MISSION_TASKS,
     configuredLabelScale,
+    fadeColor,
     fontStyle,
     getColorByHostility,
     getObstacleColor,
@@ -49,7 +50,7 @@ import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, getEnemyLabels} from '../core/co
 import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
 import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
 import {drawsAsObstacle} from '../core/obstacles';
-import {capLabelToGraphic, heldTextScale, letterGapClearance, letterInGapScale} from './labelFit';
+import {capLabelToGraphic, heldTextScale, labelGapPx, letterGapClearance, letterInGapScale} from './labelFit';
 // A cycle (movementPaints imports this file), safe because it is only called inside a paint.
 import {approachLetterScale} from './movementPaints';
 import {PLANNED_DASH_PX, strokeParts} from './dashFit';
@@ -61,10 +62,13 @@ import {
     offsetAbove,
     offsetBelow,
     pathLength,
+    splitPathAroundAll,
     textWidth,
     uprightFlipped,
     uprightRotation,
 } from './decorations';
+import {distanceAlongPath} from './curvedText';
+import {endAnchorInView, inView, insetView, isTaken, midSegmentInView, pointAlong, visibleStretch} from './viewFollow';
 
 /**
  * Blanks one amplifier line when the graphic is hiding them.
@@ -95,6 +99,39 @@ export function amplifierText(feature: PaintFeature, value: string): string {
 export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
     if (!hidden) return paints;
     return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * Every color in a paint list faded by `opacity`, 0 to 1: strokes, fills, hatches, circles,
+ * text and halos together, each keeping its own translucency relative to the others.
+ *
+ * For a renderer that styles per mark rather than per layer. MapLibre fades a graphic
+ * through its layers' opacity instead, so it does not need this.
+ * @see NativeLayerRenderer.setOpacity
+ */
+export function withFadedPaints(paints: Paint[], opacity: number | undefined): Paint[] {
+    if (opacity === undefined || opacity >= 1) return paints;
+    const stroke = (s: Paint['stroke']) => s && {...s, color: fadeColor(s.color, opacity)};
+    const fill = (f: Paint['fill']) => f && {
+        ...f,
+        color: fadeColor(f.color, opacity),
+        ...(f.pattern ? {pattern: {...f.pattern, color: fadeColor(f.pattern.color, opacity)}} : {}),
+    };
+    return paints.map(paint => ({
+        ...paint,
+        ...(paint.stroke ? {stroke: stroke(paint.stroke)} : {}),
+        ...(paint.fill ? {fill: fill(paint.fill)} : {}),
+        ...(paint.circle ? {circle: {...paint.circle, fill: fill(paint.circle.fill), stroke: stroke(paint.circle.stroke)}} : {}),
+        ...(paint.text
+            ? {
+                  text: {
+                      ...paint.text,
+                      fill: fadeColor(paint.text.fill, opacity),
+                      ...(paint.text.halo ? {halo: {...paint.text.halo, color: fadeColor(paint.text.halo.color, opacity)}} : {}),
+                  },
+              }
+            : {}),
+    }));
 }
 
 /**
@@ -171,7 +208,21 @@ export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
         }
         const scale = text.scale ?? 1;
         const px = renderedTextPx(text.font, scale);
-        out.push(px > mainPx ? {...paint, text: {...text, scale: (scale * mainPx) / px}} : paint);
+        if (px <= mainPx) {
+            out.push(paint);
+            continue;
+        }
+        // The offset was measured for the text at its old size, so it shrinks with it. @see labelGapPx
+        const ratio = mainPx / px;
+        out.push({
+            ...paint,
+            text: {
+                ...text,
+                scale: scale * ratio,
+                ...(text.offsetXPx !== undefined ? {offsetXPx: text.offsetXPx * ratio} : {}),
+                ...(text.offsetYPx !== undefined ? {offsetYPx: text.offsetYPx * ratio} : {}),
+            },
+        });
     }
     return out;
 }
@@ -595,8 +646,11 @@ export function enyOutside(text: string, leftOfEnd: boolean): string {
 }
 
 
-/** Screen-pixel gap between the end of the line and the nearest edge of its label. */
+/** Screen-pixel gap between the end of the line and the nearest edge of its label, at full size. @see labelGapPx */
 const PHASE_LINE_GAP_PX = 8;
+
+/** How many places in from its edge a phase line label tries before keeping the first. */
+const PHASE_LINE_SLIDES = 8;
 
 /**
  * A line with its designation repeated outside each end, laid along the line's
@@ -635,6 +689,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
         };
         if (!text) return [lineWork];
         const width = textWidth(context, text, fontStyle, scale);
+        const gapPx = labelGapPx(PHASE_LINE_GAP_PX, scale);
 
         // Which screen-x side is "outside" each endpoint. `offsetXPx` is in screen
         // pixels and is NOT rotated with the text, so the actual x-component of each
@@ -646,7 +701,7 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
 
         // `ENY` goes on the outer side of each end, `ENY PL T ... PL T ENY`, so it is the first
         // word of a label left of its end and the last of one to the right. @see enyOutside
-        const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'right', offsetXPx: number): Paint => ({
+        const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'center' | 'right', offsetXPx: number): Paint => ({
             geometry: {type: 'Point', coordinates: at},
             text: {
                 text: enyOutside(text, offsetXPx + (align === 'right' ? -width : 0) < 0),
@@ -661,13 +716,75 @@ export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: 
             },
         });
 
-        return [
-            lineWork,
-            endLabel(start, uprightRotation(start, startNext), 'left',
-                startOutsideRight ? PHASE_LINE_GAP_PX : -PHASE_LINE_GAP_PX - width),
-            endLabel(end, uprightRotation(endPrev, end), 'right',
-                endOutsideRight ? PHASE_LINE_GAP_PX + width : -PHASE_LINE_GAP_PX),
-        ];
+        const atStart = () =>
+            endLabel(start, uprightRotation(start, startNext), 'left', startOutsideRight ? gapPx : -gapPx - width);
+        const atEnd = () => endLabel(end, uprightRotation(endPrev, end), 'right', endOutsideRight ? gapPx + width : -gapPx);
+
+        // An end that is off screen takes its label to where the line leaves the view.
+        // @see PaintContext.view
+        // An end counts as shown only when its whole label, which runs on past it, is.
+        const view = insetView(context);
+        const labelFits = (at: ProjectedPosition, from: ProjectedPosition) => {
+            const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
+            if (!view || run === 0) return !view || inView(at, view);
+            const reach = (gapPx + width) * context.resolution;
+            const far: ProjectedPosition = [at[0] + ((at[0] - from[0]) / run) * reach, at[1] + ((at[1] - from[1]) / run) * reach];
+            return inView(at, view) && inView(far, view);
+        };
+        const startShown = labelFits(start, startNext);
+        const endShown = labelFits(end, endPrev);
+        // A label outside a shown end stays there unless another label or line holds the spot.
+        // @see PaintContext.avoid
+        const acrossPx = (BASE_FONT_SIZE_PX * scale) / 2;
+        const outsideClear = (at: ProjectedPosition, from: ProjectedPosition) => {
+            const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
+            if (run === 0) return true;
+            const [ux, uy] = [(at[0] - from[0]) / run, (at[1] - from[1]) / run];
+            const reach = (gapPx + width / 2) * context.resolution;
+            return !isTaken([at[0] + ux * reach, at[1] + uy * reach], {alongPx: width / 2, acrossPx}, ux, uy, context);
+        };
+        const startOut = startShown && outsideClear(start, startNext);
+        const endOut = endShown && outsideClear(end, endPrev);
+        if (startOut && endOut) return [lineWork, atStart(), atEnd()];
+
+        // Nothing of the line inside the inset view: it is off screen or hugging an edge, and
+        // either way the labels are best left where the symbol puts them.
+        const stretch = view ? visibleStretch(coords, view) : undefined;
+        if (!stretch) return [lineWork, atStart(), atEnd()];
+
+        // In the line just inside the view's edge (or the end whose outside is held), reading
+        // along it, with the line work cut around it: the label keeps to the line rather than
+        // sitting over or under it, and slides on in toward the middle past anything in its way.
+        const halfGap = (width / 2 + gapPx / 2) * context.resolution;
+        const gaps: {at: number; halfGap: number}[] = [];
+        const middle = distanceAlongPath(coords, stretch[0]) + pathLength(stretch) / 2;
+        const inLine = (edge: ProjectedPosition, inward: 1 | -1): Paint => {
+            const first = distanceAlongPath(coords, edge) + inward * (width / 2) * context.resolution;
+            const step = (width / 2 + gapPx) * context.resolution;
+            let s = first;
+            for (let k = 0; k < PHASE_LINE_SLIDES; k++) {
+                const candidate = first + inward * k * step;
+                if (k > 0 && inward * (candidate - middle) > 0) break;
+                const {from, to, at} = pointAlong(coords, candidate);
+                if (!isTaken(at, {alongPx: width / 2 + gapPx / 2, acrossPx}, to[0] - from[0], to[1] - from[1], context)) {
+                    s = candidate;
+                    break;
+                }
+            }
+            const {at, from, to} = pointAlong(coords, s);
+            gaps.push({at: s, halfGap});
+            return endLabel(at, uprightRotation(from, to), 'center', 0);
+        };
+
+        const labels = [startOut ? atStart() : inLine(startShown ? start : stretch[0], 1)];
+        // Two labels need room for both and the gap between them; short of it, one is enough.
+        const roomPx = pathLength(stretch) / context.resolution;
+        if (startShown || endShown || roomPx >= 2 * width + 3 * gapPx) {
+            labels.push(endOut ? atEnd() : inLine(endShown ? end : stretch[stretch.length - 1], -1));
+        }
+        const runs = splitPathAroundAll(coords, gaps);
+        const cutLine: Paint = runs.length ? {...lineWork, geometry: {type: 'MultiLineString', coordinates: runs}} : lineWork;
+        return [cutLine, ...labels];
     };
 }
 
@@ -704,7 +821,9 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         const text = getFullLabel(name, feature.properties.designation ?? '');
         const paints: Paint[] = [];
 
-        const segIdx = centerSegmentIndex(coords);
+        // The middle segment, or the part of the line in view when its middle is off screen.
+        // @see midSegmentInView
+        const {index: segIdx, t: along} = midSegmentInView(coords, {index: centerSegmentIndex(coords), t: 0.5}, context);
         const p1 = coords[segIdx];
         const p2 = coords[segIdx + 1];
 
@@ -714,7 +833,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         if (segLength === 0) return paints;
 
         const dir: ProjectedPosition = [segDx / segLength, segDy / segLength];
-        const mid: ProjectedPosition = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+        const mid: ProjectedPosition = [p1[0] + (p2[0] - p1[0]) * along, p1[1] + (p2[1] - p1[1]) * along];
 
         // The right of travel, opposite the teeth.
         const normal: ProjectedPosition = [dir[1], -dir[0]];
@@ -725,7 +844,7 @@ export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, 
         // reach, which sent the label a screen away on a line that doubled back.
         const scale = scaleOf(feature, context);
         const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * scale;
-        const offsetMap = (halfTextHeightPx + OBSTACLE_LABEL_GAP_PX) * context.resolution;
+        const offsetMap = (halfTextHeightPx + labelGapPx(OBSTACLE_LABEL_GAP_PX, scale)) * context.resolution;
 
         paints.push({
             geometry: {
@@ -1312,13 +1431,8 @@ export function defaultLinePaint(
             context,
             pathLength(coords) / context.resolution,
         );
-        const gap = DEFAULT_LINE_LABEL_GAP_PX;
+        const gap = labelGapPx(DEFAULT_LINE_LABEL_GAP_PX, scale);
         const res = context.resolution;
-
-        const startAlign: 'left' | 'right' = !uprightFlipped(start, afterStart) ? 'left' : 'right';
-        const endAlign: 'left' | 'right' = !uprightFlipped(beforeEnd, end) ? 'right' : 'left';
-        const startRotation = uprightRotation(start, afterStart);
-        const endRotation = uprightRotation(end, beforeEnd);
 
         const label = (
             at: ProjectedPosition,
@@ -1362,10 +1476,27 @@ export function defaultLinePaint(
             shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0,
             dateLabel ? textWidth(context, dateLabel, fontStyle, scale) : 0,
         );
-        if (endLabelsCollide(start, end, widestPx, res)) {
-            const i = centerSegmentIndex(coords);
+        /*
+         * **An end off screen takes its labels to where the line comes into the view**, slid on
+         * inward past anything already there; they stay over and under the line as at the end.
+         * @see endAnchorInView
+         */
+        const footprint = {alongPx: widestPx / 2, acrossPx: gap + BASE_FONT_SIZE_PX * scale};
+        const movedStart = endAnchorInView(coords, 'start', footprint, context);
+        const movedEnd = endAnchorInView(coords, 'end', footprint, context);
+        const [startAt, startFrom, startTo] = movedStart ? [movedStart.at, movedStart.from, movedStart.to] : [start, start, afterStart];
+        const [endAt, endFrom, endTo] = movedEnd ? [movedEnd.at, movedEnd.from, movedEnd.to] : [end, beforeEnd, end];
+
+        const startAlign: 'left' | 'right' = !uprightFlipped(startFrom, startTo) ? 'left' : 'right';
+        const endAlign: 'left' | 'right' = !uprightFlipped(endFrom, endTo) ? 'right' : 'left';
+        const startRotation = uprightRotation(startFrom, startTo);
+        const endRotation = uprightRotation(endTo, endFrom);
+
+        if (endLabelsCollide(startAt, endAt, widestPx, res)) {
+            // The middle of what is in view, when the line's own middle is off it. @see midSegmentInView
+            const {index: i, t} = midSegmentInView(coords, {index: centerSegmentIndex(coords), t: 0.5}, context, footprint);
             const [a, b] = [coords[i], coords[i + 1]];
-            const middle: ProjectedPosition = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            const middle: ProjectedPosition = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
             const rotation = uprightRotation(a, b);
             const centered = (paint: Paint): Paint => ({...paint, text: {...paint.text!, align: 'center'}});
             return [
@@ -1377,10 +1508,10 @@ export function defaultLinePaint(
 
         return [
             // A label aligned left runs inward from its end, so its first word is the outer one.
-            label(offsetAbove(start, start, afterStart, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
-            label(offsetAbove(end, beforeEnd, end, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
-            asAmplifier(label(offsetBelow(start, start, afterStart, res, gap), dateLabel, startRotation, startAlign, 'top')),
-            asAmplifier(label(offsetBelow(end, beforeEnd, end, res, gap), dateLabel, endRotation, endAlign, 'top')),
+            label(offsetAbove(startAt, startFrom, startTo, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(endAt, endFrom, endTo, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
+            asAmplifier(label(offsetBelow(startAt, startFrom, startTo, res, gap), dateLabel, startRotation, startAlign, 'top')),
+            asAmplifier(label(offsetBelow(endAt, endFrom, endTo, res, gap), dateLabel, endRotation, endAlign, 'top')),
             stroke,
         ];
     };

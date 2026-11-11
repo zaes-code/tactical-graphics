@@ -27,8 +27,9 @@ import {
     type TacticalGraphicsEngine,
 } from '@zaes/tactical-graphics';
 import {InteractionType, TacticalGraphicsManager} from './TacticalGraphicsManager';
-import {clearAllGraphics, rebuildGraphicsForConfig, restoreTacticalGraphics, serializeOneGraphic, serializeTacticalGraphics} from './persistence';
+import {clearAllGraphics, rebuildGraphicsForConfig, removeGraphic, restoreTacticalGraphics, serializeOneGraphic, serializeTacticalGraphics} from './persistence';
 import {amplifiersHiddenOn, stampAmplifierVisibility} from './amplifierVisibility';
+import {stampGraphicOpacity} from './graphicOpacity';
 import type {TacticalGraphicHandler} from './openlayersAdapter';
 
 /** Options for {@link createTacticalGraphics}. */
@@ -168,6 +169,18 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
 
         amplifiersHidden: (id: string) => amplifiersHiddenOn(manager.map, id),
 
+        remove(id: string) {
+            // `removeGraphic` deselects through the manager, which already tells the host
+            // through `onSelectionChange`.
+            if (!removeGraphic(manager, id)) return false;
+            options.onChange?.();
+            return true;
+        },
+
+        setOpacity(id: string, opacity: number) {
+            stampGraphicOpacity(manager.map, id, opacity);
+        },
+
         refreshStyles() {
             // A setting that moves geometry needs the generators, not just the styles.
             // @see rebuildGraphicsForConfig
@@ -191,6 +204,7 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
             // a listener behind to re-attach it partway through the *next* draw — which is
             // what made a draw end on a double-click that also zoomed the map.
             manager.restoreDoubleClickZoomNow();
+            manager.stopFollowingView();
             map.removeLayer(manager.renderingVectorLayer);
         },
     };

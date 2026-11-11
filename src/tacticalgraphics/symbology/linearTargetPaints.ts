@@ -9,14 +9,17 @@
  */
 
 import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {TacticalGraphicName} from '../core/type';
 import {offsetAbove, offsetBelow, uprightRotation} from './decorations';
+import {midSegmentInView} from './viewFollow';
+import {labelGapPx} from './labelFit';
 import {amplifierDash, amplifierText, getFullLabel, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
 
 /** Half-height of the end caps, in screen pixels **at the drawing resolution**. */
 const BAR_HALF_PX = 14;
-/** Gap between the line and the nearest edge of a label. */
+/** Gap between the line and the nearest edge of a label, at full size. @see labelGapPx */
 const LABEL_GAP_PX = 8;
 /**
  * Extra push on the first below-line label.
@@ -71,7 +74,14 @@ function linearTargetPaints(
     const startBottom: ProjectedPosition = [start[0] - px * barHalfMap, start[1] - py * barHalfMap];
     const endTop: ProjectedPosition = [end[0] + px * barHalfMap, end[1] + py * barHalfMap];
     const endBottom: ProjectedPosition = [end[0] - px * barHalfMap, end[1] - py * barHalfMap];
-    const center: ProjectedPosition = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+    // The middle of what is on screen when the line's own middle is not. @see midSegmentInView
+    const scale = scaleOf(feature, context);
+    const gapPx = labelGapPx(LABEL_GAP_PX, scale);
+    const {t: along} = midSegmentInView([start, end], {index: 0, t: 0.5}, context, {
+        alongPx: (context.measureText(nameLabel, fontStyle) * scale) / 2,
+        acrossPx: gapPx + (BASE_FONT_SIZE_PX + belowLines.length * LINE_HEIGHT_PX) * scale,
+    });
+    const center: ProjectedPosition = [start[0] + dx * along, start[1] + dy * along];
 
     const paints: Paint[] = [{
         geometry: {
@@ -82,7 +92,6 @@ function linearTargetPaints(
     }];
 
     const rotation = uprightRotation(start, end);
-    const scale = scaleOf(feature, context);
 
     const text = (at: ProjectedPosition, value: string, baseline: 'top' | 'bottom'): Paint => ({
         geometry: {type: 'Point', coordinates: at},
@@ -99,12 +108,12 @@ function linearTargetPaints(
     });
 
     if (nameLabel) {
-        paints.push(text(offsetAbove(center, start, end, context.resolution, LABEL_GAP_PX), nameLabel, 'bottom'));
+        paints.push(text(offsetAbove(center, start, end, context.resolution, gapPx), nameLabel, 'bottom'));
     }
 
     belowLines.forEach((line, i) => {
         if (!line) return;
-        const offsetPx = LABEL_GAP_PX + DESCENDER_COMPENSATE_PX * scale + i * LINE_HEIGHT_PX * scale;
+        const offsetPx = gapPx + DESCENDER_COMPENSATE_PX * scale + i * LINE_HEIGHT_PX * scale;
         paints.push(text(offsetBelow(center, start, end, context.resolution, offsetPx), line, 'top'));
     });
 

@@ -41,7 +41,7 @@ import * as turf from '../core/turf';
  * The box at the vertex. `A` is the **tactical symbol indicator** — *"the tactical symbol
  * indicator is centred over point 1"* — an associated unit symbol, not text an operator
  * types into this graphic, and the Example fills it with a framed icon. Single-point icons
- * are milsymbol's job and nothing in this package names milsymbol; the seam for injecting
+ * are a unit symbol library's job and this package imports none; the seam for injecting
  * one already exists for cover, guard and screen, and could be widened to cover this if a
  * host ever asks. @see core/securitySymbol.ts, and `GRAPHIC_FIELDS` — this graphic offers
  * no amplifier field, because its plate letters none.

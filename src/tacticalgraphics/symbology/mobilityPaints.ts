@@ -11,6 +11,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {dateRangeLabel} from './midLabelLinePaints';
 import {textWidth} from './decorations';
 import {lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {labelGapPx} from './labelFit';
 import {strokeParts} from './dashFit';
 import {FIELD_OF_FIRE_BLADE} from '../core/fieldOfFire';
 import {TacticalGraphicName} from '../core/type';
@@ -77,7 +78,7 @@ export function passageLanePaint(showDates = true): LinePaint {
          */
         const halfWidthPx = (dates ? textWidth(context, dates, fontStyle, scale) : 0) / 2;
         const halfHeightPx = (BASE_FONT_SIZE_PX / 2) * scale;
-        const clearancePx = tailReachPx + PASSAGE_LANE_LABEL_GAP_PX + Math.abs(ux) * halfWidthPx + Math.abs(uy) * halfHeightPx;
+        const clearancePx = tailReachPx + labelGapPx(PASSAGE_LANE_LABEL_GAP_PX, scale) + Math.abs(ux) * halfWidthPx + Math.abs(uy) * halfHeightPx;
         const at: ProjectedPosition = [
             x1 - ux * clearancePx * context.resolution,
             y1 - uy * clearancePx * context.resolution,

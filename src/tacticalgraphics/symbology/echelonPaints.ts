@@ -4,8 +4,8 @@
  * Battle position, strong point and the unexploded-ordnance area: closed shapes
  * that break their outline open and set a symbol in the gap.
  *
- * The first two carry an **echelon glyph** — the dots and bars that say squad
- * through brigade — which is drawn rather than lettered, so it is line work and
+ * The first two carry an **echelon glyph** — the Ø, dots, bars, X's and ++ that say team
+ * through command — which is drawn rather than lettered, so it is line work and
  * takes the affiliation's color like the outline it sits in. (The boundary's
  * echelon is the documented exception that stays black; these are not it.)
  */
@@ -15,6 +15,8 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {TacticalGraphicEchelon, TacticalGraphicStatus} from '../core/type';
 import {cutGapAlongPath, decorationScale, gapFits, joinedAtSeam, pathLength, runVector, splitAtCorners, splitPathAroundAll} from './decorations';
 import {PLANNED_DASH_PX, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {midSegmentInView} from './viewFollow';
+import {labelGapPx} from './labelFit';
 
 type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -70,6 +72,18 @@ interface OpenedRing {
  * opened the west edge.
  */
 const ECHELON_FACING: readonly [number, number] = [0, -1];
+
+/**
+ * The outward direction of the edge a position opens on: the reverse of the bag's
+ * `openingDirection`, which points from the opening into the shape, or south when it is unset.
+ * @see TacticalGraphicProperties.openingDirection
+ */
+function openingFacing(feature: PaintFeature): readonly [number, number] {
+    const degrees = feature.properties.openingDirection;
+    if (typeof degrees !== 'number' || !Number.isFinite(degrees)) return ECHELON_FACING;
+    const radians = (degrees * Math.PI) / 180;
+    return [-Math.cos(radians), -Math.sin(radians)];
+}
 
 /**
  * `1` for a ring wound counter-clockwise, `-1` for clockwise, by the shoelace sum.
@@ -133,6 +147,8 @@ function openRing(
     resolution: number,
     /** Half the hole to cut, in screen pixels — the glyph's own half-width. @see echelonWidthPx */
     halfGapPx: number,
+    /** The scale the glyph is drawn at, which its clearance follows. @see labelGapPx */
+    scale: number,
 ): OpenedRing | null {
     if (ring.length < 2) return null;
     const openIndex = openingIndex(ring, facing);
@@ -155,34 +171,51 @@ function openRing(
     const m = closed.length - 1;
     const k = Math.floor(m / 2);
     const walk = Array.from({length: m + 1}, (_, j) => closed[(((openIndex - k + j) % m) + m) % m]);
-    const cut = cutGapAlongPath(walk, k, ECHELON_OPENING_MIDPOINT, (halfGapPx + ECHELON_GAP_PX) * resolution);
+    const cut = cutGapAlongPath(walk, k, ECHELON_OPENING_MIDPOINT, (halfGapPx + labelGapPx(ECHELON_GAP_PX, scale)) * resolution);
     const outline = splitAtCorners([...cut.after, ...cut.before.slice(1)]).filter(run => run.length > 1);
 
     return {outline, midGap: cut.center, dx, dy};
 }
 
+/** Sides of the polygon a team's Ø circle is drawn as, so every engine strokes it the same. */
+const TEAM_CIRCLE_SIDES = 24;
+/** The Ø circle's radius, against the dot's. */
+const TEAM_RADIUS_SHARE = 1.4;
+/** How far the Ø slash runs past its circle's centre, as a multiple of the radius. */
+const TEAM_SLASH_REACH = 1.4;
+
+/** How many X's each echelon from brigade up wears. */
+const CROSS_COUNT: Partial<Record<TacticalGraphicEchelon, number>> = {
+    [TacticalGraphicEchelon.brigade]: 1,
+    [TacticalGraphicEchelon.division]: 2,
+    [TacticalGraphicEchelon.corpsMef]: 3,
+    [TacticalGraphicEchelon.army]: 4,
+    [TacticalGraphicEchelon.armyGroupFront]: 5,
+    [TacticalGraphicEchelon.regionTheater]: 6,
+};
+
 /**
- * The echelon glyph: dots for squad through platoon, perpendicular bars for
- * company through regiment, and one X per level from brigade up: X, XX for a
- * division, XXX for a corps or MEF.
+ * The echelon glyph, MIL-STD-2525E's field B: Ø for a team or crew, dots for squad
+ * through platoon, perpendicular bars for company through regiment, one X per level
+ * from brigade (X) to theater (XXXXXX), and ++ for a command.
  *
  * Every size is screen pixels multiplied by the label scale, so the glyph grows
  * and shrinks with the amplifiers around it rather than with the map.
  *
- * An unrecognized echelon falls back to the single dot rather than drawing
- * nothing: a position with no readable echelon is still a position.
+ * **No echelon draws nothing.** It used to fall back to a squad's dot, which said
+ * squad about every position nobody had given an echelon. `Unknown` is the same.
  */
 function buildEchelonMarks(
     mid: ProjectedPosition,
     dx: number,
     dy: number,
     resolution: number,
-    echelon: TacticalGraphicEchelon,
+    echelon: TacticalGraphicEchelon | undefined,
     color: string,
     scale: number,
 ): Paint[] {
     const segLen = Math.hypot(dx, dy);
-    if (!segLen) return [];
+    if (!segLen || echelon === undefined) return [];
 
     const ux = dx / segLen;
     const uy = dy / segLen;
@@ -252,8 +285,67 @@ function buildEchelonMarks(
         });
         return [arm(ux * cos - uy * sin, ux * sin + uy * cos), arm(ux * cos + uy * sin, -ux * sin + uy * cos)];
     };
+    const crosses = (count: number): Paint[] =>
+        Array.from({length: count}, (_, i) => cross(i - (count - 1) / 2)).flat();
+
+    /*
+     * **A command's ++.** Each plus fills the same box as one X, so ++ sits in the break at
+     * the size an XX does, and they step by that width plus the same daylight. A plus's
+     * along-arm is a stroke end-on, so its ink runs half a line width past each end.
+     */
+    const plusHalf = halfLength * Math.cos(Math.PI / 4);
+    const plusStep = plusHalf * 2 + ECHELON_CROSS_GAP_PX * scale * resolution + LINE_WIDTH() * resolution;
+    const plus = (offset: number): Paint[] => {
+        const cx = mid[0] + ux * plusStep * offset;
+        const cy = mid[1] + uy * plusStep * offset;
+        const line = (vx: number, vy: number): Paint => ({
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [cx - vx * plusHalf, cy - vy * plusHalf],
+                    [cx + vx * plusHalf, cy + vy * plusHalf],
+                ],
+            },
+            stroke,
+        });
+        return [line(ux, uy), line(nx, ny)];
+    };
+
+    /*
+     * **A team's Ø**: a ring with a slash through it, lower left to upper right on a line
+     * running east. The ring is a polygon of short strokes rather than a circle paint, which
+     * every engine fills rather than strokes.
+     */
+    const team = (): Paint[] => {
+        const radius = ECHELON_DOT_RADIUS_PX * TEAM_RADIUS_SHARE * scale * resolution;
+        const ring: ProjectedPosition[] = Array.from({length: TEAM_CIRCLE_SIDES}, (_, i) => {
+            const a = (i / TEAM_CIRCLE_SIDES) * 2 * Math.PI;
+            return [mid[0] + radius * Math.cos(a), mid[1] + radius * Math.sin(a)];
+        });
+        ring.push(ring[0]);
+        const reach = radius * TEAM_SLASH_REACH;
+        const [sx, sy] = [(ux - uy) * Math.SQRT1_2, (ux + uy) * Math.SQRT1_2];
+        return [
+            {geometry: {type: 'LineString', coordinates: ring}, stroke},
+            {
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [
+                        [mid[0] - sx * reach, mid[1] - sy * reach],
+                        [mid[0] + sx * reach, mid[1] + sy * reach],
+                    ],
+                },
+                stroke,
+            },
+        ];
+    };
+
+    const crossCount = CROSS_COUNT[echelon];
+    if (crossCount) return crosses(crossCount);
 
     switch (echelon) {
+        case TacticalGraphicEchelon.teamCrew:
+            return team();
         case TacticalGraphicEchelon.squad:
             return [dot(0)];
         case TacticalGraphicEchelon.section:
@@ -266,14 +358,10 @@ function buildEchelonMarks(
             return [bar(-1), bar(1)];
         case TacticalGraphicEchelon.regimentGroup:
             return [bar(-1), bar(0), bar(1)];
-        case TacticalGraphicEchelon.brigade:
-            return cross(0);
-        case TacticalGraphicEchelon.division:
-            return [...cross(-0.5), ...cross(0.5)];
-        case TacticalGraphicEchelon.corpsMef:
-            return [...cross(-1), ...cross(0), ...cross(1)];
+        case TacticalGraphicEchelon.command:
+            return [...plus(-0.5), ...plus(0.5)];
         default:
-            return [dot(0)];
+            return [];
     }
 }
 
@@ -314,7 +402,7 @@ export function echelonWidthPx(
     dx: number,
     dy: number,
     resolution: number,
-    echelon: TacticalGraphicEchelon,
+    echelon: TacticalGraphicEchelon | undefined,
     scale = 1,
 ): number {
     const segLen = Math.hypot(dx, dy);
@@ -338,15 +426,16 @@ export function echelonWidthPx(
  * the thing it marks — measured against the opening segment, which is what every caller
  * hands over and what the gap is cut from. @see ECHELON_SPAN_SHARE
  *
- * The glyph itself: dots for squad through platoon, perpendicular bars for company through
- * regiment, and one X per level from brigade up.
+ * The glyph itself: Ø for a team, dots for squad through platoon, perpendicular bars for
+ * company through regiment, one X per level from brigade up, ++ for a command, and nothing
+ * for no echelon. @see buildEchelonMarks
  */
 export function echelonMarks(
     mid: ProjectedPosition,
     dx: number,
     dy: number,
     resolution: number,
-    echelon: TacticalGraphicEchelon,
+    echelon: TacticalGraphicEchelon | undefined,
     color: string,
     scale = 1,
 ): Paint[] {
@@ -436,7 +525,8 @@ function outerRing(feature: PaintFeature): ProjectedPosition[] | null {
 
 /**
  * Battle position: the outline broken open on the facing side with the echelon
- * glyph in the gap, dashed when planned.
+ * glyph in the gap, dashed when planned. The side is the bag's `openingDirection`,
+ * south when it is unset. @see openingFacing
  *
  * `alwaysDashed` is APP-06 151202, "battle position prepared (P) but not occupied" —
  * a *different symbol*, not a status. Its template is drawn broken and its Example
@@ -447,14 +537,16 @@ export function battlePositionPaint(opts: {alwaysDashed?: boolean} = {}): AreaPa
     return (feature, context) => {
         const ring = outerRing(feature);
         if (!ring) return [];
-        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        // No echelon draws no glyph, and the ring opens only by its clearance. @see buildEchelonMarks
+        const echelon = feature.echelon ?? feature.properties.echelon;
+        const facing = openingFacing(feature);
         // The hole is cut to fit the glyph that goes in it, so the ring opens exactly as
         // far as this echelon needs and no further. @see echelonWidthPx
-        const opening = openingSegment(ring, ECHELON_FACING);
+        const opening = openingSegment(ring, facing);
         const halfGlyphPx = opening
             ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
             : 0;
-        const opened = openRing(ring, ECHELON_FACING, context.resolution, halfGlyphPx);
+        const opened = openRing(ring, facing, context.resolution, halfGlyphPx, scaleOf(feature, context));
         if (!opened) return [];
 
         const color = lineColorOf(feature);
@@ -479,14 +571,16 @@ export function strongPointPaint(): AreaPaint {
     return (feature, context) => {
         const ring = outerRing(feature);
         if (!ring) return [];
-        const echelon = feature.echelon ?? feature.properties.echelon ?? TacticalGraphicEchelon.squad;
+        // No echelon draws no glyph, and the ring opens only by its clearance. @see buildEchelonMarks
+        const echelon = feature.echelon ?? feature.properties.echelon;
+        const facing = openingFacing(feature);
         // The hole is cut to fit the glyph that goes in it, so the ring opens exactly as
         // far as this echelon needs and no further. @see echelonWidthPx
-        const opening = openingSegment(ring, ECHELON_FACING);
+        const opening = openingSegment(ring, facing);
         const halfGlyphPx = opening
             ? echelonWidthPx(opening[0], opening[1], context.resolution, echelon, scaleOf(feature, context)) / 2
             : 0;
-        const opened = openRing(ring, ECHELON_FACING, context.resolution, halfGlyphPx);
+        const opened = openRing(ring, facing, context.resolution, halfGlyphPx, scaleOf(feature, context));
         if (!opened) return [];
 
         const color = lineColorOf(feature);
@@ -560,12 +654,15 @@ export function unexplodedOrdnanceAreaPaint(): AreaPaint {
         for (const i of [maxIndex, minIndex]) {
             const p1 = ring[i];
             const p2 = ring[i + 1];
-            if (!gapFits(ring, i, 0.5, gapMap / 2, true)) continue;
+            // The side's middle, or the middle of what is in view of it when that is off screen:
+            // the gap and its `UXO` together. @see midSegmentInView
+            const {t} = midSegmentInView([p1, p2], {index: 0, t: 0.5}, context);
+            if (!gapFits(ring, i, t, gapMap / 2, true)) continue;
             const along = (i - start + m) % m;
-            gaps.push({at: pathLength(walk.slice(0, along + 1)) + Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 2, halfGap: gapMap / 2});
+            gaps.push({at: pathLength(walk.slice(0, along + 1)) + Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) * t, halfGap: gapMap / 2});
 
             paints.push({
-                geometry: {type: 'Point', coordinates: [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2]},
+                geometry: {type: 'Point', coordinates: [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t]},
                 text: {
                     text: 'UXO',
                     font: fontStyle,

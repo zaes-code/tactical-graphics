@@ -38,7 +38,7 @@ import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symb
 import {TacticalGraphicName} from '../core/type';
 import {DECORATION_MIN_PX, offsetBelow, uprightRotation} from './decorations';
 import {amplifierDash, amplifierText, labelColorOf, lineColorOf} from './paintFunctions';
-import {capLabelToSpan} from './labelFit';
+import {capLabelToSpan, labelGapPx} from './labelFit';
 import {spanProportionalScale} from './movementPaints';
 import {BASE_FONT_SIZE_PX} from '../core/config';
 
@@ -296,12 +296,13 @@ export function convoyPaint(name: TacticalGraphicName): LinePaint {
          * up, so nothing else would give it away. "Below" is normalized against the map's
          * north there, which is the only definition that holds. @see offsetAbove
          */
-        const underGapPx = bodyHalfPx + DATE_GAP_PX * scale;
-        const middle = at(neck / 2, 0);
-        const under: ProjectedPosition = vertical ? [middle[0] - underGapPx * res, middle[1]] : offsetBelow(middle, from, to, res, underGapPx);
         // The date-time group has the whole body to run under, and nothing beside it, but it is
         // never drawn larger than the fields inside the body. @see withProportionateAmplifiers
         const dateScale = Math.min(capLabelToSpan(context, dates, fontStyle, scale, neck / res), weapon || info ? pairScale : Infinity);
+        // At the size the dates are drawn, which is often below the body's. @see labelGapPx
+        const underGapPx = bodyHalfPx + labelGapPx(DATE_GAP_PX, dateScale);
+        const middle = at(neck / 2, 0);
+        const under: ProjectedPosition = vertical ? [middle[0] - underGapPx * res, middle[1]] : offsetBelow(middle, from, to, res, underGapPx);
         if (dates) paints.push(text(under, dates, 'top', dateScale));
 
         return paints;

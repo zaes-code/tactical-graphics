@@ -15,6 +15,112 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.8.0] — 2026-11-10
+
+Labels that follow the view and keep clear of each other, on every renderer.
+
+### Added
+
+- **A unit symbol on Search Area, Capture, Evacuate and Recover.** Their plates carry field A, a
+  unit symbol the host supplies; it is now drawn from the same center-symbol provider as Cover,
+  Guard and Screen: on Search Area's vertex, and inside the swept-arc tasks' circle, sized to it.
+  `CENTER_SYMBOL_GRAPHICS` has ten members, and the four take hostility, as a unit's frame is its
+  identity. New exports: `searchAreaSymbol`, `sweptArcTaskSymbol`, `UNIT_SYMBOL_GRAPHICS`.
+- **`setGraphicUnitSymbol(graphicId, unit)`**, from the root: gives one center-symbol graphic its
+  own unit, by entity (SIDC positions 11-16, keeping the identity its `hostility` gives) or by a
+  whole SIDC, drawn by whatever global provider is registered. The center-symbol guide now shows
+  `@zaes/military-symbols` (`setSecuritySymbolProvider(symbolImageProvider())`) beside milsymbol;
+  neither is imported.
+- **Labels follow the view.** A label whose usual place is off screen moves onto the visible
+  part of its graphic: phase line and axis labels, boundary and mid-line labels, linear target
+  and FPF labels, and area labels. Every renderer hands the paint functions its view through
+  the new optional **`PaintContext.view`**: MapLibre's native layers and canvas overlay, and
+  OpenLayers, which restyles once a pan settles. A caller that passes no view sees no change.
+- **Labels keep clear of each other.** Every renderer paints its graphics in one pass in which
+  each graphic's labels slide along their line, or across their area, clear of the labels
+  already placed and of the other graphics' lines, through the new optional
+  **`PaintContext.avoid`** and **`avoidLines`**. A label with no clear place keeps its usual one.
+  The pass is `paintWithClearance`, with `emptyLabelSpace`, `addGraphicLines`, `withClearance`,
+  `takeLabels` and `textBounds` for an engine or host that paints graphics itself.
+- **`autoPlaceLabels`** turns both on. It is off by default, so a host that does not set it sees
+  every label at its doctrinal place, as before.
+- **`fullSizeDecorations`** in `TacticalGraphicsConfigOptions` (default `false`), read with
+  `getFullSizeDecorations()`: keeps obstacle teeth, wire loops, ditch teeth and battlements at
+  full size however small the graphic is on screen. A ditch's teeth narrow to fit a short line
+  rather than vanish.
+- **Minefield, static depiction** (`TacticalGraphicName.MinefieldStaticDepiction`, 270701),
+  anchored to a line: a closed frame that follows the drawn line, with the `mineType` glyph
+  repeated inside at a constant screen size, `ENY` beyond each end when hostile, field H above
+  and W below. The unit symbol libraries (@zaes/military-symbols, milsymbol) draw 270701 as a
+  fixed-size point symbol; this is the depiction whose length follows the ground. Painted by
+  the new `minefieldStaticPaint`, with
+  `staticMinefieldLayout` for the geometry.
+- **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
+  properties, for a host drawing one graphic at a size of its own.
+- **`turnedSymbolLayer`** exported from the MapLibre entry beside `symbolLayer`.
+- **`engine.remove(id)`** on both engines, and `remove(id)` on `NativeLayerRenderer` and
+  `CanvasOverlayRenderer`: takes one
+  graphic off the map, deselecting it if it was selected, and calls `onChange`. Hiding a graphic
+  is removing it and adding it back later.
+- **`engine.setOpacity(id, opacity)`** on both engines, and `setOpacity` / `opacityOf` on
+  `NativeLayerRenderer` and `CanvasOverlayRenderer`: draws one graphic fainter, its lines,
+  fills, labels and center symbol together. View state like "name only": never in a snapshot,
+  gone after `restore` or `clearAll`. The native renderer reads it through every layer's
+  opacity; OpenLayers and the canvas overlay fade each color through the new
+  `withFadedPaints`.
+
+- **`openingDirection`** on a battle position, a prepared battle position or a strong point
+  picks the edge it opens on: degrees counter-clockwise from east, from the opening toward the
+  inside. Unset, the ring opens on its south edge as before. Every renderer reads it from the
+  saved properties.
+- **Echelons above corps, team and command.** `TacticalGraphicEchelon` gains `teamCrew` (Ø),
+  `army` (XXXX), `armyGroupFront` (XXXXX), `regionTheater` (XXXXXX) and `command` (++), drawn
+  on boundaries, battle positions, strong points and mobility corridors. Code that maps every
+  member, such as a `Record<TacticalGraphicEchelon, string>`, needs the five new entries.
+
+- **`minLabelSize`** sets the smallest size, in px, a label is shrunk to while fitting its
+  graphic. Below it the label keeps that size and may run over its outline, so a small area's
+  name stays readable from far out. Unset, nothing changes.
+- **Buttons of your own on the edit box.** `attachEditControls` takes **`actions`**: buttons
+  that are pressed rather than dragged, with an id, label, icon and corner. An action's
+  optional `visible` check picks the graphics it shows for, and `onPress` is handed the
+  selected graphic. The sample app uses one to open the properties dialog.
+
+### Changed
+
+- **`@zaes/military-symbols` is an optional peer dependency**, beside `milsymbol`: either can
+  supply the center symbol, and neither is imported. The guides and API notes name both.
+
+- **No echelon draws no echelon mark.** A boundary, battle position or strong point with no
+  echelon, or `Unknown`, used to draw a squad's dot. A boundary now draws an unbroken line and
+  a battle position a small opening with nothing in it. The mobility corridor still draws a
+  dot, since its field B is mandatory.
+
+- **A moved label keeps out of other graphics' areas** and prefers a place where it fits whole.
+  With `autoPlaceLabels` on, a label stepping aside no longer settles inside a different area
+  (the AO's name inside a kill zone), and an area's name no longer shrinks to illegibility
+  because the first clear place was cramped: it takes a roomier one, or stays at its usual
+  place when that reads larger.
+
+- **`ENY` on a hostile area is sized to the area.** It sits on the outline, so it takes the cap
+  every label there takes, and it is never larger than the area's name. It never goes
+  below the smallest legible size, so a hostile area keeps its marker when its name is too
+  small to show. Affects the action areas, the generic area and the corps support area.
+
+### Fixed
+
+- **The gap beside a label shrinks with the label.** Zoomed out, a label shrinks to fit its
+  graphic, but the gap between it and the line work kept its full pixel count, so a phase
+  line's `PL` sat a whole word's width off the end of its line. Every such gap is now stated
+  for a full-size label and scaled with the text, across 74 graphics: the line control
+  measures, routes, boundaries, arrows, the fire support areas' dates, the obstacle and mine
+  lines, linear targets, convoys and more. A date capped at its name's size takes its offset
+  down with it. Nothing changes where labels are drawn at full size.
+
+- **`/maplibre` ships no development notes.** The sample gallery behind `sampleBase` carried
+  comments about where a fix came from and when; they are gone, and the build now fails if any
+  emitted module, declaration or the published `package.json` carries such a note.
+
 ## [4.7.0] — 2026-11-02
 
 A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
@@ -1913,7 +2019,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...develop
+[4.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...v4.8.0
 [4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
 [4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2

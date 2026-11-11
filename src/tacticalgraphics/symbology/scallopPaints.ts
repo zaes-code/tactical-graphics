@@ -33,11 +33,14 @@ import {
     pathLength,
     pathPointAt,
     screenSizedArrowHead,
+    textWidth,
     upSign,
     uprightRotation,
     wavePath,
 } from './decorations';
 import {amplifierDash, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {endAnchorInView} from './viewFollow';
+import {labelGapPx} from './labelFit';
 
 type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 
@@ -130,7 +133,7 @@ export function lineOfContactPaint(): LinePaint {
                 rotation,
                 align,
                 baseline: 'middle',
-                offsetXPx: sign * LC_LABEL_PAD_PX,
+                offsetXPx: sign * labelGapPx(LC_LABEL_PAD_PX, scale2),
                 scale: scale2,
             },
         });
@@ -149,9 +152,25 @@ export function lineOfContactPaint(): LinePaint {
                 // re-coloured its affiliations re-coloured only half the symbol.
                 stroke: {color: getColorByHostility(TacticalGraphicHostility.friend), widthPx: LINE_WIDTH()},
             },
-            lc(start, uprightRotation(start, end), reversed ? 'left' : 'right', reversed ? 1 : -1),
-            lc(end, uprightRotation(end, start), reversed ? 'right' : 'left', reversed ? -1 : 1),
+            lcAt(start, 'start'),
+            lcAt(end, 'end'),
         ];
+
+        /*
+         * `LC` outside each end; an end off screen takes its `LC` to where the line comes into
+         * the view, reading inward from there along the line. @see endAnchorInView
+         */
+        function lcAt(at: ProjectedPosition, which: 'start' | 'end'): Paint {
+            const footprint = {alongPx: textWidth(context, 'LC', fontStyle, scale2) / 2 + labelGapPx(LC_LABEL_PAD_PX, scale2), acrossPx: (amplitudeMap + offsetMap) / res};
+            const moved = endAnchorInView(coords, which, footprint, context);
+            if (!moved) {
+                return which === 'start'
+                    ? lc(at, uprightRotation(start, end), reversed ? 'left' : 'right', reversed ? 1 : -1)
+                    : lc(at, uprightRotation(end, start), reversed ? 'right' : 'left', reversed ? -1 : 1);
+            }
+            const inward = which === 'start' ? (reversed ? 'right' : 'left') : reversed ? 'left' : 'right';
+            return lc(moved.at, uprightRotation(moved.from, moved.to), inward, 0);
+        }
     };
 }
 

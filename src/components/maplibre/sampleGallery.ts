@@ -135,7 +135,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * so it took `anchorLine`'s frame-built base while the seven graphics it shares a shape
      * with — a straight run, a half-circle hooked off its end — took the front edge. Two
      * layouts for one picture, and the odd one out was visibly unlike its siblings in the
-     * sheet. (User's report, 2026-09-06: "pursue should be like those other cane graphics".)
+     * sheet.
      * Its own rule numbers the points the same way: a run, then a point stating the arc.
      */
     if (usesDrawnAnchors(name)) {
@@ -150,7 +150,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * as the anchor family above and the same shape of fix: a two-point line *builds* for all
      * of them, so "the first candidate that builds wins" took it and every one drew its legacy
      * fallback — squat, about half its proper width. This is the sweep the app restores from,
-     * so it is what a user sees. (User's report, 2026-09-06.)
+     * so it is what a user sees.
      *
      * `frontEdgeBase` is the library's own statement of the shape, shared with the OpenLayers
      * sample harness and the catalog thumbnails, which were each guessing it separately.
@@ -165,7 +165,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      * through `storedOrder` reverses the eight tip-first members of the family and draws
      * them from the wrong end — the cane arrows came out as a bare arch with an arrowhead
      * on it rather than a straight run with a half circle hooked off it. The catalog
-     * generator carried the identical wrap and it was removed there on 2026-09-06 for the
+     * generator carried the identical wrap and it was removed there for the
      * same reason. The convention's "build it rear-to-tip and put it through `storedOrder`"
      * is for a base you laid out yourself, not for one the library handed you.
      */
@@ -195,7 +195,7 @@ function candidateGeometries(name: TacticalGraphicName, lon: number, lat: number
      *   - the **escort** needs three for its bar.
      *
      * (The demonstration used to be here too, then was dropped from one click and needed no
-     * layout at all. It is three clicks again as of 2026-09-06 and takes `hairpinBase` in the
+     * layout at all. It is three clicks again and takes `hairpinBase` in the
      * branch above — which it reached only once `drawsAsHairpin` was added to that gate: the
      * plain two-point line builds it through its legacy fallback, so nothing objected while
      * the sheet drew a symbol whose grips sat 70% of its own span from any stored point.
@@ -480,7 +480,7 @@ const SAMPLE_RADIUS_M = 180_000;
  * "only one of the two ranges has been decided", which is the state between the second click
  * and the third, and `generateGraphics` then draws the bare preview arc. So the sweep showed
  * a single stroke of a curve where the plate has a two-arc sector, and the sheet built from
- * OpenLayers — which files no bands at all — showed the sector. (User's report, 2026-09-07.)
+ * OpenLayers — which files no bands at all — showed the sector.
  *
  * The four values are the ones 200700's plate names and the ones its draw files, so this is
  * the symbol a user would have drawn rather than an imitation of it.
@@ -720,8 +720,7 @@ function cellOrigin(index: number, total: number): {lon: number; lat: number} {
  * three-point envelopment where a draw stores four, and an unsquared third point on the
  * turns and the ambush. Every one of those builds, and every one draws the fallback the
  * generator keeps for a half-finished sketch. (Found by comparing the sheet against the
- * normalizer, 2026-09-06 — "make sure to update the sweep for all the graphics we've
- * fixed".)
+ * normalizer.)
  *
  * Falls back to the raw layout if normalizing produced something that will not build,
  * since a lesser symbol on the sheet still beats a missing one.
@@ -732,6 +731,21 @@ function sheetBase(name: TacticalGraphicName, geometry: Geometry, properties: Om
     if (settled === geometry.coordinates) return geometry;
     const candidate: Geometry = {type: 'LineString', coordinates: settled};
     return buildTacticalGraphic(name, candidate, properties) ? candidate : geometry;
+}
+
+/**
+ * The base a draw would store for `name` laid west to east about `[0, 0]`, with the sizes it
+ * needs: one cell of the sample sheet, for a host that draws the symbol at a size of its own
+ * rather than on a map. `undefined` when nothing builds.
+ */
+export function sampleBase(
+    name: TacticalGraphicName,
+): {geometry: Geometry; properties: Omit<TacticalGraphicProperties, 'name'>} | undefined {
+    const properties = {radius: SAMPLE_RADIUS_M, rotation: 0, ...SAMPLE_PROPERTY_OVERRIDES[name]};
+    const chosen = candidateGeometries(name, 0, 0).find(g => buildTacticalGraphic(name, g, properties));
+    if (!chosen) return undefined;
+    const geometry = sheetBase(name, chosen, properties);
+    return {geometry, properties: sheetSizes(name, geometry, properties)};
 }
 
 export function buildSampleGraphics(
