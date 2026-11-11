@@ -2,8 +2,8 @@
  * The 2525E point symbol that sits at the center of a security operation.
  *
  * Cover, Guard and Screen each render a unit symbol between their two arms. That
- * symbol is a *single-point* icon, which is milsymbol's job and not this
- * library's — so the library does not draw it and does not import milsymbol to
+ * symbol is a *single-point* icon, which is a unit symbol library's job and not this
+ * library's — so the library does not draw it and does not import one (milsymbol here) to
  * draw it. It asks a provider, and a host registers one.
  *
  * Why not just import milsymbol here

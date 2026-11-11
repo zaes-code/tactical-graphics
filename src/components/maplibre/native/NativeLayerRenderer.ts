@@ -835,8 +835,8 @@ export class NativeLayerRenderer {
     /**
      * Registers and places the security operations' center symbols.
      *
-     * The symbol is a single-point icon, which is milsymbol's job rather than this
-     * library's — nothing here names milsymbol, and a host that registers no provider
+     * The symbol is a single-point icon, which is a unit symbol library's job rather than
+     * this library's — nothing here imports one, and a host that registers no provider
      * simply gets an empty center, which is a supported state.
      *
      * MapLibre needs the image **registered by name** before a layer can reference

@@ -1,6 +1,6 @@
 {
   "name": "@zaes/tactical-graphics",
-  "version": "4.7.0",
+  "version": "4.8.0",
   "description": "MIL-STD-2525E, FM 1-02.2 and APP-06 tactical graphics as plain GeoJSON, with their entity codes. Renders axis-of-advance arrows, phase lines, mission tasks and range fans for OpenLayers, MapLibre or any GeoJSON consumer.",
   "keywords": [
     "mil-std-2525",
@@ -117,7 +117,7 @@
     "check:readme-samples": "node scripts/check-readme-samples.mjs",
     "gen:field-matrix": "node scripts/gen-field-matrix.mjs",
     "check:field-matrix": "node scripts/gen-field-matrix.mjs --check",
-    "check:conformance": "node ai/conformance/build-report.mjs --check",
+    "check:conformance": "node scripts/check-conformance.mjs",
     "check:tracker": "python scripts/gen-readme-graphics-table.py --check",
     "gen:app6-review": "python scripts/gen-app6-review-sheet.py",
     "check:app6-review": "python scripts/gen-app6-review-sheet.py --check",
@@ -155,11 +155,15 @@
     "@types/geojson": "^7946.0.16"
   },
   "peerDependencies": {
+    "@zaes/military-symbols": ">=0.1",
     "maplibre-gl": ">=4",
     "milsymbol": ">=3",
     "ol": ">=9"
   },
   "peerDependenciesMeta": {
+    "@zaes/military-symbols": {
+      "optional": true
+    },
     "maplibre-gl": {
       "optional": true
     },

@@ -1117,7 +1117,7 @@ export enum TacticalGraphicName {
     PsyOpsZoneRectangular = 'PsyOpsZoneRectangular',  // APP-06 242702 PsyOps Zone, Rectangular
     PsyOpsZoneCircular = 'PsyOpsZoneCircular',        // APP-06 242703 PsyOps Zone, Circular
     /**
-     * APP-06 270701. A point symbol in Table A-32, which milsymbol draws at a fixed size. This
+     * APP-06 270701. A point symbol in Table A-32, which a unit symbol library draws at a fixed size. This
      * is the line-anchored depiction: a frame whose length follows a drawn line, with the
      * mine type repeated inside. @see minefieldStaticPaint
      */

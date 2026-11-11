@@ -352,8 +352,8 @@ export function staticMinefieldLayout(
  * APP-06 270701 minefield, static depiction: a closed rectangular frame that follows the
  * drawn line, with the mine type's glyph repeated along the line inside it.
  *
- * **Anchored to a line, which milsymbol's point symbol is not.** The plate's draw rule is
- * one static point, and milsymbol draws it so: a fixed-size box holding three Sector 1
+ * **Anchored to a line, which the point symbol is not.** The plate's draw rule is
+ * one static point, and a unit symbol library draws it so: a fixed-size box holding three Sector 1
  * glyphs (codes 13-19 only). A minefield laid along a feature needs its frame to follow the
  * ground, so here the drawn line is the long axis and the mine count follows its length.
  *

@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.8.0] — 2026-11-10
+
 Labels that follow the view and keep clear of each other, on every renderer.
 
 ### Added
@@ -49,8 +51,9 @@ Labels that follow the view and keep clear of each other, on every renderer.
 - **Minefield, static depiction** (`TacticalGraphicName.MinefieldStaticDepiction`, 270701),
   anchored to a line: a closed frame that follows the drawn line, with the `mineType` glyph
   repeated inside at a constant screen size, `ENY` beyond each end when hostile, field H above
-  and W below. milsymbol draws 270701 as a fixed-size point symbol; this is the depiction
-  whose length follows the ground. Painted by the new `minefieldStaticPaint`, with
+  and W below. The unit symbol libraries (@zaes/military-symbols, milsymbol) draw 270701 as a
+  fixed-size point symbol; this is the depiction whose length follows the ground. Painted by
+  the new `minefieldStaticPaint`, with
   `staticMinefieldLayout` for the geometry.
 - **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
   properties, for a host drawing one graphic at a size of its own.
@@ -85,6 +88,9 @@ Labels that follow the view and keep clear of each other, on every renderer.
 
 ### Changed
 
+- **`@zaes/military-symbols` is an optional peer dependency**, beside `milsymbol`: either can
+  supply the center symbol, and neither is imported. The guides and API notes name both.
+
 - **No echelon draws no echelon mark.** A boundary, battle position or strong point with no
   echelon, or `Unknown`, used to draw a squad's dot. A boundary now draws an unbroken line and
   a battle position a small opening with nothing in it. The mobility corridor still draws a
@@ -113,7 +119,7 @@ Labels that follow the view and keep clear of each other, on every renderer.
 
 - **`/maplibre` ships no development notes.** The sample gallery behind `sampleBase` carried
   comments about where a fix came from and when; they are gone, and the build now fails if any
-  emitted module or declaration carries such a note.
+  emitted module, declaration or the published `package.json` carries such a note.
 
 ## [4.7.0] — 2026-11-02
 
@@ -2013,7 +2019,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...develop
+[4.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...v4.8.0
 [4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
 [4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2

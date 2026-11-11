@@ -338,8 +338,15 @@ const INTERNAL = [
             }
         });
     }
-    if (found.length) throw new Error(`internal notes in dist/:\n  ${found.join('\n  ')}`);
-    console.log('  verified: no internal notes in dist/');
+    // package.json ships too, scripts and all: a script naming an internal path went out
+    // with every release until 4.8.0.
+    fs.readFileSync(path.join(root, 'package.json'), 'utf8').split('\n').forEach((line, i) => {
+        for (const [pattern, what] of INTERNAL) {
+            if (pattern.test(line)) found.push(`package.json:${i + 1}: ${what}: ${line.trim().slice(0, 100)}`);
+        }
+    });
+    if (found.length) throw new Error(`internal notes in dist/ or package.json:\n  ${found.join('\n  ')}`);
+    console.log('  verified: no internal notes in dist/ or package.json');
 })();
 
 /**
