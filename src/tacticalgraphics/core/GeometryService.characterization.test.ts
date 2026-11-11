@@ -5,8 +5,8 @@ import geometryService from './GeometryService';
 /**
  * Characterization ("golden master") tests, not correctness tests.
  *
- * GeometryService has no unit coverage of its own (it's normally
- * verified by eyeballing the demo app). Before splitting this ~2400-line class
+ * GeometryService has no unit coverage of its own (it's normally verified by
+ * eyeballing the demo app). Before splitting this ~2400-line class
  * into topic files, this suite pins down what every method currently returns
  * for a representative input — bugs and all. If a later refactor (a pure code
  * move, or a `this.foo()` → `foo()` conversion) changes any snapshot, that's a
