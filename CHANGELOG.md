@@ -15,6 +15,8 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.8.0] — 2026-11-10
+
 Labels that follow the view and keep clear of each other, on every renderer.
 
 ### Added
@@ -117,7 +119,7 @@ Labels that follow the view and keep clear of each other, on every renderer.
 
 - **`/maplibre` ships no development notes.** The sample gallery behind `sampleBase` carried
   comments about where a fix came from and when; they are gone, and the build now fails if any
-  emitted module or declaration carries such a note.
+  emitted module, declaration or the published `package.json` carries such a note.
 
 ## [4.7.0] — 2026-11-02
 
@@ -2017,7 +2019,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...develop
+[4.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...v4.8.0
 [4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
 [4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
 [4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2
