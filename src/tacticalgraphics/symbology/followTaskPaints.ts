@@ -131,10 +131,6 @@ const capSymbolPx = (wantedPx: number): number => Math.min(wantedPx, MAX_SYMBOL_
 /** The connector's dash, which belongs to the symbol rather than to its status. */
 const CONNECTOR_DASH_PX = [10, 7];
 
-/** Straight-line interpolation between two projected points. */
-const lerp = (a: ProjectedPosition, b: ProjectedPosition, t: number): ProjectedPosition =>
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-
 /**
  * Everything both the paint and the renderers need to agree on: the axis frame, the
  * sizes, and whether a host-supplied unit symbol is taking the place of field T.
