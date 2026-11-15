@@ -3,25 +3,21 @@ import TileLayer from 'ol/layer/Tile';
 import Feature, {FeatureLike} from 'ol/Feature';
 import {Fill, Stroke, Style, Text} from 'ol/style';
 import CircleStyle from 'ol/style/Circle';
-import { Geometry, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
+import {LineString, MultiLineString, Point} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {defaults, ScaleLine} from 'ol/control';
 import {StyleFunction} from 'ol/style/Style';
 // The wire and anti-tank tables moved with their paint functions — they describe
 // what those symbols *are*, and `obstaclePaints.ts` reads them directly now.
-import {geometryService, getPaintFunction} from '@zaes/tactical-graphics';
+import {getPaintFunction} from '@zaes/tactical-graphics';
 import {
     getLabel,
-    TacticalGraphicConfidence,
-    TacticalGraphicEchelon,
     TacticalGraphicHostility,
     TacticalGraphicName,
-    TacticalGraphicStatus,
 } from '@zaes/tactical-graphics';
 import {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import {assignRole, readGraphicGeometryState, readGraphicLabels} from './graphicProperties';
 import {escortSymbolStyle, followTaskSymbolStyle, securityOperationCentreSymbolStyle, unitSymbolStyle} from './securityOperationSymbol';
-import {BASE_FONT_SIZE_PX, getDefaultLabelSize} from '@zaes/tactical-graphics';
 /**
  * The color table, the line weight and the three label-scale formulas now live in the
  * map-agnostic half (`core/symbology.ts`) — none of them mentions OpenLayers, and a
@@ -240,9 +236,6 @@ import {getTextWidth} from './textMeasure';
 export {getTextWidth};
 
 const centerCoordinates = [0, 0];
-
-/** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
-const OBSTACLE_LABEL_GAP_PX = 8;
 
 /**
  * ## One palette, and where a host changes it
@@ -892,45 +885,6 @@ export function airCoordinatingCorridorStyleFunc(name: TacticalGraphicName): Sty
 export const airCorridorCircleStyleFunc = (feature: FeatureLike, resolution = 1) =>
     asStyleFunction(airCorridorPaint())(feature, resolution);
 
-
-function createRotatedLabel(start: Coordinate, stop: Coordinate, labelPoint: Coordinate, resolution: number, label: string, scaleMultiplier = 1, feature?: FeatureLike): Style {
-    const [x1, y1] = start;
-    const [x2, y2] = stop;
-
-    // Segment angle
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    let rotation = -Math.atan2(dy, dx);
-
-    // Keep text upright
-    if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-        rotation += Math.PI;
-    }
-
-    const scale = feature
-        ? featureLabelScale(feature, resolution) * scaleMultiplier
-        : (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * labelZoomMultiplier(undefined, resolution) * scaleMultiplier;
-
-    return new Style({
-        geometry: new Point(labelPoint), // dummy point
-        text: new Text({
-            text: label,
-            font: fontStyle,
-            fill: new Fill({color: labelFillFor(feature)}),
-            rotation: rotation,
-            textAlign: 'center',
-            textBaseline: 'middle',
-            scale,
-            stroke: getHaloStroke(),
-        }),
-    });
-}
-
-function createRotatedLabelAtMidpoint(start: Coordinate, stop: Coordinate, resolution: number, label: string, scaleMultiplier = 1, feature?: FeatureLike): Style {
-    const [midX, midY] = geometryService.getMidpoint(start, stop);
-    return createRotatedLabel(start, stop, [midX, midY], resolution, label, scaleMultiplier, feature);
-}
-
 export const phaseLineStyle = (feature: FeatureLike, resolution: number, labelText: string) => {
     let featureGeometry = feature.getGeometry();
     const coords = (featureGeometry as LineString).getCoordinates();
@@ -1049,9 +1003,6 @@ export function bridgeGraphicStyleFunc(): StyleFunction {
     return asStyleFunction(bridgeLabelPaint());
 }
 
-/** Screen-px clear space between the passage lane's fishtail and its DTG. */
-const PASSAGE_LANE_LABEL_GAP_PX = 8;
-
 /** **Ported.** @see mobilityPaints.ts, `passageLanePaint`. */
 export function passageLaneGraphicStyle(): StyleFunction {
     return asStyleFunction(passageLanePaint());
@@ -1099,44 +1050,6 @@ export function envelopmentGraphicStyleFunc(): StyleFunction {
 }
 
 /**
- * Render a label whose font size tracks the graphic's size in screen pixels.
- * coords[0]→coords[1] defines both the label position (midpoint) and the span
- * used to derive scale — so the label stays proportional at every zoom level.
- * Font is declared at 24px; scale = (spanPx * 0.7) / 24.
- */
-function graphicProportionalLabel(feature: FeatureLike | undefined, c0: Coordinate, c1: Coordinate, resolution: number, text: string, textAlign: CanvasTextAlign = 'center'): Style {
-    const [x0, y0] = c0;
-    const [x1, y1] = c1;
-    const dx = x1 - x0, dy = y1 - y0;
-    const spanPx = Math.sqrt(dx * dx + dy * dy) / resolution;
-    const scale = (spanPx * 0.7) / 24;
-    let rotation = -Math.atan2(dy, dx);
-    if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) rotation += Math.PI;
-    return new Style({
-        geometry: new Point([(x0 + x1) / 2, (y0 + y1) / 2]),
-        text: new Text({
-            text,
-            font: fontStyle,
-            fill: new Fill({color: labelFillFor(feature)}),
-            rotation,
-            textAlign,
-            textBaseline: 'middle',
-            scale,
-        }),
-    });
-}
-
-/**
- * Compute a label scale locked to a segment's screen-pixel span.
- * Mirrors graphicProportionalLabel: font declared at 24px, scale = (spanPx × 0.7) / 24.
- * As you zoom in the segment grows on screen → label grows with it.
- */
-function segmentProportionalScale(dx: number, dy: number, resolution: number): number {
-    const spanPx = Math.sqrt(dx * dx + dy * dy) / resolution;
-    return (spanPx * 0.7) / 24;
-}
-
-/**
  * Create a single feature with a style function
  * that draws labels at each segment midpoint with rotation.
  */
@@ -1178,94 +1091,9 @@ function movementLabelPaintFor(name: TacticalGraphicName) {
     return (MOVEMENT_LABEL_PAINTS[name] ?? movementLabelPaint)();
 }
 
-function movementGraphicStyles(label: GraphicLabels, f: FeatureLike, resolution: number) {
-    let primaryLabel = label.designation ?? '';
-    let dateLabel = getDateLabel(label);
-    const geom = f.getGeometry() as MultiPoint;
-    if (!geom) return [];
-    const coords = geom.getCoordinates();
-    if (!coords || coords.length < 2) return [];
-
-    const styles: Style[] = [];
-    styles.push(graphicProportionalLabel(f, coords[0], coords[1], resolution, primaryLabel));
-
-    if (!!dateLabel) {
-        // Shift one span-width along line direction for date label offset
-        const [x0, y0] = coords[0];
-        const [x1, y1] = coords[1];
-        const dx = x1 - x0, dy = y1 - y0;
-        const dc0: Coordinate = [x0 + dx, y0 + dy];
-        const dc1: Coordinate = [x1 + dx, y1 + dy];
-        styles.push(graphicProportionalLabel(f, dc0, dc1, resolution, dateLabel));
-    }
-
-    return styles;
-}
-
-/**
- * Downward nudge, in screen pixels per unit of label scale, that puts a capital
- * letter's *ink* on the line rather than its em box. @see clearStyleFunc
- */
-const OPTICAL_CENTER_PX_PER_SCALE = 2.2;
-
 /** **Ported.** @see blockPaints.ts, `clearPaint`. */
 export function clearStyleFunc(textLabel: string, t1: number = 0.6): StyleFunction {
     return asStyleFunction(clearPaint(textLabel, t1));
-}
-
-function getRotation(start: Coordinate, end: Coordinate) {
-    const dx = end[0] - start[0],
-        dy = end[1] - start[1];
-    let rotation = -Math.atan2(dy, dx);
-
-    // Keep text upright
-    if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-        rotation += Math.PI;
-    }
-    // Normalize to [-π, π)
-    if (rotation > Math.PI) rotation -= 2 * Math.PI;
-    return rotation;
-}
-
-/**
- * Offset `anchor` perpendicular to line `a→b`, always toward the "above" (north) side
- * regardless of which direction the line was drawn. Safe to call for both label-above
- * and label-below needs: use offsetBelow for the opposite side.
- */
-function offsetAbove(anchor: Coordinate, a: Coordinate, b: Coordinate, resolution: number, offsetPx: number): Coordinate {
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
-    const len = Math.hypot(dx, dy);
-    if (len === 0) return anchor;
-    // CCW perpendicular unit vector
-    let nx = -dy / len;
-    let ny = dx / len;
-    // Normalize so the perpendicular always points "above" (north = positive y in EPSG:3857).
-    // Without this, drawing right-to-left produces ny < 0 and labels appear below the line.
-    if (ny < 0 || (ny === 0 && nx < 0)) { nx = -nx; ny = -ny; }
-    const offsetMap = offsetPx * Math.abs(resolution);
-    return [anchor[0] + nx * offsetMap, anchor[1] + ny * offsetMap];
-}
-
-/** Mirror of offsetAbove — offsets `anchor` to the "below" (south) side of line `a→b`. */
-function offsetBelow(anchor: Coordinate, a: Coordinate, b: Coordinate, resolution: number, offsetPx: number): Coordinate {
-    const [x, y] = offsetAbove(anchor, a, b, resolution, offsetPx);
-    return [2 * anchor[0] - x, 2 * anchor[1] - y];
-}
-
-function offsetCoordinatesUp(start: Coordinate, next: Coordinate, resolution: number, offsetPx: number = 15): Coordinate {
-    const dx = next[0] - start[0],
-        dy = next[1] - start[1];
-
-    // Offset in map units
-    const offsetMap = offsetPx * resolution;
-    // Perpendicular unit vector
-    const len = Math.hypot(dx, dy);
-
-    const nx = -dy / len;
-    const ny = dx / len;
-    // Clamp to small angles so vertical lines stay horizontal
-    return [start[0] + nx * offsetMap, start[1] + ny * offsetMap];
 }
 
 /**
@@ -1455,339 +1283,10 @@ export function engineerWorkLineStyle(name: TacticalGraphicName): StyleFunction 
 }
 
 
-/**
- * ## Obstacle crenellation
- *
- * Teeth are a feature of the symbol, not a measurement: their size says nothing about
- * the ground, so it should not change with zoom. They are drawn here at a constant
- * number of screen pixels, the way `StrongPoint`'s cross-ties always have been.
- *
- * They used to be baked into the geometry by the generator, sized from the drawing
- * resolution — 15 px at whatever zoom the graphic happened to be drawn at, then fixed in
- * meters, so they grew on screen as the map zoomed in and shrank to nothing zoomed out.
- * That also made the obstacle line's label clearance a measuring exercise: with teeth of
- * unknown map-unit height, the label had to scan the rendered geometry to find out how
- * far to stand off. A constant in pixels needs no measuring.
- *
- * The one place a constant is wrong is a symbol smaller than its own decoration — a
- * 15 px sample in the gallery cannot carry a 10 px tooth. So the height is capped at a
- * share of the shape's own on-screen extent, and the base and gap scale with it, keeping
- * the teeth in proportion as they shrink.
- */
-const OBSTACLE_TOOTH_HEIGHT_PX = 10;
-const OBSTACLE_TOOTH_BASE_PX = 10;
-const OBSTACLE_TOOTH_GAP_PX = 10;
-
-/**
- * The fortified line and area wear square merlons; the forward line of own troops and
- * each half of the line of contact wear a scalloped wave. Both were baked into geometry
- * at the drawing resolution, for the same reason and with the same
- * result as the obstacle teeth. `LINE_OF_CONTACT_OFFSET_PX` is what holds the enemy-side
- * and friendly-side waves apart — in pixels, so the pair keeps its spacing at any zoom.
- */
-const WAVE_WAVELENGTH_PX = 15;
-const WAVE_AMPLITUDE_PX = 8;
-const LINE_OF_CONTACT_OFFSET_PX = 16;
-
-/**
- * How much to shrink a decoration so it still fits the symbol it decorates, 0–1.
- * Zero means "draw the plain line or ring" — every decoration builder here returns
- * its input path unchanged when the pattern comes out non-positive.
- *
- * A constant pixel size is right in the middle of the range and wrong at both ends.
- * Too small a shape cannot carry its own decoration — the sample gallery draws areas
- * 15 px across — and the same is true of a full-size graphic seen from far enough
- * out, which is the case this exists for. `available` is what the decoration has to
- * fit inside: the smaller side of a closed ring's extent, or the length of an open
- * path, because a horizontal line's extent has no height and the smaller side would
- * be zero.
- *
- * The rule is deliberately about the *shape*, not the zoom. A graphic 120 px across
- * needs the same treatment whether it got that way by being drawn small or by the
- * user zooming out, and a resolution threshold would only catch the second.
- */
-function decorationScale(path: Coordinate[], closed: boolean, resolution: number, heightPx: number): number {
-    let availablePx: number;
-    if (closed) {
-        const xs = path.map(p => p[0]);
-        const ys = path.map(p => p[1]);
-        availablePx = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / resolution;
-    } else {
-        availablePx = pathLength(path) / resolution;
-    }
-    const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
-    const scale = Math.max(0, Math.min(1, (availablePx * share) / heightPx));
-
-    // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is
-    // texture on the stroke — and a row of 2 px bumps reads as a fuzzy line rather than
-    // as an obstacle. Drop it and let the plain geometry stand.
-    return heightPx * scale < DECORATION_MIN_PX ? 0 : scale;
-}
-
-/**
- * The share of a shape's own on-screen size its decoration may occupy before it starts
- * shrinking.
- *
- * These came down from 0.25 and 0.12, which were loose enough that the cap
- * effectively never engaged: at 0.12 an open path had to fall under 83 px before a 10 px
- * tooth was touched, so an obstacle line zoomed out to 117 px still carried six full-size
- * teeth and read as a zigzag rather than as a line.
- *
- * The open share is much the smaller of the two because it is measured against the
- * path's whole length while the decoration repeats along it — a tooth a twentieth of the
- * line long is already prominent. A closed ring is measured against its smaller side,
- * which the decoration spans only once.
- */
-const DECORATION_MAX_SHARE_CLOSED = 0.1;
-const DECORATION_MAX_SHARE_OPEN = 0.05;
-
-/** Below this many screen pixels a decoration is dropped rather than drawn. */
-const DECORATION_MIN_PX = 3;
-
-/**
- * Length of a solid arrowhead, in screen pixels.
- *
- * 15 is Fix's own head at its minimum draw: `FIX_TRIANGLE_WIDTH_RATIO` is `15/145`
- * and `LineGraphicBase` enforces a 145 px minimum first segment, so a freshly
- * drawn Fix has always carried a 15 px head. It is the one calibrated value among
- * the three solid heads, so the others adopt it.
- */
-const SOLID_ARROWHEAD_PX = 15;
-
-/**
- * The share of its graphic's on-screen length an arrowhead may occupy before it
- * starts shrinking with the shape.
- *
- * Much larger than `DECORATION_MAX_SHARE_OPEN`, and deliberately so. That share is
- * small because a tooth or a merlon **repeats** along the path, so one of them a
- * twentieth of the line long is already a lot of ink. An arrowhead appears once,
- * at the end, and a head a quarter of a short graphic still reads correctly — a
- * 5% cap would shrink it on any graphic under 300 px, which is most of them.
- */
-const ARROWHEAD_MAX_SHARE = 0.25;
-
-/**
- * Redraws a generator-emitted solid arrowhead at a fixed screen size.
- *
- * The generators build their heads in meters — Fix's off the drawn line's length,
- * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
- * — so resizing the graphic resized the head, and Turn's swelled on screen as you
- * zoomed in. The head is a symbol, not part of the shape: it should hold one size.
- *
- * Kept in the style layer rather than re-derived into the geometry, per the house
- * rule that a zoom-invariant size is `px * resolution` computed at draw time. The
- * generators still emit their own heads, so a consumer reading the raw GeoJSON
- * gets a complete symbol — the same split `labelGapDegrees` uses.
- *
- * Scaled **about the tip**, because the tip is the meaningful point: it is where
- * the arrow lands, and the generator has already put it in the right place.
- *
- * Returns null when the head would fall under `DECORATION_MIN_PX`, letting the
- * plain geometry stand rather than drawing a smudge.
- */
-function screenSizedArrowHead(head: Polygon, path: Coordinate[], resolution: number): Polygon | null {
-    const ring = head.getCoordinates()[0];
-    if (!ring || ring.length < 3) return null;
-    const [tip, left, right] = ring;
-    const baseMid: Coordinate = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
-    const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
-    if (currentLength === 0) return null;
-
-    const availablePx = path.length >= 2 ? pathLength(path) / resolution : Infinity;
-    const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
-    if (wantedPx < DECORATION_MIN_PX) return null;
-
-    const factor = (wantedPx * resolution) / currentLength;
-    return new Polygon([ring.map(p =>
-        [tip[0] + (p[0] - tip[0]) * factor, tip[1] + (p[1] - tip[1]) * factor] as Coordinate)]);
-}
-
-/** The point at a distance along a polyline, with the unit direction there. */
-function pathPointAt(path: Coordinate[], distance: number): {point: Coordinate, dir: Coordinate} {
-    let remaining = Math.max(0, distance);
-    for (let i = 0; i < path.length - 1; i++) {
-        const a = path[i];
-        const b = path[i + 1];
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (length === 0) continue;
-        const dir: Coordinate = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
-        if (remaining <= length) {
-            return {point: [a[0] + dir[0] * remaining, a[1] + dir[1] * remaining], dir};
-        }
-        remaining -= length;
-    }
-    const a = path[path.length - 2];
-    const b = path[path.length - 1];
-    const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-    return {point: b, dir: [(b[0] - a[0]) / length, (b[1] - a[1]) / length]};
-}
-
-/** The side of a segment that points up on screen, as a sign on the left-hand normal. */
-function upSign(dir: Coordinate): number {
-    return dir[0] >= 0 ? 1 : -1;
-}
-
-
-/** Steps per bump. Enough that a semicircle reads as a curve rather than a tent. */
-const WAVE_STEPS = 12;
-
-/**
- * A scalloped path — the forward line of own troops, and each half of the line of
- * contact. `offsetMap` shifts the whole wave sideways off the drawn line, which is what
- * separates the line of contact's two identities.
- */
-/**
- * Slides a path sideways by `offsetMap`, on the side `sideSign` selects.
- *
- * Per vertex, using the direction at that point along the path, so a bend keeps both
- * halves of the pair the same distance apart rather than pinching on the inside.
- */
-function offsetPath(path: Coordinate[], sideSign: number, offsetMap: number): Coordinate[] {
-    if (!offsetMap || path.length < 2) return path;
-    const total = pathLength(path);
-    if (total === 0) return path;
-
-    let traveled = 0;
-    return path.map((point, i) => {
-        if (i > 0) traveled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
-        const {dir} = pathPointAt(path, Math.min(traveled, total));
-        return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as Coordinate;
-    });
-}
-
-function wavePath(path: Coordinate[], wavelengthMap: number, amplitudeMap: number, sideSign: number, offsetMap = 0): Coordinate[] {
-    const total = pathLength(path);
-    // No wave to draw, but `offsetMap` is a displacement of the whole line and not part
-    // of the wave — the line of contact is a *pair*, and returning the path undisplaced
-    // put its two halves on top of each other the moment the waves were dropped. Offset
-    // it and hand back a plain line.
-    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return offsetPath(path, sideSign, offsetMap);
-
-    const count = Math.max(1, Math.round(total / wavelengthMap));
-    const wavelength = total / count;
-    const out: Coordinate[] = [];
-
-    const shifted = (at: {point: Coordinate, dir: Coordinate}): Coordinate => {
-        const n: Coordinate = [-at.dir[1] * sideSign, at.dir[0] * sideSign];
-        return [at.point[0] + n[0] * offsetMap, at.point[1] + n[1] * offsetMap];
-    };
-
-    for (let i = 0; i < count; i++) {
-        const from = pathPointAt(path, i * wavelength);
-        const to = pathPointAt(path, (i + 1) * wavelength);
-        const a = shifted(from);
-        const b = shifted(to);
-        const dx = b[0] - a[0];
-        const dy = b[1] - a[1];
-        const chord = Math.hypot(dx, dy) || 1;
-        const nx = -(dy / chord) * sideSign;
-        const ny = (dx / chord) * sideSign;
-
-        for (let step = 0; step <= WAVE_STEPS; step++) {
-            if (i > 0 && step === 0) continue; // the previous bump ended here
-            const t = step / WAVE_STEPS;
-            const bump = Math.sin(Math.PI * t) * amplitudeMap;
-            out.push([a[0] + dx * t + nx * bump, a[1] + dy * t + ny * bump]);
-        }
-    }
-    return out;
-}
-
-/** Winding, by the shoelace sum: `> 0` is clockwise in projected coordinates. */
-function ringIsClockwise(ring: Coordinate[]): boolean {
-    let sum = 0;
-    for (let i = 0; i < ring.length - 1; i++) {
-        sum += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
-    }
-    return sum > 0;
-}
-
-function pathLength(path: Coordinate[]): number {
-    let total = 0;
-    for (let i = 0; i < path.length - 1; i++) {
-        total += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
-    }
-    return total;
-}
-
-/**
- * Tooth dimensions in map units for one path, honoring the cap.
- *
- * `available` is what the teeth have to fit inside: the smaller side of a closed ring's
- * extent, or the length of an open one — a horizontal line's extent has no height, so
- * the smaller side would be zero and the teeth would vanish.
- */
-function obstacleToothSize(path: Coordinate[], closed: boolean, resolution: number) {
-    const scale = decorationScale(path, closed, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
-    return {
-        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
-        baseMap: OBSTACLE_TOOTH_BASE_PX * scale * resolution,
-        gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
-        heightPx: OBSTACLE_TOOTH_HEIGHT_PX * scale,
-    };
-}
-
-/**
- * Walks a path and inserts teeth, apex on the side `sideSign` selects (+1 left of travel,
- * -1 right). A tooth is only placed where it fits wholly within one segment, so corners
- * get a slightly wider gap rather than a tooth bent around them; the pattern carries
- * across the vertex so the spacing stays even along the whole path.
- */
-function crenellatedPath(path: Coordinate[], heightMap: number, baseMap: number, gapMap: number, side: number | 'up'): Coordinate[] {
-    if (path.length < 2 || baseMap <= 0) return path;
-    const out: Coordinate[] = [];
-    const unit = baseMap + gapMap;
-    let nextToothAt = gapMap / 2;
-
-    for (let i = 0; i < path.length - 1; i++) {
-        const a = path[i];
-        const b = path[i + 1];
-        out.push(a);
-
-        const dx = b[0] - a[0];
-        const dy = b[1] - a[1];
-        const length = Math.hypot(dx, dy);
-        if (length === 0) continue;
-
-        const ux = dx / length;
-        const uy = dy / length;
-        // 'up' is decided per segment: a closed ring has an inside and an outside, but an
-        // open line has neither, so the only stable choice is the one the map defines.
-        // Picking a side of *travel* is what made the same line drawn right-to-left come
-        // out with its teeth on the other side.
-        const sideSign = side === 'up' ? (ux >= 0 ? 1 : -1) : side;
-        const nx = -uy * sideSign;
-        const ny = ux * sideSign;
-
-        while (nextToothAt + baseMap <= length) {
-            const p1: Coordinate = [a[0] + ux * nextToothAt, a[1] + uy * nextToothAt];
-            const p2: Coordinate = [a[0] + ux * (nextToothAt + baseMap), a[1] + uy * (nextToothAt + baseMap)];
-            out.push(
-                p1,
-                [(p1[0] + p2[0]) / 2 + nx * heightMap, (p1[1] + p2[1]) / 2 + ny * heightMap],
-                p2,
-            );
-            nextToothAt += unit;
-        }
-        nextToothAt = Math.max(0, nextToothAt - length);
-    }
-    out.push(path[path.length - 1]);
-    return out;
-}
-
-
 
 /** **Ported.** @see paintFunctions.ts, `obstacleLinePaint`. */
 export function obstacleLineStyle(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(obstacleLinePaint(name), name);
-}
-
-
-function getPointAlongSegment(coord1: number[], coord2: number[], ratio: number) {
-    return [
-        coord1[0] + (coord2[0] - coord1[0]) * ratio,
-        coord1[1] + (coord2[1] - coord1[1]) * ratio,
-    ];
 }
 
 /** **Ported.** @see scallopPaints.ts, `arrowheadedLinePaint` — the no-letter case. */
@@ -2073,10 +1572,6 @@ export function wireObstacleStyleFunc(name: TacticalGraphicName): StyleFunction 
 }
 
 
-/** Miter ceiling, so a hairpin bend pinches rather than growing a spike. */
-const MAX_MITER = 4;
-
-
 /** **Ported.** @see linePaints.ts, `directionArrowPaint`. */
 export function directionArrowStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(directionArrowPaint(name), name);
@@ -2099,176 +1594,9 @@ export function munitionFlightPathStyleFunc(): StyleFunction {
     return asStyleFunction(munitionFlightPathPaint());
 }
 
-
-const dashStyle = (labels: GraphicLabels) => {
-    return (labels.status === TacticalGraphicStatus.planned ||
-        (labels.hostility === TacticalGraphicHostility.hostileFaker
-            && labels.confidence === TacticalGraphicConfidence.suspected
-        )
-    ) ? [12, 8] : undefined;
-};
-
 /** **Ported.** @see boundaryPaints.ts, `boundaryPaint`. */
 export function boundariesStyleFunc(): StyleFunction {
     return asStyleFunction(boundaryPaint(), TacticalGraphicName.Boundary);
-}
-
-function boundariesStyleFromLabels(labels: GraphicLabels): StyleFunction {
-    const topLabel = formatFullLabel(labels.designation, labels.countryCode ?? '');
-    const botLabel = formatFullLabel(labels.secondDesignation ?? '', labels.secondCountryCode ?? '');
-    return (f, resolution) => {
-        const geom = f.getGeometry() as MultiPoint;
-        const coords = geom.getCoordinates();
-
-        const styles: Style[] = [];
-        const hostility = readHostility(f);
-        const echelon = f.get('echelon') || TacticalGraphicEchelon.unknown;
-
-        const outlineSegments: Coordinate[][] = [];
-
-        const start = coords[0];
-        const end = coords[coords.length - 1];
-
-        // Compute the total baseline vector (start → end)
-        const baseDx = end[0] - start[0];
-        const baseDy = end[1] - start[1];
-        const baseLen = Math.hypot(baseDx, baseDy);
-
-        // Project each vertex onto that baseline to get cumulative "linear" distance
-        const projectedDistances = coords.map(([x, y]) => {
-            const vx = x - start[0];
-            const vy = y - start[1];
-            return (vx * baseDx + vy * baseDy) / baseLen; // scalar projection
-        });
-
-        // 4️⃣ Normalize to 0 → baseLen range
-        const minProj = Math.min(...projectedDistances);
-        const maxProj = Math.max(...projectedDistances);
-        const normalizedProjections = projectedDistances.map(d => (d - minProj) / (maxProj - minProj));
-
-        // Find segment that crosses the projected midpoint (0.5)
-        const half = 0.5;
-        let midSegmentIndex = 0;
-        for (let i = 0; i < normalizedProjections.length - 1; i++) {
-            if (normalizedProjections[i] <= half && normalizedProjections[i + 1] >= half) {
-                midSegmentIndex = i;
-                break;
-            }
-        }
-
-        for (let i = 0; i < coords.length - 1; i++) {
-            if (i !== midSegmentIndex) {
-                outlineSegments.push([coords[i], coords[i + 1]]);
-            }
-        }
-
-        // Interpolate along that segment
-        const t1 =
-            (half - normalizedProjections[midSegmentIndex]) /
-            (normalizedProjections[midSegmentIndex + 1] - normalizedProjections[midSegmentIndex]);
-
-        const p1 = coords[midSegmentIndex];
-        const p2 = coords[midSegmentIndex + 1];
-
-        const dx = p2[0] - p1[0],
-            dy = p2[1] - p1[1];
-        const segLen = Math.hypot(dx, dy);
-
-        // 4) carve a central gap — match StrongPoint approach:
-        //    10% of the segment on each side of center + 10px scaled pixel padding
-        const echelonScale = featureLabelScale(f, resolution);
-        const GAP_PX = 10;
-        const gapHalfMap = 0.1 * segLen + GAP_PX * echelonScale * resolution;
-        const gapRatio = gapHalfMap / segLen;
-
-        const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-        const gapB: Coordinate = [p1[0] + dx * (t1 + gapRatio), p1[1] + dy * (t1 + gapRatio)];
-        let rotation = -Math.atan2(dy, dx);
-
-        // Keep text upright. Track the flip so the perpendicular direction
-        // stays consistent with the corrected reading direction.
-        let perpSign = 1;
-        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
-            rotation += Math.PI;
-            perpSign = -1;
-        }
-        // Normalize to [-π, π)
-        if (rotation > Math.PI) rotation -= 2 * Math.PI;
-
-        // keep the two side pieces of that segment
-        outlineSegments.push([p1, gapA], [gapB, p2]);
-
-        // 5) compute the center of the gap for the dot
-        const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-        // Offset label so its near edge clears the echelon with a proportional gap.
-        // All three components scale together with labelScale so the layout stays
-        // visually identical at every zoom level:
-        //   anchor_px = (half_font_height + echelon_perp_extent + gap) * labelScale
-        // With textBaseline:'middle', the near text edge is half_font_height px
-        // closer to the line than the anchor, leaving `gap` px between it and the
-        // echelon edge.
-        // const GAP_PX = 8;
-        const labelScale = featureLabelScale(f, resolution);
-        const echelonPerpBasePx = getEchelonPerpExtentPx(echelon);
-        const anchorMap = (BASE_FONT_SIZE_PX / 2 + echelonPerpBasePx + GAP_PX) * labelScale * resolution;
-        // Perpendicular unit vector, negated when rotation was flipped to keep
-        // top/bottom labels on the correct sides regardless of segment direction.
-        const len = Math.hypot(dx, dy);
-
-        const nx = perpSign * (-dy / len);
-        const ny = perpSign * (dx / len);
-        const topLabelCoordinate = [midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap];
-        const bottomLabelCoordinate = [midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap];
-
-        styles.push(new Style(
-            {
-                geometry: new Point(topLabelCoordinate),
-                text: new Text({
-                    text: topLabel,
-                    font: fontStyle,
-                    fill: new Fill({color: labelFillFor(f)}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-        styles.push(new Style(
-            {
-                geometry: new Point(bottomLabelCoordinate),
-                text: new Text({
-                    text: botLabel,
-                    font: fontStyle,
-                    fill: new Fill({color: labelFillFor(f)}),
-                    rotation: rotation,
-                    textAlign: 'center',
-                    textBaseline: 'middle',
-                    scale: labelScale,
-                    stroke: getHaloStroke(),
-                }),
-            },
-        ));
-        // 6) build styles for the echelon in the middle
-        const echelonStyles = createEchelonStyles(midGap, dx, dy, resolution, echelon, getColorByHostility(TacticalGraphicHostility.unknown), echelonScale);
-        styles.push(...echelonStyles);
-
-
-        const outlineStyle = new Style({
-            geometry: new MultiLineString(outlineSegments),
-            stroke: new Stroke({
-                color: getColorByHostility(hostility),
-                width: LINE_WIDTH(),
-                lineDash: dashStyle(labels),
-            }),
-        });
-        // Base layers
-        styles.push(outlineStyle);
-
-        return styles;
-    };
 }
 
 
@@ -2535,32 +1863,6 @@ function getAreaLabelStylesFromLabels(name: TacticalGraphicName, labels: Graphic
     }
 }
 
-
-/**
- * Points along the two runway strokes, in unscaled path units, used to test the
- * symbol against the polygon outline. Endpoints alone are not enough: both arms
- * pass through the center, so a notch can cut a stroke without containing either
- * of its ends.
- */
-
-/**
- * Ray-cast point-in-polygon.
- *
- * Deliberately hand-rolled: a style function receives **projected EPSG:3857
- * meters**, and turf expects geographic degrees, so `booleanPointInPolygon`
- * would quietly give wrong answers here.
- */
-function pointInRing(pt: Coordinate, ring: Coordinate[]): boolean {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [xi, yi] = ring[i];
-        const [xj, yj] = ring[j];
-        const straddles = (yi > pt[1]) !== (yj > pt[1]);
-        if (straddles && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
-    }
-    return inside;
-}
-
 /**
  * How much to scale the crossed-runway symbol so it is proportional to the area
  * it marks rather than a fixed number of meters — a USA-sized airfield used to
@@ -2769,47 +2071,9 @@ export function turnStyleFunc(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(turnPaint(getLabel(name)), name);
 }
 
-/** Padding either side of the "T", in screen pixels. */
-const TURN_LABEL_PAD_PX = 5;
-
-/**
- * Drops `distance` map units off the far end of a polyline, interpolating the
- * new last vertex. Euclidean — these are projected EPSG:3857 meters.
- * Returns fewer than two points when the line is shorter than the trim.
- */
-function trimFromEnd(coords: number[][], distance: number): Coordinate[] {
-    let remaining = distance;
-    const kept = coords.map(c => [c[0], c[1]] as Coordinate);
-    while (kept.length >= 2) {
-        const last = kept[kept.length - 1];
-        const prev = kept[kept.length - 2];
-        const segment = Math.hypot(last[0] - prev[0], last[1] - prev[1]);
-        if (segment > remaining) {
-            const t = remaining / segment;
-            kept[kept.length - 1] = [last[0] + (prev[0] - last[0]) * t, last[1] + (prev[1] - last[1]) * t];
-            return kept;
-        }
-        remaining -= segment;
-        kept.pop();
-    }
-    return kept;
-}
-
 /** **Ported.** @see boundaryPaints.ts, `rangeFanLabelPaint`. */
 export function getRangeFanLabelStyleFn(name: TacticalGraphicName): StyleFunction {
     return asStyleFunction(rangeFanLabelPaint(name), name);
-}
-
-function formatAzimuth(deg: number): string {
-    let n = Math.round(deg) % 360;
-    if (n < 0) n += 360;
-    return String(n).padStart(3, '0');
-}
-
-function getOffset(distance: number, rotation: number): [number, number] {
-    const offsetX = Math.cos(rotation) * distance;
-    const offsetY = Math.sin(rotation) * distance;
-    return [offsetX, offsetY];
 }
 
 /** **Ported.** @see securityPaints.ts, `securityOperationLabelPaint`. */
@@ -2832,383 +2096,11 @@ export const createFeatureWithDashedLines = () => {
     return feature;
 };
 
-/** Screen-pixel size of a StrongPoint cross tie, and the spacing between ties. */
-const CROSS_TIE_PX = 10;
-
-function generateCrossTiesForPolygon(polygon: Polygon | MultiLineString, resolution: number, color: string) {
-    const styles: any[] = [];
-
-    const rings = polygon.getCoordinates(); // [ [ [x, y], ... ], [hole1], [hole2], ... ]
-
-    // StrongPoint's ties are where the screen-fixed decorations started — the obstacle
-    // teeth and the fortified merlons were changed to match them — but they were the one
-    // set never capped, so zoomed out they swamped the ring they hang off. Same
-    // shape-relative rule as the rest now, measured across the whole outline because
-    // `rings` here are the outline segments rather than one closed ring.
-    const scale = decorationScale(rings.flat() as Coordinate[], true, resolution, CROSS_TIE_PX);
-    if (scale <= 0) return styles;
-
-    const tieSpacing = CROSS_TIE_PX * scale * resolution; // Distance between ties
-    const tieLength = CROSS_TIE_PX * scale * resolution; // Half-length of each cross tie
-
-    rings.forEach((ring: Coordinate[]) => {
-        let totalDistance = 0;
-        let lastTieDistance = 0;
-
-        for (let i = 0; i < ring.length - 1; i++) {
-            const p1 = ring[i];
-            const p2 = ring[i + 1];
-
-            const dx = p2[0] - p1[0];
-            const dy = p2[1] - p1[1];
-            const segmentLength = Math.sqrt(dx * dx + dy * dy);
-
-            if (segmentLength === 0) continue;
-
-            const segmentStart = totalDistance;
-            const segmentEnd = totalDistance + segmentLength;
-
-            while (lastTieDistance + tieSpacing <= segmentEnd) {
-                const nextTieDistance = lastTieDistance + tieSpacing;
-
-                if (nextTieDistance >= segmentStart) {
-                    const t = (nextTieDistance - segmentStart) / segmentLength;
-                    const x = p1[0] + t * dx;
-                    const y = p1[1] + t * dy;
-
-                    const perpX = -dy / segmentLength;
-                    const perpY = dx / segmentLength;
-
-                    const tieStart = [x, y];
-                    const tieEnd = [x + perpX * tieLength, y + perpY * tieLength];
-
-                    styles.push(
-                        new Style({
-                            geometry: new LineString([tieStart, tieEnd]),
-                            stroke: new Stroke({
-                                color: color,
-                                width: LINE_WIDTH(),
-                            }),
-                        }),
-                    );
-                }
-
-                lastTieDistance = nextTieDistance;
-            }
-
-            totalDistance = segmentEnd;
-        }
-    });
-
-    return styles;
-}
-
-// Define a type for the common computed results
-interface GraphicGeometryData {
-    /** The segments of the polygon outline, excluding the gap. */
-    outlineSegments: Coordinate[][];
-    /** The center point of the gap, where the echelon symbol will be placed. */
-    midGap: Coordinate;
-    /** The delta X component of the segment used for the gap. */
-    dx: number;
-    /** The delta Y component of the segment used for the gap. */
-    dy: number;
-    /** The length of the segment used for the gap. */
-    segLen: number;
-}
-
-/**
- * Common logic to process the polygon geometry, find the open segment,
- * carve a gap, and prepare data for style generation.
- * @param geom The OpenLayers Polygon geometry.
- * @param rotation The rotation angle (0=east, π/2=north).
- * @param resolution The current map resolution (map units per pixel).
- * @returns An object containing the computed geometry data, or null if invalid.
- */
-function getGraphicGeometryData(
-    geom: Geometry,
-    rotation: number,
-    resolution: number,
-): GraphicGeometryData | null {
-    if (geom.getType() !== 'Polygon') {
-        return null;
-    }
-
-    const unitRot: Coordinate = [Math.cos(rotation), Math.sin(rotation)];
-
-    // 1) get the outer ring
-    const ring: Coordinate[] = (geom as Polygon).getCoordinates()[0];
-    if (ring.length < 2) {
-        return null;
-    }
-
-    // 2) pick the segment whose outward normal best aligns with rotation
-    let openIndex = 0;
-    let bestDot = -Infinity;
-    for (let i = 0; i < ring.length - 1; i++) {
-        const [x1, y1] = ring[i];
-        const [x2, y2] = ring[i + 1];
-        const dx = x2 - x1,
-            dy = y2 - y1;
-        const segLen = Math.hypot(dx, dy);
-        if (segLen === 0) continue;
-
-        // polygon is CCW → outward normal = [-dy, dx]
-        const nx = -dy / segLen;
-        const ny = dx / segLen;
-        const dot = nx * unitRot[0] + ny * unitRot[1];
-        if (dot > bestDot) {
-            bestDot = dot;
-            openIndex = i;
-        }
-    }
-
-    // endpoints of that opening segment
-    const p1 = ring[openIndex];
-    const p2 = ring[openIndex + 1];
-    const dx = p2[0] - p1[0],
-        dy = p2[1] - p1[1];
-    const segLen = Math.hypot(dx, dy);
-
-    // 3) outline all other edges
-    const outlineSegments: Coordinate[][] = [];
-    for (let i = 0; i < ring.length - 1; i++) {
-        if (i !== openIndex) {
-            outlineSegments.push([ring[i], ring[i + 1]]);
-        }
-    }
-
-    // 4) carve a central gap in that opening side
-    const GAP_PX = 10; // px gap on each side of the dot
-    const gapMap = GAP_PX * resolution; // map-unit gap
-    const gapRatio = gapMap / segLen;
-    // t1 and t2 define the original fraction along the segment for the gap center
-    const t1 = 0.4,
-        t2 = 0.6;
-
-    // Calculate gap endpoints adjusted by the map-unit gap
-    const gapA: Coordinate = [p1[0] + dx * (t1 - gapRatio), p1[1] + dy * (t1 - gapRatio)];
-    const gapB: Coordinate = [p1[0] + dx * (t2 + gapRatio), p1[1] + dy * (t2 + gapRatio)];
-
-    // keep the two side pieces of that segment
-    outlineSegments.push([p1, gapA], [gapB, p2]);
-
-    // 5) compute the center of the gap for the dot
-    const midGap: Coordinate = [(gapA[0] + gapB[0]) / 2, (gapA[1] + gapB[1]) / 2];
-
-    return {
-        outlineSegments,
-        midGap,
-        dx,
-        dy,
-        segLen,
-    };
-}
 
 // Complete style function for OpenLayers
 /** **Ported.** @see echelonPaints.ts, `strongPointPaint` — the strong point. */
 function railroadStyleFunction(feature: FeatureLike, resolution: number) {
     return asStyleFunction(strongPointPaint())(feature, resolution);
-}
-
-/** Returns the echelon symbol's half-extent perpendicular to the segment, in screen pixels (unscaled). */
-function getEchelonPerpExtentPx(echelon: TacticalGraphicEchelon): number {
-    const dotRadiusPx = 5;
-    const lineHalfPx = 10;
-    switch (echelon) {
-        case TacticalGraphicEchelon.squad:
-        case TacticalGraphicEchelon.section:
-        case TacticalGraphicEchelon.platoonDetachment:
-            return dotRadiusPx;
-        case TacticalGraphicEchelon.companyBatteryTroop:
-        case TacticalGraphicEchelon.battalionSquadron:
-        case TacticalGraphicEchelon.regimentGroup:
-        case TacticalGraphicEchelon.brigade:
-            return lineHalfPx;
-        default:
-            return dotRadiusPx;
-    }
-}
-
-/** Returns the echelon symbol's half-extent along the segment, in screen pixels. */
-function getEchelonHalfExtentPx(echelon: TacticalGraphicEchelon): number {
-    const dotRadiusPx = 5;
-    const spacingPx = 12;
-    const lineHalfPx = 10;
-    switch (echelon) {
-        case TacticalGraphicEchelon.squad:
-            return dotRadiusPx;
-        case TacticalGraphicEchelon.section:
-        case TacticalGraphicEchelon.platoonDetachment:
-            return spacingPx + dotRadiusPx;
-        case TacticalGraphicEchelon.companyBatteryTroop:
-            return 0;
-        case TacticalGraphicEchelon.battalionSquadron:
-        case TacticalGraphicEchelon.regimentGroup:
-            return spacingPx;
-        case TacticalGraphicEchelon.brigade:
-            return lineHalfPx * Math.cos(Math.PI / 4);
-        default:
-            return dotRadiusPx;
-    }
-}
-
-function createEchelonStyles(mid: Coordinate, dx: number, dy: number, resolution: number, echelon: TacticalGraphicEchelon, color: string, echelonScale: number = 1): Style[] {
-    const segLen = Math.hypot(dx, dy);
-    if (!segLen) return [];
-
-    // unit tangent (along segment) & normal (perp to segment)
-    const ux = dx / segLen;
-    const uy = dy / segLen;
-    const nx = -uy;
-    const ny = ux;
-
-    // common sizes — scaled so the echelon grows with zoom like the labels
-    const dotRadius = 5 * echelonScale;           // px (CircleStyle radius is in px)
-    const spacingPx = 12 * echelonScale;
-    const lineHalfPx = 10 * echelonScale;
-
-    // convert to map units
-    const spacing = spacingPx * resolution;
-    const lineHalf = lineHalfPx * resolution;
-
-    const fillStyle = new Fill({color});
-    const strokeStyle = new Stroke({color, width: LINE_WIDTH()});
-
-    const styles: Style[] = [];
-
-    switch (echelon) {
-        // single dot
-        case TacticalGraphicEchelon.squad:
-            styles.push(
-                new Style({
-                    geometry: new Point(mid),
-                    image: new CircleStyle({radius: dotRadius, fill: fillStyle}),
-                }),
-            );
-            break;
-
-        // two dots along the segment
-        case TacticalGraphicEchelon.section:
-            [-1, 1].forEach(i => {
-                const x = mid[0] + ux * spacing * i;
-                const y = mid[1] + uy * spacing * i;
-                styles.push(
-                    new Style({
-                        geometry: new Point([x, y]),
-                        image: new CircleStyle({radius: dotRadius, fill: fillStyle}),
-                    }),
-                );
-            });
-            break;
-
-        // three dots (-, center, +)
-        case TacticalGraphicEchelon.platoonDetachment:
-            [-1, 0, 1].forEach(i => {
-                const x = mid[0] + ux * spacing * i;
-                const y = mid[1] + uy * spacing * i;
-                styles.push(
-                    new Style({
-                        geometry: new Point([x, y]),
-                        image: new CircleStyle({radius: dotRadius, fill: fillStyle}),
-                    }),
-                );
-            });
-            break;
-
-        // single perpendicular line
-        case TacticalGraphicEchelon.companyBatteryTroop:
-            styles.push(
-                new Style({
-                    geometry: new LineString([
-                        [mid[0] - nx * lineHalf, mid[1] - ny * lineHalf],
-                        [mid[0] + nx * lineHalf, mid[1] + ny * lineHalf],
-                    ]),
-                    stroke: strokeStyle,
-                }),
-            );
-            break;
-
-        // two parallel perpendicular lines
-        case TacticalGraphicEchelon.battalionSquadron:
-            [-1, 1].forEach(i => {
-                // offset along segment, then draw perp line
-                const cx = mid[0] + ux * spacing * i;
-                const cy = mid[1] + uy * spacing * i;
-                styles.push(
-                    new Style({
-                        geometry: new LineString([
-                            [cx - nx * lineHalf, cy - ny * lineHalf],
-                            [cx + nx * lineHalf, cy + ny * lineHalf],
-                        ]),
-                        stroke: strokeStyle,
-                    }),
-                );
-            });
-            break;
-
-        // three parallel perpendicular lines
-        case TacticalGraphicEchelon.regimentGroup:
-            [-1, 0, 1].forEach(i => {
-                const cx = mid[0] + ux * spacing * i;
-                const cy = mid[1] + uy * spacing * i;
-                styles.push(
-                    new Style({
-                        geometry: new LineString([
-                            [cx - nx * lineHalf, cy - ny * lineHalf],
-                            [cx + nx * lineHalf, cy + ny * lineHalf],
-                        ]),
-                        stroke: strokeStyle,
-                    }),
-                );
-            });
-            break;
-
-        // X shape: two crossing lines (segment & its normal)
-        case TacticalGraphicEchelon.brigade: {
-            const angle = Math.PI / 4; // 45°
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-
-            // rotate tangent by +45°
-            const vx1 = ux * cos - uy * sin;
-            const vy1 = ux * sin + uy * cos;
-            // rotate tangent by -45°
-            const vx2 = ux * cos + uy * sin;
-            const vy2 = -ux * sin + uy * cos;
-
-            styles.push(
-                new Style({
-                    geometry: new LineString([
-                        [mid[0] - vx1 * lineHalf, mid[1] - vy1 * lineHalf],
-                        [mid[0] + vx1 * lineHalf, mid[1] + vy1 * lineHalf],
-                    ]),
-                    stroke: strokeStyle,
-                }),
-            );
-            styles.push(
-                new Style({
-                    geometry: new LineString([
-                        [mid[0] - vx2 * lineHalf, mid[1] - vy2 * lineHalf],
-                        [mid[0] + vx2 * lineHalf, mid[1] + vy2 * lineHalf],
-                    ]),
-                    stroke: strokeStyle,
-                }),
-            );
-            break;
-        }
-
-        default:
-            // fallback to single dot
-            styles.push(
-                new Style({
-                    geometry: new Point(mid),
-                    image: new CircleStyle({radius: dotRadius, fill: fillStyle}),
-                }),
-            );
-    }
-
-    return styles;
 }
 
 /** **Ported.** @see echelonPaints.ts, `battlePositionPaint`. */
@@ -3411,10 +2303,6 @@ function getStyleFromLabels(name: TacticalGraphicName, labels: GraphicLabels, fe
     // the 75 area graphics reach this branch. @see paintFunctions.ts, `areaOutlinePaint`.
     return asStyleFunction(areaOutlinePaint(name), name)(feature, resolution);
 }
-
-
-// --- CONFIGURATION CONSTANTS ---
-const GAP_WIDTH_PX = 40; // The desired width (in screen pixels) for each text gap
 
 /** **Ported.** @see echelonPaints.ts, `unexplodedOrdnanceAreaPaint`. */
 function unexplodedExplosiveOrdenanceStyle(feature: FeatureLike, resolution: number) {

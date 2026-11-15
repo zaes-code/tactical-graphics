@@ -37,7 +37,6 @@ import {
 import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
-import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 import {hasClosingEdge, usesDrawnAnchors} from './handles';
 import {carriesWidthPointInBase} from './axisWidth';
@@ -1298,10 +1297,6 @@ export function topEdgeLabel<T extends readonly number[]>(name: TacticalGraphicN
     const [a, b] = [drawnRing[i], drawnRing[i + 1]];
     return {anchor: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], segment: [a, b]};
 }
-
-/** How far a security operation's arm reaches from the centre, in screen pixels. */
-const SECURITY_OPERATION_REACH_PX =
-    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
 
 /**
  * Half of a security operation's own width, in screen pixels.
