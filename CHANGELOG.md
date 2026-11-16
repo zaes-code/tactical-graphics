@@ -15,6 +15,10 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.9.0] — 2026-11-16
+
+A stated Unknown in yellow, one builder for a graphic's symbol code, and ring breaks cut exactly.
+
 ### Added
 
 - **A stated Unknown draws yellow.** MIL-STD-2525E L.5.1.1.1 draws a control measure of unknown
@@ -2058,7 +2062,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.9.0...develop
+[4.9.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...v4.9.0
 [4.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...v4.8.0
 [4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
 [4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
