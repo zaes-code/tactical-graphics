@@ -27,7 +27,7 @@ import {
     textWidth,
     topmostSegmentIndex,
 } from './decorations';
-import {PLANNED_DASH_PX, hostilityOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
+import {PLANNED_DASH_PX, identityColorOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
 import {labelGapPx} from './labelFit';
 import {terrainHatchColor} from './sectorModifierPaints';
 
@@ -258,7 +258,7 @@ export function encirclementPaint(): AreaPaint {
  * The hatch is the *hostility* color rather than the line color, so an unknown
  * or pending area still washes in its own tint — the same choice
  * {@link limitedAccessAreaPaint} makes, and the reason both take it from
- * `hostilityOf` rather than reusing the stroke.
+ * `identityColorOf` rather than reusing the stroke.
  */
 export function freeFireAreaCircularPaint(): AreaPaint {
     return feature => {
@@ -267,7 +267,7 @@ export function freeFireAreaCircularPaint(): AreaPaint {
         return [{
             geometry: strokeableGeometry(feature),
             fill: isPlanned
-                ? {color: withOpacity(getColorByHostility(hostilityOf(feature)), 0.25), pattern: hatch(getColorByHostility(hostilityOf(feature)), 8, 1)}
+                ? {color: withOpacity(identityColorOf(feature), 0.25), pattern: hatch(identityColorOf(feature), 8, 1)}
                 : undefined,
             stroke: {color, widthPx: LINE_WIDTH(), dashPx: isPlanned ? PLANNED_DASH_PX : undefined},
         }];

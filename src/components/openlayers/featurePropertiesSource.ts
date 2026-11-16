@@ -7,6 +7,7 @@
  */
 
 import {Feature, Map as OlMap} from 'ol';
+import type {FeatureLike} from 'ol/Feature';
 import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Draw} from 'ol/interaction';
@@ -15,7 +16,7 @@ import VectorSource from 'ol/source/Vector';
 import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByHostility, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByIdentity, statesUnknownIdentity, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
 import {featuresOf, stampAmplifierVisibility} from './amplifierVisibility';
 import {graphicOpacityOf, stampGraphicOpacity} from './graphicOpacity';
 import {removeGraphic} from './persistence';
@@ -93,6 +94,25 @@ function widthOfSelection(manager: TacticalGraphicsManager, symbolId: string): {
     const stored = geometry?.getCoordinates().map(c => toLonLat(c as [number, number])) as Position[] | undefined;
     const width = widthFromBase(name, stored);
     return width === undefined ? {} : {width};
+}
+
+/**
+ * The resolved line colour the properties dialog stamps on a feature, from its stamped hostility
+ * and its amplifier bag: a stated Unknown, or an exercise graphic's, is yellow.
+ * @see statesUnknownIdentity
+ */
+export function stampedHostilityColor(feature: FeatureLike): string {
+    const labels = readGraphicLabels(feature);
+    const hostility = (labels.hostility ?? feature.get('hostility') ?? TacticalGraphicHostility.unknown) as TacticalGraphicHostility;
+    return getColorByIdentity(hostility, statesUnknownIdentity({...labels, hostility: labels.hostility ?? feature.get('hostility')}));
+}
+
+/**
+ * Re-derives a stamped `hostilityColor` after a config or palette change, which the stamp would
+ * otherwise outlive. A feature with no stamp is left alone: its style resolves the colour live.
+ */
+export function restampHostilityColor(feature: Feature): void {
+    if (feature.get('hostility') && feature.get('hostilityColor')) feature.set('hostilityColor', stampedHostilityColor(feature));
 }
 
 /**
@@ -215,7 +235,7 @@ export function createOpenLayersPropertiesSource(
         apply(selection, labels, echelon) {
             if (!selection.id) return;
 
-            const color = getColorByHostility(labels.hostility ?? TacticalGraphicHostility.unknown);
+            const color = getColorByIdentity(labels.hostility ?? TacticalGraphicHostility.unknown, statesUnknownIdentity(labels));
             const layers = map
                 .getLayers()
                 .getArray()

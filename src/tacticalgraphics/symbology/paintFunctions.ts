@@ -38,6 +38,8 @@ import {
     fadeColor,
     fontStyle,
     getColorByHostility,
+    getColorByIdentity,
+    statesUnknownIdentity,
     getObstacleColor,
     getLabelFillColor,
     getLabelHaloColor,
@@ -529,7 +531,16 @@ export function lineColorOf(feature: PaintFeature): string {
 export function affiliationColorOf(feature: PaintFeature): string {
     const name = feature.properties.name;
     if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
-    return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
+    return feature.hostilityColor || identityColorOf(feature);
+}
+
+/**
+ * The colour of the feature's standard identity, with no resolved `hostilityColor` and no
+ * obstacle rule. A stated Unknown is yellow; an unset one, the default line colour.
+ * @see getColorByIdentity, statesUnknownIdentity
+ */
+export function identityColorOf(feature: PaintFeature): string {
+    return getColorByIdentity(hostilityOf(feature), statesUnknownIdentity(feature.properties));
 }
 
 /**

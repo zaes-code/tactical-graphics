@@ -390,7 +390,6 @@ const DECISION_LINE = f(true, false, false, false, false, {countryCodes: true});
  * it — so the two look alike here and are not. @see mobilityCorridorPaint
  */
 const MOBILITY_CORRIDOR = f(false, false, false, false, false, {additionalInfo: true, echelon: true});
-const FIRE_SUPPORT_LINE = f(true, false, true, true, true);
 
 /**
  * The fire-support lines whose plate pairs the designation with a country code.

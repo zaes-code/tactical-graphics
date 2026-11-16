@@ -37,7 +37,6 @@ import {
 import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './type';
 import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
 import {baseGeometryFor} from './render';
-import {SECURITY_OPERATION_PX} from '../graphics/SecurityOperation';
 import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
 import {hasClosingEdge, usesDrawnAnchors} from './handles';
 import {carriesWidthPointInBase} from './axisWidth';
@@ -120,6 +119,37 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
 
     return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
 };
+
+/**
+ * The line color for a standard identity, telling a stated Unknown from an unset one.
+ *
+ * `stated` says the identity was set on purpose rather than left at its default. A stated
+ * `unknown` draws yellow: MIL-STD-2525E L.5.1.1.1 gives control measures "yellow (unknown ...)",
+ * and MIL-STD-2525C Tables II and XIII-1 give unknown and pending one yellow. A host's
+ * `unknown` override wins, then its `pending` override, as for `suspectJoker`. An unset
+ * `unknown` is a graphic with no affiliation and keeps the default line color, which is what
+ * {@link getColorByHostility} gives it. Every other identity is the same either way.
+ * @see statesUnknownIdentity
+ */
+export function getColorByIdentity(hostility: TacticalGraphicHostility, stated = false): string {
+    if (stated && hostility === TacticalGraphicHostility.unknown) {
+        return getHostilityColorOverride(TacticalGraphicHostility.unknown) ?? getColorByHostility(TacticalGraphicHostility.pending);
+    }
+    return getColorByHostility(hostility);
+}
+
+/**
+ * Whether a graphic's properties state Unknown as its identity, rather than leave it unset.
+ *
+ * `Unknown` alone does not: hosts, and this library's own sample dialog, wrote `Unknown` for a
+ * graphic whose affiliation nobody chose, and that saved data has to keep drawing as it always
+ * has. A graphic states it with `identityStated`, or by being part of an exercise, where
+ * MIL-STD-2525C's exercise unknown (W) is an identity of its own.
+ * @see TacticalGraphicProperties.identityStated
+ */
+export function statesUnknownIdentity(properties: {hostility?: TacticalGraphicHostility; identityStated?: boolean; exercise?: boolean}): boolean {
+    return properties.hostility === TacticalGraphicHostility.unknown && (properties.identityStated === true || properties.exercise === true);
+}
 
 /**
  * The green APP-06 8.1.4.3 requires for obstacles, or `undefined` when the host has turned
@@ -1298,10 +1328,6 @@ export function topEdgeLabel<T extends readonly number[]>(name: TacticalGraphicN
     const [a, b] = [drawnRing[i], drawnRing[i + 1]];
     return {anchor: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], segment: [a, b]};
 }
-
-/** How far a security operation's arm reaches from the centre, in screen pixels. */
-const SECURITY_OPERATION_REACH_PX =
-    SECURITY_OPERATION_PX.labelPadding + SECURITY_OPERATION_PX.labelGap + SECURITY_OPERATION_PX.arrowLength;
 
 /**
  * Half of a security operation's own width, in screen pixels.

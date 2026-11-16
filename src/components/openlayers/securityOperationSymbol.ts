@@ -459,7 +459,7 @@ export function securityOperationSymbolStyle(
             provider ??
             getSecuritySymbolProvider();
         const style = resolve(
-            {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
+            {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility, name), sizePx: symbolSizePx, labels},
             active,
         );
         return fadedSymbolStyle(style, graphicOpacityOf(source()));
@@ -505,7 +505,7 @@ export function followTaskSymbolStyle(feature: FeatureLike, resolution: number):
             name: feature.get('graphicName') as TacticalGraphicName,
             graphicId: (feature.get('symbolId') as string) || undefined,
             hostility,
-            sidc: securitySymbolSidc(hostility),
+            sidc: securitySymbolSidc(hostility, feature.get('graphicName') as TacticalGraphicName),
             sizePx: placement.sizePx,
             labels,
         },
@@ -548,7 +548,7 @@ export function securityOperationCentreSymbolStyle(feature: FeatureLike, resolut
             name: feature.get('graphicName') as TacticalGraphicName,
             graphicId: (feature.get('symbolId') as string) || undefined,
             hostility,
-            sidc: securitySymbolSidc(hostility),
+            sidc: securitySymbolSidc(hostility, feature.get('graphicName') as TacticalGraphicName),
             sizePx: placement.sizePx,
             labels,
         },
@@ -586,7 +586,7 @@ export function unitSymbolStyle(feature: FeatureLike, resolution: number, place:
             name: feature.get('graphicName') as TacticalGraphicName,
             graphicId: (feature.get('symbolId') as string) || undefined,
             hostility,
-            sidc: securitySymbolSidc(hostility),
+            sidc: securitySymbolSidc(hostility, feature.get('graphicName') as TacticalGraphicName),
             sizePx: placement.sizePx,
             labels,
         },
@@ -624,7 +624,7 @@ export function escortSymbolStyle(feature: FeatureLike, resolution: number): Sty
             name: TacticalGraphicName.Escort,
             graphicId: (feature.get('symbolId') as string) || undefined,
             hostility,
-            sidc: securityOperationSidc(hostility),
+            sidc: securityOperationSidc(hostility, TacticalGraphicName.Escort),
             sizePx: escortSymbolSizePx(spanPx),
             labels,
         },

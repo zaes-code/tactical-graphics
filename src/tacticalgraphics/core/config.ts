@@ -133,7 +133,7 @@ export interface TacticalGraphicsConfigOptions {
     lineWidth?: number;
     /** Per-affiliation line colors. Anything omitted keeps its FM 1-02.2 value. */
     hostilityColors?: Partial<Record<TacticalGraphicHostility, string>>;
-    /** Line color for graphics with no affiliation, and for the `unknown` hostility. Default `#000000`. */
+    /** Line color for graphics with no affiliation, and for an `unknown` hostility that is not stated (see `identityStated`). Default `#000000`. */
     defaultLineColor?: string;
     /** Label text fill. Defaults to whatever `defaultLineColor` resolves to, so overriding one moves both. */
     labelFillColor?: string;

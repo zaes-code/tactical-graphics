@@ -145,9 +145,6 @@ const vertexLine = (maxPts: number, minVertices: number) => (name: TacticalGraph
     return controller.enableVertexDragging(minVertices);
 };
 
-const block = (name: TacticalGraphicName, res: number, sizing: number) =>
-    new LineGraphicController(new Block(name, sizing * 20, res), 2, name);
-
 /**
  * The four bracket mission tasks: three placed points, every one of them grabbable.
  *

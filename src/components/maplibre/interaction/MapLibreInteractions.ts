@@ -2084,26 +2084,6 @@ export class MapLibreInteractions {
     }
 }
 
-/**
- * The base geometry a set of drawn vertices makes, for the shape this graphic
- * wants — or null when there are not enough of them yet.
- */
-/**
- * The ring of an axis-aligned box through two opposite corners.
- *
- * What OpenLayers gets from `createBox()`, which is why its rectangles are rectangles:
- * the operator gives two corners and the other two are derived, so there is never a moment
- * at which the shape could be anything else. MapLibre was collecting these as ordinary
- * polygons — click a ring out by hand — so a "rectangular" kill box was whatever
- * quadrilateral the operator happened to click, and every later complaint about corners
- * moving and vertices appearing followed from that.
- */
-function buildBox([a, b]: Position[]): Geometry {
-    const [x0, x1] = [Math.min(a[0], b[0]), Math.max(a[0], b[0])];
-    const [y0, y1] = [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
-    return {type: 'Polygon', coordinates: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]};
-}
-
 function buildBase(wants: 'Point' | 'LineString' | 'Polygon' | undefined, vertices: Position[]): Geometry | null {
     if (!vertices.length) return null;
 

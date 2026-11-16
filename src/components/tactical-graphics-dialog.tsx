@@ -101,6 +101,10 @@ export function shownLabels(selection: SelectedGraphic): GraphicLabels {
         designation: fields.identifier1 ? (stored.designation ?? '') : '',
         hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
     };
+    // Kept through the rebuild, or applying the dialog would turn a stated Unknown back into an
+    // unset one and an exercise graphic into a real one. @see TacticalGraphicProperties.identityStated
+    if (stored.identityStated) labels.identityStated = true;
+    if (stored.exercise) labels.exercise = true;
 
     if (fields.identifier2) labels.secondDesignation = stored.secondDesignation ?? '';
     if (fields.countryCodes) {
@@ -735,7 +739,9 @@ const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source})
                                                 onChange={(e: SelectChangeEvent<TacticalGraphicHostility>) =>
                                                     setPendingChanges(prev => ({
                                                         ...prev,
-                                                        labels: {...prev.labels, hostility: e.target.value},
+                                                        // Picking a value states it, so a chosen Unknown is the
+                                                        // unknown identity rather than the default.
+                                                        labels: {...prev.labels, hostility: e.target.value, identityStated: true},
                                                     }))
                                                 }
                                             >

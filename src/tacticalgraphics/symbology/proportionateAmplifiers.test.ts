@@ -101,7 +101,9 @@ describe('the safe-distance zone numbers close their rings when too small to rea
     it('cuts both breaks and numbers them at a readable size', () => {
         const paints = nestedZonePaint()(zone(), context(1));
         expect(texts(paints).map(p => p.text!.text)).toEqual(['1', '2']);
-        expect(strokeRuns(paints)).toHaveLength(2);
+        // Each ring is cut once, mid-edge, into two runs. (Sampling each edge in 24 steps used
+        // to step over a gap this narrow, so the rings were drawn whole under their numbers.)
+        expect(strokeRuns(paints)).toHaveLength(4);
     });
 
     it('draws both rings whole, with no numbers, once the inner ring is too small for them', () => {
