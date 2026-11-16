@@ -22,6 +22,13 @@ the npm publish dates — when a version actually became installable.
   XIII gives unknown and pending one yellow; outside an exercise, or with no identity at all, it
   keeps the default line colour. Every other identity is unchanged. New exports:
   `getColorByIdentity(hostility, exercise)` and `identityColorOf(feature)`.
+- **`buildGraphicSidc(properties, options)`**, from the root: a graphic's 20- or 30-digit symbol
+  identification code, built from its entity code and its saved properties under MIL-STD-2525E
+  Change 1 Appendix A, for any edition in Table A-I (`SIDC_VERSIONS`, default MIL-STD-2525E).
+  The context follows `exercise`. The digit tables it writes with are exported
+  (`SIDC_STANDARD_IDENTITY`, `SIDC_STATUS`, `SIDC_ECHELON`, `SIDC_MOBILITY`, `SIDC_MINE_TYPE`,
+  `SIDC_TERRAIN`, `SIDC_CONTEXTS`, `CONTROL_MEASURE_SYMBOL_SET`), and the centre symbol's code
+  takes its identity digit from the same table.
 
 ### Fixed
 

@@ -405,6 +405,23 @@ resolveEntityCode('330301');   // → {name: 'MainSupplyRoute', direction: 'One 
 getEntityCode(TacticalGraphicName.MainSupplyRoute, {direction: RouteDirection.oneWay}); // → '330301'
 ```
 
+`buildGraphicSidc(properties, options)` writes the whole symbol identification code: the
+version of the edition named in `options.standard` (MIL-STD-2525E by default, Table A-I), the
+context (exercise for a graphic with `exercise` set), the standard identity, symbol set 25,
+status, echelon, the entity code, and the mobility or mine type and terrain digits. It returns
+`undefined` for a graphic with no entity code. `length: 30` adds an empty third set, and
+`defaultIdentity` says what to write for a graphic that states no `hostility`. The digit
+tables are exported too (`SIDC_STANDARD_IDENTITY`, `SIDC_ECHELON` and the rest).
+
+```ts
+import {buildGraphicSidc, TacticalGraphicHostility, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+buildGraphicSidc({name: TacticalGraphicName.PhaseLine, hostility: TacticalGraphicHostility.hostileFaker});
+// → '13062500001403000000'
+buildGraphicSidc({name: TacticalGraphicName.PhaseLine}, {standard: 'APP-06(E)(2)', length: 30});
+// → '160325000014030000000000000000'
+```
+
 `TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
 at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
 `tacticalGraphic.name` is readable in a raw GeoJSON file. TypeScript still wants the member

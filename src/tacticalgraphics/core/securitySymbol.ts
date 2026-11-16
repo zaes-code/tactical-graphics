@@ -26,6 +26,7 @@
  */
 
 import {TacticalGraphicHostility, TacticalGraphicName} from './type';
+import {SIDC_STANDARD_IDENTITY} from './sidc';
 import type {GraphicLabels} from './render';
 import type {PaintFeature} from './paint';
 
@@ -354,17 +355,9 @@ const SECURITY_OPERATIONS: ReadonlySet<TacticalGraphicName> = new Set([
  * `assumedFriend` and `suspectJoker` are distinct identities in the standard and
  * get their own digits here, even though the *color* accessors alias them onto
  * friend and pending — color is a rendering choice, identity is what the symbol
- * asserts.
+ * asserts. The same table a graphic's own code is written with. @see buildGraphicSidc
  */
-const IDENTITY_DIGIT: Partial<Record<TacticalGraphicHostility, string>> = {
-    [TacticalGraphicHostility.pending]: '0',
-    [TacticalGraphicHostility.unknown]: '1',
-    [TacticalGraphicHostility.assumedFriend]: '2',
-    [TacticalGraphicHostility.friend]: '3',
-    [TacticalGraphicHostility.neutral]: '4',
-    [TacticalGraphicHostility.suspectJoker]: '5',
-    [TacticalGraphicHostility.hostileFaker]: '6',
-};
+const IDENTITY_DIGIT = SIDC_STANDARD_IDENTITY;
 
 /**
  * The MIL-STD-2525E SIDC for a centre symbol at a given affiliation.
