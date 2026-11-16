@@ -459,7 +459,7 @@ export function securityOperationSymbolStyle(
             provider ??
             getSecuritySymbolProvider();
         const style = resolve(
-            {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility), sizePx: symbolSizePx, labels},
+            {name, graphicId: id || undefined, hostility, sidc: securityOperationSidc(hostility, name), sizePx: symbolSizePx, labels},
             active,
         );
         return fadedSymbolStyle(style, graphicOpacityOf(source()));
@@ -624,7 +624,7 @@ export function escortSymbolStyle(feature: FeatureLike, resolution: number): Sty
             name: TacticalGraphicName.Escort,
             graphicId: (feature.get('symbolId') as string) || undefined,
             hostility,
-            sidc: securityOperationSidc(hostility),
+            sidc: securityOperationSidc(hostility, TacticalGraphicName.Escort),
             sizePx: escortSymbolSizePx(spanPx),
             labels,
         },

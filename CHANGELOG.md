@@ -45,8 +45,9 @@ the npm publish dates — when a version actually became installable.
   centre symbol MIL-STD-2525E land unit entity 130100, Fires/Air Defense. 2525E files the three
   under Mission Tasks/Security, so their centre now asks for entity 141700, Protection/Security
   (`130310001414170000000000000000` for a friend). `securitySymbolSidc(hostility, name?)` takes the graphic's
-  name; with no name it returns the security code. The other seven centre-symbol graphics keep
-  130100.
+  name; with no name it keeps returning 130100, so only a named security operation asks for
+  Security. The other seven centre-symbol graphics keep 130100, the escort included on both
+  renderers.
 
 ## [4.8.0] — 2026-11-10
 

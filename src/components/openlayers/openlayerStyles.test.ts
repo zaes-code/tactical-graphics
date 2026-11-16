@@ -1039,7 +1039,7 @@ describe('security operation center symbol', () => {
 
     // A friendly security operation is a friendly platoon of 2525E entity 141700, Security.
     it('gives a friendly security operation the friendly security platoon', () => {
-        expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001414170000000000000000');
+        expect(securityOperationSidc(TacticalGraphicHostility.friend, TacticalGraphicName.Screen)).toBe('130310001414170000000000000000');
     });
 
     /**

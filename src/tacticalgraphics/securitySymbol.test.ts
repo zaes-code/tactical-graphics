@@ -63,8 +63,8 @@ describe('the centre unit of a security operation', () => {
         }
     });
 
-    it('is the security unit when no graphic is named', () => {
-        expect(entity(securitySymbolSidc(TacticalGraphicHostility.friend))).toBe('141700');
+    it('keeps 130100 when no graphic is named, so an unnamed call never claims Security', () => {
+        expect(entity(securitySymbolSidc(TacticalGraphicHostility.friend))).toBe('130100');
     });
 
     it.each([
@@ -104,7 +104,7 @@ describe('what a provider is told', () => {
             request({
                 name: TacticalGraphicName.Screen,
                 hostility: TacticalGraphicHostility.hostileFaker,
-                sidc: securitySymbolSidc(TacticalGraphicHostility.hostileFaker),
+                sidc: securitySymbolSidc(TacticalGraphicHostility.hostileFaker, TacticalGraphicName.Screen),
             }),
         );
 

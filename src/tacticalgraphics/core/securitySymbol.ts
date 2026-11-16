@@ -334,7 +334,7 @@ const SIDC_TEMPLATE = '130#100014@00000000000000';
 const SECURITY_UNIT_ENTITY = '141700';
 
 /**
- * The entity the other centre-symbol graphics carry: 130100, Fires/Air Defense.
+ * The entity the other centre-symbol graphics carry, and an unnamed call: 130100, Fires/Air Defense.
  *
  * Their plates leave the unit to the operator — the unit that follows, searches, escorts or
  * captures — and no 2525E entity is a better default for every one of them, so they keep the
@@ -362,14 +362,16 @@ const IDENTITY_DIGIT = SIDC_STANDARD_IDENTITY;
 /**
  * The MIL-STD-2525E SIDC for a centre symbol at a given affiliation.
  *
- * With no `name`, or the name of a security operation (cover, guard, screen), the unit is
- * 141700 Security. The other centre-symbol graphics carry 130100. @see SECURITY_UNIT_ENTITY
+ * For a security operation (cover, guard, screen) the unit is 141700 Security. The other
+ * centre-symbol graphics carry 130100, and so does a call that names no graphic, which is what
+ * this returned for every graphic before the name was taken. Every caller in this library
+ * passes the name. @see SECURITY_UNIT_ENTITY
  *
  * Exported so a host writing its own provider can start from the doctrinal code
  * rather than reverse-engineering one.
  */
 export function securitySymbolSidc(hostility: TacticalGraphicHostility, name?: TacticalGraphicName): string {
-    const entity = name === undefined || SECURITY_OPERATIONS.has(name) ? SECURITY_UNIT_ENTITY : DEFAULT_UNIT_ENTITY;
+    const entity = name !== undefined && SECURITY_OPERATIONS.has(name) ? SECURITY_UNIT_ENTITY : DEFAULT_UNIT_ENTITY;
     return SIDC_TEMPLATE.replace('#', IDENTITY_DIGIT[hostility] ?? IDENTITY_DIGIT[TacticalGraphicHostility.pending]!).replace('@', entity);
 }
 
