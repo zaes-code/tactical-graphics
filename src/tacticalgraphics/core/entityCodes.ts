@@ -433,7 +433,7 @@ export function getEntityCode(name: TacticalGraphicName, amplifiers?: EntityCode
  *
  * Returns an array so a code shared by two graphics can report both. No code is shared
  * today: `LineOfContact` used to borrow `141100` from line of departure/line of contact
- * until it took its own MIL-STD-2525 code, `140200`. Order follows `GRAPHIC_ENTITY_CODES`.
+ * until it took MIL-STD-2525D's code, `140200`. Order follows `GRAPHIC_ENTITY_CODES`.
  * An unknown code returns empty.
  */
 export function listNamesByEntityCode(code: string): readonly TacticalGraphicName[] {

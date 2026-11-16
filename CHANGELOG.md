@@ -15,6 +15,45 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **A stated Unknown draws yellow.** MIL-STD-2525E L.5.1.1.1 draws a control measure of unknown
+  identity in yellow, as MIL-STD-2525C Tables II and XIII-1 do; a graphic with no affiliation is
+  black. `Unknown` was also what an unchosen affiliation was saved as, so the two are told apart
+  by a new property, **`identityStated`**: `Unknown` with it draws yellow, `Unknown` alone keeps
+  meaning "not set" and draws as before, and saved data is unaffected. A graphic marked
+  **`exercise`** states its Unknown too (2525C exercise unknown, W). Every other identity is
+  unchanged. The sample app's properties dialog sets `identityStated` when an affiliation is
+  picked. New exports: `getColorByIdentity(hostility, stated)`, `statesUnknownIdentity(properties)`
+  and `identityColorOf(feature)`.
+- **`buildGraphicSidc(properties, options)`**, from the root: a graphic's 20- or 30-digit symbol
+  identification code, built from its entity code and its saved properties under MIL-STD-2525E
+  Change 1 Appendix A, for any edition in Table A-I (`SIDC_VERSIONS`, default MIL-STD-2525E).
+  The context follows `exercise`. The digit tables it writes with are exported
+  (`SIDC_STANDARD_IDENTITY`, `SIDC_STATUS`, `SIDC_ECHELON`, `SIDC_MOBILITY`, `SIDC_MINE_TYPE`,
+  `SIDC_TERRAIN`, `SIDC_CONTEXTS`, `CONTROL_MEASURE_SYMBOL_SET`), and the centre symbol's code
+  takes its identity digit from the same table.
+
+### Fixed
+
+- **A ring broken for its labels is cut exactly, from far fewer points.** The artillery maneuver
+  and reserved areas, the radiation dose rate contour line and both minimum safe distance zones
+  resampled every ring segment into 24 points, and each break ended on the nearest sample.
+  `breakRingAt` now returns **fewer points**: each run is the ring's own vertices plus the exact
+  points where its gaps start and stop, about 5 to 24 times fewer coordinates than before. The outline
+  is otherwise unchanged; each break end moves by up to one old sample step (a 24th of the ring
+  segment it falls on) to where the gap was computed, and a gap narrower than a sample step,
+  which the old form stepped over, is now cut.
+  The padding either side of the text in a break shrinks with the text, as every other label gap
+  does.
+- **The centre unit of Cover, Guard and Screen is Security.** `securitySymbolSidc` gave every
+  centre symbol MIL-STD-2525E land unit entity 130100, Fires/Air Defense. 2525E files the three
+  under Mission Tasks/Security, so their centre now asks for entity 141700, Protection/Security
+  (`130310001414170000000000000000` for a friend). `securitySymbolSidc(hostility, name?)` takes the graphic's
+  name; with no name it keeps returning 130100, so only a named security operation asks for
+  Security. The other seven centre-symbol graphics keep 130100, the escort included on both
+  renderers.
+
 ## [4.8.0] — 2026-11-10
 
 Labels that follow the view and keep clear of each other, on every renderer.

@@ -111,8 +111,8 @@ describe('the cardinal-label boundary', () => {
         const long = cardinalBoundaryPaint('LONGER LABEL')(areaFeature(), context(400));
         const spanOf = (paint: typeof short[0]) =>
             (paint.geometry as {coordinates: ProjectedPosition[][]}).coordinates
-                .reduce((total, run) => total + run.length, 0);
-        // A wider label eats more of the ring, so fewer sampled points survive.
+                .reduce((total, run) => total + run.slice(1).reduce((sum, p, i) => sum + Math.hypot(p[0] - run[i][0], p[1] - run[i][1]), 0), 0);
+        // A wider label eats more of the ring, so less of the outline is drawn.
         expect(spanOf(long[0])).toBeLessThan(spanOf(short[0]));
     });
 });

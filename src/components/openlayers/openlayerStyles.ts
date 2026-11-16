@@ -49,6 +49,8 @@ import {
     measureReadoutScale,
     type MeasurePart,
     getColorByHostility,
+    getColorByIdentity,
+    statesUnknownIdentity,
     getDefaultLineColor,
     getDoctrinalHostilityColor,
     getDrawMarkerColor,
@@ -305,7 +307,14 @@ export function labelFillFor(feature?: FeatureLike): string {
 }
 
 export function readHostilityColor(feature: FeatureLike): string {
-    return feature.get('hostilityColor') || getColorByHostility(readHostility(feature));
+    return feature.get('hostilityColor') || getColorByIdentity(readHostility(feature), readsAsStated(feature));
+}
+
+/** Whether the feature states Unknown as its identity. @see statesUnknownIdentity */
+function readsAsStated(feature: FeatureLike): boolean {
+    const labels = readGraphicLabels(feature);
+    // Not `readHostility`, which reads an absent identity as Unknown.
+    return statesUnknownIdentity({...labels, hostility: labels.hostility ?? feature.get('hostility')});
 }
 
 /** Radius in px of the dot under the cursor while drawing. */
@@ -1242,7 +1251,7 @@ function firePositionStyles(f: FeatureLike): Style[] {
     const hostility = readHostility(f);
     return [new Style({
         geometry: geom,
-        stroke: new Stroke({color: getColorByHostility(hostility), width: LINE_WIDTH()}),
+        stroke: new Stroke({color: getColorByIdentity(hostility, readsAsStated(f)), width: LINE_WIDTH()}),
     })];
 }
 

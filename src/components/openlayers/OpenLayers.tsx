@@ -4,10 +4,10 @@ import '../../styles/map.css';
 
 // MapControls is no longer rendered here — it moved up to `MapRendering` so one
 // panel can drive either engine. @see components/mapEngine.ts
-import {createMap, getColorByHostility} from './openlayerStyles';
+import {createMap} from './openlayerStyles';
 import ol from 'ol/dist/ol';
 import TacticalGraphicsDialog from '../tactical-graphics-dialog';
-import {createOpenLayersPropertiesSource} from './featurePropertiesSource';
+import {createOpenLayersPropertiesSource, restampHostilityColor} from './featurePropertiesSource';
 import {TacticalGraphicsManager} from './TacticalGraphicsManager';
 import {createTacticalGraphics} from './createTacticalGraphics';
 import {rememberAmplifierVisibility} from '../amplifierVisibility';
@@ -238,10 +238,7 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
         // keep that mode's color forever. Re-derive it before invalidating, or the sweep
         // below faithfully re-renders the stale value.
         tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
-            const hostility = f.get('hostility');
-            if (hostility && f.get('hostilityColor')) {
-                f.set('hostilityColor', getColorByHostility(hostility));
-            }
+            restampHostilityColor(f);
             // Invalidate per-feature style cache so StyleFunctions re-evaluate with new mode
             f.changed();
         });
@@ -259,12 +256,10 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
     useEffect(() => {
         if (!map) return;
         tacticalGraphicManager.current?.renderingVectorSource.forEachFeature(f => {
-            const hostility = f.get('hostility');
             // Same stale-stamp problem as the mode sweep: `hostilityColor` caches a
-            // *resolved* color, so re-tinting an affiliation has to re-derive it.
-            if (hostility && f.get('hostilityColor')) {
-                f.set('hostilityColor', getColorByHostility(hostility));
-            }
+            // *resolved* color, so re-tinting an affiliation has to re-derive it, from the
+            // same rule the dialog stamped it with (a stated Unknown stays yellow).
+            restampHostilityColor(f);
             f.changed();
         });
     }, [map, graphicsSettings]);

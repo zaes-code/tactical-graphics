@@ -129,7 +129,7 @@ export function securityOperationSymbol(
             name: feature.properties.name as TacticalGraphicName,
             graphicId: symbolGraphicId(feature),
             hostility,
-            sidc: securitySymbolSidc(hostility),
+            sidc: securitySymbolSidc(hostility, feature.properties.name as TacticalGraphicName),
             sizePx: wantedPx,
             labels: feature.properties as unknown as GraphicLabels,
         },

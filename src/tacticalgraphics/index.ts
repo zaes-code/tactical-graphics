@@ -106,6 +106,19 @@ export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications,
 export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes, listEntityVariantCodes, resolveEntityCode} from './core/entityCodes';
 export type {EntityCodeAmplifiers, EntityCodeResolution} from './core/entityCodes';
 export {
+    CONTROL_MEASURE_SYMBOL_SET,
+    SIDC_CONTEXTS,
+    SIDC_ECHELON,
+    SIDC_MINE_TYPE,
+    SIDC_MOBILITY,
+    SIDC_STANDARD_IDENTITY,
+    SIDC_STATUS,
+    SIDC_TERRAIN,
+    SIDC_VERSIONS,
+    buildGraphicSidc,
+} from './core/sidc';
+export type {SidcContext, SidcOptions, SidcProperties, SidcStandard} from './core/sidc';
+export {
     DoctrinalIssueKind,
     getDoctrinalRequirements,
     hasDoctrinalRequirements,
@@ -208,6 +221,8 @@ export {
     RATIO_LOCKED_LABEL_FRACTION,
     fontStyle,
     getColorByHostility,
+    getColorByIdentity,
+    statesUnknownIdentity,
     getDefaultLineColor,
     getObstacleColor,
     getDoctrinalHostilityColor,
@@ -349,6 +364,7 @@ export {
     areaOutlinePaint,
     defaultLinePaint,
     affiliationColorOf,
+    identityColorOf,
     amplifierDash,
     formatDesignationWithCountry,
     formatFullLabel,

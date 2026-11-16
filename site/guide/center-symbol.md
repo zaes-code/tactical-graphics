@@ -58,8 +58,10 @@ resolves one.
 
 The SIDC handed to the provider is derived from the graphic's own `hostility`, so a
 hostile Screen gets a hostile-framed symbol and changing the affiliation redraws it.
-`securitySymbolSidc(hostility)` exposes the same doctrinal code if you want to build on
-it. All ten offer the affiliation for that reason — the escort and the two follow tasks
+`securitySymbolSidc(hostility, name)` exposes the same doctrinal code if you want to build on
+it. Cover, Guard and Screen carry a platoon of MIL-STD-2525E entity 141700, Security, as
+2525E files them under Mission Tasks/Security; the other seven carry 130100, since their
+plates leave the unit to the operator. All ten offer the affiliation for that reason — the escort and the two follow tasks
 are tactical mission tasks, which otherwise carry little (the escort nothing, the follow
 tasks only a designation), and an entity symbol's frame *is* its standard identity.
 

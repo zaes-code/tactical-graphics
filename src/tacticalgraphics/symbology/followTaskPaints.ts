@@ -198,7 +198,7 @@ function layout(feature: PaintFeature, context: PaintContext) {
             name,
             graphicId: symbolGraphicId(feature),
             hostility,
-            sidc: securitySymbolSidc(hostility),
+            sidc: securitySymbolSidc(hostility, name),
             sizePx: symbolBoxPx,
             labels: feature.properties as unknown as GraphicLabels,
         },

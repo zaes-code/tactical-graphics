@@ -24,7 +24,7 @@ import {BASE_FONT_SIZE_PX} from '../core/config';
 import {HALO_WIDTH, LINE_WIDTH, fontStyle, getLabelHaloColor} from '../core/symbology';
 import {amplifierText, labelColorOf, lineColorOf, scaleOf} from './paintFunctions';
 import {textWidth} from './decorations';
-import {heldTextScale, letterInGapScale} from './labelFit';
+import {heldTextScale, labelGapPx, letterInGapScale} from './labelFit';
 import {ringDirectionInView} from './viewFollow';
 
 type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
@@ -33,7 +33,7 @@ type CardinalPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
 const CARDINALS = [Math.PI / 2, 0, -Math.PI / 2, Math.PI] as const;
 
 /**
- * Clear space either side of the text inside its break, in screen pixels.
+ * Clear space either side of the text inside its break, in screen pixels, for text at full size.
  *
  * **Just enough to keep the glyphs off the stroke ends.** It was six, which on a
  * three-letter abbreviation opened a break half as wide again as the word it holds — the
@@ -110,39 +110,53 @@ function alongRing(
     return undefined;
 }
 
-/** The ring split into the runs that survive after the breaks are removed. */
+/**
+ * The ring split into the runs that survive after the breaks are removed.
+ *
+ * Each run is the ring's own vertices between two break ends, plus the exact points where the
+ * breaks start and stop. Breaks are spans of along-ring distance and do not wrap past the
+ * ring's closing vertex; overlapping spans merge.
+ */
 function ringWithBreaks(
     ring: readonly ProjectedPosition[],
     breaks: ReadonlyArray<readonly [number, number]>,
 ): ProjectedPosition[][] {
-    const total = breaks.slice().sort((a, b) => a[0] - b[0]);
-    const inBreak = (d: number) => total.some(([from, to]) => d >= from && d <= to);
+    // Distance along the ring to every vertex.
+    const at: number[] = [0];
+    for (let i = 0; i + 1 < ring.length; i++) at.push(at[i] + Math.hypot(ring[i + 1][0] - ring[i][0], ring[i + 1][1] - ring[i][1]));
+    const total = at[at.length - 1];
 
-    const runs: ProjectedPosition[][] = [];
-    let run: ProjectedPosition[] = [];
-    let traveled = 0;
-    const push = (p: ProjectedPosition) => run.push(p);
-    const close = () => {
-        if (run.length >= 2) runs.push(run);
-        run = [];
+    // The drawn spans: [0, total] minus the union of the breaks.
+    const cuts = breaks
+        .map(([from, to]) => [Math.max(0, from), Math.min(total, to)] as const)
+        .filter(([from, to]) => to >= from)
+        .sort((a, b) => a[0] - b[0]);
+    const drawn: Array<[number, number]> = [];
+    let cursor = 0;
+    for (const [from, to] of cuts) {
+        if (from > cursor) drawn.push([cursor, from]);
+        cursor = Math.max(cursor, to);
+    }
+    if (cursor < total) drawn.push([cursor, total]);
+
+    const pointAt = (d: number, i: number): ProjectedPosition => {
+        const span = at[i + 1] - at[i];
+        const u = span > 0 ? (d - at[i]) / span : 0;
+        return [ring[i][0] + (ring[i + 1][0] - ring[i][0]) * u, ring[i][1] + (ring[i + 1][1] - ring[i][1]) * u];
     };
 
-    for (let i = 0; i + 1 < ring.length; i++) {
-        const a = ring[i];
-        const b = ring[i + 1];
-        const segLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        // Sample the segment finely enough that a break's ends land within a pixel or so
-        // of where they were computed; the runs are strokes, not measurements.
-        const steps = Math.max(2, Math.ceil(segLen / Math.max(1, segLen / 24)));
-        for (let s = 0; s <= steps; s++) {
-            const d = traveled + (segLen * s) / steps;
-            const p: ProjectedPosition = [a[0] + ((b[0] - a[0]) * s) / steps, a[1] + ((b[1] - a[1]) * s) / steps];
-            if (inBreak(d)) close();
-            else push(p);
+    const runs: ProjectedPosition[][] = [];
+    let i = 0;
+    for (const [from, to] of drawn) {
+        while (i + 2 < at.length && at[i + 1] < from) i++;
+        const run: ProjectedPosition[] = [pointAt(from, i)];
+        while (i + 2 < at.length && at[i + 1] < to) {
+            i++;
+            if (at[i] > from) run.push(ring[i]);
         }
-        traveled += segLen;
+        run.push(pointAt(to, i));
+        if (run.length >= 2 && to > from) runs.push(run);
     }
-    close();
     return runs;
 }
 
@@ -179,9 +193,12 @@ function breakTextScale(feature: PaintFeature, context: PaintContext, text: stri
     return rule(scaleOf(feature, context), textWidth(context, text, fontStyle, 1), BASE_FONT_SIZE_PX, ringPx(ring, context));
 }
 
-/** Half the break each label needs, in projected meters. */
+/**
+ * Half the break each label needs, in projected meters. The padding shrinks with the text, as
+ * every gap beside a label does. @see labelGapPx
+ */
 function halfBreak(context: PaintContext, label: string, scale: number): number {
-    return ((textWidth(context, label, fontStyle, scale) + GAP_PADDING_PX * 2) / 2) * context.resolution;
+    return ((textWidth(context, label, fontStyle, scale) + labelGapPx(GAP_PADDING_PX, scale) * 2) / 2) * context.resolution;
 }
 
 
@@ -190,6 +207,9 @@ function halfBreak(context: PaintContext, label: string, scale: number): number 
  *
  * The single primitive under all of this: everything below differs only in how many
  * bearings it passes and what text it sets in the resulting gaps.
+ *
+ * Each run is the ring's own vertices between two gaps, plus the exact points where each gap
+ * starts and stops, so a run holds no more points than the ring does.
  */
 export function breakRingAt(
     ring: readonly ProjectedPosition[],

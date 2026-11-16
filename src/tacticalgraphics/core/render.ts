@@ -134,6 +134,25 @@ export interface TacticalGraphicProperties {
 
     // ── Symbology (affects color and dash pattern) ─────────────────────────
     hostility?: TacticalGraphicHostility;
+    /**
+     * `hostility` was set on purpose. Default `false`.
+     *
+     * It matters for `Unknown` alone. A graphic whose affiliation nobody chose used to be saved
+     * as `Unknown`, so `Unknown` on its own still means "not set" and draws in the default line
+     * colour, as it always has. `Unknown` with `identityStated` is the unknown standard identity
+     * and draws yellow (MIL-STD-2525E L.5.1.1.1: "yellow (unknown ...)"). A graphic with no
+     * `hostility` at all is unaffiliated, whatever this says.
+     */
+    identityStated?: boolean;
+    /**
+     * The graphic belongs to an exercise: MIL-STD-2525C's exercise identities, the exercise
+     * context of 2525D and 2525E. Default `false`.
+     *
+     * An exercise graphic's `Unknown` is exercise unknown (2525C Table II, drawn yellow), so it
+     * counts as stated without `identityStated`. It also sets the exercise context in
+     * `buildGraphicSidc`.
+     */
+    exercise?: boolean;
     /** `Planned` dashes the line work on most graphics. */
     status?: TacticalGraphicStatus;
     /** `Suspected` on a hostile graphic dashes its line work, as `Planned` does. */
@@ -364,6 +383,10 @@ export interface GraphicLabels {
     grid?: string;
     weapon?: string;
     hostility?: TacticalGraphicHostility;
+    /** @see TacticalGraphicProperties.identityStated */
+    identityStated?: boolean;
+    /** @see TacticalGraphicProperties.exercise */
+    exercise?: boolean;
     echelon?: TacticalGraphicEchelon;
     /** @see TacticalGraphicProperties.openingDirection */
     openingDirection?: number;

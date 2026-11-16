@@ -870,7 +870,7 @@ export class NativeLayerRenderer {
                 // global one. @see setGraphicSecuritySymbolProvider
                 graphicId: graphic.id,
                 hostility,
-                sidc: securitySymbolSidc(hostility),
+                sidc: securitySymbolSidc(hostility, graphic.name),
                 sizePx: placed.sizePx,
                 // The graphic's own amplifiers, which the OpenLayers provider has
                 // always been handed. A provider is a host's code and may key on
