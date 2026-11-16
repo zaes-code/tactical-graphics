@@ -7,6 +7,7 @@
  */
 
 import {Feature, Map as OlMap} from 'ol';
+import type {FeatureLike} from 'ol/Feature';
 import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Draw} from 'ol/interaction';
@@ -93,6 +94,25 @@ function widthOfSelection(manager: TacticalGraphicsManager, symbolId: string): {
     const stored = geometry?.getCoordinates().map(c => toLonLat(c as [number, number])) as Position[] | undefined;
     const width = widthFromBase(name, stored);
     return width === undefined ? {} : {width};
+}
+
+/**
+ * The resolved line colour the properties dialog stamps on a feature, from its stamped hostility
+ * and its amplifier bag: a stated Unknown, or an exercise graphic's, is yellow.
+ * @see statesUnknownIdentity
+ */
+export function stampedHostilityColor(feature: FeatureLike): string {
+    const labels = readGraphicLabels(feature);
+    const hostility = (labels.hostility ?? feature.get('hostility') ?? TacticalGraphicHostility.unknown) as TacticalGraphicHostility;
+    return getColorByIdentity(hostility, statesUnknownIdentity({...labels, hostility: labels.hostility ?? feature.get('hostility')}));
+}
+
+/**
+ * Re-derives a stamped `hostilityColor` after a config or palette change, which the stamp would
+ * otherwise outlive. A feature with no stamp is left alone: its style resolves the colour live.
+ */
+export function restampHostilityColor(feature: Feature): void {
+    if (feature.get('hostility') && feature.get('hostilityColor')) feature.set('hostilityColor', stampedHostilityColor(feature));
 }
 
 /**
