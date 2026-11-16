@@ -301,7 +301,7 @@ export function securitySymbolRevision(): number {
 }
 
 /**
- * The doctrinal SIDC, with the standard-identity digit left as a placeholder.
+ * The doctrinal SIDC, with the standard-identity digit and the entity left as placeholders.
  *
  * Version 13, reality context (digit 3), symbol set 10 (land unit). Digit **4** is
  * standard identity; digit 3 is context, and putting the placeholder there instead
@@ -316,11 +316,37 @@ export function securitySymbolRevision(): number {
  * what a missing echelon looks like. Rendered through milsymbol the two differ by
  * 6 drawn elements against 2.
  *
- * The entity is illustrative rather than prescribed — FM 1-02.2 does not say which
- * unit performs a security task — so a host that cares substitutes its own through
- * a provider. What matters here is that both renderers start from **one** code.
+ * What matters here is that both renderers start from **one** code. A host that
+ * wants a particular unit substitutes its own through a provider or
+ * `setGraphicUnitSymbol`.
  */
-const SIDC_TEMPLATE = '130#10001413010000000000000000';
+const SIDC_TEMPLATE = '130#100014@00000000000000';
+
+/**
+ * MIL-STD-2525E land unit entity 141700, Protection/Security (Appendix A, symbol set 10).
+ *
+ * The unit a security operation's centre carries. Cover, guard and screen are 2525E's
+ * Mission Tasks/Security (342201-342203), and their plates centre "the tactical symbol"
+ * between points 2 and 3 without naming one, so the security unit is the reading that says
+ * what the graphic is about.
+ */
+const SECURITY_UNIT_ENTITY = '141700';
+
+/**
+ * The entity the other centre-symbol graphics carry: 130100, Fires/Air Defense.
+ *
+ * Their plates leave the unit to the operator — the unit that follows, searches, escorts or
+ * captures — and no 2525E entity is a better default for every one of them, so they keep the
+ * code they have always drawn and a host names the real unit.
+ */
+const DEFAULT_UNIT_ENTITY = '130100';
+
+/** The security operations, whose centre unit is {@link SECURITY_UNIT_ENTITY}. */
+const SECURITY_OPERATIONS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
 
 /**
  * Standard-identity digit per MIL-STD-2525E, position 4 of the SIDC.
@@ -341,13 +367,17 @@ const IDENTITY_DIGIT: Partial<Record<TacticalGraphicHostility, string>> = {
 };
 
 /**
- * The MIL-STD-2525E SIDC for a security operation at a given affiliation.
+ * The MIL-STD-2525E SIDC for a centre symbol at a given affiliation.
+ *
+ * With no `name`, or the name of a security operation (cover, guard, screen), the unit is
+ * 141700 Security. The other centre-symbol graphics carry 130100. @see SECURITY_UNIT_ENTITY
  *
  * Exported so a host writing its own provider can start from the doctrinal code
  * rather than reverse-engineering one.
  */
-export function securitySymbolSidc(hostility: TacticalGraphicHostility): string {
-    return SIDC_TEMPLATE.replace('#', IDENTITY_DIGIT[hostility] ?? IDENTITY_DIGIT[TacticalGraphicHostility.pending]!);
+export function securitySymbolSidc(hostility: TacticalGraphicHostility, name?: TacticalGraphicName): string {
+    const entity = name === undefined || SECURITY_OPERATIONS.has(name) ? SECURITY_UNIT_ENTITY : DEFAULT_UNIT_ENTITY;
+    return SIDC_TEMPLATE.replace('#', IDENTITY_DIGIT[hostility] ?? IDENTITY_DIGIT[TacticalGraphicHostility.pending]!).replace('@', entity);
 }
 
 /** The shape of the milsymbol module this library needs, and no more of it. */

@@ -1037,10 +1037,9 @@ describe('security operation center symbol', () => {
         expect(getSecurityOperationSymbolProvider()).toBeUndefined();
     });
 
-    // The literal is the code the controller carried inline. Deriving the SIDC from
-    // hostility must not have moved the symbol a Friend graphic renders.
-    it('reproduces the historical SIDC for a friendly graphic', () => {
-        expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001413010000000000000000');
+    // A friendly security operation is a friendly platoon of 2525E entity 141700, Security.
+    it('gives a friendly security operation the friendly security platoon', () => {
+        expect(securityOperationSidc(TacticalGraphicHostility.friend)).toBe('130310001414170000000000000000');
     });
 
     /**

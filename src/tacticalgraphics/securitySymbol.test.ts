@@ -49,6 +49,43 @@ afterEach(() => {
     setSecuritySymbolSize(DEFAULT_SYMBOL_SIZE_PX);
 });
 
+/**
+ * MIL-STD-2525E Appendix A, symbol set 10: 141700 is Protection/Security and 130100 is
+ * Fires/Air Defense. Cover, guard and screen are 2525E's Mission Tasks/Security, so the unit
+ * between their arms is the security unit, not an air defense one.
+ */
+describe('the centre unit of a security operation', () => {
+    const entity = (sidc: string): string => sidc.slice(10, 16);
+
+    it.each([TacticalGraphicName.Cover, TacticalGraphicName.Guard, TacticalGraphicName.Screen])('%s carries 141700 Security', name => {
+        for (const hostility of Object.values(TacticalGraphicHostility)) {
+            expect(entity(securitySymbolSidc(hostility, name))).toBe('141700');
+        }
+    });
+
+    it('is the security unit when no graphic is named', () => {
+        expect(entity(securitySymbolSidc(TacticalGraphicHostility.friend))).toBe('141700');
+    });
+
+    it.each([
+        TacticalGraphicName.Escort,
+        TacticalGraphicName.FollowAndAssume,
+        TacticalGraphicName.FollowAndSupport,
+        TacticalGraphicName.SearchArea,
+        TacticalGraphicName.Capture,
+        TacticalGraphicName.Evacuate,
+        TacticalGraphicName.Recover,
+    ])('%s, whose plate leaves the unit to the operator, keeps 130100', name => {
+        expect(entity(securitySymbolSidc(TacticalGraphicHostility.friend, name))).toBe('130100');
+    });
+
+    it('stays a 30-digit code with the platoon echelon', () => {
+        const sidc = securitySymbolSidc(TacticalGraphicHostility.hostileFaker, TacticalGraphicName.Screen);
+        expect(sidc).toMatch(/^\d{30}$/);
+        expect(sidc.slice(8, 10)).toBe('14');
+    });
+});
+
 describe('registering nothing', () => {
     it('is a supported state — the center is simply empty', () => {
         expect(getSecuritySymbolProvider()).toBeUndefined();
@@ -75,7 +112,7 @@ describe('what a provider is told', () => {
         expect(seen?.hostility).toBe(TacticalGraphicHostility.hostileFaker);
         // Identity digit 6, so a host that builds its own SIDC from the affiliation can
         // check its work against the one the library would have used.
-        expect(seen?.sidc).toBe('130610001413010000000000000000');
+        expect(seen?.sidc).toBe('130610001414170000000000000000');
         expect(seen?.sizePx).toBe(DEFAULT_SYMBOL_SIZE_PX);
     });
 
