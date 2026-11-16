@@ -17,11 +17,15 @@ the npm publish dates — when a version actually became installable.
 
 ### Added
 
-- **`exercise` on a graphic's properties.** An exercise graphic whose `hostility` is `Unknown`
-  draws in the pending yellow, as MIL-STD-2525C Table II draws exercise unknown (W) and Table
-  XIII gives unknown and pending one yellow; outside an exercise, or with no identity at all, it
-  keeps the default line colour. Every other identity is unchanged. New exports:
-  `getColorByIdentity(hostility, exercise)` and `identityColorOf(feature)`.
+- **A stated Unknown draws yellow.** MIL-STD-2525E L.5.1.1.1 draws a control measure of unknown
+  identity in yellow, as MIL-STD-2525C Tables II and XIII-1 do; a graphic with no affiliation is
+  black. `Unknown` was also what an unchosen affiliation was saved as, so the two are told apart
+  by a new property, **`identityStated`**: `Unknown` with it draws yellow, `Unknown` alone keeps
+  meaning "not set" and draws as before, and saved data is unaffected. A graphic marked
+  **`exercise`** states its Unknown too (2525C exercise unknown, W). Every other identity is
+  unchanged. The sample app's properties dialog sets `identityStated` when an affiliation is
+  picked. New exports: `getColorByIdentity(hostility, stated)`, `statesUnknownIdentity(properties)`
+  and `identityColorOf(feature)`.
 - **`buildGraphicSidc(properties, options)`**, from the root: a graphic's 20- or 30-digit symbol
   identification code, built from its entity code and its saved properties under MIL-STD-2525E
   Change 1 Appendix A, for any edition in Table A-I (`SIDC_VERSIONS`, default MIL-STD-2525E).

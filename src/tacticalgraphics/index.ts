@@ -222,6 +222,7 @@ export {
     fontStyle,
     getColorByHostility,
     getColorByIdentity,
+    statesUnknownIdentity,
     getDefaultLineColor,
     getObstacleColor,
     getDoctrinalHostilityColor,

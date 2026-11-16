@@ -48,8 +48,11 @@ tacticalGraphic: {
     // Symbology — affects color and dash pattern. Every field below is backed by an
     // exported enum; the table after this block lists each one's complete set of values.
     hostility: 'Friend',      // TacticalGraphicHostility
-    exercise: false,          // part of an exercise: an exercise Unknown draws in the
-                              // pending yellow (MIL-STD-2525C Table II)
+    identityStated: false,    // hostility was set on purpose. Unknown with this draws
+                              // yellow; Unknown alone means "not set" and draws in the
+                              // default line color, as saved data always has
+    exercise: false,          // part of an exercise: its Unknown is exercise unknown and
+                              // draws yellow, and buildGraphicSidc writes context 1
     status: 'Present',        // TacticalGraphicStatus — Planned ⇒ dashed
     confidence: 'Known',      // TacticalGraphicConfidence — Suspected on a hostile
                               // graphic dashes its line work, as Planned does

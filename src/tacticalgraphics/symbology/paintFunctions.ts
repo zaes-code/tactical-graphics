@@ -39,6 +39,7 @@ import {
     fontStyle,
     getColorByHostility,
     getColorByIdentity,
+    statesUnknownIdentity,
     getObstacleColor,
     getLabelFillColor,
     getLabelHaloColor,
@@ -534,15 +535,12 @@ export function affiliationColorOf(feature: PaintFeature): string {
 }
 
 /**
- * The colour of the feature's standard identity, exercise included, with no resolved
- * `hostilityColor` and no obstacle rule.
- *
- * An exercise graphic counts as exercise unknown only when its `hostility` says `Unknown`: a
- * graphic with no identity at all is unaffiliated, exercise or not. @see getColorByIdentity
+ * The colour of the feature's standard identity, with no resolved `hostilityColor` and no
+ * obstacle rule. A stated Unknown is yellow; an unset one, the default line colour.
+ * @see getColorByIdentity, statesUnknownIdentity
  */
 export function identityColorOf(feature: PaintFeature): string {
-    const {hostility, exercise} = feature.properties;
-    return getColorByIdentity(hostilityOf(feature), exercise === true && hostility !== undefined);
+    return getColorByIdentity(hostilityOf(feature), statesUnknownIdentity(feature.properties));
 }
 
 /**

@@ -90,6 +90,15 @@ repainting them. Every engine does this, the add-ons included. On OpenLayers wit
 façade, call `rebuildGraphicsForConfig(manager)` from `@zaes/tactical-graphics/openlayers`
 before invalidating the features.
 
+## Unknown, stated or not set
+
+A graphic of **unknown** identity draws yellow, as MIL-STD-2525E L.5.1.1.1 colors it; a
+graphic with **no** affiliation draws in the default line color. Saved graphics have long used
+`hostility: 'Unknown'` for an affiliation nobody chose, so `Unknown` alone still means "not set".
+To say Unknown on purpose, set `identityStated: true` beside it, or mark the graphic `exercise`
+(2525C's exercise unknown). `statesUnknownIdentity(properties)` answers which case a bag is, and
+a host's `hostilityColors.unknown`, then `pending`, re-tints the yellow.
+
 ## Obstacles are green, and that beats affiliation
 
 APP-06 8.1.4.3 is unusually direct about this:

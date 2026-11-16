@@ -121,17 +121,34 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
 };
 
 /**
- * The line color for a standard identity, inside an exercise or out of one.
+ * The line color for a standard identity, telling a stated Unknown from an unset one.
  *
- * Outside an exercise this is {@link getColorByHostility}. Inside one, `unknown` draws in the
- * pending yellow: MIL-STD-2525C Table II draws exercise unknown (W) in yellow beside exercise
- * pending (G), and Table XIII gives unknown and pending one yellow. A host's `pending` override
- * carries to it, as it does to `suspectJoker`. Every other identity is unchanged by the
- * exercise.
+ * `stated` says the identity was set on purpose rather than left at its default. A stated
+ * `unknown` draws yellow: MIL-STD-2525E L.5.1.1.1 gives control measures "yellow (unknown ...)",
+ * and MIL-STD-2525C Tables II and XIII-1 give unknown and pending one yellow. A host's
+ * `unknown` override wins, then its `pending` override, as for `suspectJoker`. An unset
+ * `unknown` is a graphic with no affiliation and keeps the default line color, which is what
+ * {@link getColorByHostility} gives it. Every other identity is the same either way.
+ * @see statesUnknownIdentity
  */
-export function getColorByIdentity(hostility: TacticalGraphicHostility, exercise = false): string {
-    if (exercise && hostility === TacticalGraphicHostility.unknown) return getColorByHostility(TacticalGraphicHostility.pending);
+export function getColorByIdentity(hostility: TacticalGraphicHostility, stated = false): string {
+    if (stated && hostility === TacticalGraphicHostility.unknown) {
+        return getHostilityColorOverride(TacticalGraphicHostility.unknown) ?? getColorByHostility(TacticalGraphicHostility.pending);
+    }
     return getColorByHostility(hostility);
+}
+
+/**
+ * Whether a graphic's properties state Unknown as its identity, rather than leave it unset.
+ *
+ * `Unknown` alone does not: hosts, and this library's own sample dialog, wrote `Unknown` for a
+ * graphic whose affiliation nobody chose, and that saved data has to keep drawing as it always
+ * has. A graphic states it with `identityStated`, or by being part of an exercise, where
+ * MIL-STD-2525C's exercise unknown (W) is an identity of its own.
+ * @see TacticalGraphicProperties.identityStated
+ */
+export function statesUnknownIdentity(properties: {hostility?: TacticalGraphicHostility; identityStated?: boolean; exercise?: boolean}): boolean {
+    return properties.hostility === TacticalGraphicHostility.unknown && (properties.identityStated === true || properties.exercise === true);
 }
 
 /**

@@ -20,6 +20,11 @@ describe('readHostilityColor inside an exercise', () => {
             .toBe(getColorByHostility(TacticalGraphicHostility.pending));
     });
 
+    it('draws a stated Unknown in the pending yellow, outside an exercise too', () => {
+        expect(readHostilityColor(stamped({hostility: TacticalGraphicHostility.unknown, identityStated: true})))
+            .toBe(getColorByHostility(TacticalGraphicHostility.pending));
+    });
+
     it('keeps unknown, and an exercise with no identity, in the default line colour', () => {
         expect(readHostilityColor(stamped({hostility: TacticalGraphicHostility.unknown}))).toBe(getDefaultLineColor());
         expect(readHostilityColor(stamped({exercise: true}))).toBe(getDefaultLineColor());
