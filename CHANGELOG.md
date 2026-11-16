@@ -40,7 +40,7 @@ the npm publish dates — when a version actually became installable.
   and reserved areas, the radiation dose rate contour line and both minimum safe distance zones
   resampled every ring segment into 24 points, and each break ended on the nearest sample.
   `breakRingAt` now returns **fewer points**: each run is the ring's own vertices plus the exact
-  points where its gaps start and stop, 9 to 24 times fewer coordinates than before. The outline
+  points where its gaps start and stop, about 5 to 24 times fewer coordinates than before. The outline
   is otherwise unchanged; each break end moves by up to one old sample step (a 24th of the ring
   segment it falls on) to where the gap was computed, and a gap narrower than a sample step,
   which the old form stepped over, is now cut.
