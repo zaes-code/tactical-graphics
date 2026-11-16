@@ -134,6 +134,16 @@ export interface TacticalGraphicProperties {
 
     // ── Symbology (affects color and dash pattern) ─────────────────────────
     hostility?: TacticalGraphicHostility;
+    /**
+     * The graphic belongs to an exercise: MIL-STD-2525C's exercise identities, the exercise
+     * context of 2525D and 2525E. Default `false`.
+     *
+     * It changes one colour. 2525C Table II draws exercise unknown in yellow, and Table XIII
+     * gives unknown and pending one yellow, so an exercise graphic whose `hostility` is
+     * `Unknown` draws in the pending yellow rather than the default line colour. Every other
+     * identity draws as it does outside an exercise.
+     */
+    exercise?: boolean;
     /** `Planned` dashes the line work on most graphics. */
     status?: TacticalGraphicStatus;
     /** `Suspected` on a hostile graphic dashes its line work, as `Planned` does. */
@@ -364,6 +374,8 @@ export interface GraphicLabels {
     grid?: string;
     weapon?: string;
     hostility?: TacticalGraphicHostility;
+    /** @see TacticalGraphicProperties.exercise */
+    exercise?: boolean;
     echelon?: TacticalGraphicEchelon;
     /** @see TacticalGraphicProperties.openingDirection */
     openingDirection?: number;

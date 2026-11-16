@@ -48,6 +48,8 @@ tacticalGraphic: {
     // Symbology — affects color and dash pattern. Every field below is backed by an
     // exported enum; the table after this block lists each one's complete set of values.
     hostility: 'Friend',      // TacticalGraphicHostility
+    exercise: false,          // part of an exercise: an exercise Unknown draws in the
+                              // pending yellow (MIL-STD-2525C Table II)
     status: 'Present',        // TacticalGraphicStatus — Planned ⇒ dashed
     confidence: 'Known',      // TacticalGraphicConfidence — Suspected on a hostile
                               // graphic dashes its line work, as Planned does

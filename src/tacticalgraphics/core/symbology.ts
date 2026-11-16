@@ -121,6 +121,20 @@ export const getColorByHostility = (hostility: TacticalGraphicHostility): string
 };
 
 /**
+ * The line color for a standard identity, inside an exercise or out of one.
+ *
+ * Outside an exercise this is {@link getColorByHostility}. Inside one, `unknown` draws in the
+ * pending yellow: MIL-STD-2525C Table II draws exercise unknown (W) in yellow beside exercise
+ * pending (G), and Table XIII gives unknown and pending one yellow. A host's `pending` override
+ * carries to it, as it does to `suspectJoker`. Every other identity is unchanged by the
+ * exercise.
+ */
+export function getColorByIdentity(hostility: TacticalGraphicHostility, exercise = false): string {
+    if (exercise && hostility === TacticalGraphicHostility.unknown) return getColorByHostility(TacticalGraphicHostility.pending);
+    return getColorByHostility(hostility);
+}
+
+/**
  * The green APP-06 8.1.4.3 requires for obstacles, or `undefined` when the host has turned
  * the rule off and the affiliation colour should apply instead.
  *

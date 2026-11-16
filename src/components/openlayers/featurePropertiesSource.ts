@@ -15,7 +15,7 @@ import VectorSource from 'ol/source/Vector';
 import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
-import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByHostility, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByIdentity, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
 import {featuresOf, stampAmplifierVisibility} from './amplifierVisibility';
 import {graphicOpacityOf, stampGraphicOpacity} from './graphicOpacity';
 import {removeGraphic} from './persistence';
@@ -215,7 +215,7 @@ export function createOpenLayersPropertiesSource(
         apply(selection, labels, echelon) {
             if (!selection.id) return;
 
-            const color = getColorByHostility(labels.hostility ?? TacticalGraphicHostility.unknown);
+            const color = getColorByIdentity(labels.hostility ?? TacticalGraphicHostility.unknown, labels.exercise === true && labels.hostility !== undefined);
             const layers = map
                 .getLayers()
                 .getArray()

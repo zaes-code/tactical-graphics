@@ -15,6 +15,14 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+### Added
+
+- **`exercise` on a graphic's properties.** An exercise graphic whose `hostility` is `Unknown`
+  draws in the pending yellow, as MIL-STD-2525C Table II draws exercise unknown (W) and Table
+  XIII gives unknown and pending one yellow; outside an exercise, or with no identity at all, it
+  keeps the default line colour. Every other identity is unchanged. New exports:
+  `getColorByIdentity(hostility, exercise)` and `identityColorOf(feature)`.
+
 ### Fixed
 
 - **The centre unit of Cover, Guard and Screen is Security.** `securitySymbolSidc` gave every

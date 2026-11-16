@@ -38,6 +38,7 @@ import {
     fadeColor,
     fontStyle,
     getColorByHostility,
+    getColorByIdentity,
     getObstacleColor,
     getLabelFillColor,
     getLabelHaloColor,
@@ -529,7 +530,19 @@ export function lineColorOf(feature: PaintFeature): string {
 export function affiliationColorOf(feature: PaintFeature): string {
     const name = feature.properties.name;
     if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
-    return feature.hostilityColor || getColorByHostility(hostilityOf(feature));
+    return feature.hostilityColor || identityColorOf(feature);
+}
+
+/**
+ * The colour of the feature's standard identity, exercise included, with no resolved
+ * `hostilityColor` and no obstacle rule.
+ *
+ * An exercise graphic counts as exercise unknown only when its `hostility` says `Unknown`: a
+ * graphic with no identity at all is unaffiliated, exercise or not. @see getColorByIdentity
+ */
+export function identityColorOf(feature: PaintFeature): string {
+    const {hostility, exercise} = feature.properties;
+    return getColorByIdentity(hostilityOf(feature), exercise === true && hostility !== undefined);
 }
 
 /**
