@@ -11,18 +11,15 @@ import type {FeatureLike} from 'ol/Feature';
 import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
 import {Coordinate} from 'ol/coordinate';
 import {Draw} from 'ol/interaction';
-import VectorLayer from 'ol/layer/Vector';
-import VectorSource from 'ol/source/Vector';
-import Style from 'ol/style/Style';
 import type {Position} from 'geojson';
 import {toLonLat} from 'ol/proj';
 import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByIdentity, statesUnknownIdentity, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
 import {featuresOf, stampAmplifierVisibility} from './amplifierVisibility';
 import {graphicOpacityOf, stampGraphicOpacity} from './graphicOpacity';
 import {removeGraphic} from './persistence';
-import {GraphicLabels, GraphicLinkRegistry} from '../../utils/graphicLinkRegistry';
+import {applyGraphicLabels} from './applyGraphicLabels';
 import type {FeaturePropertiesSource} from '../featurePropertiesSource';
-import {readGraphicGeometryState, readGraphicLabels, writeGraphicProperties} from './graphicProperties';
+import {readGraphicGeometryState, readGraphicLabels} from './graphicProperties';
 import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
 
 /**
@@ -233,45 +230,7 @@ export function createOpenLayersPropertiesSource(
         },
 
         apply(selection, labels, echelon) {
-            if (!selection.id) return;
-
-            const color = getColorByIdentity(labels.hostility ?? TacticalGraphicHostility.unknown, statesUnknownIdentity(labels));
-            const layers = map
-                .getLayers()
-                .getArray()
-                .filter((l): l is VectorLayer<VectorSource> => l instanceof VectorLayer && !!l.getSource());
-
-            for (const layer of layers) {
-                const source = layer.getSource();
-                if (!source) continue;
-
-                const features = source.getFeatures().filter(f => f.get('symbolId') === selection.id);
-                if (!features.length) continue;
-
-                features.forEach(feature => {
-                    feature.set('hostility', labels.hostility);
-                    feature.set('echelon', echelon);
-                    feature.set('hostilityColor', color);
-                    // Persist the amplifiers on the feature itself, under the same key the
-                    // style functions read. Graphics whose holder has no `setLabel` — Block,
-                    // the retrograde tasks — depend on this write alone.
-                    writeGraphicProperties([feature], feature.get('graphicName') as TacticalGraphicName, labels);
-
-                    const styleLike = feature.getStyle?.();
-                    const resolved = Array.isArray(styleLike)
-                        ? styleLike[0]
-                        : typeof styleLike === 'function'
-                            ? undefined
-                            : styleLike;
-                    if (resolved instanceof Style) {
-                        resolved.getStroke?.()?.setColor(color);
-                        resolved.getFill?.()?.setColor(`${color}44`);
-                    }
-
-                    GraphicLinkRegistry.getFromFeature(feature)?.setLabel?.(labels as GraphicLabels);
-                    feature.changed();
-                });
-            }
+            if (selection.id) applyGraphicLabels(map, selection.id, labels, echelon);
         },
 
         setAmplifiersHidden(selection, hidden) {

@@ -425,6 +425,18 @@ buildGraphicSidc({name: TacticalGraphicName.PhaseLine}, {standard: 'APP-06(E)(2)
 // → '160325000014030000000000000000'
 ```
 
+`parseGraphicSidc(code)` reads one back: every field, the graphic it names, and `properties`
+ready for a feature or for `startDrawing` (see [Drawing from a code](/guide/rendering#drawing-from-a-code)).
+In a MIL-STD-2525E or APP-06(E) code, digits 21-22 can turn digits 17-20 into a common modifier
+(Annex A.13), which it reads as no mobility, mine type or terrain.
+
+```ts
+import {parseGraphicSidc} from '@zaes/tactical-graphics';
+
+parseGraphicSidc('13062500001403000000').properties;
+// → {hostility: 'Hostile/Faker', identityStated: true, status: 'Present'}
+```
+
 `TacticalGraphicName` is a string enum, so `TacticalGraphicName.PhaseLine` **is** `'PhaseLine'`
 at run time — which is why `listTacticalGraphicNames()` returns plain strings and why a saved
 `tacticalGraphic.name` is readable in a raw GeoJSON file. TypeScript still wants the member

@@ -18,6 +18,7 @@ import {
     allowedGestures,
     geometryConfigKey,
     type AllowedGestures,
+    type DrawPreset,
     type EditMode,
     type GestureKind,
     type SelectedGraphic,
@@ -125,9 +126,9 @@ export function createTacticalGraphics(map: Map, options: OpenLayersEngineOption
 
         beginGesture: (kind: GestureKind, event: PointerEvent) => manager.beginGesture(kind, event),
 
-        startDrawing(name: TacticalGraphicName) {
+        startDrawing(name: TacticalGraphicName, preset?: DrawPreset) {
             setInteractionMode('drawing');
-            manager.startDrawing(name);
+            manager.startDrawing(name, preset);
         },
 
         cancelDrawing() {
