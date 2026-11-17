@@ -122,6 +122,10 @@ export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngine
         beginGesture: (kind: GestureKind, event: PointerEvent) => interactions.beginGesture(kind, event),
 
         startDrawing(name: TacticalGraphicName) {
+            // A draw already under way ends first, and says so. Ending it from inside `startDraw`
+            // instead put the mode back to `view` after it had been set to `drawing`, so a pick
+            // made mid-draw left the engine out of drawing and the host needed a second pick.
+            interactions.cancelDraw();
             mode = 'drawing';
             interactions.startDraw(name);
             options.onModeChange?.('drawing');

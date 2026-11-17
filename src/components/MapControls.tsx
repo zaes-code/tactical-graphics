@@ -365,13 +365,15 @@ const MapControls: React.FC<Props> = ({
      * **Clicking a graphic in the list draws it.** There is no Add Graphic button and no Edit
      * button: picking the graphic is the whole request, and the map rests in edit mode, so a
      * click on a graphic already drawn selects it and its box offers the gestures and the
-     * properties. Clicking the graphic being drawn again cancels the draw. @see EditAffordances
+     * properties.
+     *
+     * **One click always draws.** A second click on the graphic being drawn used to cancel the
+     * draw, so a pick that seemed not to take (nothing on the map changes until the first point)
+     * was undone by the click meant to retry it, and the next pick worked: every graphic seemed
+     * to need two clicks. Clicking it again now starts the draw afresh; Esc and the Cancel button
+     * still cancel. @see EditAffordances
      */
     const handleSelect = (opt: GraphicOption) => {
-        if (isDrawing && selected?.value === opt.value) {
-            onCancelDrawing();
-            return;
-        }
         setSelected(opt);
         onShapeChange(opt.value);
         if (capabilities.draw) onDrawTacticalGraphics(opt.value);
