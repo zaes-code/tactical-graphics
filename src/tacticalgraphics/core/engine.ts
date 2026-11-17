@@ -39,7 +39,32 @@
 
 import type {FeatureCollection} from 'geojson';
 import type {AllowedGestures} from './symbology';
+import type {TacticalGraphicProperties} from './render';
 import type {TacticalGraphicName} from './type';
+
+/**
+ * What a graphic is drawn with from the start: its identity, status, echelon, designation or any
+ * other amplifier, as a graphic builder or a code ({@link parseGraphicSidc}'s `properties`) gives
+ * them. What the draw itself decides (the points, and the size and turn the clicks give it) wins
+ * over anything here.
+ */
+export type DrawPreset = Omit<Partial<TacticalGraphicProperties>, 'name'>;
+
+/** What a draw decides from its clicks (the size, the turn, which side a decoration faces), which a preset never sets. */
+const DRAWN_GEOMETRY_INPUTS = ['radius', 'decorationSize', 'width', 'length', 'rotation', 'rangeFan', 'mirrored'] as const;
+
+/**
+ * What of a preset a drawn graphic takes: everything but the geometry inputs, which are the
+ * draw's. Each engine lays it over the graphic it builds from the clicks.
+ * @see TacticalGraphicsEngine.startDrawing
+ */
+export function presetAmplifiers(preset: DrawPreset | undefined): DrawPreset {
+    if (!preset) return {};
+    const out: Record<string, unknown> = {...preset};
+    for (const key of DRAWN_GEOMETRY_INPUTS) delete out[key];
+    delete out.name;
+    return out as DrawPreset;
+}
 
 /**
  * What a drag currently means.
@@ -166,8 +191,16 @@ export interface TacticalGraphicsEngine {
     /** What this engine supports. @see EngineCapabilities */
     readonly capabilities: EngineCapabilities;
 
-    /** Arms the draw tool for one graphic. The next clicks place its base. */
-    startDrawing(name: TacticalGraphicName): void;
+    /**
+     * Arms the draw tool for one graphic. The next clicks place its base.
+     *
+     * ```ts
+     * const parsed = parseGraphicSidc(sidc);
+     * if (parsed.name) engine.startDrawing(parsed.name, parsed.properties);
+     * ```
+     * @param preset Properties the graphic is drawn with, in the preview and once placed. @see DrawPreset
+     */
+    startDrawing(name: TacticalGraphicName, preset?: DrawPreset): void;
     /** Abandons a draw in progress, leaving nothing behind. */
     cancelDrawing(): void;
 

@@ -116,8 +116,10 @@ export {
     SIDC_TERRAIN,
     SIDC_VERSIONS,
     buildGraphicSidc,
+    isGraphicSidc,
+    parseGraphicSidc,
 } from './core/sidc';
-export type {SidcContext, SidcOptions, SidcProperties, SidcStandard} from './core/sidc';
+export type {ParsedGraphicSidc, SidcContext, SidcGraphicProperties, SidcOptions, SidcProperties, SidcStandard} from './core/sidc';
 export {
     DoctrinalIssueKind,
     getDoctrinalRequirements,
@@ -569,8 +571,8 @@ export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMerc
 export {ARC_ARROW_MIN_REACH, RAIL_PREVIEW_GAP_PX, SUPPORT_BY_FIRE_PREVIEW_REACH, supportByFireAnchors, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
 export {carriesRectangleLength, groundMeters, rectangleAmplifiers, shapedByWidth, usesCornerAnchors, usesDrawnAnchors} from './core/handles';
 export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
-export {HANDLE_EDIT_MODES} from './core/engine';
-export type {EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
+export {HANDLE_EDIT_MODES, presetAmplifiers} from './core/engine';
+export type {DrawPreset, EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
 export type {HandleContract, HandleRole} from './core/handles';
 export {
     DEFAULT_SYMBOL_SIZE_PX,

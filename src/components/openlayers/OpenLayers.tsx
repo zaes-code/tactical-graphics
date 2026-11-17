@@ -155,9 +155,9 @@ const OpenLayersMapComponent: React.FC<Props> = ({darkMode, graphicsSettings, on
             // and moving GeoJSON through the user's filesystem.
             ...engine.current,
             capabilities: FULL_CAPABILITIES,
-            startDrawing: name => {
+            startDrawing: (name, preset) => {
                 selectedShape.current = name;
-                engine.current?.startDrawing(name);
+                engine.current?.startDrawing(name, preset);
             },
             reset: () => {
                 engine.current?.clearAll();

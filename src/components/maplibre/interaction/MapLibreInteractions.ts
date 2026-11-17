@@ -44,7 +44,7 @@ import {
 import {buildTacticalGraphic, descriptionOf, type MapLibreTacticalGraphic} from '../maplibreAdapter';
 import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
 import {resolutionOf, toLonLat, toMercator} from '../projection';
-import {acceptsInsertedVertex, maxAreaVertices, axisBaseFromDraw, drawnSide, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, rotationFromDrawnPoint, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {acceptsInsertedVertex, maxAreaVertices, axisBaseFromDraw, drawnSide, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, rotationFromDrawnPoint, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, presetAmplifiers, type DrawPreset, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
 import {
     centerOf,
     insertVertex,
@@ -407,6 +407,8 @@ export class MapLibreInteractions {
     private mode: EditMode = 'view';
     /** The graphic being drawn, or null when not drawing. */
     private drawing: TacticalGraphicName | null = null;
+    /** The properties the draw under way was started with. @see startDraw */
+    private drawPreset: DrawPreset | undefined;
     /** Vertices collected so far, in lon/lat. */
     private sketch: Position[] = [];
 
@@ -668,9 +670,10 @@ export class MapLibreInteractions {
      * `baseGeometryFor` is consulted up front rather than at the end — a draw tool
      * that asked afterwards would need a click to discover it did not need one.
      */
-    startDraw(name: TacticalGraphicName): void {
+    startDraw(name: TacticalGraphicName, preset?: DrawPreset): void {
         this.cancelDraw();
         this.drawing = name;
+        this.drawPreset = preset;
         this.mode = 'view';
         this.map.doubleClickZoom.disable();
         // **And drop any restore the last draw armed.** It fires on the next press on the
@@ -686,6 +689,7 @@ export class MapLibreInteractions {
     cancelDraw(): void {
         if (!this.drawing) return;
         this.drawing = null;
+        this.drawPreset = undefined;
         this.sketch = [];
         this.renderer.setSketch(null);
         // An abandoned sizing click would otherwise leave its read-out — or its preview,
@@ -1097,10 +1101,10 @@ export class MapLibreInteractions {
      */
     private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
         const ranged = this.rangeClickDraw(name, vertices);
-        if (ranged) return buildTacticalGraphic(name, ranged.geometry, ranged.properties, resolutionOf(this.map));
+        if (ranged) return buildTacticalGraphic(name, ranged.geometry, this.withPreset(ranged.properties), resolutionOf(this.map));
 
         const drawn = this.anchorDraw(name, vertices);
-        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, drawn.properties, drawn.geometry), resolutionOf(this.map));
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, this.withPreset(drawn.properties), drawn.geometry), resolutionOf(this.map));
 
         const wants = baseGeometryFor(name);
         // What the operator clicked becomes what is stored — repeated clicks dropped, and an
@@ -1140,7 +1144,16 @@ export class MapLibreInteractions {
             ...drawnSide(name, tidied),
         };
 
-        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, properties, geometry), resolutionOf(this.map));
+        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, this.withPreset(properties), geometry), resolutionOf(this.map));
+    }
+
+    /**
+     * The properties the draw worked out, over the preset the draw was started with: the points,
+     * size and turn the clicks gave are the draw's, the identity and amplifiers the host's.
+     * @see TacticalGraphicsEngine.startDrawing
+     */
+    private withPreset(properties: TacticalGraphicProperties): TacticalGraphicProperties {
+        return this.drawPreset ? {...properties, ...presetAmplifiers(this.drawPreset)} : properties;
     }
 
     /**

@@ -12,7 +12,10 @@ import {Style} from "ol/style";
 import {ModifyEvent} from "ol/interaction/Modify";
 import {MultiPoint, Point, Polygon} from "ol/geom";
 import LineString from "ol/geom/LineString";
-import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx, getAutoPlaceLabels} from '@zaes/tactical-graphics';
+import {CENTER_SYMBOL_GRAPHICS, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, TacticalGraphicName, acceptsInsertedVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, allowedGestures, axisOf, carriesWidthPointInBase, drawIsComplete, anchorConnectorRuns, generatorOrder, groundLength, handleRole, latitudeFromMercatorY, normalizeDrawnBase, reservedLeadPx, getAutoPlaceLabels, presetAmplifiers, type DrawPreset} from '@zaes/tactical-graphics';
+import {applyGraphicLabels} from './applyGraphicLabels';
+import {readGraphicLabels} from './graphicProperties';
+import type {GraphicLabels} from '../../utils/graphicLinkRegistry';
 import type {Position} from 'geojson';
 
 import {fromLonLat, toLonLat} from 'ol/proj';
@@ -1833,9 +1836,11 @@ export class TacticalGraphicsManager {
      * geometry, and this builds, styles and wires up everything that follows from
      * it. The primary verb of this package.
      *
+     * @param preset Properties the graphic is drawn with, such as a code's identity and echelon.
+     *   What the draw decides (the points, the size and turn the clicks give) wins over it.
      * @see handleDrawTacticalGraphic for the former name, kept as an alias.
      */
-    startDrawing = (name: TacticalGraphicName) => {
+    startDrawing = (name: TacticalGraphicName, preset?: DrawPreset) => {
         if (this.draw) this.map.removeInteraction(this.draw);
 
         // create a new source for drawing, this can be modified per application
@@ -1924,6 +1929,9 @@ export class TacticalGraphicsManager {
                 tacticalGraphicHandler.onPointerMove?.(evt);
             });
             tacticalGraphicHandler.onDrawStartFunc(e);
+            // So the graphic is drawn with it while the clicks land, as MapLibre previews it, and
+            // again once placed, since building it from the last click can write its labels anew.
+            if (preset) this.applyPreset(tacticalGraphicHandler, preset);
         });
 
         this.draw.on('drawend', (e: DrawEvent) => {
@@ -1932,9 +1940,23 @@ export class TacticalGraphicsManager {
             tacticalGraphicHandler.onDrawEndFunc(e);
             drawingVectorSource.clear();
             this.graphicControllers.push(tacticalGraphicHandler);
+            if (preset) this.applyPreset(tacticalGraphicHandler, preset);
             this.stopDrawing(tacticalGraphicHandler, false);
         });
     };
+
+    /**
+     * Puts a draw's preset on the graphic it placed, over the labels the draw gave it, the way the
+     * properties dialog writes an edit. Once the holder has built: building is what stamps the
+     * draw's own size and turn, which win. @see applyGraphicLabels
+     */
+    private applyPreset(handler: TacticalGraphicHandler, preset: DrawPreset): void {
+        const id = handler.getSymbolId();
+        const feature = handler.getFeatures().find(f => f.get('symbolId') === id) ?? handler.getFeatures()[0];
+        if (!id || !feature) return;
+        const labels = {...readGraphicLabels(feature), ...presetAmplifiers(preset)} as GraphicLabels;
+        applyGraphicLabels(this.map, id, labels, labels.echelon);
+    }
 
     /**
      * Applies the library's tidy-up to the geometry the operator just drew.
