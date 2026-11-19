@@ -15,6 +15,28 @@ the npm publish dates — when a version actually became installable.
 
 ## [Unreleased]
 
+## [4.10.0] — 2026-11-19
+
+A symbol code read back into its graphic, and a draw that starts with its properties set.
+
+### Added
+
+- **`parseGraphicSidc(sidc)`**, from the root: reads a 20- or 30-digit MIL-STD-2525D/E or
+  APP-06(D)/(E) symbol identification code back into the graphic it names and the properties it
+  gives it: identity, status, echelon, mobility or mine type, terrain and a route's direction.
+  It is the reverse of `buildGraphicSidc`, and a round trip over every coded graphic keeps the two
+  in step. New types: `ParsedGraphicSidc` and `SidcGraphicProperties`.
+- **`startDrawing(name, preset)`** takes a preset as its second argument (`DrawPreset`), so a
+  host's graphic builder or a parsed code can give a graphic its identity and amplifiers before
+  the first click. Both engines show it in the preview and keep it once the graphic is placed;
+  the size and turn the clicks give stay the draw's.
+
+### Fixed
+
+- **MapLibre: picking a graphic while another is being drawn starts the new draw at once.** The
+  old draw ended after the new mode was set and put the map back in view mode, so the pick
+  needed a second click. OpenLayers already behaved this way.
+
 ## [4.9.0] — 2026-11-16
 
 A stated Unknown in yellow, one builder for a graphic's symbol code, and ring breaks cut exactly.
@@ -2062,7 +2084,8 @@ First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJS
 
 ---
 
-[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.9.0...develop
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.10.0...develop
+[4.10.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.9.0...v4.10.0
 [4.9.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...v4.9.0
 [4.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...v4.8.0
 [4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
