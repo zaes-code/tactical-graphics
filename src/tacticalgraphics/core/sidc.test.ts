@@ -25,6 +25,8 @@ import {
     SIDC_TERRAIN,
     SIDC_VERSIONS,
     buildGraphicSidc,
+    isGraphicSidc,
+    parseGraphicSidc,
 } from './sidc';
 import * as barrel from '../index';
 
@@ -130,5 +132,99 @@ describe('buildGraphicSidc', () => {
     it('is exported from the package root', () => {
         expect(barrel.buildGraphicSidc).toBe(buildGraphicSidc);
         expect(barrel.SIDC_VERSIONS).toBe(SIDC_VERSIONS);
+    });
+});
+
+describe('parseGraphicSidc', () => {
+    it('reads a hostile phase line into the graphic and the properties to draw it with', () => {
+        expect(parseGraphicSidc('13062500001403000000')).toMatchObject({
+            name: TacticalGraphicName.PhaseLine,
+            identity: TacticalGraphicHostility.hostileFaker,
+            properties: {hostility: TacticalGraphicHostility.hostileFaker, identityStated: true, status: TacticalGraphicStatus.present},
+        });
+    });
+
+    it('gives back what buildGraphicSidc wrote, for every coded graphic', () => {
+        const hostilities = Object.values(TacticalGraphicHostility);
+        let checked = 0;
+        for (const name of listTacticalGraphicNames() as TacticalGraphicName[]) {
+            if (getEntityCode(name) === undefined) continue;
+            hostilities.forEach((hostility, i) => {
+                const props = {
+                    name,
+                    hostility,
+                    status: i % 2 ? TacticalGraphicStatus.planned : TacticalGraphicStatus.present,
+                    echelon: TacticalGraphicEchelon.brigade,
+                };
+                const parsed = parseGraphicSidc(buildGraphicSidc(props)!);
+                expect(parsed.name).toBe(name);
+                expect(parsed.properties).toEqual({hostility, identityStated: true, status: props.status, echelon: props.echelon});
+                checked++;
+            });
+        }
+        // Every coded graphic, at every identity.
+        expect(checked).toBe(listTacticalGraphicNames().filter(n => getEntityCode(n as TacticalGraphicName) !== undefined).length * hostilities.length);
+    });
+
+    it('reads a supply route traffic subtype as the route with its direction', () => {
+        const sidc = buildGraphicSidc({name: TacticalGraphicName.MainSupplyRoute, direction: RouteDirection.oneWay})!;
+        expect(parseGraphicSidc(sidc)).toMatchObject({name: TacticalGraphicName.MainSupplyRoute, direction: RouteDirection.oneWay, properties: {direction: RouteDirection.oneWay}});
+    });
+
+    it('reads mobility or mine type in digits 17-18 and terrain in 19-20', () => {
+        const restricted = buildGraphicSidc({name: TacticalGraphicName.RestrictedTerrain, mobility: TacticalGraphicMobility.dismounted, terrain: TacticalGraphicTerrain.water})!;
+        expect(parseGraphicSidc(restricted).properties).toMatchObject({mobility: TacticalGraphicMobility.dismounted, terrain: TacticalGraphicTerrain.water});
+        expect(parseGraphicSidc(restricted).properties.mineType).toBeUndefined();
+        const mined = buildGraphicSidc({name: TacticalGraphicName.MinedArea, mineType: TacticalGraphicMineType.wideAreaAntitank})!;
+        expect(parseGraphicSidc(mined).properties).toMatchObject({mineType: TacticalGraphicMineType.wideAreaAntitank});
+        expect(parseGraphicSidc(mined).properties.mobility).toBeUndefined();
+    });
+
+    it('reads digits 17-20 of a 2525E or APP-06(E) code as a common modifier when digits 21-22 say so (Annex A.13)', () => {
+        for (const standard of ['MIL-STD-2525E', 'APP-06(E)(1)', 'MIL-STD-2525E(1)', 'APP-06(E)(2)'] as const) {
+            const mined = buildGraphicSidc({name: TacticalGraphicName.MinedArea, mineType: TacticalGraphicMineType.wideAreaAntitank, terrain: TacticalGraphicTerrain.water}, {standard, length: 30})!;
+            expect(parseGraphicSidc(mined)).toMatchObject({mineType: TacticalGraphicMineType.wideAreaAntitank, terrain: TacticalGraphicTerrain.water});
+            expect(parseGraphicSidc(mined.slice(0, 20) + '11' + mined.slice(22))).toMatchObject({sector1: '18', sector2: '02', mobility: undefined, mineType: undefined, terrain: undefined});
+            expect(parseGraphicSidc(mined.slice(0, 20) + '10' + mined.slice(22))).toMatchObject({mineType: undefined, terrain: TacticalGraphicTerrain.water});
+        }
+    });
+
+    it("keeps digits 17-20 of a 2525D code whatever digits 21-30 hold, a national set C (2525D A.5.5)", () => {
+        const mined = buildGraphicSidc({name: TacticalGraphicName.MinedArea, mineType: TacticalGraphicMineType.wideAreaAntitank, terrain: TacticalGraphicTerrain.water}, {standard: 'MIL-STD-2525D', length: 30})!;
+        expect(parseGraphicSidc(mined.slice(0, 20) + '1100000000')).toMatchObject({mineType: TacticalGraphicMineType.wideAreaAntitank, terrain: TacticalGraphicTerrain.water});
+    });
+
+    it('reads the exercise context as an exercise graphic', () => {
+        const sidc = buildGraphicSidc({name: TacticalGraphicName.Boundary, hostility: TacticalGraphicHostility.friend, exercise: true})!;
+        expect(digits(sidc, 3)).toBe('1');
+        expect(parseGraphicSidc(sidc).properties.exercise).toBe(true);
+        expect(parseGraphicSidc(buildGraphicSidc({name: TacticalGraphicName.Boundary}, {context: 'simulation'})!).properties.exercise).toBeUndefined();
+    });
+
+    it('names no graphic outside the control measures, and reads the fields all the same (APP-06(E)(2) Annex A.14)', () => {
+        expect(parseGraphicSidc('160310021612040100060100000000')).toMatchObject({
+            symbolSet: '10',
+            identity: TacticalGraphicHostility.friend,
+            echelon: TacticalGraphicEchelon.battalionSquadron,
+            entity: '120401',
+            name: undefined,
+            candidates: [],
+        });
+    });
+
+    it('names no graphic for an entity this library does not draw', () => {
+        expect(parseGraphicSidc('13032500009999990000').name).toBeUndefined();
+    });
+
+    it('takes surrounding space, and refuses anything that is not 20 or 30 hex digits', () => {
+        expect(parseGraphicSidc(' 13062500001403000000\n').name).toBe(TacticalGraphicName.PhaseLine);
+        expect(isGraphicSidc('13062500001403000000')).toBe(true);
+        expect(isGraphicSidc('GHGPGLP----AUSX')).toBe(false);
+        expect(() => parseGraphicSidc('GHGPGLP----AUSX')).toThrow(/20 or 30/);
+    });
+
+    it('is exported from the package root', () => {
+        expect(barrel.parseGraphicSidc).toBe(parseGraphicSidc);
+        expect(barrel.isGraphicSidc).toBe(isGraphicSidc);
     });
 });

@@ -28,7 +28,7 @@ and leaves your map alone.
 | | |
 |---|---|
 | `capabilities` | what this engine supports, so a host can disable a control **with a reason** rather than offer one that does nothing |
-| `startDrawing(name)` / `cancelDrawing()` | arm the draw tool; the next clicks place the base |
+| `startDrawing(name, preset?)` / `cancelDrawing()` | arm the draw tool; the next clicks place the base. `preset` gives the graphic its identity, echelon and other amplifiers from the start, see [Drawing from a code](#drawing-from-a-code) |
 | `setInteractionMode(mode)` / `getInteractionMode()` | what a drag means: `view`, `edit`, `translate`, `rotate`, `resize`, `modify`. `getInteractionMode()` also reports `drawing`, which `startDrawing` sets |
 | `getSelection()` / `select(id)` | the selected graphic as `{id, name, base}`, or `null`; `select(null)` clears |
 | `selectionGestures()` | which of translate, rotate and resize the selected graphic accepts, or `null` with nothing selected |
@@ -46,6 +46,33 @@ also takes engine-specific fields: an existing `manager` (a `TacticalGraphicsMan
 on OpenLayers, or an existing `renderer` (a `NativeLayerRenderer`) on MapLibre, to wrap
 instead of constructing a new one. On MapLibre it also takes `glyphs` and `fontStack`
 (see below); a `renderer` you pass in keeps its own, so give those to its constructor.
+
+## Drawing from a code
+
+`startDrawing` takes the properties the graphic is drawn with as its second argument, so a
+graphic builder in your own app can choose the identity, status, echelon and labels before
+the first click. The preview shows them while the user clicks, and the placed graphic keeps
+them. The points, and the size and turn the clicks give, are always the draw's.
+
+`parseGraphicSidc` turns a 20- or 30-digit MIL-STD-2525D/E or APP-06(D)/(E) code into the
+graphic and those properties:
+
+```ts
+import {parseGraphicSidc, TacticalGraphicName} from '@zaes/tactical-graphics';
+
+const parsed = parseGraphicSidc('13062500181101000000');
+// parsed.name: Boundary
+// parsed.properties: {hostility: 'Hostile/Faker', identityStated: true, status: 'Present', echelon: 'Brigade'}
+if (parsed.name) graphics.startDrawing(parsed.name, {...parsed.properties, designation: 'BLUE'});
+
+// Or from your own builder, with no code at all:
+graphics.startDrawing(TacticalGraphicName.PhaseLine, {designation: 'AMBER'});
+```
+
+`parsed.name` is `undefined` when the code is not a control measure, or names one this library
+does not draw. A code that is not 20 or 30 hexadecimal digits throws; `isGraphicSidc(code)`
+checks first. The 15-character codes of MIL-STD-2525C and APP-6(A) or (B) are read by the
+Exchange add-on.
 
 ## Edit controls
 

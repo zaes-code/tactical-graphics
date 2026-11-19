@@ -361,7 +361,7 @@ const MapLibreMapComponent: React.FC<Props> = ({darkMode, tilted, graphicsSettin
              * whenever it was built.
              */
             capabilities: MAPLIBRE_CAPABILITIES,
-            startDrawing: name => engine?.startDrawing(name),
+            startDrawing: (name, preset) => engine?.startDrawing(name, preset),
             cancelDrawing: () => engine?.cancelDrawing(),
             setInteractionMode: mode => engine?.setInteractionMode(mode),
             getInteractionMode: () => engine?.getInteractionMode() ?? 'view',
