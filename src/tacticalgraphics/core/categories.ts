@@ -1,0 +1,421 @@
+import {TacticalGraphicName} from './type';
+
+export enum TacticalGraphicCategory {
+    AirspaceCoordinatingMeasures = 'Airspace Coordinating Measures',
+    Areas = 'Areas',
+    Boundaries = 'Boundaries',
+    DefenseOperationsPlanning = 'Defense Operations Planning',
+    EnablingOperationsPlanning = 'Enabling Operations Planning',
+    FieldFortification = 'Field Fortification Symbols',
+    FireSupportCoordination = 'Fire Support Coordination Control Measures',
+    Lines = 'Lines',
+    MobilityAndCountermobility = 'Mobility and Countermobility Control Measures',
+    MovementAndManeuver = 'Movement and Maneuver',
+    OffenseOperationsPlanning = 'Offense Operations Planning',
+    TacticalMissionTasks = 'Tactical Mission Tasks',
+    TargetAcquisitionControlMeasures = 'Target Acquisition Control Measures',
+    TargetControlMeasures = 'Target Control Measures',
+}
+
+export const GRAPHIC_CATEGORIES: Record<TacticalGraphicName, TacticalGraphicCategory> = {
+
+    // ── Airspace Control Measures ───────────────────────────────────────────── OK
+    [TacticalGraphicName.AirCorridor]:                              TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.AirSpaceCoordinationAreaCircular]:         TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.AirSpaceCoordinationAreaIrregular]:        TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.AirSpaceCoordinationAreaRectangular]:      TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.AirToAirRefuelingRestrictedOperationsZone]: TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.BaseDefenseZone]:                          TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.HighAltitudeMissileEngagementZone]:        TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.HighDensityAirspaceControlZone]:           TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.IdentificationFriendOrFoeOff]:             TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.IdentificationFriendOrFoeOn]:              TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.FighterEngagementZone]: TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.JointEngagementZone]:                      TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.LowAltitudeMissileEngagementZone]:         TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.LowLevelTransitRoute]:                     TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.MinimumRiskRoute]:                         TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.MissileEngagementZone]:                    TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.RestrictedOperationsZone]:                 TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.SafeLane]:                                 TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.ShortRangeAirDefenseEngagementZone]:       TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.SpecialCorridor]:                          TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.StandardUseArmyAircraftFlightRoute]:       TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.TransitCorridor]:                          TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.UnmannedAircraftCorridor]:                 TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.UnmannedAircraftRestrictedOperationsZone]: TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.WeaponEngagementZone]:                     TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+    [TacticalGraphicName.WeaponsFreeZone]:                          TacticalGraphicCategory.AirspaceCoordinatingMeasures,
+
+    // ── Areas ──────────────────────────────────────────────────────────────── OK
+    [TacticalGraphicName.AirfieldZone]: TacticalGraphicCategory.Areas,
+    // A point symbol, but it stays in the Areas menu group: an operator
+    // looking for an airfield looks where the airfield zone is.
+    [TacticalGraphicName.Airfield]:                         TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.AirheadLine]:                      TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.AreaOfOperations]:                 TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.AssaultPosition]:                  TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BombArea]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.Bridgehead]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.EnemyPrisonerOfWarHoldingArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.HumanTerrain]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.PenetrationBox]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.Area]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.JointTacticalActionArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.SubmarineActionArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.SubmarineGeneratedActionArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.AreaGeneric]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ZoneOfFire]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.RestrictedTerrain]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.SeverelyRestrictedTerrain]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BiologicalContaminatedArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ChemicalContaminatedArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.NuclearContaminatedArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RadiologicalContaminatedArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ArtilleryManeuverArea]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ArtilleryReservedArea]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.AssemblyArea]:                     TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.AttackPosition]:                   TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BaseCamp]:                         TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BattlePosition]:                   TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BattlePositionPreparedButNotOccupied]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.BrigadeSupportArea]:               TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.CorpsSupportArea]:                 TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DetaineeHoldingArea]:              TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DivisionSupportArea]:              TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ExtractionZone]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RegimentalSupportArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DropZone]:                         TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.Encirclement]:                     TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.EngagementArea]:                   TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.FortifiedArea]:                    TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ForwardArmingAndRefuelingPoint]:   TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.GuerrillaBase]:                    TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.KillZone]:                         TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.LandingZone]:                      TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.LimitedAccessArea]:                TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.NamedAreaOfInterest]:              TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ObjectiveArea]:                    TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.PickupZone]:                       TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RefugeeHoldingArea]:               TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.StrongPoint]:                      TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.TargetAreaOfInterest]:             TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]:  TacticalGraphicCategory.Areas,
+
+    // ── Boundaries ──────────────────────────────────────────────────────────── OK
+    [TacticalGraphicName.Boundary]: TacticalGraphicCategory.Boundaries,
+
+    // ── Defense Operations Planning ─────────────────────────────────────────── OK
+    [TacticalGraphicName.AreaDefense]:                      TacticalGraphicCategory.DefenseOperationsPlanning,
+    [TacticalGraphicName.Delay]:                            TacticalGraphicCategory.DefenseOperationsPlanning,
+    [TacticalGraphicName.MobileDefense]:                    TacticalGraphicCategory.DefenseOperationsPlanning,
+    [TacticalGraphicName.Retirement]:                       TacticalGraphicCategory.DefenseOperationsPlanning,
+    [TacticalGraphicName.Withdraw]:                         TacticalGraphicCategory.DefenseOperationsPlanning,
+    [TacticalGraphicName.WithdrawUnderPressure]:            TacticalGraphicCategory.DefenseOperationsPlanning,
+
+    // ── Enabling Operations Planning ────────────────────────────────────────── OK
+    [TacticalGraphicName.Cover]:                            TacticalGraphicCategory.EnablingOperationsPlanning,
+    [TacticalGraphicName.ForwardPassageOfLines]:            TacticalGraphicCategory.EnablingOperationsPlanning,
+    [TacticalGraphicName.Guard]:                            TacticalGraphicCategory.EnablingOperationsPlanning,
+    [TacticalGraphicName.RearwardPassageOfLines]:           TacticalGraphicCategory.EnablingOperationsPlanning,
+    [TacticalGraphicName.ReliefInPlace]:                    TacticalGraphicCategory.EnablingOperationsPlanning,
+    [TacticalGraphicName.Screen]:                           TacticalGraphicCategory.EnablingOperationsPlanning,
+
+    // ── Field Fortification Symbols ─────────────────────────────────────────── OK
+    [TacticalGraphicName.FortifiedLine]:                    TacticalGraphicCategory.FieldFortification, // TODO: not in ui yet
+
+    // ── Fire Support Coordination Control Measures ──────────────────────────── OK
+    [TacticalGraphicName.FieldsOfFire]:                     TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FinalProtectiveFireLeft]:          TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FinalProtectiveFireRight]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.PrincipalDirectionOfFire]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.SecondaryDirectionOfFire]:         TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FreeFireAreaCircular]:             TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FreeFireAreaIrregular]:            TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.FreeFireAreaRectangular]:          TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.MunitionFlightPath]:               TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.NoFireAreaCircular]:               TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.NoFireAreaIrregular]:              TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.NoFireAreaRectangular]:            TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.PositionAreaArtilleryCircular]:    TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.PositionAreaArtilleryIrregular]:   TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.PositionAreaArtilleryRectangular]: TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.RestrictiveFireAreaCircular]:      TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.RestrictiveFireAreaIrregular]:     TacticalGraphicCategory.FireSupportCoordination,
+    [TacticalGraphicName.RestrictiveFireAreaRectangular]:   TacticalGraphicCategory.FireSupportCoordination,
+
+    // ── Lines ───────────────────────────────────────────────────────────────── OK
+    [TacticalGraphicName.BattlefieldHandoverLine]:          TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BridgeheadLine]:                   TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.CommonSensorBoundary]:             TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.CoordinatedFireLine]:              TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.DelayLine]:                        TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.EngineerWorkLine]:                 TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.FinalCoordinationLine]:            TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.FireSupportCoordinationLine]:      TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.ForwardEdgeOfBattleArea]:          TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.ForwardLineOfOwnTroops]:           TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.IntelligenceCoordinationLine]:     TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LimitOfAdvance]:                   TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LineOfContact]:                    TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LineOfDepartureOrLineOfContact]:   TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LineOfDeparture]:                  TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.PhaseLine]:                        TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.ProbableLineOfDeployment]:         TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.ReleaseLine]:                      TacticalGraphicCategory.Lines,
+    // APP-06 §8.11 maritime control lines. The library has no maritime category and does
+    // not need one: these are lines, and the menu groups by what a thing *is*.
+    // APP-06 §8.10 Table 8-12 -- the maritime control **areas**, where the nine bearing
+    // lines below are its control lines. Both sit in the two generic buckets rather than
+    // in a maritime one of their own: this enum is the picker's menu, and a category
+    // holding nine graphics an army user never opens is a menu item, not a grouping.
+    [TacticalGraphicName.LaunchAreaEllipse]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DefendedAreaEllipse]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.DefendedAreaRectangle]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.NoAttackZone]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ShipAreaOfInterestRectangle]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ActiveManeuverArea]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RadarSearchDoctrine]: TacticalGraphicCategory.Areas,
+    // A line, not an area -- the one member of group 21 that is drawn line work.
+    [TacticalGraphicName.NavigationalLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineElectronic]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineElectromagneticWarfare]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineAcoustic]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineAcousticAmbiguous]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineTorpedo]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineElectroOpticalIntercept]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineJammer]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BearingLineRadioDirectionFinder]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.NavigationalRhumbLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LightLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.LineGeneric]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.HandoverLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.NamedAreaOfInterestLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.HoldingLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.NoFireLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.BattlefieldCoordinationLine]: TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.RestrictiveFireLine]:              TacticalGraphicCategory.Lines,
+
+    // ── Mobility and Countermobility Control Measures ─────────────────────────
+    [TacticalGraphicName.Abatis]:                           TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.OverheadWire]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ExplosivesPlannedStateOfReadiness]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ExplosivesStateOfReadiness1Safe]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.RoadblockCompleteExecuted]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankDitchUnderConstruction]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankDitchCompleted]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankDitchReinforcedWithMines]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.AntiTankWall]: TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireUnspecified]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireSingleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleFence]:                       TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleApronFence]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireLowWireFence]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireHighWireFence]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireSingleConcertina]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireDoubleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.WireTripleStrandConcertina]:            TacticalGraphicCategory.MobilityAndCountermobility,
+    // Convoy Symbols OK
+    [TacticalGraphicName.HaltedConvoy]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MovingConvoy]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+
+    // Countermobility OK
+    // [TacticalGraphicName.Abatis]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.AntiTankDitchCompleted]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.AntiTankDitchUnderConstruction]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.AntiTankDitchReinforced]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Block]:                            TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Disrupt]:                          TacticalGraphicCategory.MobilityAndCountermobility,
+    // [TacticalGraphicName.ExplosivesPlanned]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.ExplosivesSafe]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.ExplosivesArmedButPassable]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Fix]:                              TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleBelt]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleFreeArea]:                 TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleGroup]:                    TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleLine]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Capture]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Seize]:                            TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.FollowAndAssume]:                  TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.FollowAndSupport]:                 TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Escort]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Demonstration]:                    TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Evacuate]:                         TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Recover]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.DecisionLine]:                     TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.MobilityCorridor]:                 TacticalGraphicCategory.Lines,
+    [TacticalGraphicName.MinefieldStaticDepiction]:         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MinefieldDynamicDepiction]:        TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MinedArea]:                        TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MinedAreaFenced]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.PsyOpsZoneIrregular]:              TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.PsyOpsZoneRectangular]:            TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.PsyOpsZoneCircular]:               TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.MinimumSafeDistanceZone]:          TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.MinimumSafeDistanceMultipleStrike]: TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.RadiationDoseRateContourLine]:     TacticalGraphicCategory.Areas,
+    [TacticalGraphicName.ObstacleBypassEasy]:               TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleBypassDifficult]:          TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleBypassImpossible]:         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Mineline]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.MineCluster]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.TripWire]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.RaftSite]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.FortifiedPosition]:                TacticalGraphicCategory.FieldFortification,
+    [TacticalGraphicName.ObstacleRestrictedArea]:           TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.ObstacleZone]:                     TacticalGraphicCategory.MobilityAndCountermobility,
+    // [TacticalGraphicName.RoadblockComplete]:                     TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Turn]:                             TacticalGraphicCategory.MobilityAndCountermobility,
+    // Wire obstacles — the tracker names every one `wire, …`, so the members
+    // carry a `Wire` prefix and sort together here rather than scattering
+    // through the list under D, H, S and T. `WireUnspecified` in particular was
+    // a bare `Unspecified`, which said nothing about what it was unspecified
+    // about. The names must keep matching the tracker's: `gen-proven-graphics.py`
+    // resolves a row by stripping non-alphanumerics and lowercasing, so
+    // `wire, double apron fence` → `wiredoubleapronfence` → `WireDoubleApronFence`.
+    // [TacticalGraphicName.WireDoubleApronFence]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireDoubleFence]:                  TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireDoubleStrandConcertina]:       TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireHighWireFence]:                TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireLowWireFence]:                 TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireSingleConcertina]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireSingleFence]:                  TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireTripleStrandConcertina]:       TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.WireUnspecified]:                  TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+
+    // Mobility OK
+    [TacticalGraphicName.AssaultCrossing]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Bridge]:                           TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.FerryCrossing]:                    TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.FordDifficult]:                         TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.FordEasy]:                             TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.Gap]:                              TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.PassageLane]:                      TacticalGraphicCategory.MobilityAndCountermobility,
+    [TacticalGraphicName.SafeLaneOrGap]:                    TacticalGraphicCategory.MobilityAndCountermobility,
+
+    // Route Control Measures OK
+    [TacticalGraphicName.AlternateSupplyRoute]:             TacticalGraphicCategory.MobilityAndCountermobility,
+    // [TacticalGraphicName.AlternateSupplyRouteAlternatingTraffic]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.AlternateSupplyRouteOneWayTraffic]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.AlternateSupplyRouteTwoWayTraffic]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.AlternatingTrafficRoute]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.MainSupplyRoute]:                  TacticalGraphicCategory.MobilityAndCountermobility,
+    // [TacticalGraphicName.MainSupplyRouteAlternatingTraffic]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.MainSupplyRouteOneWayTraffic]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.MainSupplyRouteTwoWayTraffic]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    // [TacticalGraphicName.OneWayTrafficRoute]:             TacticalGraphicCategory.MobilityAndCountermobility, // TODO: not in ui yet
+    [TacticalGraphicName.Route]:                            TacticalGraphicCategory.MobilityAndCountermobility,
+
+    // ── Movement and Maneuver ───────────────────────────────────────────────── OK
+    [TacticalGraphicName.AviationAxisOfAdvance]:            TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.AttackHelicopterAxisOfAdvance]:    TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.AviationDirectionOfAttack]:           TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.DirectionOfMainAttack]:            TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.DirectionOfMainAttackFeint]:       TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.DirectionOfSupportingAttack]:      TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.Envelopment]:                      TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.FrontalAttack]:                    TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.Infiltration]:                     TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.InfiltrationLane]:                     TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.AvenueOfApproach]:                 TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.SearchArea]:                       TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.MainAxisOfAdvance]:                TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.MainAxisOfAdvanceFeint]:           TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.Penetration]:                      TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.SupportingAxisOfAdvance]:                 TacticalGraphicCategory.MovementAndManeuver,
+    [TacticalGraphicName.TurningMovement]:                  TacticalGraphicCategory.MovementAndManeuver,
+
+    // ── Offense Operations Planning ─────────────────────────────────────────── OK
+    [TacticalGraphicName.Ambush]:                           TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.CordonAndKnock]: TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Deny]: TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Locate]: TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.CordonAndSearch]:                  TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.CounterattackByFire]:              TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Counterattack]:                    TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Exploitation]:                     TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.MovementToContact]:                TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.AdvanceToContact]:                 TacticalGraphicCategory.OffenseOperationsPlanning,
+    [TacticalGraphicName.Pursuit]:                          TacticalGraphicCategory.OffenseOperationsPlanning,
+
+    // ── Tactical Mission Tasks ──────────────────────────────────────────────── OK
+    [TacticalGraphicName.AttackByFire]:                     TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.TacticalBlock]:                            TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Breach]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Bypass]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Canalize]:                         TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Clear]:                            TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Contain]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Control]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Defeat]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Destroy]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Disengage]:                        TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.TacticalDisrupt]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Exfiltrate]:                       TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.TacticalFix]:                              TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Interdict]:                        TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Isolate]:                          TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Neutralize]:                       TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Occupy]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Retain]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Secure]:                           TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.SupportByFire]:                    TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.Suppress]:                         TacticalGraphicCategory.TacticalMissionTasks,
+    [TacticalGraphicName.TacticalTurn]:                             TacticalGraphicCategory.TacticalMissionTasks,
+
+    // ── Target Acquisition Control Measures ─────────────────────────────────── OK
+    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular]:    TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneIrregular]:   TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ArtilleryTargetIntelligenceZoneRectangular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.BlueKillBoxCircular]:              TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.BlueKillBoxIrregular]:             TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.BlueKillBoxRectangular]:           TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CallForFireZoneCircular]:          TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CallForFireZoneIrregular]:         TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CallForFireZoneRectangular]:       TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TargetBuildUpAreaCircular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TargetBuildUpAreaIrregular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TargetBuildUpAreaRectangular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TargetValueAreaCircular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TargetValueAreaIrregular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.TargetValueAreaRectangular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ZoneOfResponsibilityCircular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ZoneOfResponsibilityIrregular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.ZoneOfResponsibilityRectangular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CensorZoneCircular]:               TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CensorZoneIrregular]:              TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CensorZoneRectangular]:            TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CriticalFriendlyZoneCircular]:    TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CriticalFriendlyZoneIrregular]:   TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.CriticalFriendlyZoneRectangular]: TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.DeadSpaceAreaCircular]:            TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.DeadSpaceAreaIrregular]:           TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.DeadSpaceAreaRectangular]:         TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.PurpleKillBoxCircular]:            TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.PurpleKillBoxIrregular]:           TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.PurpleKillBoxRectangular]:         TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.WeaponSensorRangeFanCircular]:     TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+    [TacticalGraphicName.WeaponSensorRangeFanSector]:       TacticalGraphicCategory.TargetAcquisitionControlMeasures,
+
+    // ── Target Control Measures ─────────────────────────────────────────────── OK
+    [TacticalGraphicName.FinalProtectiveFire]:              TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.FireSupportAreaCircular]:          TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.FireSupportAreaIrregular]:         TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.FireSupportAreaRectangular]:       TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.GroupOrSeriesOfTargets]:           TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.LinearSmokeTarget]:                TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.LinearTarget]:                     TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.SmokeObscurant]:            TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.TargetAreaCircular]:               TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.TargetAreaIrregular]:              TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.TargetAreaRectangular]:            TacticalGraphicCategory.TargetControlMeasures,
+    [TacticalGraphicName.TargetAreaSingleTargetAegis]:      TacticalGraphicCategory.TargetControlMeasures,
+};

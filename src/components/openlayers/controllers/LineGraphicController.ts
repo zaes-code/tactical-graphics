@@ -1,0 +1,657 @@
+import {Feature} from 'ol';
+
+import {Coordinate} from 'ol/coordinate';
+import LineString from 'ol/geom/LineString';
+import {DrawEvent} from 'ol/interaction/Draw';
+import openlayersAdapter, {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from "../openlayersAdapter";
+import {Geometry} from 'ol/geom';
+import {ObjectEvent} from 'ol/Object';
+import {StyleFunction} from 'ol/style/Style';
+import {TacticalGraphicName, anchorVertex, carriesWidthPointInBase, drawnSide, hasDrawnSide, editStretches, normalizeDrawnBase, pivotVertexIndex, reshapesByVertex, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {fromLonLat, toLonLat} from 'ol/proj';
+import type {Position} from 'geojson';
+import {GraphicLinkRegistry} from '../../../utils/graphicLinkRegistry';
+
+export interface LineGraphic extends TacticalGraphic {
+    base: Feature<LineString>;
+
+    setSymbolId(symbolId: string): void;
+
+    setOffset?(offset: number): void;
+
+    offsetScale?: number;
+
+    /**
+     * Drop the handle on p0. Set by `LineGraphicController` for graphics fixed at
+     * two vertices; see `visiblePathHandles`.
+     */
+    hidesStartHandle?: boolean;
+
+    /**
+     * Takes a base that is still a run of clicks, rather than a settled one.
+     *
+     * **The two are the same array of coordinates and only the caller knows which it is
+     * holding**, which is the division `axisBaseFromDraw` already keeps one layer down. It
+     * matters for the eleven axis arrows: their last stored coordinate is the width, so a
+     * holder handed a sketch reads the point under the cursor as a width and previews an
+     * arrow pinched to nothing. Declared optional, so a holder with no such distinction is
+     * reached through `setBaseFeature` exactly as before.
+     */
+    setSketchBase?(base: Feature<LineString>): void;
+}
+
+/**
+ * Two handles within a millimeter of each other are the same point. Coordinates
+ * here are EPSG:3857 meters, and the only error to absorb is the generator's
+ * 3857 → 4326 → 3857 round trip, which lands far inside that.
+ */
+export const SAME_POINT_EPSILON_M = 1e-3;
+
+/**
+ * A dragged base put back through the library's own reading of its points.
+ *
+ * **A vertex drag authors a base, so it comes in by the same door a draw does.** MapLibre
+ * has always run `normalizeDrawnBase` on every *build* — draw, restore, import, and after
+ * every gesture — while this engine ran it on `drawend` and on restore only. So a point the
+ * library projects onto the symbol stayed projected until the operator touched it, and then
+ * kept whatever the cursor left behind: drag an obstacle bypass's rear grip sideways and it
+ * walked off the middle of the rear bar, where APP-06 270601's PT.3 leader puts it, while
+ * the same drag on the other engine held it there. Measured on the running app,
+ * 1,454,816 m of along-bar drift here against 0 on MapLibre, for one 150 px drag.
+ *
+ * The same asymmetry reaches every graphic whose third point is a projection — the bracket
+ * tasks, block and disrupt, the cane arrows, the demolition block, the infiltration lane —
+ * so it is fixed for the family rather than for the one that was reported.
+ *
+ * **Through 4326 and back, because the library speaks degrees.** These are projected metres;
+ * handed metres, the normalizer's distance and bearing guards fail and it returns the path
+ * untouched — which looks exactly like a base that needed no tidying. The manager's
+ * `normalizeDrawnGeometry` and the sample sweep convert for the same reason.
+ *
+ * **No resolution**, which is deliberate and is what MapLibre passes on a build: the one
+ * rule that reads one — the S pair's pixel-range clamp on point 2 — belongs to the draw,
+ * and re-imposing it on every pointer move would fight the drag. A graphic the library has
+ * nothing to say about comes back exactly as it arrived.
+ */
+function settle(name: TacticalGraphicName | undefined, coords: Coordinate[]): Coordinate[] {
+    if (!name || coords.length < 2) return coords;
+    const settled = normalizeDrawnBase(name, coords.map(c => toLonLat(c)) as Position[]);
+    return settled.map(c => fromLonLat(c as Coordinate));
+}
+
+/**
+ * The path handles a one-segment graphic should actually show — every one except
+ * the handle sitting on p0.
+ *
+ * A graphic fixed at two vertices *is* a single segment, so a handle on each end
+ * is redundant: either one rotates and resizes the whole thing about the other.
+ * p0 is additionally where most of these graphics stack their label or symbol,
+ * so its dot lands underneath the text and reads as clutter rather than as
+ * something grabbable.
+ *
+ * **Matches on position, not on index.** The obvious implementation — drop the
+ * first path handle — is wrong, because generators do not agree on an order:
+ * `Breach` and `Penetration` emit `[end, p0]`, and `Disrupt` emits three arrow
+ * handles before its two endpoints. Only "is this handle at p0" is stable across
+ * all of them, and it also leaves a generator's extra shape handles alone, which
+ * dropping by index would eat.
+ *
+ * Safe because nothing indexes into a line graphic's handle set:
+ * `toggleHandleFeatures` only flips `hidden` on the whole feature, and
+ * `handleRotate` / `handleResize` / `handleTranslate` transform `graphic.base`
+ * wholesale — `handleResize` anchored on `getCenter()`, which is the base's pivot end
+ * and stays the anchor whether or not it is drawn. @see pivotCoordinate
+ *
+ * Never returns an empty set: a generator whose handles all sit on p0 keeps
+ * them, so the graphic cannot end up with nothing to grab.
+ */
+/**
+ * The end of a drawn line an edit turns, scales and stacks its label about.
+ *
+ * `coords[0]` for an ordinary line -- where the operator started drawing -- the **last**
+ * coordinate for the graphics that store their points tip-first, whose first point is the
+ * arrowhead, and a named index for the handful that are neither. It is the same physical end
+ * in every case; only the index it lives at moved when the bases were renumbered into
+ * APP-06's order.
+ *
+ * Both jobs `hidesStartHandle` does want this end rather than index zero: the redundant
+ * handle is the one on the pivot, and the label sits there too. Anchoring a resize on the
+ * tip instead would grow an axis of advance backwards out of its own arrowhead.
+ *
+ * **The index comes from the library**, not from `drawsTipFirst` read here. The two questions
+ * that function answers -- which order the points are stored in, and which end the symbol
+ * turns about -- have been parting company one graphic at a time, and this
+ * engine reading the first to answer the second is how they could disagree with MapLibre,
+ * which asks `rotationAnchor`. Same table, two coordinate systems. @see pivotVertexIndex
+ */
+export function pivotCoordinate(name: TacticalGraphicName | undefined, coords: Coordinate[] | undefined): Coordinate | undefined {
+    if (!coords?.length) return undefined;
+    return coords[pivotVertexIndex(name, coords.length)];
+}
+
+export function visiblePathHandles(coords: Coordinate[], startCoord: Coordinate | undefined, hidesStartHandle?: boolean): Coordinate[] {
+    if (!hidesStartHandle || !startCoord) return coords;
+
+    const kept = coords.filter(c => Math.hypot(c[0] - startCoord[0], c[1] - startCoord[1]) > SAME_POINT_EPSILON_M);
+    return kept.length > 0 ? kept : coords;
+}
+
+
+/*
+* Controller class for managing linestring-like graphics.
+* maxPoints is used to control how many vertices are allowed to be drawn in openlayers.
+* */
+export class LineGraphicController implements TacticalGraphicHandler {
+    graphic: LineGraphic;
+    type: TacticalGraphicShape = 'LineString';
+    geomHandleType: TacticalGraphicShape = 'LineString';
+    drawStyleFunc?: StyleFunction | undefined;
+    onPointerMove?: Function | undefined;
+    symbolId: string = '';
+    maxPoints: number | undefined;
+    /**
+     * Edit ("modify vertices") mode drags this graphic exactly the way resize
+     * does — stretch along the current bearing, anchored on p0.
+     *
+     * A fixed-vertex graphic has no vertices to modify: `base` is cleared below,
+     * so OpenLayers' `Modify` is handed nothing and an edit-mode drag used to
+     * fall through to the map and pan it. Stretching is the only meaningful
+     * edit left, so edit mode borrows the resize path (see
+     * `TacticalGraphicsManager.handleLineStringDrag`).
+     */
+    editStretches: boolean = false;
+
+    /**
+     * Whether an edit-mode drag moves the grabbed vertex rather than scaling the whole
+     * graphic. Off by default: the line family is overwhelmingly "a drawn path plus
+     * decorations", where a uniform resize is what an operator expects. On for the graphics
+     * whose shape *is* the arrangement of their vertices — a fields-of-fire V, where the
+     * legs' angle and length are the content.
+     *
+     * `handleVertexDrag` is only declared when this is set, because the manager routes on
+     * the method's presence.
+     */
+    dragsVertices: boolean = false;
+
+    /**
+     * Moves base vertex `index` to `coordinate`. @see TacticalGraphicHandler.handleVertexDrag
+     *
+     * Guarded by `minimumVertices`: a fields-of-fire V stops reading as one the moment it
+     * straightens into a line, and the same is true of any graphic drawn from segments, so
+     * a drag can move a vertex but never remove one.
+     */
+    handleVertexDrag?(index: number, coordinate: Coordinate): void;
+
+    /** Fewest vertices this graphic still reads correctly at. @see handleVertexDrag */
+    minimumVertices: number = 2;
+
+    /**
+     * Base vertex that **moves the whole graphic** instead of reshaping it — the apex of a
+     * fields-of-fire V.
+     *
+     * Expressed as a translate so the grabbed point lands under the cursor, which is what
+     * makes it feel like the center dot on a point-anchored graphic rather than a corner
+     * that drags the shape inside out. `undefined` means every vertex reshapes.
+     */
+    anchorVertex: number | undefined;
+
+    /**
+     * The base a vertex drag started on, held for the length of the gesture.
+     *
+     * **Every move is applied to this, not to what the previous move left behind**, and
+     * the difference is not cosmetic. `settle` re-squares a derived point against the
+     * axis the drag is moving, so squaring the already-squared answer once per pointer
+     * event composes: the same drag delivered in four steps put 152901's third point
+     * 21.9 km from where the one-step drag put it, and the step count is whatever the
+     * pointer happened to report. MapLibre reached the same guarantee the same way and
+     * says so in `dragTo`; this is the OpenLayers twin.
+     *
+     * Cleared in `endGesture`, which the manager calls however a drag finishes.
+     */
+    private vertexDragStart: Coordinate[] | undefined;
+
+    /**
+     * Which graphic this is, kept because two of the rules the library states are
+     * answered per graphic rather than per shape -- `editStretches`, and which end of a
+     * drawn line is its pivot. @see pivotCoordinate
+     */
+    name: TacticalGraphicName | undefined;
+
+    /**
+     * The graphic's name, from the holder when the factory did not pass one.
+     *
+     * **Two factories do not pass it** -- `mobileDefense` and `corridor` in the registry
+     * -- and an optional constructor argument gives no warning when it is left out. The
+     * holder always knows, because it was built with the name to look its own style
+     * function up, so asking it is the answer that cannot be forgotten.
+     */
+    private resolvedName(): TacticalGraphicName | undefined {
+        const holder = this.graphic as unknown as {name?: TacticalGraphicName; graphicName?: TacticalGraphicName};
+        return this.name ?? holder.graphicName ?? holder.name;
+    }
+
+    constructor(graphic: LineGraphic, maxPoints?: number, name?: TacticalGraphicName) {
+        this.graphic = graphic;
+        this.maxPoints = maxPoints;
+        this.name = name;
+
+        // turn off modification because there should only be a fixed number of vertices.
+        if (this.maxPoints) {
+            this.graphic.base.set('base', false);
+        }
+
+        // **The library's rule, not a second copy of it.** This used to be
+        // `!NO_EDIT_STRETCH.has(name)` *and* only when a vertex limit was set, so a
+        // free-form graphic whose factory forced the flag on afterwards disagreed with
+        // the library the moment the factory stopped forcing it. Asking once, for every
+        // controller, is the whole point. @see editStretches
+        this.editStretches = !!name && editStretches(name);
+
+        // Two vertices is one segment: show only the handle on the far end.
+        if (this.maxPoints === 2) {
+            this.graphic.hidesStartHandle = true;
+        }
+
+        const features = this.graphic?.getFeatures?.();
+        if (!Array.isArray(features)) return;
+
+        features.forEach((feature) => {
+            GraphicLinkRegistry.register(feature, this.graphic, this.symbolId);
+        })
+    }
+
+    getCenter() {
+        const coords = this.graphic.base.getGeometry()!.getCoordinates();
+        const name = this.resolvedName();
+
+        /*
+         * **A corner-anchored symbol turns and scales about the middle of its two corners.**
+         *
+         * Read from the library rather than restated, because MapLibre reads the same rule
+         * out of `rotationAnchor` and a pivot stated twice is a pivot that drifts — a
+         * fields-of-fire once rotated about its middle on one engine and its left leg on
+         * the other, from the same drag. @see usesCornerAnchors
+         *
+         * A plain average is right here and a Mercator midpoint is right in the library,
+         * because these coordinates are **already** projected metres. The two agree by
+         * construction; that is the point of doing it in the projected frame there.
+         *
+         * **`pivotCoordinate` is deliberately left alone.** Its other job is telling
+         * `visiblePathHandles` which handle sits on the pivot and is therefore redundant,
+         * and a two-vertex graphic hides one that way. Whether both corners should be
+         * grabbable is a real question and a separate one — how many handles a graphic
+         * publishes is not the same switch as what a gesture turns about.
+         */
+        /*
+         * **Asked, not restated.** `rotationAnchor` is the library's whole answer to "what
+         * does a gesture turn and scale about", and it carries three decisions this engine
+         * was not honouring: 141700 ambush turns about point 2 rather than its centre
+         * and cover, guard and screen turn and scale about their
+         * middle rather than about the arrowhead their first point sits on. MapLibre has always read it.
+         *
+         * Measured with a three-point base at 40 degrees north, the anchor this returned
+         * against the one the library states: the three security operations 336 km out and
+         * ambush 230. Every other one of the 172 graphics on this controller already agreed,
+         * the corner-anchored ones included — which is why the branch that restated their
+         * rule is gone rather than kept beside this.
+         *
+         * The round trip through lon/lat is what `pivotVertexIndex` exists to avoid, and it
+         * is affordable: a base is at most fifty points and this runs once per gesture, not
+         * once per frame.
+         */
+        if (!coords.length) return [0, 0] as Coordinate;
+        const stated = rotationAnchor(
+            {type: 'LineString', coordinates: coords.map(c => toLonLat(c as Coordinate))},
+            name,
+        );
+        return fromLonLat(stated as Coordinate);
+    }
+
+    /**
+     * Where a **rotate** turns, which is not always where a resize scales from.
+     *
+     * `rotationPivot` is the library's separate answer for turning, and the two differ on the
+     * graphics whose frame centre is not the corner the symbol swings about. Measured with a
+     * deliberate quarter turn on the running app, the two engines' geometry after the gesture:
+     * 152800 envelopment 15.8% of the symbol apart, both turns 7.6%. MapLibre asked the right
+     * function; this engine turned about the same point it scaled from. @see rotationAnchor
+     */
+    getTurningPoint(): number[] {
+        const coords = this.graphic.base.getGeometry()?.getCoordinates() ?? [];
+        if (!coords.length) return this.getCenter();
+        const stated = rotationPivot(
+            {type: 'LineString', coordinates: coords.map(c => toLonLat(c as Coordinate))},
+            this.resolvedName(),
+        );
+        return fromLonLat(stated as Coordinate);
+    }
+
+    getBaseGeometry(): number[] | number[][] | number[][][] {
+        return this.graphic.base.getGeometry()!.getCoordinates();
+    }
+
+    getFeatures(): Feature<Geometry>[] {
+        return this.graphic.getFeatures();
+    }
+
+    onResolutionChangeFunc(_e: ObjectEvent): void {
+    }
+
+    handleRotate(deltaAngle: number): void {
+        let rotated = openlayersAdapter.rotateFeature(this.graphic.base, deltaAngle) as Feature<LineString>;
+        this.graphic.setBaseFeature(rotated);
+    }
+
+    handleTranslate(deltaX: number, deltaY: number): void {
+        let translated = openlayersAdapter.translateFeature(this.graphic.base, deltaX, deltaY) as Feature<LineString>;
+        this.graphic.setBaseFeature(translated);
+    }
+
+    handleResize(deltaSize: number): void {
+        /*
+         * **The decoration scales with the line it decorates.**
+         *
+         * A line graphic's chevron, tooth or arrowhead is filed as its own distance in
+         * metres, independent of the drawn line, so scaling only the base made the
+         * graphic longer while its symbol stayed the size it was — an abatis grew a long
+         * tail behind an unchanged chevron, which reads as a different obstacle rather
+         * than a bigger one. "Resize the whole graphic as is" is review.
+         *
+         * Only the *gesture* scales it. `setOffset` is also how a restore replays a
+         * stamped size, and scaling there would compound on every load.
+         */
+        /*
+         * **Unless the size is a vertex, in which case the scale below already carries it.**
+         *
+         * The eleven axis arrows keep their width as the last coordinate of their base, so
+         * `resizeFeature` scales it about the pivot along with everything else — exactly what
+         * MapLibre's `scaleDrawnSizes` does by having no `width` to scale. Spending it here as
+         * well moved the point twice, and from the *pre-scale* axis: measured against MapLibre
+         * on the same gesture, five of the eleven moved 29.7 degrees where the other engine
+         * moved 0.8. @see carriesWidthPointInBase, scaleDrawnSizes
+         */
+        const holder = this.graphic as unknown as {sizeOverride?: number; setOffset?: (value: number) => void};
+        const current = carriesWidthPointInBase(this.resolvedName()) ? undefined : this.currentDecorationSize();
+        if (holder.setOffset && current !== undefined && current > 0) holder.setOffset(current * deltaSize);
+
+        let resized = openlayersAdapter.resizeFeature(this.graphic.base, deltaSize) as Feature<LineString>;
+        this.graphic.setBaseFeature(resized);
+    }
+
+    /**
+     * The decoration size the holder is currently drawing with, in metres — whatever
+     * `setOffset` last set, or the per-name default it started from.
+     */
+    private currentDecorationSize(): number | undefined {
+        const holder = this.graphic as unknown as {graphicSize?: () => number; size?: number; offset?: number};
+        const value = holder.graphicSize ? holder.graphicSize() : (holder.offset ?? holder.size);
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
+    }
+
+    /**
+     * Hangs the graphic's hook on the other side. Forwarded to the holder when it has one;
+     * a symmetric graphic has nothing to mirror and simply ignores it.
+     * @see TacticalGraphicHandler.setMirrored
+     */
+    setMirrored(mirrored: boolean): void {
+        (this.graphic as {setMirrored?: (m: boolean) => void}).setMirrored?.(mirrored);
+    }
+
+    setOffset(offset: number): void {
+        this.graphic.setOffset?.(offset);
+    }
+
+    /**
+     * Forwards the live resolution to whichever holder owns a pixel floor.
+     *
+     * Duck-typed for the same reason `suspendSizeFloor` is: the two line holders do not
+     * share an interface that names it. @see TacticalGraphicHandler.setGestureResolution
+     */
+    setGestureResolution(resolution: number | undefined): void {
+        (this.graphic as {gestureResolution?: number}).gestureResolution = resolution;
+    }
+
+    /**
+     * Ends the width read-out. Called by the manager when any drag finishes.
+     *
+     * `MissionTaskController` has always had this and the line controller never needed
+     * one, because no line holder drew a read-out. A rectangular zone does — and without
+     * the hook the hashed line and its figure stayed on the map after the drag was over,
+     * which reads as part of the symbol. @see RectangularAreaGraphicBase.showMeasure
+     */
+    endGesture(): void {
+        (this.graphic as {showMeasure?: (active: boolean) => void}).showMeasure?.(false);
+        // The latched base belongs to one gesture. @see vertexDragStart
+        this.vertexDragStart = undefined;
+        this.settleBase();
+    }
+
+    /**
+     * The base put back through the library's reading of it, **once, when the gesture is over**.
+     *
+     * A rotate, a resize and a translate all transform the base wholesale in projected metres,
+     * and a point the library derives is a *geodesic* fact: the demolition family's third point
+     * sits on the perpendicular at the centreline's midpoint, and a planar transform shears that
+     * perpendicular. So a gesture left the base off the shape its own plate describes — measured
+     * over the registry, 35 graphics and up to 902 m after one rotate-resize-translate.
+     *
+     * MapLibre never had it, because `buildTacticalGraphic` normalizes on every build and its
+     * gestures are absolute — applied to the shape the drag started from, so one settle per move
+     * gives the same answer as one at the end. This is that guarantee on this side, and it has to
+     * be **at the end**: settling each delta would compose, which is the trap `vertexDragStart`
+     * exists for. @see normalizeDrawnBase
+     * path-independent"
+     */
+    private settleBase(): void {
+        const geometry = this.graphic.base?.getGeometry();
+        if (!(geometry instanceof LineString)) return;
+        const coords = geometry.getCoordinates();
+        const settled = settle(this.resolvedName(), coords);
+        if (settled.length !== coords.length || settled.some((c, i) => Math.hypot(c[0] - coords[i][0], c[1] - coords[i][1]) > SAME_POINT_EPSILON_M)) {
+            this.graphic.setBaseFeature(new Feature(new LineString(settled)));
+        }
+    }
+
+    /**
+     * The width the holder is currently drawing with.
+     *
+     * Duck-typed on the holder rather than declared on a shared base, because the
+     * holders that own a width call it different things — `offset` on the movement
+     * family and the corridors, `size` on the block and retrograde families — and none
+     * of them share an interface that names it. @see TacticalGraphicHandler.currentOffset
+     */
+    /**
+     * Forwards to whichever floor the holder owns. Duck-typed because the flag lives on
+     * the holder — `Block` and `LineGraphicBase` both call it `suspendMinimumLength`,
+     * and a holder without one simply has no floor to lift.
+     * @see TacticalGraphicHandler.suspendSizeFloor
+     */
+    suspendSizeFloor(active: boolean): void {
+        const holder = this.graphic as unknown as {suspendMinimumLength?: boolean};
+        if ('suspendMinimumLength' in holder) holder.suspendMinimumLength = active;
+    }
+
+    /**
+     * The drawn base's total length, in projected meters.
+     *
+     * A resize scales the base about its first vertex, so its length is exactly the
+     * measure that a `handleResize(k)` multiplies by k — which is what makes it the
+     * right answer here even for the families whose *rendered* size is derived from it.
+     * @see TacticalGraphicHandler.currentSize
+     */
+    currentSize(): number | undefined {
+        const coords = this.graphic.base?.getGeometry()?.getCoordinates?.();
+        if (!Array.isArray(coords) || coords.length < 2) return undefined;
+        let total = 0;
+        for (let i = 1; i < coords.length; i++) {
+            total += Math.hypot(coords[i][0] - coords[i - 1][0], coords[i][1] - coords[i - 1][1]);
+        }
+        return total > 0 ? total : undefined;
+    }
+
+    /**
+     * Declared by the holder, for the two families that publish `handleCoords[0]` as
+     * their own offset feature and `slice(1)` as `handles`.
+     * @see TacticalGraphicHandler.handleIndexOffset
+     */
+    get handleIndexOffset(): number | undefined {
+        return (this.graphic as unknown as {handleIndexOffset?: number}).handleIndexOffset;
+    }
+
+    currentOffset(): number | undefined {
+        // A holder that reads its own width off its base declares it, because the field the
+        // duck-type below finds is only what the generator falls back to there.
+        // @see MovementGraphicBase.currentOffset
+        const declared = (this.graphic as unknown as {currentOffset?: () => number | undefined}).currentOffset?.();
+        const holder = this.graphic as unknown as {offset?: number; size?: number};
+        const value = declared ?? holder.offset ?? holder.size;
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : undefined;
+    }
+
+    // Surfaced from the graphic so the manager can read it off the controller.
+    get offsetScale(): number | undefined {
+        return this.graphic.offsetScale;
+    }
+
+    areCoordsEqual(coord1: Coordinate, coord2: Coordinate): boolean {
+        return coord1[0] === coord2[0] && coord1[1] === coord2[1];
+    }
+
+    onDrawStartFunc = (e: DrawEvent) => {
+        let originalFeature = e.feature;
+
+        let geometry = originalFeature.getGeometry();
+        if (geometry === undefined || geometry.getType() !== 'LineString') return;
+
+        // The minimum-length floors belong to the gesture that authors the shape.
+        // @see LineGraphicBase.shapingFromGesture
+        this.shapeFromGesture(true);
+
+        geometry.on('change', () => {
+            if (geometry === undefined || geometry.getType() !== 'LineString') return;
+            let coords = (geometry as LineString).getCoordinates();
+            if (coords.length < 2) return;
+
+            // handle the case when an operator just clicks without moving their mouse
+            if (this.areCoordsEqual(coords[coords.length - 1], coords[coords.length - 2])) {
+                coords.pop();
+                (geometry as LineString).setCoordinates(coords);
+            }
+            // Which side a decoration takes, from the way the line is being drawn, applied to
+            // the preview on every move so what the operator sees while drawing is what they get:
+            // an abatis tooth faces north. Only a draw sets it, so rotation keeps it.
+            // @see drawnSide
+            // The field, not `setMirrored`: that redraws at once, and the first move has no base
+            // yet to draw. The sketch update below draws with the side already in place.
+            const name = this.resolvedName();
+            const holder = this.graphic as {mirrored?: boolean};
+            if (name && hasDrawnSide(name) && 'mirrored' in holder) {
+                holder.mirrored = drawnSide(name, coords.map(c => toLonLat(c))).mirrored === true;
+            }
+            // **Through the sketch door where the holder has one**, because these coordinates
+            // are clicks and not a base. @see LineGraphic.setSketchBase
+            if (this.graphic.setSketchBase) this.graphic.setSketchBase(originalFeature as Feature<LineString>);
+            else this.graphic.setBaseFeature(originalFeature as Feature<LineString>);
+        });
+    };
+
+    onDrawEndFunc = (_e: DrawEvent) => {
+        // **After the last vertex has been through `setBaseFeature`**, so a barely-drawn
+        // line is still held to a length the symbol fits in.
+        this.shapeFromGesture(false);
+    };
+
+    /** Marks the holder as authoring geometry. @see LineGraphicBase.shapingFromGesture */
+    private shapeFromGesture(active: boolean): void {
+        (this.graphic as unknown as {shapingFromGesture?: boolean}).shapingFromGesture = active;
+    }
+
+    setBaseFeature(base: Feature<LineString>) {
+        this.graphic.setBaseFeature(base);
+    }
+
+    /**
+     * Turns on vertex dragging. Called from the registry for the graphics that want it;
+     * assigning the method here rather than always declaring it is what lets the manager
+     * route on presence and leave every other line graphic exactly as it was.
+     */
+    enableVertexDragging(minimumVertices = 2): this {
+        /*
+         * **Whether a grip reshapes at all is the library's answer, not this call's.**
+         *
+         * The call itself was the only statement of it, so MapLibre could not read it —
+         * and that engine reshapes wherever `allowedGestures().modify` is true, which is
+         * 272 graphics against the 81 named here. The 23 that stretch and do not reshape
+         * were the difference: the same dot scaled the symbol here and pulled one point
+         * out of it there. @see reshapesByVertex
+         */
+        if (this.name !== undefined && !reshapesByVertex(this.name)) return this;
+        this.dragsVertices = true;
+        this.minimumVertices = minimumVertices;
+        /*
+         * **Which vertex is inert is the library's answer, not a number passed in here.**
+         *
+         * It used to be a third argument, and ten registry entries supplied one while the
+         * portable table listed four names — so seven graphics refused to drag a vertex on
+         * this engine and dragged it on MapLibre, which reads only the table, and 341900
+         * did the reverse. Reading it here makes the two engines agree by construction
+         * rather than by assertion. @see anchorVertex
+         */
+        this.anchorVertex = this.name === undefined ? undefined : anchorVertex(this.name);
+        /*
+         * **Both ends get a grip once both ends can be dragged.**
+         *
+         * The constructor sets `hidesStartHandle` for any two-point line — "two vertices is
+         * one segment: show only the handle on the far end" — which is right while the only
+         * gesture is a stretch anchored on the near end, because the near handle would then
+         * do nothing. It is wrong the moment the graphic drags vertices: the near end is a
+         * point the operator can move, and a point you can move needs something to grab.
+         *
+         * MapLibre publishes both and has all along, so this was a **cross-engine
+         * difference on every `vertexLine(2, …)` graphic** — the convoys, the navigational
+         * line, `Fix`, the follow tasks. Reported on the convoys: *"maplibre has two red
+         * handles (correct) and openlayers has only 1"*.
+         *
+         * Cleared here rather than in the constructor because this is the builder that
+         * decides: a two-point line that does *not* drag vertices keeps the single handle.
+         */
+        this.graphic.hidesStartHandle = false;
+        this.handleVertexDrag = (index: number, coordinate: Coordinate) => {
+            const geom = this.graphic.base.getGeometry();
+            if (!geom) return;
+            // Latched on the first move of the gesture. @see vertexDragStart
+            const coords = (this.vertexDragStart ??= geom.getCoordinates());
+            if (index < 0 || index >= coords.length) return;
+            if (coords.length < this.minimumVertices) return;
+
+            // The anchor drags the graphic, not its own vertex: shift every coordinate by
+            // however far the anchor had to move to reach the cursor.
+            const isAnchor = this.anchorVertex !== undefined && index === this.anchorVertex;
+            const dx = coordinate[0] - coords[index][0];
+            const dy = coordinate[1] - coords[index][1];
+            const moved = coords.map((c, i) =>
+                isAnchor ? [c[0] + dx, c[1] + dy] : i === index ? [coordinate[0], coordinate[1]] : c,
+            );
+            const next = new Feature(new LineString(settle(this.resolvedName(), moved)));
+            // Dragging a vertex *is* authoring the shape, so the floors apply here.
+            this.shapeFromGesture(true);
+            try {
+                this.graphic.setBaseFeature(next as Feature<LineString>);
+            } finally {
+                this.shapeFromGesture(false);
+            }
+        };
+        return this;
+    }
+
+    getSymbolId(): string {
+        return this.symbolId;
+    }
+
+    setSymbolId(symbolId: string): void {
+        this.symbolId = symbolId;
+        this.graphic.setSymbolId(symbolId);
+        // Re-key the registry: the constructor registered under the empty string.
+        GraphicLinkRegistry.registerAll(this.graphic.getFeatures(), this.graphic, symbolId);
+    }
+}

@@ -1,0 +1,144 @@
+import {IBaseGraphicOptions, IGraphicGenerator} from "../core/type";
+import {
+    Feature,
+    GeometryCollection,
+    MultiLineString,
+    MultiPoint,
+    Position,
+    Geometry,
+    Polygon,
+    Point,
+    GeoJsonProperties, LineString
+} from "geojson";
+import {ITacticalGraphic} from "../core/type";
+import {featureInGeneratorOrder} from "../core/drawOrder";
+import {axisFeature, optionsFromWidthPoint} from "../core/axisWidth";
+import {smoothedForGenerator} from "../core/smoothing";
+import {unwrappedLongitudes} from "../core/antimeridian";
+
+
+export abstract class TacticalGraphicsBase<T extends IBaseGraphicOptions = IBaseGraphicOptions> implements IGraphicGenerator {
+    abstract name: string;
+    abstract type: string;
+
+    abstract generateGraphics(base: Feature, opts?: T): Feature;
+
+    abstract generateHandles(base: Feature, opts?: T): Feature;
+
+    abstract generateLabels(base: Feature, opts?: T): Feature;
+
+    asMultiLineStringFeature(coords: Position[][], props?: GeoJsonProperties): Feature<MultiLineString> {
+        return {
+            type: "Feature",
+            geometry: {
+                type: "MultiLineString",
+                coordinates: coords
+            },
+            properties: props || {},
+        };
+    }
+
+    asLineStringFeature(coords: Position[], props?: GeoJsonProperties): Feature<LineString> {
+        return {
+            type: "Feature",
+            geometry: {
+                type: "LineString",
+                coordinates: coords
+            },
+            properties: props || {},
+        };
+    }
+
+    asPointFeature(coords: Position, props?: GeoJsonProperties): Feature<Point> {
+        return {
+            type: "Feature",
+            geometry: {
+                type: "Point",
+                coordinates: coords
+            },
+            properties: props || {},
+        };
+    }
+
+    asMultiPointFeature(coords: Position[], props?: GeoJsonProperties): Feature<MultiPoint> {
+        return {
+            type: "Feature",
+            geometry: {
+                type: "MultiPoint",
+                coordinates: coords
+            },
+            properties: props || {},
+        };
+    }
+
+    asPolygonFeature(coords: Position[][], props?: GeoJsonProperties): Feature<Polygon> {
+        return {
+            type: "Feature",
+            geometry: {
+                type: "Polygon",
+                coordinates: coords
+            },
+            properties: props || {}
+        };
+    }
+
+    asGeometryCollectionFeature(geometries: Geometry[], props?: GeoJsonProperties): Feature<GeometryCollection> {
+        return {
+            type: "Feature",
+            geometry: {
+                type: "GeometryCollection",
+                geometries: geometries
+            },
+            properties: props || {},
+        };
+    }
+
+    /**
+     * The one place a generator is handed its base, and so the one place APP-06's point
+     * numbering is applied.
+     *
+     * Thirty-two graphics store their points **tip first**, because that is how the standard
+     * numbers them; every `generateGraphics` in this package was written to build its
+     * head at the last vertex. `featureInGeneratorOrder` reconciles the two by reversing
+     * the line on the way in, which leaves the shape, the decoration sizes and the handle
+     * contracts exactly as they were and keeps the reversal out of thirty-two generators.
+     *
+     * `base` on the way out is the caller's own feature, not the reversed copy: the
+     * caller drew it, saves it, and edits its vertices. @see drawOrder.ts
+     */
+    generate(base: Feature, opts?: T): ITacticalGraphic {
+        /*
+         * **Eleven bases end in a point that is not a route point**, and the generators walk
+         * their coordinates as a path. So it comes off here, beside the reversal and for the
+         * identical reason: one statement at the door rather than an edit in every generator
+         * that reads `coordinates[length - 1]`.
+         *
+         * Its distance across the axis becomes the `radius` the generator is handed, which is
+         * what makes the coordinate the only stored statement of the width. A legacy base
+         * carrying no such point leaves the caller's own radius alone. @see axisWidth.ts
+         */
+        /*
+         * **A base across the antimeridian is unwrapped first**, since the generators and
+         * the width point all do their arithmetic in degrees. @see antimeridian.ts
+         */
+        const continuous = unwrappedLongitudes(base);
+        const axis = axisFeature(this.name, continuous);
+        const drawn = featureInGeneratorOrder(this.name, axis);
+        const options = optionsFromWidthPoint(this.name, continuous, opts);
+        /*
+         * **Smooth lines shape the line work and nothing else.** The handles and labels are
+         * built from the drawn points, so editing still moves what the operator placed, and an
+         * arrow keeps the segment its head is built on. @see smoothedForGenerator
+         */
+        const shaped = smoothedForGenerator(this.name, drawn);
+        return <ITacticalGraphic>{
+            name: this.name,
+            type: this.type,
+            base: base,
+            graphic: this.generateGraphics(shaped, options),
+            handles: this.generateHandles(drawn, options),
+            labels: this.generateLabels(drawn, options),
+        }
+    }
+
+}

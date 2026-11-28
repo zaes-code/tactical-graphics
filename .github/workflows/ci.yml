@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+
+jobs:
+  build:
+    name: typecheck · test · build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `npm ci` installs devDependencies too, which the demo app needs to
+      # typecheck. It does not download Playwright browsers — the browser
+      # driver (`npm run drive`) needs a running dev server and is not part
+      # of CI.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # `vitest run` is already single-shot; the old `-- --watchAll=false` was a Jest flag
+      # that Vitest rejects.
+      - name: Test
+        run: npm test
+        env:
+          CI: true
+
+      - name: Build library
+        run: npm run build
+
+      # Both layering rules: the published library never imports a renderer or a
+      # map library, and the sample app reaches the library through its published
+      # entry point rather than a deep path.
+      #
+      # The patterns live in the script, not here. They used to be two inline greps,
+      # which meant the rules could not be run locally — typecheck and the test suite
+      # both pass with a deep import in place, because the path resolves and neither
+      # tool has an opinion about it. Two of them reached the trunk for that reason.
+      # `npm run check:layering` is the same check a developer runs.
+      - name: Layering rules
+        run: npm run check:layering
+
+      - name: Package contents
+        run: npm pack --dry-run

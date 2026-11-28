@@ -1,0 +1,1785 @@
+/**
+ * # Symbology — the colors, weights and label sizes, with no renderer in them
+ *
+ * These accessors used to live in `openlayerStyles.ts`, which made them
+ * unreachable from anywhere that is not OpenLayers even though not one of them
+ * mentions it. They are the same class of thing as `core/config.ts`, which is
+ * already here for exactly this reason: what color a hostile line is, and how
+ * big a label renders, describe the *symbology* — they would mean the same to a
+ * MapLibre view, a Cesium view, or a consumer drawing to a canvas.
+ *
+ * `openlayerStyles.ts` re-exports every name below, so the OpenLayers layer's
+ * public surface is unchanged and there is exactly one implementation of each.
+ *
+ * Values and pure functions only, like `config.ts`. Nothing here touches a DOM,
+ * so this module loads in Node.
+ */
+
+import {
+    BASE_FONT_SIZE_PX,
+    DEFAULT_PALETTE,
+    getDefaultLabelSize,
+    getDefaultLineColorOverride,
+    getDefaultLineWidth,
+    getDrawMarkerColorOverride,
+    getDrawMarkerOutlineColorOverride,
+    getHandleColorOverride,
+    getHostilityColorOverride,
+    getObstacleColorsEnabled,
+    getObstacleColorOverride,
+    getInertHandleColorOverride,
+    getLabelFillColorOverride,
+    getLabelUsesHostilityColor,
+    getLabelHaloColorOverride,
+    ALTITUDE_UNIT_SUFFIX,
+    getAltitudeUnit,
+} from './config';
+import {AltitudeDatum, TacticalGraphicHostility, TacticalGraphicName} from './type';
+import {GRAPHIC_CATEGORIES, TacticalGraphicCategory} from './categories';
+import {baseGeometryFor} from './render';
+import {CENTER_SYMBOL_GRAPHICS} from './securitySymbol';
+import {hasClosingEdge, usesDrawnAnchors} from './handles';
+import {carriesWidthPointInBase} from './axisWidth';
+import {getSmoothLines} from './config';
+import {smoothingKindOf} from './smoothing';
+import {topmostSegmentIndex} from '../symbology/decorations';
+
+// ── Line weight ──────────────────────────────────────────────────────────────
+
+/**
+ * Stroke width in screen pixels for every graphic's line work.
+ *
+ * A **function**, backed by the live config. Caching the result in a
+ * module-level const is the bug this shape exists to prevent: a host's width
+ * change could then never reach that stroke.
+ */
+export const LINE_WIDTH = (): number => getDefaultLineWidth();
+
+/** Text-halo stroke width, in screen pixels. Independent of `LINE_WIDTH` by design. */
+export const HALO_WIDTH = 4;
+
+// ── Colors ──────────────────────────────────────────────────────────────────
+
+/**
+ * The doctrinal FM 1-02.2 affiliation colors.
+ *
+ * A host re-tints these through `configureTacticalGraphics({hostilityColors})`
+ * rather than by editing this table.
+ */
+const HOSTILITY_COLORS = {
+    friend: 'rgba(0, 0, 255, 1)',
+    hostile: 'rgba(255, 0, 0, 1)',
+    neutral: 'rgba(0, 128, 0, 1)',
+    pending: 'rgba(255, 255, 0, 1)',
+} as const;
+
+/**
+ * Affiliations that draw as another one. Doctrine gives assumed-friend the friendly
+ * blue and suspect/joker the pending yellow, so an override on the affiliation a host
+ * actually thinks about (`friend`, `pending`) carries to its alias without their having
+ * to name both. An override on the alias itself still wins, for a host that wants them
+ * distinguishable.
+ */
+const HOSTILITY_ALIASES: Partial<Record<TacticalGraphicHostility, TacticalGraphicHostility>> = {
+    [TacticalGraphicHostility.assumedFriend]: TacticalGraphicHostility.friend,
+    [TacticalGraphicHostility.suspectJoker]: TacticalGraphicHostility.pending,
+};
+
+/**
+ * The doctrinal FM 1-02.2 color for an affiliation, **ignoring any config override**.
+ * `undefined` for `unknown`, whose color is `getDefaultLineColor()` rather than an
+ * affiliation color of its own.
+ *
+ * Exported because it is a *pure* answer to "what would this be with no override" —
+ * something a settings UI needs and cannot get from `getColorByHostility`, which reads
+ * the live config. Reading the live config to render a control that edits the live
+ * config renders one frame stale: clearing an override re-renders before the host has
+ * republished, so the cleared value is still what comes back.
+ */
+export function getDoctrinalHostilityColor(hostility: TacticalGraphicHostility): string | undefined {
+    switch (HOSTILITY_ALIASES[hostility] ?? hostility) {
+        case TacticalGraphicHostility.friend:
+            return HOSTILITY_COLORS.friend;
+        case TacticalGraphicHostility.hostileFaker:
+            return HOSTILITY_COLORS.hostile;
+        case TacticalGraphicHostility.neutral:
+            return HOSTILITY_COLORS.neutral;
+        case TacticalGraphicHostility.pending:
+            return HOSTILITY_COLORS.pending;
+        default:
+            return undefined;
+    }
+}
+
+/** An affiliation's line color: the host's override if there is one, else doctrine. */
+export const getColorByHostility = (hostility: TacticalGraphicHostility): string => {
+    const canonical = HOSTILITY_ALIASES[hostility] ?? hostility;
+    const override = getHostilityColorOverride(hostility) ?? getHostilityColorOverride(canonical);
+    if (override) return override;
+
+    return getDoctrinalHostilityColor(hostility) ?? getDefaultLineColor();
+};
+
+/**
+ * The line color for a standard identity, telling a stated Unknown from an unset one.
+ *
+ * `stated` says the identity was set on purpose rather than left at its default. A stated
+ * `unknown` draws yellow: MIL-STD-2525E L.5.1.1.1 gives control measures "yellow (unknown ...)",
+ * and MIL-STD-2525C Tables II and XIII-1 give unknown and pending one yellow. A host's
+ * `unknown` override wins, then its `pending` override, as for `suspectJoker`. An unset
+ * `unknown` is a graphic with no affiliation and keeps the default line color, which is what
+ * {@link getColorByHostility} gives it. Every other identity is the same either way.
+ * @see statesUnknownIdentity
+ */
+export function getColorByIdentity(hostility: TacticalGraphicHostility, stated = false): string {
+    if (stated && hostility === TacticalGraphicHostility.unknown) {
+        return getHostilityColorOverride(TacticalGraphicHostility.unknown) ?? getColorByHostility(TacticalGraphicHostility.pending);
+    }
+    return getColorByHostility(hostility);
+}
+
+/**
+ * Whether a graphic's properties state Unknown as its identity, rather than leave it unset.
+ *
+ * `Unknown` alone does not: hosts, and this library's own sample dialog, wrote `Unknown` for a
+ * graphic whose affiliation nobody chose, and that saved data has to keep drawing as it always
+ * has. A graphic states it with `identityStated`, or by being part of an exercise, where
+ * MIL-STD-2525C's exercise unknown (W) is an identity of its own.
+ * @see TacticalGraphicProperties.identityStated
+ */
+export function statesUnknownIdentity(properties: {hostility?: TacticalGraphicHostility; identityStated?: boolean; exercise?: boolean}): boolean {
+    return properties.hostility === TacticalGraphicHostility.unknown && (properties.identityStated === true || properties.exercise === true);
+}
+
+/**
+ * The green APP-06 8.1.4.3 requires for obstacles, or `undefined` when the host has turned
+ * the rule off and the affiliation colour should apply instead.
+ *
+ * Returns a colour rather than a boolean so a caller cannot get the rule right and the value
+ * wrong — there is one place that knows both. @see OBSTACLE_GRAPHICS
+ */
+export function getObstacleColor(): string | undefined {
+    if (!getObstacleColorsEnabled()) return undefined;
+    return getObstacleColorOverride() ?? DEFAULT_PALETTE.obstacleColor;
+}
+
+/** Default stroke/fill color for graphics with no specific hostility color. */
+export function getDefaultLineColor(): string {
+    return getDefaultLineColorOverride() ?? DEFAULT_PALETTE.defaultLineColor;
+}
+
+/** Text label fill color. Follows the default line color unless overridden on its own. */
+export function getLabelFillColor(): string {
+    return getLabelFillColorOverride() ?? getDefaultLineColor();
+}
+
+/**
+ * Whether text amplifiers take their graphic's affiliation colour rather than
+ * `labelFillColor`. Re-exported here so a paint function has one place to import colour
+ * rules from. @see TacticalGraphicsConfigOptions.labelUsesHostilityColor
+ */
+export {getLabelUsesHostilityColor};
+
+/** Text label halo (outline) color — contrast against the map background. */
+export function getLabelHaloColor(): string {
+    return getLabelHaloColorOverride() ?? DEFAULT_PALETTE.labelHaloColor;
+}
+
+/**
+ * ## Editor chrome
+ *
+ * The affordances an operator edits a graphic with — handle dots, the inert center, the draw
+ * marker. Not part of any symbol: they say "you can drag this", and that meaning must
+ * not shift with a graphic's affiliation. Tinting handles by hostility made a hostile
+ * graphic's handles the same red as its own strokes, so they stopped reading as handles
+ * at all.
+ */
+
+/** Draggable handle dots. Renderers apply their own opacity on top. */
+export function getHandleColor(): string {
+    return getHandleColorOverride() ?? DEFAULT_PALETTE.handleColor;
+}
+
+/** Handle dots that exist but cannot be dragged in the current mode. */
+export function getInertHandleColor(): string {
+    return getInertHandleColorOverride() ?? DEFAULT_PALETTE.inertHandleColor;
+}
+
+/** The marker and sketch line shown while a graphic is being drawn. */
+export function getDrawMarkerColor(): string {
+    return getDrawMarkerColorOverride() ?? DEFAULT_PALETTE.drawMarkerColor;
+}
+
+/** That marker's outline. */
+export function getDrawMarkerOutlineColor(): string {
+    return getDrawMarkerOutlineColorOverride() ?? DEFAULT_PALETTE.drawMarkerOutlineColor;
+}
+
+/**
+ * Re-expresses a color at a given alpha.
+ *
+ * Handles both forms the palette can hold: `rgb()`/`rgba()`, and the hex the
+ * default line color is written as. Returns its input unchanged for anything
+ * else, so a host's `hsl()` or named color degrades to full opacity rather than
+ * to a crash.
+ */
+export function withOpacity(color: string, alpha: number): string {
+    const rgba = rgbaOf(color);
+    return rgba ? `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${alpha})` : color;
+}
+
+/**
+ * A color with its own alpha multiplied by `factor`, so a translucent wash dimmed by half
+ * stays half as strong as it was. Same forms and same fallback as {@link withOpacity}.
+ */
+export function fadeColor(color: string, factor: number): string {
+    const rgba = rgbaOf(color);
+    return rgba ? `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3] * factor})` : color;
+}
+
+/** `[r, g, b, a]` of an `rgb()`/`rgba()` or hex color, or null for any other form. */
+function rgbaOf(color: string): [number, number, number, number] | null {
+    const rgb = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/);
+    if (rgb) {
+        const [, r, g, b, a] = rgb;
+        return [Number(r), Number(g), Number(b), a === undefined ? 1 : Number(a)];
+    }
+
+    const hex = color.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+    if (hex) {
+        let h = hex[1];
+        if (h.length <= 4) h = h.split('').map(c => c + c).join(''); // #rgb(a) → #rrggbb(aa)
+        const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+        return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), a];
+    }
+
+    return null;
+}
+
+// ── Label scale ──────────────────────────────────────────────────────────────
+
+/** The font most labels render at. Note `BASE_FONT_SIZE_PX` is 16, not the 24 many literals use. */
+export const fontStyle = `bold ${BASE_FONT_SIZE_PX}px sans-serif`;
+
+/**
+ * The font literal every ratio-locked mission-task label renders with. Anything
+ * that measures one of those labels has to pass this same string, or the measured
+ * width won't match the drawn glyph.
+ */
+export const RATIO_LOCKED_LABEL_FONT = 'bold 24px sans-serif';
+/** Declared px size of `RATIO_LOCKED_LABEL_FONT`, for glyph-height math. */
+export const RATIO_LOCKED_LABEL_FONT_PX = 24;
+
+/** Used when a feature carries no `drawingResolution` to anchor against. */
+const TEXT_RESOLUTION_FALLBACK = 3000;
+
+/**
+ * Readability clamp on the zoom multiplier. Without the cap a graphic drawn from
+ * high altitude grows its label without bound as the operator zooms in past the
+ * drawing zoom; without the floor the label shrinks to nothing zoomed out.
+ */
+const MIN_LABEL_ZOOM_MULTIPLIER = 0.3;
+const MAX_LABEL_ZOOM_MULTIPLIER = 1.5;
+
+export function labelZoomMultiplier(drawingResolution: number | undefined, resolution: number): number {
+    const zoom = drawingResolution && drawingResolution > 0
+        ? drawingResolution / resolution
+        : Math.sqrt(TEXT_RESOLUTION_FALLBACK / resolution);
+    return Math.min(MAX_LABEL_ZOOM_MULTIPLIER, Math.max(MIN_LABEL_ZOOM_MULTIPLIER, zoom));
+}
+
+/**
+ * Ceiling shared by every *size-proportional* label scale.
+ *
+ * Both size-proportional formulas track the graphic's rendered size with nothing
+ * stopping them, so a large or zoomed-in graphic grew a letter of unbounded
+ * height. This is the same ceiling a zoom-anchored label stops at, expressed as a
+ * multiple of the *configured* label size so raising `labelSize` raises it too.
+ */
+export function maxGraphicLabelScale(): number {
+    return (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * MAX_LABEL_ZOOM_MULTIPLIER;
+}
+
+/**
+ * The scale that renders a label at exactly the size the host configured.
+ *
+ * **The plain reading of `labelSize`, with no memory in it.** A label's size used to be
+ * this multiplied by how far the map had moved since the graphic was drawn, clamped to
+ * [0.3, 1.5] — so two identical graphics could carry labels five times apart because of
+ * *when* someone clicked, and a saved map came back different because the drawing zoom is
+ * live view state and is deliberately not in the file. Measured on the sweep, 116 of 224
+ * labels moved when that remembered zoom moved.
+ *
+ * What kept the label from swamping a small graphic was that same clamp, and
+ * `capLabelToGraphic` does that job properly now — against the graphic itself rather than
+ * against a moment in time. So the size is the configured one, capped by the symbol.
+ *
+ * Divided by `BASE_FONT_SIZE_PX` rather than by the font a family happens to render with,
+ * which keeps every graphic at exactly the size it draws today at its own drawing zoom.
+ * That the 24 px families therefore render half again larger than `labelSize` is older than
+ * this change and left alone. @see BASE_FONT_SIZE_PX
+ */
+export function configuredLabelScale(): number {
+    return getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+}
+
+/**
+ * Zoom-anchored label scale.
+ *
+ * **No longer a fallback.** `scaleOf` used to reach for this whenever a feature carried no
+ * extent, which made a label's size depend on who built the feature: a holder-backed one
+ * has bounds, a host-built one does not, so the same graphic at the same zoom drew its
+ * designation at two different sizes with nothing in the config to account for it. A
+ * missing extent now means no cap, not a different rule. @see scaleOf
+ *
+ * What still uses it is the mission-task letter, which is genuinely anchored to the zoom
+ * the task was dropped at rather than to any extent.
+ *
+ * At the drawing zoom the text is exactly `labelSize` px; zoomed out it shrinks
+ * proportionally, clamped to [0.3, 1.5] of `labelSize` so it stays readable at
+ * every altitude. Does **not** react to a resize; for that see
+ * {@link graphicLabelScale}.
+ */
+export function labelScale(drawingResolution: number | undefined, resolution: number): number {
+    return (getDefaultLabelSize() / BASE_FONT_SIZE_PX) * labelZoomMultiplier(drawingResolution, resolution);
+}
+
+/** Share of a graphic's on-screen size its label may span, for the block family. */
+const GRAPHIC_LABEL_FRACTION = 0.5;
+
+/**
+ * Size-proportional label scale: the label grows with both user resize and
+ * zoom-in. Falls back to {@link labelScale} when the graphic has no size stamped.
+ */
+export function graphicLabelScale(graphicSize: number | undefined, drawingResolution: number | undefined, resolution: number): number {
+    if (graphicSize && graphicSize > 0) {
+        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+        return Math.min(maxGraphicLabelScale(), sizeFactor * GRAPHIC_LABEL_FRACTION * (graphicSize / resolution) / BASE_FONT_SIZE_PX);
+    }
+    return labelScale(drawingResolution, resolution);
+}
+
+/**
+ * Label height as a fraction of the graphic's size on screen, for the ratio-locked
+ * mission tasks. Lower than `GRAPHIC_LABEL_FRACTION` because mission tasks store a
+ * radius where the block family stores a perpendicular size — 0.3 lines the two
+ * families up at their respective minimums.
+ */
+export const RATIO_LOCKED_LABEL_FRACTION = 0.3;
+
+/**
+ * The four tactical mission tasks FM 1-02.2 draws as two straight lines crossing at
+ * a one-letter designation, table 6-1. They share one generator and one style.
+ */
+export const CROSSED_MISSION_TASKS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+];
+
+/**
+ * A distance for an operator to read, from meters.
+ *
+ * Meters below a kilometer — a 400 m radius shown as "0.4 km" is both harder to read
+ * and less precise than the number it came from. Above that, kilometers: one decimal
+ * while the figure is small enough for it to mean something, whole numbers beyond
+ * 10 km where it is noise.
+ *
+ * **In the core, because every renderer's measure read-out has to agree with every
+ * other and with the properties dialog** — they report the same quantity and an operator
+ * compares them. It was in `openlayerStyles.ts`, which is why MapLibre had no
+ * read-out to be consistent with.
+ */
+export const formatDistance = (meters: number): string => {
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    const km = meters / 1000;
+    return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
+};
+
+/**
+ * An angle for an operator to read, from degrees.
+ *
+ * Three digits and a degree sign, which is how a bearing is written on a map and in every
+ * order that carries one: `043°`, not `43 deg`. Normalized into [0, 360) first, so a
+ * gesture that has swung the long way round still reports a bearing rather than 400 or a
+ * negative.
+ *
+ * **In the core for the same reason as {@link formatDistance}**: a read-out, a dialog field
+ * and a label all state the same quantity, and an operator compares them.
+ */
+export const formatBearing = (degrees: number): string => {
+    const normalized = ((Math.round(degrees) % 360) + 360) % 360;
+    return `${String(normalized).padStart(3, '0')}°`;
+};
+
+/**
+ * What a read-out calls each of 200700's four numbers.
+ *
+ * The plate's own words — search axis azimuth, start range, stop range, stop relative
+ * bearing — shortened to what fits beside a grip being dragged. Here rather than in either
+ * renderer because both print them, and both printing "Start" by writing the word twice is
+ * how the two came to disagree about everything else.
+ * @see measureReadout
+ */
+export const RADAR_READOUT_CAPTIONS = {
+    azimuth: 'Azimuth',
+    startRange: 'Start',
+    stopRange: 'Stop',
+    relativeBearing: 'Bearing',
+} as const;
+
+/** One figure in a measure read-out: what it is, and the number. @see measureReadout */
+export interface MeasurePart {
+    /** What is being set — "Azimuth", "Start", "Stop". Omitted where one number needs no name. */
+    caption?: string;
+    /** A distance, in metres on the ground. */
+    meters?: number;
+    /** An angle, in degrees. Takes precedence: a part states one figure, not two. */
+    degrees?: number;
+}
+
+/** How two figures in one read-out are separated. */
+const MEASURE_SEPARATOR = ' · ';
+
+/**
+ * The text beside a measure line: what is being set, then the figure.
+ *
+ * One statement of it because both renderers draw this read-out and a caption written
+ * twice drifts. A gesture that swings an *angle* gives `degrees` and the figure is a
+ * bearing; everything else reports the distance it is dragging out.
+ *
+ * **More than one part, because one gesture can set more than one number.** Aiming the
+ * radar search doctrine's second click fixes its axis *and* its start range at the same
+ * time, and reporting only one of them is how the axis came to have no read-out at all.
+ * @see formatBearing
+ */
+export function measureReadout(parts: MeasurePart[]): string {
+    return parts
+        .map(part => {
+            const figure =
+                part.degrees !== undefined && isFinite(part.degrees)
+                    ? formatBearing(part.degrees)
+                    : part.meters !== undefined && isFinite(part.meters)
+                      ? formatDistance(part.meters)
+                      : undefined;
+            if (figure === undefined) return undefined;
+            return part.caption ? `${part.caption} ${figure}` : figure;
+        })
+        .filter(Boolean)
+        .join(MEASURE_SEPARATOR);
+}
+
+/**
+ * The smallest a read-out may be shrunk to fit its own line, as a share of the label size.
+ *
+ * Half. Below that the figure stops being readable, and a number nobody can read is no
+ * better than the nothing this replaces.
+ */
+export const MEASURE_READOUT_MIN_SCALE = 0.5;
+
+/** How much of the line the text may fill, so it does not run out past both ends at once. */
+const MEASURE_READOUT_SHARE = 0.95;
+
+/**
+ * How far to shrink a read-out so it fits the line it is drawn along.
+ *
+ * **A read-out that does not fit is not drawn at all.** OpenLayers lays line-placed text
+ * along its geometry and drops it when the glyphs run past the ends, so the radar search
+ * doctrine's label — 201 px wide with an azimuth and a range in it — appeared only once the
+ * drag passed 201 px. Everything before that was blind, which is the opposite of what a
+ * read-out is for.
+ *
+ * So the text shrinks to the room it has, down to {@link MEASURE_READOUT_MIN_SCALE}. Below
+ * that a caller should stop laying it along the line and place it at the midpoint instead:
+ * shrinking further would trade one unreadable state for another.
+ */
+export function measureReadoutScale(naturalWidthPx: number, linePx: number, desired = 1): number {
+    if (!(naturalWidthPx > 0) || !(linePx > 0)) return desired;
+    const fitted = (linePx * MEASURE_READOUT_SHARE) / naturalWidthPx;
+    return Math.max(MEASURE_READOUT_MIN_SCALE, Math.min(desired, fitted));
+}
+
+/**
+ * An altitude or height for a label, from whatever the operator typed.
+ *
+ * The number is written in the configured {@link AltitudeUnit} and the unit is appended,
+ * which is what FM 1-02.2 asks for — fields X and X1 say "measurement units shall be
+ * displayed in the string" — while keeping the input a plain number a host can store,
+ * compare and sort. The plates append it tight: `1500FT`, not `1500 ft`.
+ *
+ * **Anything non-numeric is shown verbatim**, and that is what keeps the doctrine
+ * whole. A flight level is not a count of feet and a datum is not a unit, so `FL150`,
+ * `1500MSL` and `1500FT AGL` all pass through untouched — restored from a save,
+ * imported from another system, or typed where a host allows it. Formatting them would
+ * destroy the very thing they carry.
+ *
+ * @see getAltitudeUnit for why the unit is a host-level setting rather than per symbol.
+ */
+export const formatAltitude = (value: string | number | undefined, datum?: AltitudeDatum): string => {
+    if (value === undefined) return '';
+    const text = String(value).trim();
+    const altitude = Number(text);
+    if (text === '' || !Number.isFinite(altitude)) return text;
+
+    // **A flight level is not a number of feet with a label on it.** `FL150` is 15,000 ft
+    // of pressure altitude against the standard setting, and the number written is the
+    // level itself — 150. So it takes the prefix and no unit, rather than a suffix.
+    if (datum === AltitudeDatum.flightLevel) return `FL${Math.round(altitude)}`;
+
+    const written = `${Math.round(altitude)}${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]}`;
+    // Spaced, as the plates print it: `1500FT AGL`.
+    return datum ? `${written} ${datum}` : written;
+};
+
+/**
+ * Graphics that carry a radius an operator can read: the circular areas, the arc mission
+ * tasks, the range fans.
+ *
+ * Drives both the properties dialog's read-out and the measure line drawn while the
+ * graphic is sized. The coupling is deliberate — a graphic showing a radius in one
+ * place and not the other reads as a bug — and it belongs here for the same reason
+ * the formatter does: a second renderer draws the same read-out.
+ */
+export const RADIUS_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.AirSpaceCoordinationAreaCircular,
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.ArtilleryTargetIntelligenceZoneCircular,
+    TacticalGraphicName.BaseDefenseZone,
+    TacticalGraphicName.BlueKillBoxCircular,
+    TacticalGraphicName.CallForFireZoneCircular,
+    TacticalGraphicName.CensorZoneCircular,
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.CriticalFriendlyZoneCircular,
+    TacticalGraphicName.DeadSpaceAreaCircular,
+    TacticalGraphicName.FireSupportAreaCircular,
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.Isolate,
+    // Movement to contact is deliberately absent. It is sized by a radius like the
+    // rest of this list, but it is a **badge**, not an area: FM 1-02.2 table 5-10
+    // draws it with no amplifier of any kind, and a distance is not one of the
+    // things the symbol says. Reporting one put a measurement on the properties
+    // dialog and a hashed read-out under the cursor that meant nothing.
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.PositionAreaArtilleryCircular,
+    TacticalGraphicName.PurpleKillBoxCircular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    TacticalGraphicName.TargetAreaCircular,
+    // 241703, 241803 and 241903 letter `AM` along a `RADIUS (M)` arrow like the other seven
+    // circular target-acquisition zones, and were the three missing from this list.
+    TacticalGraphicName.TargetBuildUpAreaCircular,
+    TacticalGraphicName.TargetValueAreaCircular,
+    TacticalGraphicName.ZoneOfResponsibilityCircular,
+    // APP-06 200300: its Template letters `AM` with `RADIUS (m)` written along the arrow,
+    // so the radius is an amplifier the symbol carries and not only a drag read-out.
+    TacticalGraphicName.NoAttackZone,
+    TacticalGraphicName.WeaponSensorRangeFanCircular,
+    TacticalGraphicName.WeaponSensorRangeFanSector,
+]);
+
+/** Whether this graphic reports a radius. @see RADIUS_GRAPHICS */
+export function hasRadiusReadout(name: TacticalGraphicName): boolean {
+    return RADIUS_GRAPHICS.has(name);
+}
+
+/**
+ * Circle graphics that draw the read-out while being sized but carry **no radius field
+ * in the properties dialog**.
+ *
+ * Seven, not ten: `TargetReferencePoint`, `PointTarget` and `FireSupportStation` also
+ * route through the circular family but are commented out of the controller registry,
+ * so they are not drawable.
+ *
+ * ## Why the two lists came apart
+ *
+ * They used to be one. `RADIUS_GRAPHICS` drove both the dialog's read-out and the hashed
+ * line under the cursor, and the coupling was deliberate — a graphic reporting a radius
+ * in one place and not the other reads as a bug.
+ *
+ * But the coupling ran the wrong way for a third of the family. These ten are drawn as
+ * circles and sized by dragging, and the number the operator is dragging *to* is the whole
+ * point of showing it — while the dialog deliberately does not offer a radius field,
+ * because the amplifier is not one the symbol carries. So they resized blind: the
+ * neighbouring zone showed a distance and they showed nothing, for a reason no operator
+ * can see. **A read-out is feedback on a gesture; a dialog field is an amplifier.**
+ *
+ * `MovementToContact` stays out of both, and that is doctrine rather than an omission:
+ * FM 1-02.2 table 5-10 draws it with no amplifier of any kind, and it is a badge rather
+ * than an area — a distance is not one of the things the symbol says.
+ */
+const SIZE_READOUT_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
+    TacticalGraphicName.PsyOpsZoneCircular,
+    // The target build-up, target value and zone of responsibility circles left this list:
+    // their plates letter AM along a RADIUS (M) arrow, so the radius is an
+    // amplifier and they are in RADIUS_GRAPHICS with the rest of their family.
+    /*
+     * Not a circle, but sized by the same gesture. The rectangular target became
+     * point-anchored in 3.2.0 — one anchor point, with the length swung and set by dragging
+     * the edge handle — so it resizes exactly the way the entries above do, and would
+     * otherwise be the one graphic in the family that reports nothing while you drag it.
+     * The number under the cursor is its half-length. @see RectangularTarget
+     */
+    TacticalGraphicName.TargetAreaRectangular,
+    /*
+     * The maritime control areas sized by the same rim drag and lettering no radius.
+     *
+     * 200500 letters nothing at all; the three ellipses and 200600 letter their two axes
+     * and a rotation, which the dialog offers as `width` / `length` / `attitude` -- a
+     * radius field on top of those would be a fourth way to say the same thing. 200700's
+     * ranges are edited as bands. Every one of them is still *dragged* to size, so the
+     * number under the cursor is the whole feedback the gesture has.
+     */
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.ShipAreaOfInterestEllipse,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+    /*
+     * **200700 is back.** It left with the note "no longer
+     * sized by a rim drag -- it is three placed points -- so there is no radius under the
+     * cursor to report", which was true of that day's contract and is not of this one: the
+     * plate gives it one anchor point and typed ranges, so it is dropped and dragged out
+     * again, and the reach under the cursor is once more the whole feedback the gesture
+     * has. Its ranges are still edited as bands rather than through a radius field, which
+     * is why it belongs in this set and not in `RADIUS_GRAPHICS`. @see RadarSearchDoctrine
+     */
+    TacticalGraphicName.RadarSearchDoctrine,
+]);
+
+/**
+ * Whether this graphic draws the hashed read-out while it is being drawn or resized.
+ *
+ * Broader than {@link hasRadiusReadout}, which answers a different question — whether
+ * the properties dialog offers a radius field. Both renderers read this one for the
+ * measure line. @see SIZE_READOUT_ONLY
+ */
+export function showsSizeReadout(name: TacticalGraphicName): boolean {
+    return RADIUS_GRAPHICS.has(name) || SIZE_READOUT_ONLY.has(name);
+}
+
+/**
+ * Graphics whose designation gap is cut from the **rendered glyph** at paint time,
+ * so the generated geometry must carry none of its own.
+ *
+ * The two bowed turns. Their generator leaves `0.16 * size` for the letter when
+ * nobody says otherwise, which is right for a consumer taking the raw GeoJSON and
+ * wrong for a renderer that measures the letter and cuts its own hole — the two
+ * gaps add, and the curve opens three times wider than the "T" needs.
+ *
+ * A renderer that paints through this library's paint functions passes
+ * `labelGap: 0` for these. It is a list rather than a per-renderer constant because
+ * both renderers need the same answer, and the OpenLayers holder having it alone is
+ * exactly how the two came to disagree.
+ */
+export const GLYPH_CUT_GAP_GRAPHICS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.Turn,
+    TacticalGraphicName.TacticalTurn,
+];
+
+/**
+ * The mission tasks whose designation is **ratio-locked**: a 24 px base font scaled
+ * from the graphic's own `graphicSize`, so the letter grows and shrinks with the
+ * circle it sits in. Every other mission task takes the ordinary zoom-anchored
+ * 16 px label.
+ *
+ * Which list a task is on is a *symbology* fact, not a renderer's opinion — a letter
+ * that tracks its circle in one view and holds a zoom-anchored size in another is
+ * two different symbols. It lived in the OpenLayers holder, and the second renderer
+ * duly disagreed with it: every mission-task letter was drawn ratio-locked there,
+ * which put a 24 px "T" on a turn that OpenLayers drew at 16 px and scaled it by a
+ * different rule as the map moved.
+ *
+ * The crossed four are here for the font only. Their scale is overridden with a
+ * constant, because the whole symbol is pinned to a fixed screen size — but keeping
+ * them on the list keeps the family's font literal in one place.
+ */
+export const RATIO_LOCKED_MISSION_TASKS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Contain,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.Isolate,
+    // The other three arc-and-arrowhead circles. Their letters used to render at the
+    // zoom-anchored 16 px default while Isolate's "I" tracked its circle, so four
+    // graphics built from the same arcs disagreed about how big a one-letter label is.
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Secure,
+    // **And the last five.** The same reasoning had been applied twice and
+    // stopped short both times: these are built from the identical two arcs and carry the
+    // identical rim letter, so leaving them zoom-anchored meant a `LOC` or a `C/S` held
+    // its screen size while the circle around it shrank — at a far zoom the letter is the
+    // graphic. A zoom-anchored scale is *deliberately* insensitive to the shape; this
+    // family needs the opposite.
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
+    ...CROSSED_MISSION_TASKS,
+]);
+
+/** Scale of a ratio-locked mission task's label. Anything opening a gap for that label must use this number. */
+export function ratioLockedLabelScale(graphicSize: number | undefined, drawingResolution: number | undefined, resolution: number): number {
+    if (graphicSize && graphicSize > 0) {
+        const sizeFactor = getDefaultLabelSize() / BASE_FONT_SIZE_PX;
+        return Math.min(maxGraphicLabelScale(), sizeFactor * RATIO_LOCKED_LABEL_FRACTION * (graphicSize / resolution) / BASE_FONT_SIZE_PX);
+    }
+    return labelScale(drawingResolution, resolution);
+}
+
+/**
+ * Fraction of a font's declared px size taken up by a capital letter's height.
+ *
+ * Used wherever a gap has to clear a glyph's *height* rather than its width —
+ * the arc mission tasks' tangential gap, which runs along the letter's height
+ * when the label sits due east.
+ */
+export const CAP_HEIGHT_FRACTION = 0.72;
+
+/**
+ * Tic length on the arc mission tasks, as a fraction of the graphic's radius.
+ *
+ * APP-06 sets it against the letter rather than against the circle:
+ *
+ * > The default tic length should be the same as the text height of the identifying
+ * > letter. Spacing between the tics should also be the height of the identifying
+ * > letter. (151204 Contain; 151205 Retain states the length half)
+ *
+ * **Derived, not measured.** These labels are ratio-locked, so the letter's cap height
+ * is a fixed share of the radius at every zoom: the scale is
+ * `RATIO_LOCKED_LABEL_FRACTION x radiusPx / BASE_FONT_SIZE_PX`, rendered at
+ * `RATIO_LOCKED_LABEL_FONT_PX`, of which `CAP_HEIGHT_FRACTION` is the capital. Writing
+ * the 0.324 out as a literal would silently stop matching the letter the first time any
+ * of those four moved.
+ *
+ * Contain and Retain both drew their tics at `size / 2.5` — 0.4 of the radius, about a
+ * quarter too long — and spaced them nearly twice as far apart as the letter is tall.
+ */
+export const ARC_TIC_FRACTION =
+    RATIO_LOCKED_LABEL_FRACTION * (RATIO_LOCKED_LABEL_FONT_PX / BASE_FONT_SIZE_PX) * CAP_HEIGHT_FRACTION;
+
+/**
+ * How many tics span `spanDegrees` of arc at that spacing, counting both ends.
+ *
+ * The spacing APP-06 asks for is a *chord* — one letter-height along the rim — so the
+ * angular step is `2 * asin(fraction / 2)` rather than the fraction itself. At the
+ * radius these graphics are drawn the difference is small, but it grows with the
+ * fraction and getting it wrong puts the last tic through the label's gap.
+ */
+export function arcTicCount(spanDegrees: number): number {
+    const stepDegrees = (2 * Math.asin(Math.min(ARC_TIC_FRACTION / 2, 1)) * 180) / Math.PI;
+    if (!(stepDegrees > 0)) return 2;
+    return Math.max(2, Math.round(Math.abs(spanDegrees) / stepDegrees) + 1);
+}
+
+/**
+ * Graphics that draw both standard identities at once, so selecting one is
+ * meaningless. Line of contact is the whole set: FM 1-02.2's line control measure
+ * table prints it as two opposed waves - the enemy side red, the friendly side
+ * black - and the generator does exactly that, unconditionally. A hostility here
+ * has nothing to change.
+ */
+const BOTH_IDENTITIES_AT_ONCE = new Set<TacticalGraphicName>([TacticalGraphicName.LineOfContact]);
+
+/**
+ * The four FM 1-02.2 table 5-19 obstacle effects, each an exact copy of the
+ * Chapter 6 tactical mission task of the same doctrinal name apart from the
+ * letter. They are Chapter 5, so the category derivation would switch hostility on
+ * and a hostile one would draw red - but a twin that renders differently from what
+ * it twins is not a twin. Kept separate from the set above because the reason is
+ * different: line of contact has nothing to change, these have something to change
+ * and must not.
+ */
+const MISSION_TASK_TWINS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Block,
+    TacticalGraphicName.Disrupt,
+    TacticalGraphicName.Fix,
+    TacticalGraphicName.Turn,
+]);
+
+/**
+ * Whether a graphic's line work takes the standard identity color at all.
+ *
+ * **A symbology fact, not a UI one**, which is why it lives here rather than beside
+ * the dialog's field list. FM 1-02.2 gives no amplifier fields to the Chapter 6
+ * tactical mission tasks: a hostile Seize is drawn exactly like any other Seize.
+ * Deriving that from the category beats repeating a boolean 198 times - a graphic
+ * added later inherits the right answer instead of whatever was copied above it.
+ *
+ * It moved out of `openlayers/graphicFieldRegistry.ts` (which still re-exports it)
+ * once there was a second renderer. Hiding the input is only half the rule: it
+ * stops a *user* choosing an identity, and does nothing about one that arrives in
+ * an imported file or from a host that writes the bag itself. The other half is
+ * {@link getColorByHostility}'s caller refusing it - see `lineColorOf`.
+ */
+/**
+ * The three obstacle bypasses, whose own row says so in as many words:
+ *
+ * > Obstacle bypass symbols indicate a mobility function and should be rendered in black.
+ *
+ * A third reason, distinct from both sets above: these have something to change and are
+ * told not to, like the mission-task twins, but the instruction is the standard's own
+ * rather than an inference from what they twin.
+ */
+const MOBILITY_FUNCTION_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ObstacleBypassEasy,
+    TacticalGraphicName.ObstacleBypassDifficult,
+    TacticalGraphicName.ObstacleBypassImpossible,
+]);
+
+/**
+ * The CBRN contaminated areas, which describe **ground rather than a force**.
+ *
+ * Table 8-19 draws all seven one way: the hazard yellow, the inverted triangle, the
+ * letter. A contaminated area warns about a place — it belongs to nobody, and asking who
+ * it is affiliated with has no answer the symbol could show.
+ *
+ * The yellow was already fixed for that reason, on the reading that "the outline still
+ * carries the affiliation". That half is gone: a hostile contaminated area drew red line
+ * work around a hazard whose whole point is that it does not care who is standing in it,
+ * and the field offered an identity the plate has no form for.
+ */
+const HAZARD_AREAS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.BiologicalContaminatedArea,
+    TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.ChemicalContaminatedArea,
+    TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+    TacticalGraphicName.NuclearContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedArea,
+    TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
+]);
+
+/**
+ * The two maritime areas whose plate **names a colour**, APP-06 200500 and 200700.
+ *
+ * A third reason to withhold an identity, and it is the sharpest of the three: for these
+ * the colour *is* the symbol.
+ *
+ * - 200500, the active manoeuvre area, is a bare circle in amber -- and 200400, ship area
+ *   of interest, is the same bare circle in black. Draw a hostile 200500 red and what is
+ *   on the screen is neither: a circle in a colour that names no symbol at all.
+ * - 200700's Note states its dark cyan outright, border and fill.
+ *
+ * Same ruling as the hazard areas, one step further along: there the colour was doctrinal
+ * and the outline was argued to still carry the affiliation, and that half was withdrawn.
+ * Here there is no outline separate from the colour to argue about.
+ *
+ * **200600 is deliberately not here.** Its plate names a *fill*, and its border is stated
+ * as white -- which this library draws in the affiliation colour instead, because a white
+ * stroke is invisible on every basemap the default palette is built for. It has line work
+ * that can carry an identity, so it does. @see maritimeAreaPaints
+ */
+const COLOUR_NAMED_AREAS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.ActiveManeuverArea,
+    TacticalGraphicName.RadarSearchDoctrine,
+    /*
+     * Four more, when the plates' stated colours were applied to the
+     * **outline** as well as the fill. While only the fill was the plate's
+     * these kept their identity, because the rim still carried it; with the rim orange, grey
+     * or white there is no line work left for an affiliation to colour, and a hostile launch
+     * area drawn red would be a symbol the standard does not have.
+     *
+     * 200600 was held back for one round, on the argument that its stated *white* border is
+     * invisible on the basemaps this palette is built for. That is a rendering worry, not a
+     * reading of the plate, and the plate is what this file records: its Note says white, so
+     * the rim is white and the identity goes with it.
+     */
+    TacticalGraphicName.LaunchAreaEllipse,
+    TacticalGraphicName.DefendedAreaEllipse,
+    TacticalGraphicName.DefendedAreaRectangle,
+    TacticalGraphicName.CuedAcquisitionDoctrine,
+]);
+
+/**
+ * Restricted terrain and severely restricted terrain, for the same reason as the hazard
+ * areas: they describe **ground rather than a force**.
+ *
+ * APP-06 152400 and 152500 say what a piece of country does to movement -- a gradient, a
+ * marsh, dense woodland -- and the answer is the same whoever is trying to cross it. Their
+ * Templates carry a Sector 1 modifier, a Sector 2 modifier and field H, and nothing else:
+ * no `T`, no `N`, no status form. So the identity had nowhere to go but the outline, where
+ * it turned a statement about the ground into a claim about a side. @see sectorModifierPaints
+ *
+ * **The limited access area is deliberately not here.** Its FM 1-02.2 Template offers a
+ * date-time group, so it is a restriction someone imposes for a while rather than a
+ * standing property of the ground, and the affiliation still reads.
+ */
+const TERRAIN_DESCRIPTIONS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.RestrictedTerrain,
+    TacticalGraphicName.SeverelyRestrictedTerrain,
+]);
+
+/**
+ * The mission tasks that **do** carry an identity.
+ *
+ * The category rule below switches hostility off for every tactical mission task, on FM
+ * 1-02.2's line that they "do not use modifiers or amplifiers". The exfiltration and the
+ * infiltration are the exception the operator asked for, and there is a reading
+ * behind it: these two are told apart by *whose* forces the arrow points toward — APP-06
+ * 343700 says "the direction of friendly forces" and 343800 "the direction of enemy forces"
+ * — so an identity is the one amplifier that means something on them.
+ *
+ * They are also categorised inconsistently: 343700 sits under Tactical Mission Tasks and
+ * 343800 under Movement and Manoeuvre, which is why one of them offered hostility and the
+ * other did not, for a pair that is one symbol with two letters.
+ */
+const HOSTILE_CAPABLE_MISSION_TASKS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Exfiltrate,
+    TacticalGraphicName.Infiltration,
+]);
+
+/**
+ * A graphic that carries a unit symbol carries that unit's identity.
+ *
+ * The escort and the two follow tasks are tactical mission tasks, so the category rule
+ * switched hostility off for all three -- and all three draw a **host-supplied entity
+ * symbol**: the escort in the break in its bar, the follow tasks where field T would go.
+ * An entity symbol's frame *is* its standard identity. Offering no affiliation left the
+ * symbol stuck on `pending`, so the one amplifier that decides what the drawn symbol looks
+ * like was the one the operator could not set.
+ *
+ * Read from {@link CENTER_SYMBOL_GRAPHICS} rather than listed again, so a graphic that
+ * gains a centre symbol later cannot gain it without the identity that frames it.
+ */
+
+export function supportsHostility(name: TacticalGraphicName): boolean {
+    if (HOSTILE_CAPABLE_MISSION_TASKS.has(name) || CENTER_SYMBOL_GRAPHICS.has(name)) return true;
+    if (BOTH_IDENTITIES_AT_ONCE.has(name) || MISSION_TASK_TWINS.has(name)) return false;
+    if (MOBILITY_FUNCTION_SYMBOLS.has(name) || HAZARD_AREAS.has(name)) return false;
+    if (COLOUR_NAMED_AREAS.has(name)) return false;
+    if (TERRAIN_DESCRIPTIONS.has(name)) return false;
+    return GRAPHIC_CATEGORIES[name] !== TacticalGraphicCategory.TacticalMissionTasks;
+}
+
+/**
+ * The gestures a graphic accepts.
+ *
+ * **A property of the symbol, not of a renderer.** Some of these are badges: they
+ * mark a point and describe no ground extent, so there is no size for a resize to
+ * be right about and no axis for a rotate to turn. Others are pinned to a screen
+ * size outright and would simply ignore the number.
+ *
+ * It reads as doctrine rather than as UI: refusing a gesture is how the symbol
+ * says "this dimension is not yours to set". A renderer that let the operator drag it
+ * anyway would store a number the generator throws away, which looks like a
+ * gesture that silently does nothing.
+ *
+ * The OpenLayers side enforces the same thing by choosing a controller —
+ * `PointDropController` no-ops the rotate for the crossed tasks and keeps resize for
+ * the readiness states. This is that knowledge as a table any renderer can read.
+ *
+ * There was a third case here, `SecurityOperationsController`, which no-opped resize
+ * and kept rotate for cover, guard and screen. Those three stopped being fixed-size
+ * badges and the controller was deleted with them; they are ordinary
+ * two-point line graphics now and take every gesture.
+ */
+export interface AllowedGestures {
+    translate: boolean;
+    rotate: boolean;
+    resize: boolean;
+    /** Whether the base has vertices an operator can drag. A point never does. */
+    modify: boolean;
+}
+
+/**
+ * The point-anchored symbols that turn but do not resize.
+ *
+ * **Empty**, when cover, guard and screen — the only members — stopped
+ * being badges. They are drawn from two points now, so they turn by being drawn along a
+ * different axis and resize by being drawn longer; neither is a gesture on a dropped
+ * symbol any more. Kept rather than deleted because the *category* is real: a symbol whose
+ * size is fixed by doctrine but whose orientation is the operator's would belong here.
+ * @see SecurityOperation
+ */
+const ROTATE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([]);
+
+/**
+ * The point-anchored symbols the operator **scales but does not turn**.
+ *
+ * Each is dropped whole on one click and then sized — an airfield covers ground, a
+ * completed roadblock spans a road, a crossed mission task covers the area the task
+ * applies to — but each has a single doctrinal orientation, so `PointDropController`
+ * no-ops the rotate.
+ *
+ * **All four crossed tasks are here.** They were fixed-size badges,
+ * pinned to a constant 100 px so a stored size was divided straight back out. The
+ * security operations were the same kind of thing and were the last of them: APP-06's
+ * four anchor points made them two-point drawn graphics, so nothing in
+ * the library is a fixed-size badge any more and `ROTATE_ONLY_SYMBOLS` is empty.
+ *
+ * **Neither was listed here, and only OpenLayers refused the rotate.** The refusal lived
+ * in the controller, which MapLibre does not have, so a rotate drag turned a graphic on
+ * one engine and did nothing on the other. That is the standing failure mode for anything
+ * decided in a holder: the table is portable, the controller is not.
+ */
+/**
+ * The graphics whose base points are **derived from the drop, not placed by the operator**.
+ *
+ * A base geometry with several points normally means several things to drag, and
+ * `allowedGestures` reads it that way — a `LineString` base is a modifiable one. That is
+ * the wrong reading for a symbol the standard describes by four anchor points which are
+ * nonetheless one fixed shape: APP-06 343300's demonstration is two straights of equal
+ * length, parallel, joined by a turn whose diameter is the gap between them, and none of
+ * those ratios is an input. The points still travel — they are what the base carries and
+ * what a snapshot holds — but the whole symbol moves, turns and scales together.
+ *
+ * **A table rather than a controller override.** The first version of the dropped
+ * demonstration refused the vertex drag by not having any vertices, which cost the four
+ * points the standard names; the version before that refused a *rotate* inside
+ * `PointDropController`, where only OpenLayers could see it. @see allowedGestures
+ */
+/**
+ * **Empty**, and kept because the category is real.
+ *
+ * The demonstration was its only member and left when its four points became placed rather
+ * than laid out from one centre. A graphic whose points are derived is still a thing this
+ * library could hold — the predicate is what a renderer asks — so an empty answer is a fact
+ * worth pinning rather than a table to delete. Same reasoning as `ROTATE_ONLY_SYMBOLS`.
+ */
+const DERIVED_ANCHOR_GRAPHICS = new Set<TacticalGraphicName>([]);
+
+/** @see DERIVED_ANCHOR_GRAPHICS */
+export function hasDerivedAnchors(name: TacticalGraphicName): boolean {
+    return DERIVED_ANCHOR_GRAPHICS.has(name);
+}
+
+/**
+ * The symbols the operator turns and moves but does not **scale by dragging**.
+ *
+ * A range fan's size is not one number. It is a list of bands, each with its own range in
+ * metres and its own label — `MG RG 60,000`, `ATGM RG 120,000` — and those numbers are
+ * *stated*, read off a weapon's data rather than found by eye. A whole-graphic resize can
+ * only multiply them all by the same factor, which turns a set of real ranges into a set of
+ * arbitrary ones and leaves the labels reading numbers nobody chose.
+ *
+ * So the affordance is not offered, and the two ways left are the two that mean something:
+ * type a range into the dialog's band editor, or drag that band's own rim handle, which
+ * moves one ring and writes the metres it landed on.
+ *
+ * **This is not `ROTATE_ONLY_SYMBOLS`.** That set is for symbols with no size input at all;
+ * these have several, and the point is which control reaches them.
+ */
+const NO_DRAG_RESIZE_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.WeaponSensorRangeFanCircular,
+    TacticalGraphicName.WeaponSensorRangeFanSector,
+]);
+
+const RESIZE_ONLY_SYMBOLS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Airfield,
+    // **Roadblock complete left.** It refused rotation because it was
+    // dropped whole at a fixed 45-degree bearing, so turning it meant turning a symbol
+    // that had no orientation of its own. It is drawn from a centreline now, and its
+    // bearing is that line's. @see RoadblockComplete
+    // Its four arrows sit in the quadrants; on the cardinals it is a picture APP-06 344300
+    // does not draw. Same reason as the crossed tasks below it. @see Defeat
+    TacticalGraphicName.Defeat,
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+]);
+
+/**
+ * The graphics that publish **their anchor point and nothing else** as a handle.
+ *
+ * The five one-letter tasks drawn about a centre. Every one of their plates says the same
+ * thing: *"This symbol requires one anchor point. The centre point defines the centre of
+ * the symbol."* One anchor point is one handle, and it is the middle.
+ *
+ * **This is not a refusal, and it is deliberately not `allowedGestures`.** All five still
+ * resize — that is what the edit-mode affordance offers and what `handleResize` performs —
+ * and asking them to stop would take away a capability nobody asked to lose. What this
+ * governs is only which points the generator publishes as grabbable.
+ *
+ * The two had been the same switch, and that is the defect it fixes. `generateHandles`
+ * emitted `[edge, centre]` whenever a resize was allowed; `publishHandles` then makes
+ * anything off-centre the live red handle and anything on the centre a grey inert dot. So
+ * a symbol the standard describes by its middle showed its live grip off to one side, with
+ * a dead-looking dot where the anchor is. Now the generator emits the centre alone, nothing
+ * is off-centre to promote, and `publishHandles` publishes the centre as the live handle.
+ * @see MissionTaskGraphicBase.publishHandles
+ */
+const ANCHOR_ONLY_HANDLE_GRAPHICS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Defeat,
+    TacticalGraphicName.Destroy,
+    TacticalGraphicName.Interdict,
+    TacticalGraphicName.Neutralize,
+    TacticalGraphicName.Suppress,
+]);
+
+/**
+ * Whether `name` publishes its anchor point alone, rather than an `[edge, centre]` pair.
+ *
+ * In the map-agnostic half because it decides what a *generator* emits, so both renderers
+ * get the same handle set from the same statement rather than one of them cropping the
+ * pair in a holder. @see ANCHOR_ONLY_HANDLE_GRAPHICS
+ */
+export function publishesAnchorHandleOnly(name: TacticalGraphicName): boolean {
+    return ANCHOR_ONLY_HANDLE_GRAPHICS.has(name);
+}
+
+// ── The hashed line between a graphic's anchor points ─────────────────────────
+
+/**
+ * The dash of the hashed construction line, in screen pixels.
+ *
+ * Screen pixels, so the hatching holds its density at every zoom — the same rule the
+ * radius read-out and the draw sketch follow. Here rather than in either renderer so the
+ * two draw one mark and not two that look alike. @see anchorConnectorRun
+ */
+export const ANCHOR_CONNECTOR_DASH_PX: readonly number[] = [4, 4];
+
+/**
+ * The graphics whose drawn base is a **centreline the symbol never draws**, so the editor
+ * hashes it between the anchor points while the graphic is selected.
+ *
+ * Reported by the operator, *"all graphics with parallel lines like gap/bridge/
+ * assault crossing, convoy graphics, explosives graphics need a hashed line between
+ * vertices like corridors and main axis of advance (family)"*.
+ *
+ * **What the mark is.** Every one of these is built by offsetting rails either side of a
+ * line the operator placed, and that line is then not part of the picture — so once the
+ * symbol is drawn there is nothing on screen saying where the anchor points went. The
+ * corridors and the axis-of-advance family had the mark already, but by accident rather
+ * than by statement: their controllers set no vertex cap, so OpenLayers' `Modify` was
+ * installed over their bases and un-hid them. Every family the operator named is capped at the
+ * number of points its plate gives it, which switched the same base off — the two
+ * questions had become one switch. @see LineGraphicController, `base.set('base', false)`
+ *
+ * **Editor chrome, not line work.** It says "these are the points you placed", the same
+ * thing the handles and the radius read-out say — it appears with the selection, is absent
+ * from `renderTacticalGraphic`, from a snapshot, from the thumbnails and from the sample
+ * gallery, and it runs *through* the middle of the symbol. So it is drawn in the
+ * inert-handle colour and stays that colour on a hostile graphic. It used to take the
+ * hostility colour at 35% opacity, which is the half-way answer that is wrong both ways:
+ * too faint to read as symbology, too tinted to read as chrome. FM 1-02.2's colour rule is
+ * about a control measure's *lines*; a construction line is not one.
+ * @see getInertHandleColor
+ *
+ * **Both renderers read this**, which is the reason it is here rather than in a holder: on
+ * OpenLayers it decides which base features un-hide, on MapLibre it decides which graphics
+ * put a line in the connector source. MapLibre drew no base at all before this.
+ *
+ * Deliberately **not** every graphic whose base is hidden. Three groups the operator named
+ * turned out not to qualify and are left off rather than forced in:
+ *
+ * - **Passage lane and safe lane or gap** lay their splayed arms either side of a run they
+ *   also *draw* — `passageLineGraphic` emits `[start, end]` as one of its three sub-lines.
+ *   A hashed line there would be a second line on top of a solid one.
+ * - **Ferry crossing** is a plain line with an end mark; its base is the symbol.
+ * - **Bridge, gap and assault crossing** place their points on the rails themselves since the
+ *   plate numbering pass, so there is no hidden centreline left to mark.
+ * - **Roadblock complete (executed)** is switched off.
+ */
+const ANCHOR_CONNECTOR_GRAPHICS = new Set<TacticalGraphicName>([
+    // The eight air-coordinating corridors: rails tangent to a circle at every turning
+    // point, and the turning points themselves are the centreline. @see CORRIDOR_GRAPHICS
+    TacticalGraphicName.AirCorridor,
+    TacticalGraphicName.LowLevelTransitRoute,
+    TacticalGraphicName.MinimumRiskRoute,
+    TacticalGraphicName.SafeLane,
+    TacticalGraphicName.SpecialCorridor,
+    TacticalGraphicName.StandardUseArmyAircraftFlightRoute,
+    TacticalGraphicName.TransitCorridor,
+    TacticalGraphicName.UnmannedAircraftCorridor,
+
+    // The axis-of-advance family and the two casings drawn the same way. The infiltration
+    // lane is the one of these that had *lost* the mark: it takes three placed points as
+    // of which capped its controller and switched its base off.
+    TacticalGraphicName.MainAxisOfAdvance,
+    TacticalGraphicName.MainAxisOfAdvanceFeint,
+    TacticalGraphicName.SupportingAxisOfAdvance,
+    TacticalGraphicName.AviationAxisOfAdvance,
+    TacticalGraphicName.AttackHelicopterAxisOfAdvance,
+    TacticalGraphicName.AvenueOfApproach,
+    TacticalGraphicName.Counterattack,
+    TacticalGraphicName.CounterattackByFire,
+    TacticalGraphicName.InfiltrationLane,
+
+    // The two fords: dashed rails offset from the drawn line. Bridge, gap and assault crossing
+    // left this list: their points are now the rails' own ends, two per side,
+    // so the line ran along one rail and then diagonally across the gap.
+    TacticalGraphicName.FordEasy,
+    TacticalGraphicName.FordDifficult,
+
+    // The convoys: a body laid symmetrically about the run, rear to tip.
+    TacticalGraphicName.MovingConvoy,
+    TacticalGraphicName.HaltedConvoy,
+
+    // The demolition bar symbols — APP-06 271201's centreline and width, roadblock included.
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
+]);
+
+/** @see ANCHOR_CONNECTOR_GRAPHICS */
+export function drawsAnchorConnector(name: TacticalGraphicName): boolean {
+    return ANCHOR_CONNECTOR_GRAPHICS.has(name);
+}
+
+/**
+ * The graphics whose base carries a **side point after the run** — points 1 and 2 are the
+ * centreline and point 3 only says how far apart the rails sit.
+ *
+ * The connector follows the centreline, so it has to stop at point 2. Drawing the stored
+ * base whole would hash a spur out to the width handle, which is not a run between anchor
+ * points and is not what any of these symbols is laid along. These are exactly the names
+ * `anchorsFromClicks` routes to `sideAnchors`. @, 271201's draw rule
+ */
+const SIDE_POINT_AFTER_RUN = new Set<TacticalGraphicName>([
+    TacticalGraphicName.InfiltrationLane,
+    TacticalGraphicName.ExplosivesPlannedStateOfReadiness,
+    TacticalGraphicName.ExplosivesStateOfReadiness1Safe,
+    TacticalGraphicName.ExplosivesStateOfReadiness2ArmedButPassable,
+    TacticalGraphicName.RoadblockCompleteExecuted,
+]);
+
+/**
+ * The run of a base the hashed construction line follows: the whole base for most, points
+ * 1 and 2 alone for the demolition family. @see SIDE_POINT_AFTER_RUN
+ *
+ * Generic in the position type, and deliberately so — both renderers call this with
+ * *projected* coordinates, which are not the `Position` degrees the rest of this module
+ * deals in. Nothing here does geometry; it selects which of the operator's points the mark
+ * runs between, which is the same answer in any projection.
+ */
+export function anchorConnectorRun<T>(name: TacticalGraphicName, coordinates: readonly T[]): T[] {
+    if (SIDE_POINT_AFTER_RUN.has(name) && coordinates.length >= 3) return coordinates.slice(0, 2);
+    /*
+     * **The eleven axis arrows drop their last coordinate, not everything past their second.**
+     *
+     * Same rule as the four above and the same reason — the mark follows the centreline and the
+     * width point is not on it — but their run is free-length, so where it ends is "one before
+     * the end" rather than a fixed index. Measured on the running app: without this the hashed
+     * line ran out of the arrowhead and up to the width grip, a spur no plate draws.
+     * @see carriesWidthPointInBase
+     */
+    if (carriesWidthPointInBase(name) && coordinates.length >= 3) return coordinates.slice(0, -1);
+    return [...coordinates];
+}
+
+/**
+ * Every run of a selected graphic's drawn points an editor marks with the hashed construction
+ * line, in the base's own coordinates: **the one statement every engine draws it from.**
+ *
+ * The graphics `drawsAnchorConnector` names, as before. And, while smooth lines is on, every
+ * graphic it reshapes: the curve no longer passes through the points the operator placed, so
+ * the line through them is what shows where they are and what dragging one will move. On a
+ * hard drawing that line lies under the symbol's own, which is why it was never needed there.
+ * An area's run is its closed outline, and so is a ring stored as a line (the multiple-strike
+ * safe distance zone), smooth or not: its points trace an outline, and an open run reads as a
+ * line someone forgot to finish. That zone needs its `width` to say which outline: with one, the
+ * base is zone 1; without, it is the older record of two rings end to end, and each ring closes
+ * on its own. @see SMOOTHED_GRAPHICS, hasClosingEdge
+ */
+export function anchorConnectorRuns<T>(name: TacticalGraphicName, base: {type: string; coordinates?: unknown}, width?: number): T[][] {
+    const smoothed = getSmoothLines() && smoothingKindOf(name) !== undefined;
+    const ring = smoothingKindOf(name) === 'ring';
+    if (base.type === 'LineString') {
+        const coordinates = base.coordinates as T[];
+        if (!drawsAnchorConnector(name) && !smoothed && !ring) return [];
+        const run = anchorConnectorRun(name, coordinates);
+        const close = (r: T[]): T[] => [...r, r[0]];
+        if (ring && hasClosingEdge(name, width) && run.length >= 3) return [close(run)];
+        if (ring && run.length >= 6) {
+            // The generator's own split: the first half is zone 1, the rest zone 2.
+            const half = Math.floor(run.length / 2);
+            return [close(run.slice(0, half)), close(run.slice(half))];
+        }
+        return run.length >= 2 ? [run] : [];
+    }
+    if (base.type === 'Polygon' && smoothed) {
+        const ring = (base.coordinates as T[][])[0];
+        return ring && ring.length >= 3 ? [ring] : [];
+    }
+    return [];
+}
+
+/**
+ * The ring an area's labels are placed against: **one rule for every engine**.
+ *
+ * The base first, since an area the operator traced is its own outline, then the drawn shape,
+ * which is where a circular variant's outline comes from, since its base is a single point.
+ * Unless the outline is drawn smooth: then the traced corners are cut away, and a label anchored
+ * on one would float outside the curve. @see buildPaintedGraphic, AreaGraphicBase
+ */
+export function areaLabelRing<T>(name: TacticalGraphicName, baseRing: T[] | undefined, drawnRing: T[] | undefined): T[] | undefined {
+    const smoothed = getSmoothLines() && smoothingKindOf(name) === 'area';
+    return (smoothed ? drawnRing : undefined) ?? baseRing ?? drawnRing;
+}
+
+/**
+ * Where a graphic that writes its name on its outline anchors it: the middle of the top edge of
+ * the outline it draws, and that edge, to turn the text along. Only group or series of targets
+ * does, and it cuts its gap by the same rule. `undefined` for every other graphic.
+ * @see topmostSegmentIndex, groupOrSeriesOfTargetsPaint
+ */
+export function topEdgeLabel<T extends readonly number[]>(name: TacticalGraphicName, drawnRing: T[] | undefined): {anchor: [number, number]; segment: [T, T]} | undefined {
+    if (name !== TacticalGraphicName.GroupOrSeriesOfTargets || !drawnRing || drawnRing.length < 2) return undefined;
+    const i = topmostSegmentIndex(drawnRing as unknown as [number, number][]);
+    const [a, b] = [drawnRing[i], drawnRing[i + 1]];
+    return {anchor: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], segment: [a, b]};
+}
+
+/**
+ * Half of a security operation's own width, in screen pixels.
+ *
+ * **Re-exported from the generator, not computed here.** It used to be
+ * `labelPadding + labelGap + 2 x arrowLength` — 220 — while the arm the generator actually
+ * built reached `3 x arrowLength - arrowDepth`, 205. Two statements of one symbol's size,
+ * fifteen pixels apart, which is the drift this repository keeps finding. The generator
+ * owns the shape, so it owns the number.
+ *
+ * **It is not an amplifier**, and it is no longer how these three are sized either. It
+ * was the half-extent of a fixed-size badge — 163.35, so 326.7 px across at every zoom —
+ * back when the symbol's dimensions were this constant times the live resolution. Since
+ * cover, guard and screen are drawn from two anchor points and the generator
+ * builds the arms from the *base*, ignoring `radius` entirely; a renderer that forces
+ * this number in gets byte-identical geometry for its trouble.
+ *
+ * It stays exported because it shipped, and because it is still the figure a host needs
+ * to place one of these three from a single point plus a size — which is how a symbol
+ * dropped on an existing unit is positioned.
+ *
+ * It is here because the two engines were saying different things about it. MapLibre
+ * computed this expression inline and re-derived it on every build; OpenLayers filed
+ * nothing at all and let whatever a snapshot happened to carry pass straight through — so
+ * `compare:engines` read the same three graphics as `radius 180000 vs 1320000`, a stale
+ * figure from the file's own zoom beside a current one.
+ *
+ * **A save and a restore at a different zoom will not agree on it, by design.** The figure
+ * is pixels times a resolution and a snapshot carries no viewport state
+ * so restoring two zooms out files four times the metres for the same
+ * 410 px symbol. That is the pinning working, and `fullRoundTrip` exempts it for that
+ * reason.
+ *
+ * Multiplied by the **raw** resolution rather than converted to ground metres, because
+ * these symbols are placed in projected space and hold their pixel size at any latitude.
+ * @see placeOriginCentered
+ */
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from '../graphics/SecurityOperation';
+export {defaultStandoffMetres, usesStandoffWidth, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from '../graphics/SafeDistanceZone';
+
+/**
+ * The half-width, in **screen pixels**, that a one-click graphic is dropped at — and, by
+ * being defined at all, the statement that the graphic *is* a one-click drop.
+ *
+ * **Both engines need this and neither owned it.** OpenLayers had it as a literal in each
+ * controller factory (`res * 50`, `res * 34`, `res * 100`) and MapLibre had no idea these
+ * graphics existed as a family: it decided one-click-ness from `allowedGestures(name).resize`
+ * instead, on the reasoning that a resizable point graphic is *sized by the draw* in two
+ * clicks. That is true of the graphics OpenLayers draws through a Circle interaction and
+ * false of every one below, so the moment the airfield became resizable it took two clicks
+ * on MapLibre and one on OpenLayers.
+ *
+ * **In pixels, converted at the moment of the drop.** A metre default is a different symbol
+ * at every zoom — a few pixels across when zoomed out, with its handles piled on top of each
+ * other and nothing grabbable. A pixel default lands the same size on screen wherever the
+ * operator is working, and is then stored as the metres it came to.
+ */
+const DROP_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
+    // The crossed tasks, fixed and resizable alike: the size the family has always
+    // been drawn at. @see CROSSED_HALF_WIDTH_PX
+    // Defeat is sized from the same number rather than one of its own: it is measured off
+    // its plate in fractions of the box's half-width, exactly as Destroy is, so the two
+    // land the same size on screen and the label rule they share stays honest.
+    [TacticalGraphicName.Defeat]: 50,
+    [TacticalGraphicName.Destroy]: 50,
+    [TacticalGraphicName.Interdict]: 50,
+    [TacticalGraphicName.Neutralize]: 50,
+    [TacticalGraphicName.Suppress]: 50,
+    [TacticalGraphicName.Airfield]: 34,
+    // **The demonstration is not dropped either.** Its leg used to be this
+    // one number, from which the U's opening and both other points followed — so the whole
+    // symbol was fixed and the operator placed only its position. 343300 names four anchor
+    // points and each is placed now, so the draw takes four clicks and finishes on the last.
+    // @see Demonstration, BASE_VERTEX_COUNT
+    // The security operations are **not dropped**: the operator draws one
+    // arrow and the other is derived, so there is no one-click size to state. Removing
+    // them from here is what tells a renderer to wait for the second point instead of
+    // finishing on the first. @see SecurityOperation, BASE_VERTEX_COUNT
+};
+
+/**
+ * The size a one-click graphic is dropped at, or `undefined` if it is not one.
+ *
+ * A renderer asks two things of this: whether to finish the draw on the first click, and
+ * how big to make what it just dropped. @see DROP_SIZE_PX
+ */
+export function dropSizePx(name: TacticalGraphicName): number | undefined {
+    return DROP_SIZE_PX[name];
+}
+
+/**
+ * Whether the draw ends on the **second click** — a centre and an edge.
+ *
+ * **How long a draw runs is a different question from what shape the base is**, and this is
+ * the second time that distinction has cost something. The demonstration cost it first: its
+ * base is a `LineString` of four derived anchors, so the one-click drop fell through to the
+ * multi-click path and the sketch could not be finished. `dropSizePx` answered that one.
+ *
+ * The rest of the anchor family cost it next. Contain, Ambush, Envelopment, Pursuit and the
+ * two turns are drawn centre-to-edge — OpenLayers gives each of them a `Circle` interaction,
+ * which ends itself on the second click — and their bases are `LineString`s too. So on
+ * MapLibre the draw waited for a double-click that the panel's own hint ("2 points (center
+ * → edge)") tells nobody to make: **two clicks left the sketch open and nothing on the
+ * map**. Found by drawing `Contain` on both engines side by side.
+ *
+ * **It lives here rather than beside `usesDrawnAnchors`** because `handles.ts` cannot
+ * import this module: `symbology.ts` reaches `render.ts` for `baseGeometryFor`, and
+ * `render.ts` reaches the registry, which reaches `handles.ts`. Putting it there made
+ * `RECTANGULAR_GRAPHICS` unreachable at module-initialisation time and two suites died
+ * with "Cannot access before initialization" — the build was clean, because a cycle is
+ * only a problem at run time.
+ *
+ * Derived rather than listed, because both halves are already stated: an anchor graphic is
+ * centre-to-edge unless it is dropped whole or drawn end to end. A further member of any of
+ * the three is covered by construction.
+ * @see anchorDraw, which reads `vertices[0]` as the centre and `[1]` as the edge
+ */
+export function drawsCentreToEdge(name: TacticalGraphicName): boolean {
+    return usesDrawnAnchors(name)
+        && dropSizePx(name) === undefined
+        && !drawsEndToEnd(name)
+        && !drawsByAnchorClicks(name);
+}
+
+/**
+ * The anchor graphics whose **two clicks are the two points the plate marks**, rather than a
+ * centre and a rim.
+ *
+ * 151204 contain is the one, and its Draw Rules say so twice: *"Points 1 and 2 define the
+ * endpoints of the semicircle's opening"* and *"Points 1 and 2 determine the diameter of the
+ * semicircle"*. Its Template letters `PT. 1` against the upper end of the opening and
+ * `PT. 2` against the lower one — there is no annotation on the centre at all, because the
+ * centre is not a point the operator places.
+ *
+ * It was drawn centre-to-edge like the other five, which is self-consistent — the anchors
+ * stored were still the two opening ends — but it is not the gesture the standard describes,
+ * and an operator following the Draw Rules clicks the two ends and gets a symbol twice the size
+ * they asked for, turned a quarter circle from where they aimed it.
+ *
+ * **The other five are deliberately not here**, and are not an oversight: this was raised for
+ * contain and each of the others needs its own plate read before it moves. Ambush is the one
+ * to look at first — 141700 makes point 1 the arrowhead's tip.
+ */
+const DRAWN_END_TO_END = new Set<TacticalGraphicName>([TacticalGraphicName.Contain]);
+
+export function drawsEndToEnd(name: TacticalGraphicName): boolean {
+    return DRAWN_END_TO_END.has(name);
+}
+
+/**
+ * The anchor graphics an operator places **point by point**, rather than by dragging a
+ * frame out from a centre.
+ *
+ * Contain left the centre-to-edge model because an operator following the Draw
+ * Rules clicked the two points the plate marks and got a symbol twice the size they asked
+ * for, turned a quarter circle. The note here recorded that the other five each needed
+ * their own plate read before they followed. **Four of them followed**
+ * leaving Contain — which is end-to-end, a different two-click meaning —
+ * and nothing else on the centre-to-edge draw.
+ *
+ * What each takes is its plate's own numbering, and how many clicks that is depends on how
+ * many of those points carry a decision: ambush spends two, the other three spend three,
+ * and the points with no freedom left are constructed rather than clicked.
+ * @see anchorsFromClicks, which is where the click sequence becomes the stored anchors
+ */
+const DRAWN_BY_ANCHOR_CLICKS = new Set<TacticalGraphicName>([
+    TacticalGraphicName.Ambush,
+    TacticalGraphicName.Turn,
+    TacticalGraphicName.TacticalTurn,
+    TacticalGraphicName.Envelopment,
+    TacticalGraphicName.Pursuit,
+    // Three clicks read into four stored anchors. @see hairpinAnchors
+    TacticalGraphicName.Demonstration,
+    TacticalGraphicName.ReliefInPlace,
+]);
+
+/** @see DRAWN_BY_ANCHOR_CLICKS */
+export function drawsByAnchorClicks(name: TacticalGraphicName): boolean {
+    return DRAWN_BY_ANCHOR_CLICKS.has(name);
+}
+
+/**
+ * How many clicks a draw takes, where that is **not** the number of points it stores.
+ *
+ * The two counts are the same for almost every graphic, and where they differ it is
+ * because a point the standard names carries no decision and is constructed. Ambush
+ * spends two clicks on a three-point symbol; envelopment three on a four-point one.
+ *
+ * **Both engines closed a draw on the wrong number without this.** MapLibre compared the
+ * raw click count against `baseVertexCount` and so waited for a third ambush click that
+ * never comes; OpenLayers passes the number straight to `Draw`'s `maxPoints`, and a
+ * literal in the factory would have been the same fact written twice. Undefined means
+ * "the stored count is the click count", which is the ordinary case.
+ * @see anchorsFromClicks, baseVertexCount
+ */
+const DRAW_CLICKS: Partial<Record<TacticalGraphicName, number>> = {
+    /*
+     * **141700 places all three**. Points 2 and 3 are the curved back's own
+     * endpoints — *"Points 2 and 3 define the endpoints of the curved line"* — so both are
+     * the operator's, and the arc's radius follows from the chord they make. Point 1 gives
+     * way instead, squared onto their bisector. The two-click form survives as the preview.
+     * @see squareOntoBisector, ambushAnchors
+     */
+    [TacticalGraphicName.Ambush]: 3,
+    [TacticalGraphicName.Turn]: 3,
+    [TacticalGraphicName.TacticalTurn]: 3,
+    [TacticalGraphicName.Envelopment]: 3,
+    [TacticalGraphicName.Pursuit]: 3,
+    /*
+     * **343300 and 341900 are placed with three clicks and stored as four.**
+     *
+     * Their plates number four anchor points, but the fourth carries no decision: the two
+     * straights must stay parallel and the same length, so point 4 is wherever that puts it.
+     * Asking for it is asking the operator to hit a point that is already determined, and
+     * letting them miss it is how the legs came out splayed. Derived instead, exactly as
+     * 343500 envelopment derives its fourth. @see hairpinAnchors
+     */
+    [TacticalGraphicName.Demonstration]: 3,
+    [TacticalGraphicName.ReliefInPlace]: 3,
+    /*
+     * **342201/2/3 take four clicks, one per anchor point.** Stated here even though it
+     * equals `baseVertexCount`, because `normalizeDrawnBase` *upgrades* a two-point base for
+     * these — an old save, laid out as the mirror it used to derive — and a draw must not be
+     * judged finished by that. @see securityOperationAnchors, sketchIsComplete
+     */
+    /*
+     * **152000 places all three**, because points 2 and 3 are what its Size/Shape cell gives
+     * the back line's length *and* orientation to. Two clicks would have to guess one of
+     * them. What gives way instead is point 1, which is read for its reach from the middle
+     * and squared onto the perpendicular bisector — so the plate's other two sentences hold
+     * by construction. The two-click form survives as the preview.
+     * @see firePositionAnchors
+     */
+    [TacticalGraphicName.AttackByFire]: 3,
+    /*
+     * **Named even though it equals its stored count**, which this table usually omits. The
+     * reader previews a two-click sketch as four points now, and MapLibre asks the
+     * *normalized* sketch whether a draw is finished — so without this 152100's draw ended on
+     * its second click. @see sketchIsComplete, supportByFireAnchors
+     */
+    [TacticalGraphicName.SupportByFire]: 4,
+    /*
+     * **Three clicks for every two-rail crossing**, whether it stores three points or four.
+     * One rail is placed end to end and the third click sets how far the other sits across
+     * it; a fourth point, where the plate numbers one, is wherever "parallel and the same
+     * length" puts it and is not worth asking for. @see parallelRailAnchors
+     */
+    [TacticalGraphicName.Bridge]: 3,
+    [TacticalGraphicName.Gap]: 3,
+    [TacticalGraphicName.AssaultCrossing]: 3,
+    /*
+     * **Named even though it equals their stored count**, which this table usually omits. The
+     * reader previews a two-click sketch as three points now, and MapLibre asks the
+     * *normalized* sketch whether a draw is finished — so without this a ford's draw ended on
+     * its second click. @see sketchIsComplete, parallelRailAnchors
+     */
+    [TacticalGraphicName.FordEasy]: 3,
+    [TacticalGraphicName.FordDifficult]: 3,
+    [TacticalGraphicName.Cover]: 4,
+    [TacticalGraphicName.Guard]: 4,
+    [TacticalGraphicName.Screen]: 4,
+    /*
+     * **200700 is here despite storing a single point.** Its three clicks are read into an
+     * azimuth and two ranges rather than into anchor points, so it is not in
+     * `DRAWN_BY_ANCHOR_CLICKS` — but how many clicks the draw takes is the same question for
+     * it as for the five above, and both engines close the sketch from this number.
+     * @see radarSearchFromClicks, drawsByRangeClicks
+     */
+    [TacticalGraphicName.RadarSearchDoctrine]: 3,
+};
+
+/**
+ * Whether a graphic's clicks are read as **numbers on a point-anchored symbol** rather than
+ * as anchor points — 200700 alone.
+ *
+ * The renderers ask two separate things when a draw starts: what geometry to collect, and
+ * what to do with it. `drawsByAnchorClicks` answers both for the anchor family — collect a
+ * line, store the anchors. 200700 needs the first half and not the second: a line of three
+ * clicks, turned into a radar, a search axis azimuth, a start range and a stop range, on a
+ * base that stays a single `Point`. Conflating the two would have put a `LineString` on a
+ * holder that reads its centre off a `Point`. @see radarSearchFromClicks
+ */
+export function drawsByRangeClicks(name: TacticalGraphicName): boolean {
+    return name === TacticalGraphicName.RadarSearchDoctrine;
+}
+
+/**
+ * Graphics whose whole shape is stated as **range bands**, so nothing about them is a width.
+ *
+ * The two weapon/sensor fans and 200700. Every dimension they have — how far each ring
+ * reaches, how wide the wedge opens, which way it points — is a typed number under
+ * `rangeFan`, and none of it is half of anything. MapLibre's `sizeDefaults` seeds a
+ * half-width for a graphic that files none, which put a `width` of twice the radius into
+ * every saved 200700 that OpenLayers does not write — export noise, and a divergence between
+ * two engines that are supposed to describe the same symbol identically. The generators
+ * ignore it, which is exactly why nothing caught it.
+ *
+ * Stated here rather than in the adapter because it is a fact about the symbols, and the
+ * engine that does not currently need it is the one that would drift. @see RangeFanOptions
+ */
+export function statesShapeAsRangeBands(name: TacticalGraphicName): boolean {
+    return (
+        name === TacticalGraphicName.RadarSearchDoctrine ||
+        name === TacticalGraphicName.WeaponSensorRangeFanCircular ||
+        name === TacticalGraphicName.WeaponSensorRangeFanSector
+    );
+}
+
+/** @see DRAW_CLICKS */
+export function drawClickCount(name: TacticalGraphicName): number | undefined {
+    return DRAW_CLICKS[name];
+}
+
+/**
+ * Whether an anchor graphic's draw **ends on the second click**, whatever the two clicks
+ * mean.
+ *
+ * How long a draw runs and what its clicks describe are two questions, and separating them
+ * cost a graphic the first time they were conflated. `drawsCentreToEdge` answered both at
+ * once; when contain moved to an end-to-end draw it left that predicate, and MapLibre —
+ * which was using it to close the sketch — went back to waiting for a double-click and put
+ * nothing on the map. OpenLayers was unaffected, because its `Circle` interaction ends
+ * itself, so the symbol drew on one engine and not the other. Found by drawing the six
+ * review items on both engines.
+ *
+ * Derived from the other two, so a graphic that joins either list is covered here without a
+ * further edit — which is the property the conflated version only appeared to have.
+ */
+export function drawsInTwoClicks(name: TacticalGraphicName): boolean {
+    return drawsCentreToEdge(name) || drawsEndToEnd(name);
+}
+
+/**
+ * What a two-click drag actually described, for a graphic drawn from anchor points.
+ *
+ * Both engines measure the same three numbers off the drag — where the first click landed,
+ * how far the second reached, and the planar bearing between them — and then hand them to
+ * `drawnAnchors` as a centre, a size and a rotation. For a centre-to-edge graphic those are
+ * the same numbers, and this returns them untouched, except that an arc mission task's
+ * rotation is turned so its start point lands on the second click. @see rotationFromDrawnPoint
+ *
+ * For an end-to-end graphic they are not: the frame's centre is **half way along the drag**,
+ * its size is **half the reach**, and its rotation is a quarter turn off the drag, because
+ * the two clicks are the ends of the opening and the opening lies across the symbol's axis.
+ * The centre is returned as a distance and bearing from the first click rather than as a
+ * position, so each renderer walks it in the space it already works in — and neither has to
+ * restate the quarter turn.
+ *
+ * **This is here rather than in either renderer** for the reason the whole module exists: how
+ * a symbol's clicks become its frame decides what the symbol looks like, so it is a symbology
+ * fact. Stated in an OpenLayers controller, MapLibre would have gone on drawing the old one.
+ */
+export interface DragFrame {
+    /** How far the frame's centre sits from the first click, in metres. */
+    reach: number;
+    /** The planar bearing to it, in degrees — 0 is east, the schema's own convention. */
+    bearingDeg: number;
+    /** The symbol's size, in metres. */
+    size: number;
+    /** The symbol's rotation, in degrees, in the same planar convention. */
+    rotation: number;
+}
+
+/**
+ * Where **point 2** sits on an arc mission task, in degrees counter-clockwise from the
+ * rotation axis (the axis the letter sits on).
+ *
+ * APP-06 words it the same way for all ten: *"Point 1 defines the centre point of the
+ * graphic and point 2 defines the graphic's start point and radius."* The Template draws
+ * `PT. 2 (START POINT)` against the **blunt end of the upper arc**, which
+ * `MissionTask.labelGapArcs` runs round to 175 degrees. @see START_POINT_GRAPHICS
+ */
+export const START_POINT_DEGREES = 175;
+
+/**
+ * The graphics whose second drawn point **is** APP-06's start point, not the direction of
+ * their rotation axis.
+ *
+ * Read off each plate's Anchor Points text, by code: area defence 152600, retain 151205,
+ * isolate 341500, occupy 341700, secure 342100, cordon and knock 342600, cordon and search
+ * 342700, control 343200, deny 343400 and locate 343900. Every one says *"point 2 defines
+ * the graphic's start point and radius"*, and no other plate in APP-06 does. Contain
+ * (151204) is not here: its two points are the ends of the opening. @see frameFromDrag
+ *
+ * The generators put the start-point handle at `rotation + START_POINT_DEGREES`, so a draw
+ * that filed the angle to the second click as `rotation` put that handle almost opposite
+ * the click. `rotationFromDrawnPoint` takes the offset back off.
+ */
+const START_POINT_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.AreaDefense,
+    TacticalGraphicName.Retain,
+    TacticalGraphicName.Isolate,
+    TacticalGraphicName.Occupy,
+    TacticalGraphicName.Secure,
+    TacticalGraphicName.CordonAndKnock,
+    TacticalGraphicName.CordonAndSearch,
+    TacticalGraphicName.Control,
+    TacticalGraphicName.Deny,
+    TacticalGraphicName.Locate,
+]);
+
+/** Whether a graphic's second drawn point is its start point. @see START_POINT_GRAPHICS */
+export function drawsFromStartPoint(name: TacticalGraphicName): boolean {
+    return START_POINT_GRAPHICS.has(name);
+}
+
+/**
+ * The `rotation` to file for a point-anchored graphic whose second click lies at
+ * `angleDeg` from its centre.
+ *
+ * Both are planar degrees counter-clockwise from east. For the arc mission tasks the click
+ * is point 2, the start point, so the rotation is the angle less `START_POINT_DEGREES` and
+ * the start point lands under the cursor. Every other graphic takes the angle as its
+ * rotation, unchanged. The result is normalised to (-180, 180].
+ *
+ * **Both engines call this**, OpenLayers through `frameFromDrag` and MapLibre from its
+ * own point draw, so the rule is stated once. Only the draw changes: a stored graphic
+ * keeps its `rotation`, and a later rotate or resize is a delta that needs no offset.
+ */
+export function rotationFromDrawnPoint(name: TacticalGraphicName, angleDeg: number): number {
+    if (!START_POINT_GRAPHICS.has(name)) return angleDeg;
+    const turned = (((angleDeg - START_POINT_DEGREES) % 360) + 360) % 360;
+    return turned > 180 ? turned - 360 : turned;
+}
+
+export function frameFromDrag(name: TacticalGraphicName, radius: number, rotationDeg: number): DragFrame {
+    if (!drawsEndToEnd(name)) return {reach: 0, bearingDeg: rotationDeg, size: radius, rotation: rotationFromDrawnPoint(name, rotationDeg)};
+    /*
+     * The quarter turn's sign is fixed by `drawnAnchors`, which lays contain's anchors at
+     * `rotation - 90` and `rotation + 90`: for the drag to land on those two, the rotation
+     * has to be the drag's bearing plus ninety. Getting the sign backwards mirrors the
+     * symbol — the `C` opens the other way — which is a different picture and a plausible
+     * one. @see CONTAIN_OPENING_QUARTER_TURN
+     */
+    return {reach: radius / 2, bearingDeg: rotationDeg, size: radius / 2, rotation: rotationDeg + 90};
+}
+
+export function allowedGestures(name: TacticalGraphicName): AllowedGestures {
+    // A point-anchored graphic has one vertex and dragging it is a move, not a
+    // reshape — so `modify` is off and `translate` covers it. So is a graphic whose
+    // several points are all derived from one. @see DERIVED_ANCHOR_GRAPHICS
+    const pointAnchored = baseGeometryFor(name) === 'Point';
+
+    if (ROTATE_ONLY_SYMBOLS.has(name)) {
+        return {translate: true, rotate: true, resize: false, modify: false};
+    }
+    if (RESIZE_ONLY_SYMBOLS.has(name)) {
+        return {translate: true, rotate: false, resize: true, modify: false};
+    }
+    if (NO_DRAG_RESIZE_SYMBOLS.has(name)) {
+        return {translate: true, rotate: true, resize: false, modify: false};
+    }
+    return {translate: true, rotate: true, resize: true, modify: !pointAnchored && !DERIVED_ANCHOR_GRAPHICS.has(name)};
+}
+

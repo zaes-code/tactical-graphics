@@ -1,0 +1,177 @@
+/**
+ * # The graphics a standard identity must not reach
+ *
+ * FM 1-02.2 gives the Chapter 6 tactical mission tasks no amplifier fields: a
+ * hostile Breach is drawn exactly like any other Breach. Two more sets join them —
+ * the line of contact, which draws both identities at once and so has nothing to
+ * change, and the four table 5-19 obstacle effects, which are copies of a mission
+ * task and must not diverge from what they copy.
+ *
+ * The demo enforced this by hiding the input. That is a UI convenience and it does
+ * nothing about a hostility that arrives in an imported file, from a host writing
+ * the property bag directly, or from a sweep that colors everything — which is
+ * exactly what the MapLibre sample sweep did, drawing every mission task red.
+ *
+ * So these assert the *rendering*, not the field list.
+ */
+
+import {
+    TacticalGraphicCategory,
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    getColorByHostility,
+    GRAPHIC_CATEGORIES,
+    supportsHostility,
+    CENTER_SYMBOL_GRAPHICS,
+} from '../index';
+import type {PaintFeature} from '../core/paint';
+import {hostilityOf, lineColorOf} from './paintFunctions';
+
+/** A feature carrying a hostility it should not be allowed to use. */
+function hostileFeature(name: TacticalGraphicName, extra: Partial<PaintFeature> = {}): PaintFeature {
+    return {
+        geometry: {type: 'LineString', coordinates: [[0, 0], [1000, 0]]},
+        properties: {name, hostility: TacticalGraphicHostility.hostileFaker},
+        ...extra,
+    };
+}
+
+const HOSTILE_RED = getColorByHostility(TacticalGraphicHostility.hostileFaker);
+const UNAFFILIATED = getColorByHostility(TacticalGraphicHostility.unknown);
+
+describe('supportsHostility', () => {
+    it('is false for every Chapter 6 tactical mission task but the exfiltration and the six that carry a unit symbol', () => {
+        const missionTasks = (Object.keys(GRAPHIC_CATEGORIES) as TacticalGraphicName[])
+            .filter(name => GRAPHIC_CATEGORIES[name] === TacticalGraphicCategory.TacticalMissionTasks);
+
+        expect(missionTasks.length).toBeGreaterThan(20);
+        // The exfiltration and the infiltration are one symbol with two letters, told apart
+        // by *whose* forces the arrow points toward, so an identity is the one amplifier
+        // that means something on them. The infiltration is not
+        // in this list only because it is filed under Movement and Manoeuvre — the pair is
+        // categorised inconsistently, which is how one of them offered hostility all along
+        // and the other did not.
+        // The escort and the two follow tasks join it on a different reading: each draws a
+        // host-supplied entity symbol, and an entity symbol's frame *is* its standard
+        // identity, so the affiliation decides what is drawn rather than merely tinting it.
+        // Capture, evacuate and recover joined them in 4.8.0, when
+        // their circle's unit symbol was drawn. @see CENTER_SYMBOL_GRAPHICS
+        expect(new Set(missionTasks.filter(supportsHostility))).toEqual(
+            new Set([
+                TacticalGraphicName.Exfiltrate,
+                TacticalGraphicName.Escort,
+                TacticalGraphicName.FollowAndAssume,
+                TacticalGraphicName.FollowAndSupport,
+                TacticalGraphicName.Capture,
+                TacticalGraphicName.Evacuate,
+                TacticalGraphicName.Recover,
+            ]),
+        );
+        expect(supportsHostility(TacticalGraphicName.Infiltration)).toBe(true);
+    });
+
+    it('is true for every graphic that carries a host-supplied centre symbol', () => {
+        // Not listed twice: the rule reads the set, so a graphic cannot gain a unit symbol
+        // without gaining the identity that frames it.
+        CENTER_SYMBOL_GRAPHICS.forEach(name => expect(supportsHostility(name)).toBe(true));
+        expect(CENTER_SYMBOL_GRAPHICS.size).toBe(10);
+    });
+
+    it('is false for every CBRN contaminated area, subtypes included', () => {
+        // A hazard describes ground, not a force. All seven: the four in Table 8-19 and
+        // the three toxic-industrial-material subtypes.
+        for (const name of [
+            TacticalGraphicName.BiologicalContaminatedArea,
+            TacticalGraphicName.BiologicalContaminatedAreaToxicIndustrialMaterial,
+            TacticalGraphicName.ChemicalContaminatedArea,
+            TacticalGraphicName.ChemicalContaminatedAreaToxicIndustrialMaterial,
+            TacticalGraphicName.NuclearContaminatedArea,
+            TacticalGraphicName.RadiologicalContaminatedArea,
+            TacticalGraphicName.RadiologicalContaminatedAreaToxicIndustrialMaterial,
+        ]) {
+            expect(supportsHostility(name)).toBe(false);
+            // And the rendering, not just the field list: a bag that arrives carrying an
+            // identity still draws unaffiliated.
+            expect(lineColorOf(hostileFeature(name))).toBe(UNAFFILIATED);
+            expect(hostilityOf(hostileFeature(name))).toBe(TacticalGraphicHostility.unknown);
+        }
+    });
+
+    it('is false for the line of contact and the four mission-task twins', () => {
+        for (const name of [
+            TacticalGraphicName.LineOfContact,
+            TacticalGraphicName.Block,
+            TacticalGraphicName.Disrupt,
+            TacticalGraphicName.Fix,
+            TacticalGraphicName.Turn,
+        ]) {
+            expect(supportsHostility(name)).toBe(false);
+        }
+    });
+
+    it('is true for the ordinary control measures', () => {
+        for (const name of [
+            TacticalGraphicName.PhaseLine,
+            TacticalGraphicName.Boundary,
+            TacticalGraphicName.ObstacleBelt,
+            TacticalGraphicName.AssemblyArea,
+            TacticalGraphicName.ObstacleLine,
+        ]) {
+            expect(supportsHostility(name)).toBe(true);
+        }
+    });
+});
+
+describe('the paint layer refuses a hostility the symbol does not take', () => {
+    it('draws an exempt graphic unaffiliated even when the bag says hostile', () => {
+        // 270501 block and 270503 fix used to sit in this list. They are the *obstacle
+        // effects*, not the mission tasks of the same name, and since 4.0.0 they draw
+        // green under APP-06 8.1.4.3 — so they no longer demonstrate this rule. Their
+        // mission-task twins do. @see the precedence test below
+        for (const name of [TacticalGraphicName.TacticalBlock, TacticalGraphicName.TacticalDisrupt, TacticalGraphicName.Seize]) {
+            expect(lineColorOf(hostileFeature(name))).toBe(UNAFFILIATED);
+            expect(hostilityOf(hostileFeature(name))).toBe(TacticalGraphicHostility.unknown);
+        }
+    });
+
+    it('ignores a resolved hostilityColor on an exempt graphic', () => {
+        // The other door: `hostilityColor` is a color a host already resolved, so
+        // honoring it would let the same value straight back in.
+        const feature = hostileFeature(TacticalGraphicName.Breach, {hostilityColor: HOSTILE_RED});
+        expect(lineColorOf(feature)).toBe(UNAFFILIATED);
+    });
+
+    it('still colors a graphic that does take one', () => {
+        expect(lineColorOf(hostileFeature(TacticalGraphicName.PhaseLine))).toBe(HOSTILE_RED);
+        // Was `ObstacleLine`, which is now green whatever its affiliation.
+        expect(lineColorOf(hostileFeature(TacticalGraphicName.AssemblyArea))).toBe(HOSTILE_RED);
+    });
+
+    /**
+     * **The obstacle rule outranks this one, and 270501 is where the two meet.**
+     *
+     * Block is exempt from affiliation *and* an obstacle. Exempt alone would draw it in the
+     * unaffiliated colour; the obstacle rule draws it green, and green wins — the plate
+     * covers "friendly, hostile, neutral, unknown, or factional" without exception, so
+     * there is no identity for which the exemption's answer is the right one.
+     *
+     * Its mission-task twin 340100 is not an obstacle and keeps the old behaviour, which is
+     * what makes this a precedence test rather than a rename.
+     */
+    it('lets the obstacle rule outrank the exemption where a graphic is both', () => {
+        const block = lineColorOf(hostileFeature(TacticalGraphicName.Block));
+        expect(block).not.toBe(UNAFFILIATED);
+        expect(block).not.toBe(HOSTILE_RED);
+        expect(lineColorOf(hostileFeature(TacticalGraphicName.TacticalBlock))).toBe(UNAFFILIATED);
+    });
+
+    it('leaves an unnamed feature alone', () => {
+        // A paint function can be called on a feature with no name — the parity test
+        // does it — and guessing "exempt" there would silently drop every color.
+        const feature: PaintFeature = {
+            geometry: {type: 'LineString', coordinates: [[0, 0], [1000, 0]]},
+            properties: {hostility: TacticalGraphicHostility.hostileFaker} as PaintFeature['properties'],
+        };
+        expect(lineColorOf(feature)).toBe(HOSTILE_RED);
+    });
+});

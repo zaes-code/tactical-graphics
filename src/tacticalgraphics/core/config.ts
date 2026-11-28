@@ -1,0 +1,547 @@
+/**
+ * Library configuration.
+ *
+ * Everything re-styleable lives on one all-optional object. Leave a field off and the
+ * library uses its doctrinal default, so an unconfigured consumer gets FM 1-02.2 out of
+ * the box; set it and the renderer picks the value up on its next draw.
+ *
+ * ## Why this is in the map-agnostic half
+ *
+ * Nothing here knows what a renderer is. Label size in pixels, stroke width in pixels,
+ * and the affiliation colors are properties of the *symbology* — they mean the same
+ * thing to an OpenLayers style function, a planned Cesium view, or anything else that
+ * draws these graphics. Keeping the config beside the geometry means a second renderer
+ * inherits it rather than reinventing it, and a host configures the library once no
+ * matter how many views it has open.
+ *
+ * This module holds values and pure functions only: no `ol`, no React, no DOM. That is
+ * what lets it sit in the root entry point, and the build asserts it.
+ *
+ * ## One palette
+ *
+ * There is exactly one palette here — `DEFAULT_PALETTE`, the doctrinal one — and the
+ * library never swaps it for another. It cannot: only the host knows what its own
+ * basemap looks like, whether the map is on a projector or a darkened operations floor,
+ * and which of those states it is in right now. A host that wants different colors on a
+ * dark basemap keeps that set itself and sends it. The library takes colors, not modes.
+ */
+import type {TacticalGraphicHostility} from './type';
+
+/** Base label font size in px. The label-scale formulas all normalize to this. */
+export const BASE_FONT_SIZE_PX = 16;
+
+/**
+ * Default stroke width in px for every graphic's line work.
+ *
+ * Came down from 4 to 2. 4px reads as heavy at the zooms these graphics
+ * are actually used at — the line work crowds its own labels and the inner detail of
+ * the denser symbols (obstacle teeth, crenellations, fortified decoration) runs
+ * together. 2px is the weight the doctrinal plates read at.
+ */
+export const DEFAULT_LINE_WIDTH = 2;
+
+/** Readable bounds for the line-width setting: below 1px strokes vanish at typical zoom; above 8px they start to obscure the basemap and neighboring graphics. */
+export const MIN_LINE_WIDTH = 1;
+export const MAX_LINE_WIDTH = 8;
+
+/**
+ * Readable bounds for the label-size setting, mirroring the line-width pair so the two
+ * behave identically wherever they are surfaced together.
+ *
+ * Was `Math.max(1, size)` — an upper bound was missing and the lower
+ * one admitted sizes no one can read. A label under 8px is illegible at any zoom, and
+ * past the upper bound it swamps the graphic it belongs to. That ceiling came down from
+ * 48 to 26: 48 was picked to mirror the line-width pair rather than from
+ * looking at the map, and labels well short of it already overran their graphics.
+ */
+export const MIN_LABEL_SIZE = 8;
+export const MAX_LABEL_SIZE = 26;
+
+/**
+ * The smallest a label is drawn, in screen pixels. Text sized to its graphic shrinks with it,
+ * and below this it is not drawn at all. @see withLegibleText
+ *
+ * Lower than `MIN_LABEL_SIZE`, which bounds the label-size *setting*: a host asks for labels of
+ * at least 8 px, while a label that shrank with its graphic stays readable a little smaller.
+ * Started at 8 and was hiding labels too soon.
+ */
+export const MIN_LEGIBLE_TEXT_PX = 6;
+
+/**
+ * The unit an altitude is entered and displayed in.
+ *
+ * **A host-level choice, not a per-symbol one.** A picture where one zone is in feet and
+ * the next in meters is a picture nobody can read across, so one setting covers the map
+ * and every altitude on it compares.
+ *
+ * The value is **interpreted in this unit, never converted into it**: 1500 entered
+ * under `Feet` is 1500 feet, and the same 1500 under `Meters` is 1500 meters. So this
+ * is a decision to make once, at start-up, beside the palette — changing it later
+ * reinterprets every altitude already entered rather than restating it.
+ *
+ * ## Why this is only two members
+ *
+ * FM 1-02.2 gives field X four kinds of value, and they are **not four units**:
+ *
+ * 1. an altitude "in feet or meters **in relation to a reference datum**" — `1500MSL`,
+ *    `1500FT AGL`
+ * 2. a **flight level** — `FL150`
+ * 3. a **depth** for a submerged object, in feet below sea level
+ * 4. a **height** of equipment or structures on the ground
+ *
+ * Only the first half of (1) is a unit. `MSL` and `AGL` are a *reference datum* — what
+ * the number is measured from — which is an independent axis: any datum can be quoted in
+ * either unit, so folding them in here would produce an enum whose members cannot be
+ * combined and a value that cannot say "meters above ground".
+ *
+ * A **flight level** is neither. `FL150` is 15,000 ft of *pressure* altitude against the
+ * standard 1013.25 hPa datum, so it is deliberately not a true height above anything —
+ * two aircraft at FL150 are separated from each other, not placed. The number is
+ * different too: 150, not 15000. It is its own encoding, not this quantity in another
+ * unit.
+ *
+ * So the datum belongs on the **graphic**, not here: two zones on one map can honestly
+ * be one AGL and one MSL, which a host-level setting could never express. It is
+ * {@link AltitudeDatum}, carried on `TacticalGraphicProperties.altitudeDatum`.
+ * `formatAltitude` also passes a non-numeric string through untouched, so a bag written
+ * before that field existed still renders `'FL150'` and `'1500MSL'` as doctrine writes
+ * them.
+ */
+export enum AltitudeUnit {
+    meters = 'Meters',
+    feet = 'Feet',
+}
+
+/** What each unit is written as on a label. Matches the plates: `1500FT`, not `1500 ft`. */
+export const ALTITUDE_UNIT_SUFFIX: Readonly<Record<AltitudeUnit, string>> = Object.freeze({
+    [AltitudeUnit.meters]: 'M',
+    [AltitudeUnit.feet]: 'FT',
+});
+
+/**
+ * Every knob the library exposes. All optional — an omitted field keeps the default.
+ *
+ * `hostilityColors` is a partial map, so overriding one affiliation leaves the others
+ * doctrinal. The key is the same `TacticalGraphicHostility` a graphic's properties
+ * carry; `unknown` is spelled `defaultLineColor` instead, since that color is also what
+ * unaffiliated graphics and label text fall back to.
+ */
+export interface TacticalGraphicsConfigOptions {
+    /** Base label font size in px. Default 16. Clamped to [MIN_LABEL_SIZE, MAX_LABEL_SIZE]. */
+    labelSize?: number;
+    /** Stroke width in screen px for every graphic's line work. Default 2. Clamped to [MIN_LINE_WIDTH, MAX_LINE_WIDTH]. */
+    lineWidth?: number;
+    /** Per-affiliation line colors. Anything omitted keeps its FM 1-02.2 value. */
+    hostilityColors?: Partial<Record<TacticalGraphicHostility, string>>;
+    /** Line color for graphics with no affiliation, and for an `unknown` hostility that is not stated (see `identityStated`). Default `#000000`. */
+    defaultLineColor?: string;
+    /** Label text fill. Defaults to whatever `defaultLineColor` resolves to, so overriding one moves both. */
+    labelFillColor?: string;
+    /**
+     * Colour a graphic's text amplifiers by its affiliation instead of by
+     * `labelFillColor`. Default `false`.
+     *
+     * **Off by default because doctrine says off.** FM 1-02.2 colours *line work* by
+     * affiliation and leaves text amplifiers black — a hostile phase line is red, and its
+     * "PL BLUE" is not. That is the rule this library follows and the one
+     * `hostilityExemptions.test.ts` pins.
+     *
+     * It is offered as a choice because a host with a dark or busy basemap often wants the
+     * amplifier to read as part of the symbol rather than as a separate black annotation,
+     * and because a picture filtered down to one affiliation loses nothing by tinting its
+     * text. Turning it on supersedes `labelFillColor` entirely, so a host should present
+     * the two as one either/or rather than as two independent settings.
+     */
+    labelUsesHostilityColor?: boolean;
+    /** Label halo, which has to contrast against `labelFillColor`. Default opaque white. */
+    labelHaloColor?: string;
+    /**
+     * Draw obstacles and obstructions in green, as APP-06 8.1.4.3 requires. Default `true`.
+     *
+     * > Obstacles and obstructions as shown in this chapter (friendly, hostile, neutral,
+     * > unknown, or factional) are to be drawn using the colour green. However, if the
+     * > colour green is not available obstacles are to be drawn using black.
+     *
+     * **On by default because the plate says "are to be", not "may be".** This library
+     * already honours that distinction elsewhere — the maritime areas whose plates say
+     * *"has"* are painted and the ones that say *"may be depicted as"* are left to the
+     * host — and obstacles were the family where it had not been applied.
+     *
+     * **It beats affiliation, which nothing else here does.** The parenthesis above is
+     * exhaustive on purpose, and the same paragraph adds that *"The use of green and yellow
+     * for obstacles and CBRN is in contradiction to the Standard Identities."* So a hostile
+     * obstacle is green, not red; the plates carry the affiliation on a red enemy diamond
+     * drawn beside the symbol.
+     *
+     * Turning it off restores the affiliation colour — black normally, red when hostile —
+     * which is the fallback 8.1.4.3 names itself, not a compromise. It affects **only**
+     * this family: CBRN's yellow hatching, the cued-acquisition grey, the radar-search dark
+     * cyan and the sector-2 terrain colours are separate rules and are unmoved by it.
+     * @see OBSTACLE_GRAPHICS, obstacleColor
+     */
+    obstacleColors?: boolean;
+
+    /**
+     * The green itself. Default `#00AC00`.
+     *
+     * **Not the plate's own green, and deliberately so.** 270501's Example cell prints
+     * `#00FF00` — pure, unmixed, and what this defaulted to through 4.1.1. Sampled off a
+     * raster it is exact; rendered as line work over a map it is the brightest colour a
+     * screen can make, and it reads as a highlight rather than as a symbol. `#00AC00` is the
+     * same hue at about two thirds the value.
+     *
+     * The rule it serves is unchanged: 8.1.4.3 says obstacles are **green**, and names no
+     * value. A host that wants the plate's literal green sets it back here.
+     *
+     * A separate field from `obstacleColors` so the boolean says *whether* and this says
+     * *which*, matching how every other colour here works.
+     */
+    obstacleColor?: string;
+
+    /** Unit for every altitude and height amplifier. Default {@link AltitudeUnit.feet}. @see AltitudeUnit */
+    altitudeUnit?: AltitudeUnit;
+
+    /**
+     * Draw every graphic the operator traces as a free path with its corners rounded. Default `false`.
+     *
+     * Lines, areas and multi-point arrows: `SMOOTHED_GRAPHICS` lists them and `smoothingKindOf`
+     * says how each is treated. The curve rounds the corners (Chaikin corner cutting) rather than
+     * passing through them. Only the line work changes: the points the operator placed are what is
+     * saved, edited and exported, and a selected graphic shows them as a dashed line. An arrow
+     * keeps its last segment straight, so its head is drawn as on a hard line.
+     *
+     * It reshapes geometry, so `refreshStyles()` rebuilds the graphics it reaches rather than
+     * only repainting them; every engine does this.
+     */
+    smoothLines?: boolean;
+
+    /**
+     * Write `ENY` on hostile graphics as well as drawing them in the hostile color. Default
+     * `true`; set it `false` to identify hostile graphics by their red line work alone.
+     *
+     * APP-06 8.1.4 and FM 1-02.2 field N add `ENY` so a hostile graphic still reads as one
+     * where color is not available, which is why it is on unless a host opts out. It covers every
+     * place the library writes `ENY`: the ends of lines, the arrows, the areas and the
+     * obstacles. Paint only, so `refreshStyles()` is enough to apply a change.
+     */
+    enemyLabels?: boolean;
+
+    /**
+     * Move labels to stay on screen and clear of each other. Default `false`.
+     *
+     * Turned on, a label whose usual place is off the map slides into the visible part of its
+     * graphic, and labels step aside from other labels and line work. Off, every label is drawn
+     * at its doctrinal place whatever the view. Paint only, so `refreshStyles()` is
+     * enough to apply a change. @see PaintContext.view, PaintContext.avoid
+     */
+    autoPlaceLabels?: boolean;
+
+    /**
+     * Keep a line's or area's decorations — obstacle teeth, wire loops, ditch teeth,
+     * battlements — at full size however small the graphic is on screen. Default `false`.
+     *
+     * By default a decoration shrinks to a share of its graphic's own size and is dropped
+     * below a few pixels, so a short obstacle seen from far out reads as a plain line rather
+     * than as a line buried in its own glyphs. A host whose operators must tell an obstacle's
+     * type at any zoom turns this on and accepts the crowding.
+     */
+    fullSizeDecorations?: boolean;
+
+    /**
+     * Smallest size, in px, a label is shrunk to so it fits inside its graphic. Default unset:
+     * a label shrinks as far as its graphic needs, and a name under {@link MIN_LEGIBLE_TEXT_PX}
+     * is dropped.
+     *
+     * Set, a small area seen from far out keeps a readable name at this size and lets it run
+     * over its outline instead. Clamped to [MIN_LEGIBLE_TEXT_PX, MAX_LABEL_SIZE]; it never
+     * raises a label above the size it would otherwise have.
+     */
+    minLabelSize?: number;
+
+    // ── Editor chrome ────────────────────────────────────────────────────────
+    // Not part of any symbol: these color the affordances a renderer draws so an operator
+    // can edit a graphic. They say "you can drag this", and that meaning must not shift
+    // with a graphic's affiliation — which is why they are their own fields rather than
+    // derived from the palette above. A renderer without a given affordance ignores its
+    // field.
+
+    /** Draggable handle dots. Default opaque red; renderers may apply their own opacity. */
+    handleColor?: string;
+    /** Handle dots that are present but not draggable right now. Default 80%-opacity gray. */
+    inertHandleColor?: string;
+    /** The marker and sketch line shown while drawing any graphic. Default solid blue. */
+    drawMarkerColor?: string;
+    /** That marker's outline, which has to contrast against `drawMarkerColor`. Default white. */
+    drawMarkerOutlineColor?: string;
+}
+
+/**
+ * An immutable set of overrides.
+ *
+ * Construct one and hand it to `configureTacticalGraphics`, or compose with `.with()`:
+ *
+ * ```ts
+ * const dark = new TacticalGraphicsConfig({defaultLineColor: 'rgb(198,198,198)'});
+ * configureTacticalGraphics(dark.with({lineWidth: 3}));
+ * ```
+ */
+export class TacticalGraphicsConfig implements TacticalGraphicsConfigOptions {
+    readonly labelSize?: number;
+    readonly lineWidth?: number;
+    readonly hostilityColors?: Readonly<Partial<Record<TacticalGraphicHostility, string>>>;
+    readonly obstacleColors?: boolean;
+    readonly obstacleColor?: string;
+    readonly defaultLineColor?: string;
+    readonly labelFillColor?: string;
+    readonly labelUsesHostilityColor?: boolean;
+    readonly labelHaloColor?: string;
+    readonly altitudeUnit?: AltitudeUnit;
+    readonly smoothLines?: boolean;
+    readonly enemyLabels?: boolean;
+    readonly autoPlaceLabels?: boolean;
+    readonly fullSizeDecorations?: boolean;
+    readonly minLabelSize?: number;
+    readonly handleColor?: string;
+    readonly inertHandleColor?: string;
+    readonly drawMarkerColor?: string;
+    readonly drawMarkerOutlineColor?: string;
+
+    constructor(options: TacticalGraphicsConfigOptions = {}) {
+        // Clamp on the way in rather than on read: an out-of-range value typed into a
+        // settings panel should be corrected once, not re-corrected on every style call.
+        if (options.labelSize !== undefined) this.labelSize = Math.min(MAX_LABEL_SIZE, Math.max(MIN_LABEL_SIZE, options.labelSize));
+        if (options.lineWidth !== undefined) this.lineWidth = Math.min(MAX_LINE_WIDTH, Math.max(MIN_LINE_WIDTH, options.lineWidth));
+        if (options.hostilityColors !== undefined) this.hostilityColors = Object.freeze({...options.hostilityColors});
+        if (options.obstacleColors !== undefined) this.obstacleColors = options.obstacleColors;
+        if (options.obstacleColor !== undefined) this.obstacleColor = options.obstacleColor;
+        if (options.defaultLineColor !== undefined) this.defaultLineColor = options.defaultLineColor;
+        if (options.labelFillColor !== undefined) this.labelFillColor = options.labelFillColor;
+        if (options.labelUsesHostilityColor !== undefined) this.labelUsesHostilityColor = options.labelUsesHostilityColor;
+        if (options.labelHaloColor !== undefined) this.labelHaloColor = options.labelHaloColor;
+        if (options.altitudeUnit !== undefined) this.altitudeUnit = options.altitudeUnit;
+        if (options.smoothLines !== undefined) this.smoothLines = options.smoothLines;
+        if (options.enemyLabels !== undefined) this.enemyLabels = options.enemyLabels;
+        if (options.autoPlaceLabels !== undefined) this.autoPlaceLabels = options.autoPlaceLabels;
+        if (options.fullSizeDecorations !== undefined) this.fullSizeDecorations = options.fullSizeDecorations;
+        if (options.minLabelSize !== undefined) this.minLabelSize = Math.min(MAX_LABEL_SIZE, Math.max(MIN_LEGIBLE_TEXT_PX, options.minLabelSize));
+        if (options.handleColor !== undefined) this.handleColor = options.handleColor;
+        if (options.inertHandleColor !== undefined) this.inertHandleColor = options.inertHandleColor;
+        if (options.drawMarkerColor !== undefined) this.drawMarkerColor = options.drawMarkerColor;
+        if (options.drawMarkerOutlineColor !== undefined) this.drawMarkerOutlineColor = options.drawMarkerOutlineColor;
+        Object.freeze(this);
+    }
+
+    /**
+     * A copy with `overrides` merged over this one. `hostilityColors` merges key by
+     * key; every other field is replaced whole.
+     *
+     * Passing `undefined` for a field means "leave it alone", not "clear it" — that is
+     * what makes `config.with({lineWidth})` safe to call from a settings panel. To drop
+     * an override entirely, build a fresh `TacticalGraphicsConfig` and publish it with
+     * `setTacticalGraphicsConfig`.
+     */
+    with(overrides: TacticalGraphicsConfigOptions): TacticalGraphicsConfig {
+        return new TacticalGraphicsConfig({
+            labelSize: overrides.labelSize ?? this.labelSize,
+            lineWidth: overrides.lineWidth ?? this.lineWidth,
+            hostilityColors: {...this.hostilityColors, ...overrides.hostilityColors},
+            defaultLineColor: overrides.defaultLineColor ?? this.defaultLineColor,
+            labelFillColor: overrides.labelFillColor ?? this.labelFillColor,
+            labelUsesHostilityColor: overrides.labelUsesHostilityColor ?? this.labelUsesHostilityColor,
+            labelHaloColor: overrides.labelHaloColor ?? this.labelHaloColor,
+            // `??`, so composing `{obstacleColors: false}` over a config that never set it
+            // still turns it off — the same reason every other field here uses it.
+            obstacleColors: overrides.obstacleColors ?? this.obstacleColors,
+            obstacleColor: overrides.obstacleColor ?? this.obstacleColor,
+            altitudeUnit: overrides.altitudeUnit ?? this.altitudeUnit,
+            smoothLines: overrides.smoothLines ?? this.smoothLines,
+            enemyLabels: overrides.enemyLabels ?? this.enemyLabels,
+            autoPlaceLabels: overrides.autoPlaceLabels ?? this.autoPlaceLabels,
+            fullSizeDecorations: overrides.fullSizeDecorations ?? this.fullSizeDecorations,
+            minLabelSize: overrides.minLabelSize ?? this.minLabelSize,
+            handleColor: overrides.handleColor ?? this.handleColor,
+            inertHandleColor: overrides.inertHandleColor ?? this.inertHandleColor,
+            drawMarkerColor: overrides.drawMarkerColor ?? this.drawMarkerColor,
+            drawMarkerOutlineColor: overrides.drawMarkerOutlineColor ?? this.drawMarkerOutlineColor,
+        });
+    }
+}
+
+/**
+ * The one palette: every color the library falls back to, restated as an explicit set.
+ *
+ * Two jobs, which is why it is exported rather than left implicit inside the accessors:
+ *
+ * - **It is the fallback.** The renderer's `get*Color()` accessors resolve to these
+ *   values when the host has overridden nothing, so the defaults are written down once
+ *   instead of once per accessor.
+ * - **It is what a host builds its own sets on top of.** `setTacticalGraphicsConfig`
+ *   replaces wholesale, so a host swapping palettes has to send a complete one —
+ *   `{...DEFAULT_PALETTE, ...myDarkColors}` is the intended shape.
+ *
+ * Note what is **absent**: no `hostilityColors`. The four affiliation colors — friendly
+ * blue, hostile red, neutral green, pending yellow — are doctrine. They are how an
+ * operator identifies a symbol at a glance, and re-tinting them for a display setting
+ * makes a graphic mean something slightly different depending on how the app is
+ * configured. A host that disagrees can still pass `hostilityColors`; the library will
+ * not do it on its own.
+ */
+export const DEFAULT_PALETTE: Readonly<Required<Pick<TacticalGraphicsConfigOptions,
+    'defaultLineColor' | 'labelFillColor' | 'labelHaloColor' | 'handleColor' | 'inertHandleColor' | 'drawMarkerColor' | 'drawMarkerOutlineColor' | 'obstacleColor'>>> = {
+    defaultLineColor: '#000000',
+    // APP-06 8.1.4.3's green, sampled off 270501's Example cell: pure, unmixed.
+    obstacleColor: '#00AC00',
+    labelFillColor: '#000000',
+    labelHaloColor: 'rgba(255,255,255,1)',
+    handleColor: 'rgba(255,0,0,1)',
+    inertHandleColor: 'rgba(130,130,130,0.8)',
+    drawMarkerColor: 'rgba(87, 140, 255, 1)',
+    drawMarkerOutlineColor: 'white',
+};
+
+/** The empty config — every default in force. */
+const EMPTY_CONFIG = new TacticalGraphicsConfig();
+
+let _config: TacticalGraphicsConfig = EMPTY_CONFIG;
+
+/** The overrides currently in force. */
+export function getTacticalGraphicsConfig(): TacticalGraphicsConfig {
+    return _config;
+}
+
+/**
+ * Merge `options` over the current config.
+ *
+ * Accepts a plain options object or a `TacticalGraphicsConfig`. Call it as often as you
+ * like — it is cheap, and renderers read the result live. Anything already drawn keeps
+ * its cached rendering until the renderer is told to invalidate; with OpenLayers that
+ * means `source.forEachFeature(f => f.changed())`.
+ */
+export function configureTacticalGraphics(options: TacticalGraphicsConfigOptions): void {
+    _config = _config.with(options);
+}
+
+/** Replace the config wholesale, dropping any override not present in `config`. */
+export function setTacticalGraphicsConfig(config: TacticalGraphicsConfig): void {
+    _config = config;
+}
+
+/** Drop every override and go back to the doctrinal defaults. */
+export function resetTacticalGraphicsConfig(): void {
+    _config = EMPTY_CONFIG;
+}
+
+/** The smallest size in px a label shrinks to while fitting its graphic, if any. @see TacticalGraphicsConfigOptions.minLabelSize */
+export function getMinLabelSize(): number | undefined {
+    return _config.minLabelSize;
+}
+
+/** Whether decorations keep their full size on a small graphic. @see TacticalGraphicsConfigOptions.fullSizeDecorations */
+export function getFullSizeDecorations(): boolean {
+    return _config.fullSizeDecorations ?? false;
+}
+
+/** Whether free-drawn lines, areas and arrows are drawn smooth. @see TacticalGraphicsConfigOptions.smoothLines */
+export function getSmoothLines(): boolean {
+    return _config.smoothLines ?? false;
+}
+
+/** Whether hostile graphics write `ENY` as well as drawing in the hostile color. @see TacticalGraphicsConfigOptions.enemyLabels */
+export function getEnemyLabels(): boolean {
+    return _config.enemyLabels ?? true;
+}
+
+/** Whether labels move to stay on screen and clear of each other. @see TacticalGraphicsConfigOptions.autoPlaceLabels */
+export function getAutoPlaceLabels(): boolean {
+    return _config.autoPlaceLabels ?? false;
+}
+
+/**
+ * A string that changes exactly when a config change moves **geometry**, not just paint.
+ *
+ * A renderer keeps the last value it built with and, when its restyle finds a different one,
+ * rebuilds its graphics through the generators instead of only re-running the paints.
+ * `smoothLines` is the only such setting today. @see rebuildPaintedGraphic
+ */
+export function geometryConfigKey(): string {
+    return `smooth:${getSmoothLines() ? 1 : 0}`;
+}
+
+export function getDefaultLabelSize(): number {
+    return _config.labelSize ?? BASE_FONT_SIZE_PX;
+}
+
+/** Convenience wrapper over `configureTacticalGraphics({labelSize})`. */
+export function setDefaultLabelSize(size: number): void {
+    configureTacticalGraphics({labelSize: size});
+}
+
+export function getDefaultLineWidth(): number {
+    return _config.lineWidth ?? DEFAULT_LINE_WIDTH;
+}
+
+/** Convenience wrapper over `configureTacticalGraphics({lineWidth})`. */
+export function setDefaultLineWidth(width: number): void {
+    configureTacticalGraphics({lineWidth: width});
+}
+
+/**
+ * The host's override for one affiliation, or `undefined` to use the doctrinal value.
+ * The renderer owns the fallback — in the OpenLayers layer that is
+ * `getColorByHostility`.
+ */
+export function getHostilityColorOverride(hostility: TacticalGraphicHostility): string | undefined {
+    return _config.hostilityColors?.[hostility];
+}
+
+export function getObstacleColorsEnabled(): boolean {
+    return _config.obstacleColors ?? true;
+}
+
+export function getObstacleColorOverride(): string | undefined {
+    return _config.obstacleColor;
+}
+
+export function getDefaultLineColorOverride(): string | undefined {
+    return _config.defaultLineColor;
+}
+
+export function getLabelFillColorOverride(): string | undefined {
+    return _config.labelFillColor;
+}
+
+/** Whether text amplifiers take their graphic's affiliation colour. @see labelUsesHostilityColor */
+export function getLabelUsesHostilityColor(): boolean {
+    return _config.labelUsesHostilityColor === true;
+}
+
+export function getLabelHaloColorOverride(): string | undefined {
+    return _config.labelHaloColor;
+}
+
+export function getHandleColorOverride(): string | undefined {
+    return _config.handleColor;
+}
+
+/**
+ * The unit every altitude and height amplifier is written in.
+ *
+ * Defaults to feet: every altitude FM 1-02.2 prints is in feet or a flight level —
+ * `1500FT AGL`, `20000FT AGL`, `FL150` — and aviation, which is what these particular
+ * amplifiers annotate, is flown in feet almost everywhere.
+ */
+export function getAltitudeUnit(): AltitudeUnit {
+    return _config.altitudeUnit ?? AltitudeUnit.feet;
+}
+
+export function getInertHandleColorOverride(): string | undefined {
+    return _config.inertHandleColor;
+}
+
+export function getDrawMarkerColorOverride(): string | undefined {
+    return _config.drawMarkerColor;
+}
+
+export function getDrawMarkerOutlineColorOverride(): string | undefined {
+    return _config.drawMarkerOutlineColor;
+}

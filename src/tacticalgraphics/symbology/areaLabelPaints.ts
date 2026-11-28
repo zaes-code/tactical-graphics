@@ -1,0 +1,874 @@
+/**
+ * # Area labels
+ *
+ * The text that sits on an area graphic: its designation, its date-time group,
+ * and for some families a doctrinal prefix or a repeated marker.
+ *
+ * Ported from `getAreaLabelStylesFromLabels`, a switch over ~50 graphic names.
+ * Most of those names want the same thing — a centered stack of lines at the label
+ * anchor — so the switch is mostly one layout repeated, and this module is mostly
+ * {@link areaLabelStackPaint} with different line lists fed to it.
+ *
+ * ## One `Text` with newlines, never one style per line
+ *
+ * Every stack here joins its lines with `\n` rather than emitting a mark per line
+ * at a fixed pixel offset. That is a correctness point, not a tidiness one: a
+ * label's scale grows with zoom, so a fixed 18 px gap between separately-anchored
+ * lines is right at one zoom and collides at every other. Newlines make the line
+ * spacing follow the font.
+ *
+ * The one place a second mark is still used is where the two blocks genuinely sit
+ * apart — the zone families' date-time group, which hangs outside the shape's
+ * upper-left corner while the name sits at its center.
+ */
+
+import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {HALO_WIDTH, configuredLabelScale, fontStyle, getLabelHaloColor} from '../core/symbology';
+import { TacticalGraphicName, getLabel} from '../core/type';
+import {uprightRotation} from './decorations';
+import {amplifierText, asAmplifier, showsEny, formatDesignationWithCountry, getFullLabel, labelColorOf, legibleDesignation} from './paintFunctions';
+import {ringCenter, ringCrossingPoint} from './boundaryBreakPaints';
+import {capLabelToGraphic, fitLabelScale, labelGapPx} from './labelFit';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX} from '../core/config';
+import {insetView} from './viewFollow';
+
+type AreaLabelPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
+
+/** How far below the designation the date-time group hangs, in screen pixels. */
+const DEFAULT_DATE_OFFSET_PX = 18;
+
+/** Where an area's label anchor is — the label feature is a bare point. */
+function anchorOf(feature: PaintFeature): ProjectedPosition | undefined {
+    return feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
+}
+
+/**
+ * Share of an area's own size its **centred** label may stand.
+ *
+ * Larger than the general share because this label is *meant* to sit in the middle of the
+ * shape and be read as its name, where an outside label is an annotation beside it. 0.4 is
+ * what these already measured at the zoom they were drawn at (0.41 on the rectangular fire
+ * areas), so the shapes keep the size that reads correctly today — and stop growing to 0.52
+ * of the box on the way out, which they did while the zoom anchor was the only thing
+ * holding them.
+ */
+const CENTRED_LABEL_SHARE = 0.4;
+
+/**
+ * The scale an area's centred labels start from.
+ *
+ * The ring fit still has the last word — it is what keeps text off a concave outline, and
+ * no share can do that. This is the other half: the ring fit stops a label *overflowing*
+ * the shape, and says nothing about a label that fills it. Without something that does, an
+ * area label grew until the outline stopped it; measured on the sweep, the rectangular fire
+ * areas reached 0.68 of their box. @see fitLabelScale, outsideScaleOf
+ */
+function scaleOf(feature: PaintFeature, context: PaintContext): number {
+    return capLabelToGraphic(configuredLabelScale(), feature, context, BASE_FONT_SIZE_PX, CENTRED_LABEL_SHARE);
+}
+
+/**
+ * The scale for a label drawn **outside** the shape.
+ *
+ * Inside and outside want different rules, which is why there are two functions here. A
+ * label *inside* an area is already governed by `fitLabelScale`, which shrinks it until it
+ * genuinely fits the ring — a second cap on top of that would only make a label smaller
+ * than the shape it comfortably sits in, and the operator's word on those is that they read
+ * correctly. A label *outside* has no ring to be held by and nothing else stopping it, so
+ * it keeps growing relative to a shape that shrinks with the zoom: the dates above a
+ * rectangle, the `PAA` markers around a position area, a group of targets' designation on
+ * its northern edge.
+ *
+ * Those take the general rule instead — a quarter of the graphic's own on-screen size.
+ * @see capLabelToGraphic
+ */
+function outsideScaleOf(feature: PaintFeature, context: PaintContext): number {
+    // The configured size rather than the anchored one: outside the shape there is no ring
+    // holding the label, so the graphic cap is what bounds it and the anchor adds only the
+    // zoom the operator happened to be at. @see configuredLabelScale
+    const desired = feature.bounds ? configuredLabelScale() : scaleOf(feature, context);
+    return capLabelToGraphic(desired, feature, context);
+}
+
+/**
+ * One centered, multi-line text mark at `at`, **capped so it stays inside the shape**.
+ *
+ * The cap is not a caller's choice, which is why it lives here rather than at the call
+ * sites: a label's scale is zoom-anchored and a shape's size is not, so every centred block
+ * overruns its own outline at some zoom unless something stops it. Doing it in the one
+ * funnel every centred stack passes through means a new area family inherits the behaviour
+ * instead of having to remember it. @see fitLabelScale
+ */
+function stack(
+    feature: PaintFeature,
+    context: PaintContext,
+    at: ProjectedPosition,
+    lines: string[],
+    scale: number,
+    rotation = 0,
+    /**
+     * Whether the block must fit inside the shape. False for a label that rides the outline,
+     * whose box is half outside by construction: fitting it would shrink it to nothing, which
+     * is what the PAA markers and the group-of-targets designation did. Those are bounded by
+     * the graphic cap alone. @see outsideScaleOf
+     */
+    fitInside = true,
+): Paint {
+    return {
+        geometry: {type: 'Point', coordinates: at},
+        text: {
+            text: lines.join('\n'),
+            font: fontStyle,
+            fill: labelColorOf(feature),
+            halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+            align: 'center',
+            baseline: 'middle',
+            rotation,
+            scale: fitInside ? fitLabelScale(feature, context, at, lines, fontStyle, scale) : scale,
+        },
+    };
+}
+
+/**
+ * The area's smaller extent on screen, in pixels: the room its centred label is fitted to.
+ * From its stamped bounds, else its ring, else `Infinity` when neither has been stamped and
+ * nothing caps the label either.
+ */
+function areaPx(feature: PaintFeature, context: PaintContext): number {
+    const ring = feature.ring;
+    const box = feature.bounds ?? (ring?.length
+        ? {
+            minX: Math.min(...ring.map(([x]) => x)),
+            maxX: Math.max(...ring.map(([x]) => x)),
+            minY: Math.min(...ring.map(([, y]) => y)),
+            maxY: Math.max(...ring.map(([, y]) => y)),
+        }
+        : undefined);
+    if (!box) return Infinity;
+    return Math.min(box.maxX - box.minX, box.maxY - box.minY) / context.resolution;
+}
+
+/**
+ * What a fitted designation is drawn as, or `undefined` while the whole of it is still
+ * legible at `fitted` and nothing changes.
+ *
+ * Below that, the name goes and the doctrinal prefix stays, at a size that can be read, until
+ * the area is smaller than about twice it. @see legibleDesignation
+ */
+function shrunkDesignation(
+    feature: PaintFeature,
+    context: PaintContext,
+    designation: string,
+    prefix: string,
+    fitted: number,
+): {text: string; scale: number} | undefined {
+    if (!prefix.trim() || !designation || BASE_FONT_SIZE_PX * fitted >= MIN_LEGIBLE_TEXT_PX) return undefined;
+    return legibleDesignation(designation, prefix, fitted, fontStyle, context, areaPx(feature, context));
+}
+
+/**
+ * A centred stack whose `designation` line carries the doctrinal `prefix`.
+ *
+ * Drawn exactly as {@link stack} draws it while the block can be read. Once the fit takes it
+ * under the legibility floor every line of it would go, so the prefix is drawn alone instead,
+ * at its own legible size and outside the fit, which would only shrink it back under the floor.
+ */
+function designationStack(
+    feature: PaintFeature,
+    context: PaintContext,
+    at: ProjectedPosition,
+    lines: string[],
+    scale: number,
+    designation: string,
+    prefix: string,
+): Paint[] {
+    if (!lines.length) return [];
+    const block = stack(feature, context, at, lines, scale);
+    const kept = shrunkDesignation(feature, context, designation, prefix, block.text?.scale ?? scale);
+    if (!kept) return [block];
+    return kept.text ? [stack(feature, context, at, [kept.text], kept.scale, 0, false)] : [];
+}
+
+/**
+ * The date-time group as one string.
+ *
+ * Both ends joined with a hyphen; a lone end renders on its own. An incomplete
+ * range is shown rather than suppressed here — unlike the *line* graphics, where a
+ * half-filled range reads as an error. The area plates in FM 1-02.2 show a single
+ * "W" as often as a "W - W1" pair.
+ */
+export function areaDateLabel(feature: PaintFeature): string {
+    // Blanked when the graphic is showing its name only, which removes the line from
+    // every stack that joins this in — the empty-string filter does the rest.
+    const start = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+    const end = amplifierText(feature, (feature.properties.endDate ?? '').trim());
+    if (start && end) return `${start} - ${end}`;
+    return start || end || '';
+}
+
+/** Screen-pixel clearance between the shape's lower edge and the literal under it. */
+const BELOW_SHAPE_GAP_PX = 10;
+
+/**
+ * A fixed literal set **below** the shape, centred on it.
+ *
+ * The airhead line is the case: its plate labels the enclosure with the words "AIRHEAD
+ * LINE" under it and offers no name box at all, so there is nothing for the operator to
+ * type and nothing for a designation-driven label to draw.
+ *
+ * Below the *painted* outline rather than at the label anchor, because the anchor sits in
+ * the middle of the shape and this word belongs outside it. The gap is in screen pixels so
+ * it holds at every zoom, which is the standing rule for any clearance.
+ */
+export function belowShapeLiteralPaint(literal: string): AreaLabelPaint {
+    return (feature, context) => {
+        const box = feature.bounds;
+        if (!box) return [];
+        /*
+         * **Emitted directly, not through `stack`.** That helper runs the text through
+         * `fitLabelScale`, which shrinks a label until it fits *inside* the outline — right
+         * for a centred name and wrong for anything hung outside, where it collapses the
+         * text to nothing. The engine reported the mark and the map showed no words. The
+         * outside labels here all bypass it for the same reason. @see zoneLabelPaint
+         */
+        /*
+         * **Under the middle, or along under the shape to the view** when the middle is off to
+         * one side and the line under the shape is on screen. @see PaintContext.view
+         */
+        const scale = outsideScaleOf(feature, context);
+        const y = box.minY - labelGapPx(BELOW_SHAPE_GAP_PX, scale) * context.resolution;
+        let x = (box.minX + box.maxX) / 2;
+        const view = insetView(context);
+        if (view && y >= view.minY && y <= view.maxY && (x < view.minX || x > view.maxX)) {
+            const [lo, hi] = [Math.max(box.minX, view.minX), Math.min(box.maxX, view.maxX)];
+            if (lo < hi) x = Math.min(hi, Math.max(lo, x));
+        }
+        return [{
+            geometry: {type: 'Point', coordinates: [x, y]},
+            text: {
+                text: literal,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'top',
+                scale,
+            },
+        }];
+    };
+}
+
+/**
+ * The area graphics whose plate carries a country code beside the designation.
+ *
+ * APP-06 letters the pair `T2 ( AS )` on the free, no and restrictive fire areas — the
+ * establishing formation and its country — and on nothing else that routes through the
+ * centred stack. Fire support area, the obstacle areas and the EPW holding area take a
+ * designation and no country at all.
+ *
+ * **A list rather than "render it whenever one is set".** Composing the code
+ * unconditionally made four graphics draw a country they have no field for, which is
+ * invisible while nothing can set one and wrong the moment a restore or an import carries
+ * it. Which symbols take a country is a fact about the symbology, so it lives here rather
+ * than being inferred from whichever renderer happens to offer an input.
+ */
+const COUNTRY_CODE_AREAS: readonly TacticalGraphicName[] = [
+    TacticalGraphicName.FreeFireAreaCircular,
+    TacticalGraphicName.FreeFireAreaIrregular,
+    TacticalGraphicName.FreeFireAreaRectangular,
+    TacticalGraphicName.NoFireAreaCircular,
+    TacticalGraphicName.NoFireAreaIrregular,
+    TacticalGraphicName.NoFireAreaRectangular,
+    TacticalGraphicName.RestrictiveFireAreaCircular,
+    TacticalGraphicName.RestrictiveFireAreaIrregular,
+    TacticalGraphicName.RestrictiveFireAreaRectangular,
+];
+
+/**
+ * The areas whose plate sets the symbol's own literal **on a line of its own**, over the
+ * designation, rather than beside it as a prefix.
+ *
+ * Read by both {@link areaLabelStackPaint} and {@link areaDefaultLabelPaint}, so whichever
+ * route an engine takes to one of these graphics, the stack comes out the same. That is the
+ * point of a table here rather than a branch in the registry: the OpenLayers switch and the
+ * paint registry reach these graphics by different functions.
+ *
+ * - The free, no and restrictive fire areas: MIL-STD-2525E 2402xx-2404xx and APP-06 set
+ *   `FFA` over `T` over `W - W1`.
+ * - Kill zone (2525E 242800): `KILL ZONE` over `T`.
+ * - FARP (310300), DHA (310100) and refugee holding area (310400, `REFUGEE` / `HOLDING
+ *   AREA`): the literal over `T`, the same layout as the EPW holding area.
+ * - Regimental support area (310500), bomb area (240808) and terminally guided munition
+ *   footprint (242000): the bare literal. Encirclement and the UXO area: nothing. Their Template carries no `T` box, so a
+ *   designation arriving on an imported graphic is not drawn.
+ */
+export const STACKED_AREA_LITERALS: Partial<Record<TacticalGraphicName, {lines: string[]; withDesignation?: boolean}>> = {
+    [TacticalGraphicName.FreeFireAreaCircular]: {lines: ['FFA']},
+    [TacticalGraphicName.FreeFireAreaIrregular]: {lines: ['FFA']},
+    [TacticalGraphicName.FreeFireAreaRectangular]: {lines: ['FFA']},
+    [TacticalGraphicName.NoFireAreaCircular]: {lines: ['NFA']},
+    [TacticalGraphicName.NoFireAreaIrregular]: {lines: ['NFA']},
+    [TacticalGraphicName.NoFireAreaRectangular]: {lines: ['NFA']},
+    [TacticalGraphicName.RestrictiveFireAreaCircular]: {lines: ['RFA']},
+    [TacticalGraphicName.RestrictiveFireAreaIrregular]: {lines: ['RFA']},
+    [TacticalGraphicName.RestrictiveFireAreaRectangular]: {lines: ['RFA']},
+    [TacticalGraphicName.KillZone]: {lines: ['KILL ZONE']},
+    [TacticalGraphicName.ForwardArmingAndRefuelingPoint]: {lines: ['FARP']},
+    [TacticalGraphicName.DetaineeHoldingArea]: {lines: ['DHA']},
+    [TacticalGraphicName.RefugeeHoldingArea]: {lines: ['REFUGEE', 'HOLDING AREA']},
+    [TacticalGraphicName.RegimentalSupportArea]: {lines: ['RSA'], withDesignation: false},
+    [TacticalGraphicName.BombArea]: {lines: ['BOMB'], withDesignation: false},
+    [TacticalGraphicName.TerminallyGuidedMunitionFootprint]: {lines: ['TGMF'], withDesignation: false},
+    // Nothing in the middle at all: 151800 letters only its two ENY boxes and 271000 only the
+    // UXO in its two gaps, and both of those are drawn with the outline. A centred T used to
+    // sit inside each.
+    [TacticalGraphicName.Encirclement]: {lines: [], withDesignation: false},
+    [TacticalGraphicName.UnexplodedExplosiveOrdnanceArea]: {lines: [], withDesignation: false},
+};
+
+/** The areas whose plate breaks `W - W1` after the hyphen. @see areaDefaultLabelPaint */
+const STACKED_DATE_AREAS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.ArtilleryManeuverArea,
+    TacticalGraphicName.ArtilleryReservedArea,
+]);
+
+/**
+ * The default: designation over date-time group, centered on the anchor.
+ *
+ * What every area graphic gets when its family has no bespoke layout, and the
+ * shape most of the bespoke ones are a variation on.
+ *
+ * **`extraLines` go above the designation**, which is what puts "FREE" over the
+ * obstacle-free area's name and "SMOKE" under a smoke obscurant's. They are lines
+ * of their own rather than a `getLabel` prefix, because a prefix would set the
+ * word *beside* the name and the plates show it stacked.
+ */
+export function areaLabelStackPaint(
+    name: TacticalGraphicName,
+    options: {
+        before?: string[];
+        after?: string[];
+        literalLines?: string[];
+        /**
+         * Whether the stack carries the operator's designation at all.
+         *
+         * False for exactly one graphic: APP-06 200300, the no-attack zone, whose Template
+         * letters `N` over `AM` over `W - W1` and **no `T` box**. Its field set offers no
+         * designation for the same reason, so nothing in the app can set one — but a
+         * restored or imported graphic can still carry the property, and drawing it would
+         * put text on a symbol the standard does not letter. Off by construction rather
+         * than by trusting the field registry, which is a different question.
+         */
+        withDesignation?: boolean;
+    } = {},
+): AreaLabelPaint {
+    const stacked = STACKED_AREA_LITERALS[name];
+    if (stacked && !options.literalLines) {
+        options = {literalLines: stacked.lines, withDesignation: stacked.withDesignation, ...options};
+    }
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        /*
+         * **`literalLines` sets the graphic's own literal on lines of its own**, and the
+         * designation goes *under* it rather than beside it.
+         *
+         * `getFullLabel` writes "EPW HOLDING AREA T-1" on one line, because for most
+         * graphics the literal is a prefix — "OBJ SWORD", "NAI 12". 310200's Template
+         * stacks them: "EPW" over "HOLDING AREA" over the designation, which is a
+         * different arrangement and not one a prefix can express.
+         */
+        /*
+         * The country code rides on the designation line, in parentheses — "FFA 2AD (DEU)".
+         * The free / no / restrictive fire areas are the ones that carry it (APP-06 letters
+         * the pair `T2 ( AS )`); every other graphic here has no `countryCode` to read, and
+         * `formatDesignationWithCountry` then returns the designation untouched, so this is
+         * inert for them.
+         */
+        const named = COUNTRY_CODE_AREAS.includes(name)
+            ? formatDesignationWithCountry(feature.properties.designation, feature.properties.countryCode)
+            : (feature.properties.designation ?? '').trim();
+        const titled = options.literalLines ? named : getFullLabel(name, named).trim();
+        const designation = options.withDesignation === false ? '' : titled;
+
+        const lines = [
+            ...(options.before ?? []),
+            ...(options.literalLines ?? []),
+            designation,
+            ...(options.after ?? []),
+            areaDateLabel(feature),
+        ].filter(line => line.length > 0);
+
+        // A stacked literal is not a prefix of the designation line, so that line has none.
+        const prefix = options.literalLines ? '' : getLabel(name);
+        return designationStack(feature, context, at, lines, scaleOf(feature, context), designation, prefix);
+    };
+}
+
+/**
+ * The action areas -- JTAA, SAA and SGAA (APP-06 150501-150503) -- and the generic area
+ * (120700), which is the same block with field H beside the designation.
+ *
+ * One Template serves all four:
+ *
+ * ```
+ *          JTAA - T                        H  T
+ *    N     W - W1     N              N    W - W1    N
+ * ```
+ *
+ * Three things in it are worth naming. The literal joins the designation with a **hyphen**
+ * rather than the space `getFullLabel` writes, because the Example reads `JTAA - 02`.
+ * Field **H sits to the left of T** on the generic area, which is the one place in this
+ * library where H shares a line with the designation. And the **N** is field N, the
+ * hostile marker -- so it is the affiliation speaking, not an input.
+ */
+export function actionAreaLabelPaint(
+    name: TacticalGraphicName,
+    options: {withAdditionalInfo?: boolean} = {},
+): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        const designation = (feature.properties.designation ?? '').trim();
+        const literal = getLabel(name);
+        const titled = literal && designation ? `${literal} - ${designation}` : literal || designation;
+        const info = options.withAdditionalInfo
+            ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
+            : '';
+        const first = [info, titled].filter(Boolean).join('  ');
+
+        const lines = [first, areaDateLabel(feature)].filter(line => line.length > 0);
+        // Field H leads the line on the generic area, so only a line that starts with the
+        // literal can shrink to it.
+        const prefix = first.startsWith(literal) ? literal : '';
+        const scale = scaleOf(feature, context);
+        const paints = designationStack(feature, context, at, lines, scale, first, prefix);
+        // A name too small to read is dropped; ENY then takes the size it was fitted to.
+        const fitted = lines.length ? stack(feature, context, at, lines, scale).text?.scale ?? scale : scale;
+        return paints.concat(hostileFlankMarks(feature, context, nameScaleOf(paints, fitted)));
+    };
+}
+
+/** The scale the area's name was drawn at: the first text in its paints, or `fallback`. */
+function nameScaleOf(paints: Paint[], fallback: number): number {
+    return paints.find(paint => paint.text?.text)?.text?.scale ?? fallback;
+}
+
+/**
+ * `ENY` where the outline crosses due **west and due east** of the middle, and only when
+ * the graphic is hostile.
+ *
+ * The Template boxes an `N` at exactly those two points. Field N is the hostile marker, so
+ * it appears for a hostile graphic and for no other -- the same reading the encirclement
+ * already takes. The text stays in the label colour: hostile *line work* goes red, hostile
+ * text amplifiers do not. @, the hostility colour rule
+ */
+function hostileFlankMarks(feature: PaintFeature, context: PaintContext, nameScale: number): Paint[] {
+    if (!showsEny(feature)) return [];
+    const ring = feature.ring;
+    if (!ring || ring.length < 4) return [];
+
+    const center = ringCenter(ring);
+    // **Capped to the graphic like any label on the outline, and no larger than the name.** At
+    // the centred scale it stood several times the size of the name on a small area, and a
+    // short name (a generic area's) barely shrinks. Never under the legibility floor, though: ENY
+    // is the hostile marker that does not rely on colour, so it stays while the outline does.
+    // @see outsideScaleOf, withLegibleText
+    const fitted = Math.min(scaleOf(feature, context), Math.max(Math.min(outsideScaleOf(feature, context), nameScale), MIN_LEGIBLE_TEXT_PX / BASE_FONT_SIZE_PX));
+    const marks: Paint[] = [];
+    for (const angle of [0, Math.PI]) {
+        const spot = ringCrossingPoint(ring, center, angle);
+        if (!spot) continue;
+        marks.push({
+            geometry: {type: 'Point', coordinates: spot},
+            text: {
+                text: 'ENY',
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'middle',
+                scale: fitted,
+            },
+        });
+    }
+    return marks;
+}
+
+/**
+ * Human terrain (APP-06 370100): the literal `HT` with field **H** under it.
+ *
+ * The only area whose second line is the free text rather than a designation — its
+ * Template shows `HT` over an `H` box and nothing else, so a name would have nowhere to
+ * go. The dialog offers additional information alone for the same reason.
+ */
+export function humanTerrainLabelPaint(): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        const lines = [
+            getLabel(TacticalGraphicName.HumanTerrain),
+            amplifierText(feature, (feature.properties.additionalInfo ?? '').trim()),
+            areaDateLabel(feature),
+        ].filter(line => line.length > 0);
+
+        return lines.length ? [stack(feature, context, at, lines, scaleOf(feature, context))] : [];
+    };
+}
+
+/**
+ * The smoke obscurant's stack: name, then the literal "SMOKE", then the two dates
+ * on separate lines with the first carrying the joining hyphen.
+ *
+ * Its own function rather than `areaLabelStackPaint` options because the dates
+ * split across two lines here instead of joining into one, which is the plate's
+ * layout and not something the generic stack should learn.
+ */
+export function smokeObscurantLabelPaint(): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        const userName = (feature.properties.designation ?? '').trim();
+        const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+        const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
+
+        const lines: string[] = [];
+        if (userName) lines.push(userName);
+        lines.push('SMOKE');
+        if (dtg1) lines.push(dtg2 ? `${dtg1}-` : dtg1);
+        if (dtg2) lines.push(dtg2);
+
+        return [stack(feature, context, at, lines, scaleOf(feature, context))];
+    };
+}
+
+/**
+ * The zone families — fire support areas, artillery target intelligence, critical
+ * friendly, censor, call-for-fire, dead space, and the blue and purple kill boxes,
+ * in their irregular, rectangular and circular variants.
+ *
+ * Twenty-three names on one layout: the doctrinal prefix over the operator's name,
+ * centered in the shape; the two date-time groups stacked **outside** the shape's
+ * upper-left, right-aligned so they run away from it.
+ *
+ * The two dates hang **outside** the shape's upper-left corner, joined into one
+ * line. @see outsideCornerAnchor for which corner that is, and why the answer is not
+ * the same for all three variants.
+ */
+export function zoneLabelPaint(name: TacticalGraphicName, irregular: boolean): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        const scale = scaleOf(feature, context);
+        const paints: Paint[] = [];
+
+        // The prefix is a line of its own here, so it is also the line that stays once the
+        // name is too small to read.
+        const prefix = getLabel(name);
+        const nameLines = [prefix, (feature.properties.designation ?? '').trim()].filter(s => s.length > 0);
+        if (at) paints.push(...designationStack(feature, context, at, nameLines, scale, prefix, prefix));
+        // The dates belong to the name: once the zone is too small for even its prefix, they
+        // go with it. @see withProportionateAmplifiers
+        if (at && nameLines.length && !paints.length) return paints;
+
+        const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+        const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
+        if (!dtg1 && !dtg2) return paints;
+
+        const dtgAnchor = outsideCornerAnchor(feature, irregular);
+        if (!dtgAnchor) return paints;
+
+        paints.push({
+            geometry: {type: 'Point', coordinates: dtgAnchor},
+            text: {
+                /*
+                 * **One line, `dtg1 - dtg2`.** These used to break after the hyphen while
+                 * the PsyOps zones beside them — the same block, from this function's own
+                 * other half — wrote theirs across. Nothing in the plate asks for the
+                 * break; it was two implementations of one layout disagreeing, which is
+                 * also why the anchor below is now shared.
+                 */
+                text: [dtg1, dtg2].filter(s => s.length > 0).join(' - '),
+                kind: 'amplifier',
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'right',
+                baseline: 'top',
+                offsetXPx: -labelGapPx(10, scale),
+                scale,
+            },
+        });
+        return paints;
+    };
+}
+
+/**
+ * The date-time group alone, hanging outside the shape's **upper left**.
+ *
+ * The second half of {@link zoneLabelPaint}, on its own, because the PsyOps zones want
+ * exactly that block and nothing else from it: their Template sets `W - W1` outside the
+ * upper-left corner and everything else beside the loudspeaker. Written once so the two
+ * families cannot drift about where "outside the corner" is.
+ *
+ * @param irregular whether this graphic is the free-drawn variant, whose ring vertex is a
+ *        better corner than its bounding box. @see zoneLabelPaint, which splits the same way
+ */
+export function outsideCornerDatePaint(irregular = false): AreaLabelPaint {
+    return (feature, context) => {
+        const dtg1 = amplifierText(feature, (feature.properties.startDate ?? '').trim());
+        const dtg2 = amplifierText(feature, (feature.properties.endDate ?? '').trim());
+        if (!dtg1 && !dtg2) return [];
+
+        const at = outsideCornerAnchor(feature, irregular);
+        if (!at) return [];
+        const scale = outsideScaleOf(feature, context);
+
+        return [{
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                text: [dtg1, dtg2].filter(line => line.length > 0).join(' - '),
+                kind: 'amplifier',
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'right',
+                baseline: 'bottom',
+                offsetXPx: -labelGapPx(6, scale),
+                scale,
+            },
+        }];
+    };
+}
+
+/**
+ * Where a block hung **outside a shape's upper left** actually goes.
+ *
+ * Three shapes, and the split is about corners rather than about which family the
+ * graphic belongs to:
+ *
+ * - an **irregular** polygon has corners but no useful bounding box — that box's corner
+ *   can sit a long way outside the drawn shape, stranding the dates in open water. It
+ *   anchors on the real upper-left vertex.
+ * - a **rectangle** has exactly four corners, and since rectangles began keeping the
+ *   angle they were drawn on, its bounding box's top edge is the height of whichever
+ *   corner happens to be highest. Tilt one and the dates climbed away from the corner
+ *   they belong beside — *"it tends to get far up if the top-right corner of the
+ *   rectangle is much higher than top-left"*. It anchors on the real
+ *   corner.
+ * - a **circle** has no corners at all, so the square hugging it is the only stand-in.
+ *   Its leftmost *vertex* is level with its centre, which would put the dates at the
+ *   middle-left instead of above the shape.
+ *
+ * The bounding box was the right answer for a rectangle only while rectangles were
+ * levelled. The note that used to sit here said exactly that, and stayed on after it
+ * stopped being true — so the discriminator is read off the ring now rather than off a
+ * family flag: four corners means take the corner, anything else keeps the old rule.
+ */
+function outsideCornerAnchor(feature: PaintFeature, irregular: boolean): ProjectedPosition | undefined {
+    if (irregular) return upperLeftVertex(feature.ring) ?? upperLeftCorner(feature);
+    return quadrilateralUpperLeft(feature.ring) ?? upperLeftCorner(feature);
+}
+
+/**
+ * The up-and-left-most corner of a four-cornered ring, or nothing for any other shape.
+ *
+ * `y - x` is greatest at the corner furthest towards the top left. For a **levelled**
+ * rectangle that is exactly the bounding box's corner, so nothing moves until a rectangle
+ * is genuinely tilted — which is the only case that was ever wrong.
+ */
+function quadrilateralUpperLeft(ring: ProjectedPosition[] | undefined): ProjectedPosition | undefined {
+    if (!ring?.length) return undefined;
+    const last = ring[ring.length - 1];
+    const closed = ring.length > 1 && last[0] === ring[0][0] && last[1] === ring[0][1];
+    const corners = closed ? ring.slice(0, -1) : ring;
+    if (corners.length !== 4) return undefined;
+
+    let best = corners[0];
+    for (const corner of corners) if (corner[1] - corner[0] > best[1] - best[0]) best = corner;
+    return best;
+}
+
+/** The real upper-left vertex of a ring: smallest X, ties broken by largest Y. */
+function upperLeftVertex(ring: ProjectedPosition[] | undefined): ProjectedPosition | undefined {
+    if (!ring || !ring.length) return undefined;
+    let best = ring[0];
+    for (let i = 1; i < ring.length; i++) {
+        const v = ring[i];
+        if (v[0] < best[0] || (v[0] === best[0] && v[1] > best[1])) best = v;
+    }
+    return best;
+}
+
+/** The bounding box's upper-left corner. */
+function upperLeftCorner(feature: PaintFeature): ProjectedPosition | undefined {
+    return feature.bounds ? [feature.bounds.minX, feature.bounds.maxY] : undefined;
+}
+
+/**
+ * Where the four `PAA` markers go: on the outline, one to a side.
+ *
+ * A rectangle's are its edge midpoints. Any other ring takes the points where rays north,
+ * south, west and east of its centre cross it. The bounding box's edge midpoints, which these
+ * replace, are on the shape only while it is square to the screen: turned 45 degrees, all
+ * four stood off its corners.
+ */
+function paaMarkerSpots(ring: readonly ProjectedPosition[] | undefined, fallback: ProjectedPosition[]): ProjectedPosition[] {
+    if (!ring || ring.length < 4) return fallback;
+    const open = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+    if (open.length === 4) {
+        return open.map((p, i) => {
+            const q = open[(i + 1) % 4];
+            return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] as ProjectedPosition;
+        });
+    }
+    const center = ringCenter(ring);
+    const spots = [Math.PI / 2, -Math.PI / 2, Math.PI, 0].map(angle => ringCrossingPoint(ring, center, angle));
+    return spots.every(Boolean) ? (spots as ProjectedPosition[]) : fallback;
+}
+
+/**
+ * Position area for artillery: "PAA" at each of the four edge midpoints of the
+ * shape's bounding box, plus the name and date-time group centered.
+ *
+ * The four markers are what the symbol *is* — the plate shows the word repeated
+ * around the area rather than once in the middle — so they are not decoration that
+ * can be dropped when the extent is missing. Nothing renders in that case, which
+ * is honest: a PAA with one central label would be a different symbol.
+ */
+export function positionAreaArtilleryLabelPaint(name: TacticalGraphicName): AreaLabelPaint {
+    return (feature, context) => {
+        const bounds = feature.bounds;
+        if (!bounds) return [];
+        // The four `PAA` markers ride the shape's edges rather than sitting inside it, so
+        // they take the outside rule; the centred name and dates below keep the inside one.
+        const markerScale = outsideScaleOf(feature, context);
+
+        const scale = scaleOf(feature, context);
+        const cx = (bounds.minX + bounds.maxX) / 2;
+        const cy = (bounds.minY + bounds.maxY) / 2;
+
+        const paints: Paint[] = paaMarkerSpots(feature.ring, [
+            [cx, bounds.maxY],
+            [cx, bounds.minY],
+            [bounds.minX, cy],
+            [bounds.maxX, cy],
+        ]).map(at => stack(feature, context, at, ['PAA'], markerScale, 0, false));
+
+        const at = anchorOf(feature);
+        const designation = getFullLabel(name, feature.properties.designation ?? '').trim();
+        const lines = [designation, areaDateLabel(feature)].filter(line => line.length > 0);
+        if (at) paints.push(...designationStack(feature, context, at, lines, scale, designation, getLabel(name)));
+
+        return paints;
+    };
+}
+
+/**
+ * Group or series of targets: the designation written **on** the polygon's
+ * northern edge, rotated to follow it.
+ *
+ * The anchor and the segment both come from the holder — the edge was chosen when
+ * the geometry was built, and re-deriving "which edge is northernmost" here would
+ * be a second opinion that could disagree with the gap
+ * `groupOrSeriesOfTargetsPaint` cut for this very label.
+ */
+export function groupOrSeriesOfTargetsLabelPaint(name: TacticalGraphicName): AreaLabelPaint {
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        const segment = feature.labelSegment;
+        const text = getFullLabel(name, feature.properties.designation ?? '').trim();
+        if (!at || !segment || !text) return [];
+
+        return [stack(feature, context, at, [text], outsideScaleOf(feature, context), uprightRotation(segment[0], segment[1]), false)];
+    };
+}
+
+/**
+ * The fallback area label: designation, with the date-time group **18 screen
+ * pixels below it**, as two separate marks.
+ *
+ * What every area graphic without a bespoke layout gets — the largest group by
+ * count. Ported faithfully rather than improved: the rest of this module joins its
+ * lines with `
+` precisely because a fixed pixel offset between separately
+ * anchored lines collides once the label scale grows past it, and this one has
+ * that flaw. Changing it here would change what OpenLayers draws for ~59 graphics,
+ * which is not what a port is for.
+ *
+ * Worth fixing on its own merits, as its own change, with its own before/after.
+ */
+export function areaDefaultLabelPaint(
+    name: TacticalGraphicName,
+    /**
+     * Whether the centre block leads with the symbol's own abbreviation.
+     *
+     * True for almost every area, and false for the two that already write theirs into
+     * their boundary: an artillery manoeuvre area sets `AMA` at each of the four cardinal
+     * breaks, and repeating it in the middle put the same three letters on the symbol five
+     * times. The designation is what the middle is for.
+     * @see cardinalLabelPaint
+     */
+    withLiteral = true,
+    /**
+     * Whether the outline wears `ENY` at its west and east crossings when the graphic is
+     * hostile — field `N`.
+     *
+     * The corps support area is the one that asked for it here: its plate boxes an `N` at
+     * exactly those two points, where the other support areas carry none. @see hostileFlankMarks
+     */
+    withHostileFlanks = false,
+): AreaLabelPaint {
+    // A plate that stacks the literal is drawn by the stack, whichever route reached it.
+    if (withLiteral && !withHostileFlanks && STACKED_AREA_LITERALS[name]) return areaLabelStackPaint(name);
+    return (feature, context) => {
+        const at = anchorOf(feature);
+        if (!at) return [];
+
+        const scale = scaleOf(feature, context);
+        const designation = feature.properties.designation ?? '';
+        const text = withLiteral ? getFullLabel(name, designation) : designation.trim();
+        const date = areaDateLabel(feature);
+        // APP-06 242400 / 242500 stack the pair, `W -` over `W1`, and every Example prints it
+        // on two lines: one centred block, so the lines space with the font.
+        if (STACKED_DATE_AREAS.has(name)) {
+            const lines = [text, ...date.replace(' - ', ' -\n').split('\n')].filter(line => line.length > 0);
+            const stacked = designationStack(feature, context, at, lines, scale, text, withLiteral ? getLabel(name) : '');
+            if (!withHostileFlanks) return stacked;
+            const fitted = lines.length ? stack(feature, context, at, lines, scale).text?.scale ?? scale : scale;
+            return stacked.concat(hostileFlankMarks(feature, context, nameScaleOf(stacked, fitted)));
+        }
+
+        // The two marks are separately anchored, so they are capped as **one block**: the
+        // date hangs `DEFAULT_DATE_OFFSET_PX` below the designation, and fitting each alone
+        // would let the pair together leave a shape that neither leaves by itself.
+        const fitted = fitLabelScale(
+            feature, context, at, [text, date], fontStyle, scale, DEFAULT_DATE_OFFSET_PX / 2,
+        );
+        // Under the legibility floor the name goes and the prefix stays, at its own size; the
+        // date shares the fitted scale and the floor takes it. @see shrunkDesignation
+        const kept = withLiteral ? shrunkDesignation(feature, context, text, getLabel(name), fitted) : undefined;
+
+        const mark = (label: string, offsetYPx: number, markScale = fitted): Paint => ({
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                text: label,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                offsetYPx,
+                scale: markScale,
+            },
+        });
+
+        // Both marks are emitted even when empty, matching the original: an empty
+        // `text` renders nothing, and keeping the shape identical keeps the mark
+        // count comparable between the two renderers.
+        const flanks = withHostileFlanks ? hostileFlankMarks(feature, context, kept?.text ? kept.scale : fitted) : [];
+        const designationMark = kept ? mark(kept.text, 0, kept.scale) : mark(text, 0);
+        return [designationMark, asAmplifier(mark(date, DEFAULT_DATE_OFFSET_PX)), ...flanks];
+    };
+}

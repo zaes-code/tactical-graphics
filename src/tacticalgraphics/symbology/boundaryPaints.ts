@@ -1,0 +1,473 @@
+/**
+ * # Boundary and the range fans
+ *
+ * The last two families whose amplifiers come from somewhere other than the
+ * properties bag — boundary reads the echelon the properties dialog stamps on the
+ * feature, and the range fans read a resolved band list the holder stamps on the
+ * label feature.
+ */
+
+import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {BASE_FONT_SIZE_PX} from '../core/config';
+import {HALO_WIDTH, LINE_WIDTH, fontStyle, formatAltitude, getColorByHostility, getLabelHaloColor} from '../core/symbology';
+import {TacticalGraphicEchelon, TacticalGraphicHostility, TacticalGraphicName} from '../core/type';
+import {cutGapAlongPath, projectedMidSegment, runVector, splitAtCorners, textWidth} from './decorations';
+import {echelonMarks, echelonWidthPx} from './echelonPaints';
+import {midSegmentInView, ringDirectionInView} from './viewFollow';
+import {amplifierDash, formatDesignationWithCountry, lineColorOf, scaleOf, labelColorOf} from './paintFunctions';
+import {hostileEndMarks} from './midLabelLinePaints';
+
+type LinePaint = (feature: PaintFeature, context: PaintContext) => Paint[];
+
+/** Screen-pixel clearance between the echelon glyph and the line ends, and the labels. */
+const BOUNDARY_GAP_PX = 10;
+/*
+ * There was a `BOUNDARY_GAP_SHARE` of 0.1 here — a tenth of the segment either side of the
+ * middle, before clearance. The hole is measured off the glyph now, so the share is gone
+ * rather than kept as a floor: a share is what made a squad's dot sit in a hole four times
+ * its width. @see echelonWidthPx
+ */
+
+/** The echelon glyph's half-extent *across* the line, in screen pixels at scale 1. */
+function echelonPerpExtentPx(echelon: TacticalGraphicEchelon | undefined): number {
+    switch (echelon) {
+        case undefined:
+        case TacticalGraphicEchelon.unknown:
+            return 0;
+        case TacticalGraphicEchelon.teamCrew:
+            return 7;
+        case TacticalGraphicEchelon.companyBatteryTroop:
+        case TacticalGraphicEchelon.battalionSquadron:
+        case TacticalGraphicEchelon.regimentGroup:
+        case TacticalGraphicEchelon.brigade:
+        case TacticalGraphicEchelon.division:
+        case TacticalGraphicEchelon.corpsMef:
+        case TacticalGraphicEchelon.army:
+        case TacticalGraphicEchelon.armyGroupFront:
+        case TacticalGraphicEchelon.regionTheater:
+        case TacticalGraphicEchelon.command:
+            return 10;
+        default:
+            return 5;
+    }
+}
+
+/** A text amplifier with the usual halo. */
+function amplifier(feature: PaintFeature, at: ProjectedPosition, text: string, scale: number, rotation: number): Paint {
+    return {
+        geometry: {type: 'Point', coordinates: at},
+        text: {
+            text,
+            font: fontStyle,
+            fill: labelColorOf(feature),
+            halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+            rotation,
+            align: 'center',
+            baseline: 'middle',
+            scale,
+        },
+    };
+}
+
+/**
+ * The boundary: the line broken open at its projected midpoint, the echelon glyph
+ * in the gap, and the two commands' designations above and below it.
+ *
+ * **The echelon glyph stays in the unaffiliated color even on a hostile
+ * boundary** — the documented exception to the "hostile line work goes red" rule.
+ * A boundary separates two commands and the glyph belongs to neither, so
+ * coloring it by the line's affiliation would assert something the symbol does
+ * not say. The line itself does take the affiliation color.
+ *
+ * ## The offset is built from what it has to clear
+ *
+ * `anchor = (half the font's height + the echelon's reach across the line + the
+ * gap) × scale`. With a middle baseline the near text edge sits half a glyph
+ * closer to the line than its anchor, so this leaves exactly `gap` pixels of
+ * clear space. All three terms scale together, which is what keeps the layout
+ * looking identical at every zoom.
+ *
+ * `perpSign` tracks the upright flip: correcting the rotation by π without
+ * flipping the perpendicular put the top label underneath on a line drawn
+ * right-to-left.
+ */
+export function boundaryPaint(): LinePaint {
+    return (feature, context) => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'LineString' && geometry.type !== 'MultiPoint') return [];
+        const coords = geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const props = feature.properties;
+        const topLabel = formatDesignationWithCountry(props.designation, props.countryCode);
+        const bottomLabel = formatDesignationWithCountry(props.secondDesignation, props.secondCountryCode);
+        // No echelon draws no glyph and leaves the line unbroken. @see echelonMarks
+        const echelon = feature.echelon ?? props.echelon;
+
+        // Both names and the gap between them, so the pair slides clear of other labels together.
+        const footprintScale = scaleOf(feature, context);
+        const {index, t} = midSegmentInView(coords, projectedMidSegment(coords), context, {
+            alongPx: Math.max(textWidth(context, topLabel, fontStyle, footprintScale), textWidth(context, bottomLabel, fontStyle, footprintScale)) / 2,
+            acrossPx: (BASE_FONT_SIZE_PX + echelonPerpExtentPx(echelon) + BOUNDARY_GAP_PX) * footprintScale,
+        });
+        // As long as the run the middle sits on, so the glyph's cap is measured against the
+        // line it marks and not against one chord of a smoothed curve. @see runVector
+        const [dx, dy] = runVector(coords, index, t);
+        const segLen = Math.hypot(dx, dy);
+        if (segLen === 0) return [];
+
+        const scale = scaleOf(feature, context);
+        /*
+         * **The hole is the glyph's own width plus clearance.** It used to be a tenth of the
+         * segment either side of the middle, which is one number for every echelon: a corps
+         * XXX overran it while a squad's single dot sat in a hole four times its width. The
+         * glyph is measured first — after its own cap — and the line is cut to fit it.
+         * @see echelonWidthPx
+         */
+        const glyphHalfPx = echelonWidthPx(dx, dy, context.resolution, echelon, scale) / 2;
+        const gapHalfMap = glyphHalfPx > 0 ? (glyphHalfPx + BOUNDARY_GAP_PX * scale) * context.resolution : 0;
+        // Along the path, so a smoothed boundary, whose middle segment is a short chord of the
+        // curve, gets the same hole a straight one does. @see cutGapAlongPath
+        const cut = cutGapAlongPath(coords, index, t, gapHalfMap);
+        const midGap = cut.center;
+        const outline = gapHalfMap > 0 ? cut.outline : splitAtCorners(coords).filter(run => run.length > 1);
+
+        let rotation = -Math.atan2(dy, dx);
+        let perpSign = 1;
+        if (rotation > Math.PI / 2 || rotation < -Math.PI / 2) {
+            rotation += Math.PI;
+            perpSign = -1;
+        }
+        if (rotation > Math.PI) rotation -= 2 * Math.PI;
+
+        const anchorMap =
+            (BASE_FONT_SIZE_PX / 2 + echelonPerpExtentPx(echelon) + BOUNDARY_GAP_PX) * scale * context.resolution;
+        const nx = perpSign * (-dy / segLen);
+        const ny = perpSign * (dx / segLen);
+
+        return [
+            // APP-06 110100 boxes N at each end of a hostile boundary. @see hostileEndMarks
+            ...hostileEndMarks(feature, coords, scale, context),
+            amplifier(feature, [midGap[0] + nx * anchorMap, midGap[1] + ny * anchorMap], topLabel, scale, rotation),
+            amplifier(feature, [midGap[0] - nx * anchorMap, midGap[1] - ny * anchorMap], bottomLabel, scale, rotation),
+            ...echelonMarks(
+                midGap,
+                dx,
+                dy,
+                context.resolution,
+                echelon,
+                getColorByHostility(TacticalGraphicHostility.unknown),
+                scale,
+            ),
+            {
+                geometry: {type: 'MultiLineString', coordinates: outline},
+                stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: amplifierDash(feature)},
+            },
+        ];
+    };
+}
+
+/**
+ * A range band as the holder resolves it for rendering.
+ *
+ * Distinct from `RangeFanBand` in `core/type.ts`, which is the **user-facing**
+ * config: its azimuths are deflections from the graphic's center bearing. These
+ * are absolute, already resolved. Keeping them apart means a paint function can
+ * never be handed a deflection and print it as a bearing.
+ */
+export interface ResolvedRangeFanBand {
+    /** Kilometers. */
+    range: number;
+    label?: string;
+    altitude?: string;
+    /**
+     * Absolute compass bearings, already resolved. The operator-facing fields on a
+     * band are deflections from the graphic's center bearing; resolving them is
+     * the holder's job so the paint function never re-runs the resolver.
+     */
+    resolvedLeftAz?: number;
+    resolvedRightAz?: number;
+}
+
+/**
+ * A band's range in metres, thousands grouped — "5,000", "28,500".
+ *
+ * The grouping is the plate's own: 242100's example prints `MAX RG(1) 28,500` and
+ * `MAX RG(2) 34,400`. It is also what answers the argument the schema used to make for
+ * storing kilometers — that metres put three unreadable zeroes on every ring. A separator
+ * makes the zeroes readable without changing the unit. @see RangeFanBand.range
+ *
+ * A fractional metre is not a range anyone quotes, so it rounds rather than carrying a
+ * decimal the way the kilometer formatter had to.
+ */
+function formatRange(metres: number): string {
+    if (!Number.isFinite(metres)) return '0';
+    return Math.round(metres).toLocaleString('en-US');
+}
+
+/**
+ * How far outward a sector band's bearing sits from the arc it labels, in screen pixels.
+ *
+ * Enough to clear a three-line range block and no more: these mark the sector's edges, so
+ * a bearing that drifts far from its own edge stops pointing at anything.
+ */
+const AZIMUTH_LABEL_GAP_PX = 16;
+
+/**
+ * Share of the gap between two bands their labels may fill.
+ *
+ * Short of the whole gap, so consecutive blocks have air between them rather than
+ * meeting exactly.
+ */
+const BAND_LABEL_FIT_SHARE = 0.85;
+
+/** Rendered height of one label row at scale 1 — the base font with normal leading. */
+const LABEL_LINE_PX = BASE_FONT_SIZE_PX * 1.2;
+
+/** Clearance between the bottom of a lifted block and the line it was sitting on. */
+const RANGE_BLOCK_CLEARANCE_PX = 8;
+
+/**
+ * How far a sector band's range block sits above its own center line, at scale 1.
+ *
+ * **Measured from the block, not fixed.** The block is centered on its anchor and carries
+ * one to three rows depending on which fields are set, so a constant lift either fails to
+ * clear a three-row block or throws a one-row block into the arc above it. Half the
+ * block's own height puts its bottom edge on the axis; the clearance takes it off.
+ *
+ * A first attempt used a flat 22 px and simply moved the collision down a row — `RG 180`
+ * came clear and `ALT 1500FT AGL` took its place on the line.
+ */
+const rangeBlockLiftPx = (rows: number): number => (rows * LABEL_LINE_PX) / 2 + RANGE_BLOCK_CLEARANCE_PX;
+
+/** An azimuth as FM 1-02.2 prints it — three digits, zero-padded. */
+function formatAzimuth(deg: number): string {
+    let n = Math.round(deg) % 360;
+    if (n < 0) n += 360;
+    return String(n).padStart(3, '0');
+}
+
+/** Points a range fan's ring is sampled at, to find the part of it in view. */
+const RING_SAMPLES = 72;
+
+/**
+ * The doctrinal weapon/sensor range fans' labels.
+ *
+ * MultiPoint vertex layout, written by `RangeFan.generateLabels`:
+ *
+ * - circular: `[center, band1Mid, band2Mid, …]`
+ * - sector: `[center, band1Mid, band1LeftAz, band1RightAz, band2Mid, …]`
+ *
+ * so the stride is three for a sector and one for a circle. Per band the stack
+ * reads: the operator's name if there is one, then the range — "MIN RG" on a circle
+ * and "RG" on a sector — then the altitude if entered. **The range line renders
+ * even when nothing is typed**: an unnamed band still has a range, and that is
+ * the number the symbol exists to communicate.
+ */
+export function rangeFanLabelPaint(name: TacticalGraphicName): LinePaint {
+    return (feature, context) => {
+        const geometry = feature.geometry;
+        if (geometry.type !== 'MultiPoint') return [];
+        const coords = geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const bands = feature.rangeFanBands;
+        if (!bands || bands.length === 0) return [];
+
+        const isSector = feature.rangeFanShape === 'sector' && name === TacticalGraphicName.WeaponSensorRangeFanSector;
+        const stride = isSector ? 3 : 1;
+        const scale = scaleOf(feature, context);
+        const paints: Paint[] = [];
+
+        const text = (
+            at: ProjectedPosition,
+            value: string,
+            offsets: {offsetXPx?: number; offsetYPx?: number} = {},
+            textScale: number = scale,
+        ): Paint => ({
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                ...offsets,
+                text: value,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: {color: getLabelHaloColor(), widthPx: HALO_WIDTH},
+                align: 'center',
+                baseline: 'middle',
+                scale: textScale,
+            },
+        });
+
+        /**
+         * The largest scale a band's block may take before it runs into its neighbors'.
+         *
+         * Each band anchors its block at its own mid-radius, so consecutive blocks sit one
+         * band's width apart — a fixed distance on the ground, and so a fixed number of
+         * pixels at any zoom. The block's *scale*, though, grows with the graphic. On a fan
+         * of any real size the text therefore outgrew the gap it sits in, and three bands
+         * rendered as `MGATGMARTY` over `MINRINRINZOG 300` — at every zoom, which is what
+         * marks this as a cap rather than a spacing tweak.
+         *
+         * The same reasoning as `acpLabelScale`: a label that has to fit inside something
+         * is measured against that thing.
+         */
+        /** The largest scale at which `block` still fits inside `roomPx` of screen. */
+        const fitToPx = (block: string, roomPx: number): number => {
+            const widest = Math.max(...block.split('\n').map(row => textWidth(context, row, fontStyle, 1)));
+            if (!(widest > 0)) return scale;
+            return Math.min(scale, (roomPx * BAND_LABEL_FIT_SHARE) / widest);
+        };
+
+        const bandScale = (block: string, from: ProjectedPosition, to: ProjectedPosition | undefined): number => {
+            // No neighbour means a lone band, which measures against its own ring: the
+            // anchor sits at mid-radius, so twice the distance back to the centre is the
+            // radius the label has to fit inside.
+            const spacing = to ? Math.hypot(to[0] - from[0], to[1] - from[1]) : Math.hypot(from[0] - coords[0][0], from[1] - coords[0][1]) * 2;
+            return fitToPx(block, spacing / context.resolution);
+        };
+
+        // A circle's ring radii, recovered from its mid-radius anchors. @see the circular block below
+        const ringRadii: number[] = [];
+        if (!isSector) {
+            for (let i = 0; 1 + i < coords.length && i < bands.length; i++) {
+                const mid = Math.hypot(coords[1 + i][0] - coords[0][0], coords[1 + i][1] - coords[0][1]);
+                ringRadii.push(2 * mid - (ringRadii[i - 1] ?? 0));
+            }
+        }
+
+        // 242200's Template letters AN at the apex: the sector's own center azimuth, read
+        // off the bearing the generator anchors every band's block on, set behind the apex.
+        if (isSector && coords.length >= 2) {
+            const [apex, along] = [coords[0], coords[1]];
+            const [dx, dy] = [along[0] - apex[0], along[1] - apex[1]];
+            const length = Math.hypot(dx, dy);
+            if (length > 0) {
+                const gap = AZIMUTH_LABEL_GAP_PX * scale;
+                paints.push(text(apex, formatAzimuth((Math.atan2(dx, dy) * 180) / Math.PI), {
+                    offsetXPx: (-dx / length) * gap,
+                    offsetYPx: (dy / length) * gap,
+                }));
+            }
+        }
+
+        for (let i = 0; i < bands.length; i++) {
+            const midIndex = 1 + i * stride;
+            if (midIndex >= coords.length) break;
+
+            const band = bands[i];
+            const lines: string[] = [];
+            const bandLabel = band.label?.trim();
+            if (bandLabel) lines.push(bandLabel);
+            /*
+             * **The innermost band is the minimum range; every band outside it is a
+             * maximum.** 242100 labels them `MIN RG`, then `MAX RG(1)`, `MAX RG(2)`, and so
+             * on — the fan reads as one envelope with an inner limit and a series of outer
+             * ones, not as a stack of minimums. This printed `MIN RG` on all of them.
+             *
+             * The sector's own plate (242200) prints a bare `RG` per band and is unchanged.
+             */
+            if (feature.rangeFanShape === 'circular') {
+                lines.push(i === 0 ? `MIN RG ${formatRange(band.range)}` : `MAX RG(${i}) ${formatRange(band.range)}`);
+            } else if (isSector) lines.push(`RG ${formatRange(band.range)}`);
+            // Not `.trim()` — a band's altitude is a number now, and a legacy string
+            // still has to survive the same call. @see formatAltitude
+            const altitude = band.altitude;
+            // The band carries the number; the datum is the graphic's, since every band of one
+            // fan is measured from the same thing.
+            const written = formatAltitude(altitude, feature.properties.altitudeDatum);
+            if (written) lines.push(`ALT ${written}`);
+            // **Lifted clear of the center axis, on a sector.** That fan draws an arrow
+            // from the apex along its center line, and the range block is anchored on the
+            // same line — so the axis ran straight through the middle row and filled the
+            // space between the words: `RG 180` read as `RG-180`, which is exactly how it
+            // was reported. A circular fan has no such line and needs no lift.
+            //
+            // It also puts the block above the arc, which is where table 5-276 prints it.
+            // Scaled with the text, so the clearance holds as the label grows.
+            if (lines.length) {
+                const block = lines.join('\n');
+                // Measured against the next band's anchor, or the previous one for the
+                // outermost. **A lone band measures against its own ring.** It has no
+                // neighbour, and taking no cap at all let the block outgrow the circle it
+                // names as the fan shrank on screen — reported as labels leaving the circle
+                // when zooming out, and only ever with one band, because every other band is
+                // held in by its neighbour. Capping against the centre was tried first and
+                // was too tight: the anchor is at mid-radius, so the centre is half the room
+                // the label actually has. @see bandScale
+                if (isSector) {
+                    const neighbor = bands.length > 1 ? (coords[midIndex + stride] ?? coords[midIndex - stride]) : undefined;
+                    const fitted = bandScale(block, coords[midIndex], neighbor);
+                    paints.push(text(coords[midIndex], block, {offsetYPx: -rangeBlockLiftPx(lines.length) * fitted}, fitted));
+                } else {
+                    /*
+                     * **Below each ring, just outside it.** 242100's Template and FM's both hang
+                     * each band's block under the bottom of its own ring. The generator anchors
+                     * band i at mid-radius on the reference bearing, so its ring's radius is
+                     * twice that less the ring inside it. The block has the ring's width to fit
+                     * in and, unless it is the outermost, the gap to the next ring for height.
+                     */
+                    const center = coords[0];
+                    const radius = ringRadii[i];
+                    // The bottom of the ring, unless that is off screen: then the nearest part of
+                    // the ring in view. @see ringDirectionInView
+                    const circle = Array.from({length: RING_SAMPLES}, (_, k): ProjectedPosition => {
+                        const a = (k / RING_SAMPLES) * 2 * Math.PI;
+                        return [center[0] + radius * Math.cos(a), center[1] + radius * Math.sin(a)];
+                    });
+                    const [ux, uy] = ringDirectionInView(circle, center, [0, -1], context);
+                    const below: ProjectedPosition = [center[0] + ux * radius, center[1] + uy * radius];
+                    const widthFit = fitToPx(block, (2 * radius) / context.resolution);
+                    const next = ringRadii[i + 1];
+                    const heightFit = next === undefined
+                        ? widthFit
+                        : ((next - radius) / context.resolution) * BAND_LABEL_FIT_SHARE / (lines.length * LABEL_LINE_PX + RANGE_BLOCK_CLEARANCE_PX);
+                    const fitted = Math.min(widthFit, heightFit);
+                    paints.push(text(below, block, {offsetYPx: rangeBlockLiftPx(lines.length) * fitted}, fitted));
+                }
+            }
+
+            if (!isSector) continue;
+            // **Nudged outward, clear of the range stack.** The bearings are anchored on
+            // the band's own edges and the range block sits at its midpoint, so on a fan
+            // whose arc is short next to a three-line label the two overlap — rendered at
+            // 180 km with one band, "045" landed across "RG 180" and read as "RG-180",
+            // which is a bug report someone did file. Pushed along the center-to-edge
+            // ray, so each moves away from the block rather than in some fixed direction
+            // that would be wrong at half the bearings.
+            const center = coords[0];
+            const outward = (at: ProjectedPosition, textScale: number): {offsetXPx: number; offsetYPx: number} => {
+                const dx = at[0] - center[0];
+                const dy = at[1] - center[1];
+                const length = Math.hypot(dx, dy);
+                if (length === 0) return {offsetXPx: 0, offsetYPx: 0};
+                const gap = AZIMUTH_LABEL_GAP_PX * textScale;
+                // Screen y grows downward while projected y grows north, hence the flip.
+                return {
+                    offsetXPx: (dx / length) * gap,
+                    offsetYPx: (-dy / length) * gap,
+                };
+            };
+
+            // **Capped and nudged together.** These took the raw scale, so they were the
+            // one label on the fan that nothing held: the bearing outgrew the arc it marks
+            // while the fixed 16px nudge stayed put, which reads as it drifting off its own
+            // edge as the fan fills the screen. Fitted against the arm it sits on, with the
+            // nudge scaled to the text so the clearance holds at any size — the same
+            // treatment the range block above already gets.
+            const azimuthAt = (at: ProjectedPosition, value: string): Paint => {
+                const armPx = Math.hypot(at[0] - center[0], at[1] - center[1]) / context.resolution;
+                const fitted = fitToPx(value, armPx);
+                return text(at, value, outward(at, fitted), fitted);
+            };
+
+            if (midIndex + 1 < coords.length && band.resolvedLeftAz !== undefined) {
+                paints.push(azimuthAt(coords[midIndex + 1], formatAzimuth(band.resolvedLeftAz)));
+            }
+            if (midIndex + 2 < coords.length && band.resolvedRightAz !== undefined) {
+                paints.push(azimuthAt(coords[midIndex + 2], formatAzimuth(band.resolvedRightAz)));
+            }
+        }
+
+        return paints;
+    };
+}

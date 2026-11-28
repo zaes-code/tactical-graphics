@@ -1,0 +1,82 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# published library build output
+/dist
+*.tgz
+
+# misc
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.idea
+
+# playwright driver screenshots
+/.playwright-out
+
+# Reference material and internal trackers — kept locally, not redistributed.
+# FM 1-02.2 is a US Government work (public domain in the US), but the PDF is
+# 10.5 MB and that status does not travel internationally. The extracted
+# docs/FM_1-02.2.txt stays tracked: it is greppable and the internal docs cite it.
+docs/*.pdf
+docs/*.xlsx
+# ...but track the progress trackers (they feed the README graphics
+# table). They are stripped from the public GitHub mirror by publish-github.sh.
+!docs/*Progress*.xlsx
+# Never track Excel's lock/owner files ("~$name.xlsx"), which appear while a
+# workbook is open. Must come after the negation above.
+docs/~$*
+
+# Python bytecode (from scripts/*.py)
+__pycache__/
+*.pyc
+
+# Copied from node_modules by scripts/copy-maplibre-worker.js — a build artefact,
+# not vendored source. See that script for why MapLibre needs it served.
+/public/maplibre-gl-worker.mjs
+/public/maplibre-gl-shared.mjs
+.devserver.log
+# Which add-on engines this machine's demo loads under `npm run start:addons`. Local by design:
+# an add-on is licensed separately and never part of this repo. @see src/components/demoAddons.ts
+/demo-addons.local.json
+
+# Scratch output from analysis runs — never part of the repo. The APP-06 extracts
+# under here are standard-derived material and must not reach the public mirror.
+output/
+
+# Scratch build/inspection output, like `output/` above. Narrow on purpose: `tmp/pdfs`
+# is tracked — the APP-06 crop references live there — and ignoring the whole tree once
+# cost the repo 163 tracked files.
+tmp/spreadsheet-build/
+tmp/spreadsheet-inspect/
+
+# Plate crops, regenerated on demand by tmp/plate.py — 8 MB of derived PNGs.
+tmp/plates/
+
+# What `tmp/verify-artifact.mjs` writes beside the page it is checking: the same file
+# wrapped in the skeleton the artifact host adds at publish time. Build output.
+*.wrapped.html
+
+# The docs site: the API reference is generated, and so is the build.
+/site/api/
+/site/.vitepress/cache/
+/site/.vitepress/dist/
+/site/.vitepress/preview/

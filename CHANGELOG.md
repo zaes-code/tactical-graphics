@@ -1,0 +1,2142 @@
+# Changelog
+
+All notable changes to `@zaes/tactical-graphics`.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
+project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Dates are
+the npm publish dates — when a version actually became installable.
+
+> **Versions 1.0.0 – 2.0.0 were reconstructed from the commit history after the fact.**
+> This file was added afterwards, so those entries summarize what each release contained
+> rather than being written alongside it. They are accurate but not exhaustive; the
+> commit range between two tags is the complete record.
+
+---
+
+## [Unreleased]
+
+### Changed
+
+- **The optional `@zaes/military-symbols` peer is `>=0.1.0 <1`** (was `>=0.1`). Every 0.x version
+  draws center symbols as before; the bound keeps a future major version, which may change
+  `symbolImageProvider`, from being accepted unchecked.
+
+### Changed
+
+- **`milsymbol` is no longer listed as a peer dependency.** Nothing here imports it: a host that draws the
+  center symbols with it still passes it in, with `useMilsymbolSecurityOperationSymbols(ms)`, as before.
+
+## [4.10.0] — 2026-11-19
+
+A symbol code read back into its graphic, and a draw that starts with its properties set.
+
+### Added
+
+- **`parseGraphicSidc(sidc)`**, from the root: reads a 20- or 30-digit MIL-STD-2525D/E or
+  APP-06(D)/(E) symbol identification code back into the graphic it names and the properties it
+  gives it: identity, status, echelon, mobility or mine type, terrain and a route's direction.
+  It is the reverse of `buildGraphicSidc`, and a round trip over every coded graphic keeps the two
+  in step. New types: `ParsedGraphicSidc` and `SidcGraphicProperties`.
+- **`startDrawing(name, preset)`** takes a preset as its second argument (`DrawPreset`), so a
+  host's graphic builder or a parsed code can give a graphic its identity and amplifiers before
+  the first click. Both engines show it in the preview and keep it once the graphic is placed;
+  the size and turn the clicks give stay the draw's.
+
+### Fixed
+
+- **MapLibre: picking a graphic while another is being drawn starts the new draw at once.** The
+  old draw ended after the new mode was set and put the map back in view mode, so the pick
+  needed a second click. OpenLayers already behaved this way.
+
+## [4.9.0] — 2026-11-16
+
+A stated Unknown in yellow, one builder for a graphic's symbol code, and ring breaks cut exactly.
+
+### Added
+
+- **A stated Unknown draws yellow.** MIL-STD-2525E L.5.1.1.1 draws a control measure of unknown
+  identity in yellow, as MIL-STD-2525C Tables II and XIII-1 do; a graphic with no affiliation is
+  black. `Unknown` was also what an unchosen affiliation was saved as, so the two are told apart
+  by a new property, **`identityStated`**: `Unknown` with it draws yellow, `Unknown` alone keeps
+  meaning "not set" and draws as before, and saved data is unaffected. A graphic marked
+  **`exercise`** states its Unknown too (2525C exercise unknown, W). Every other identity is
+  unchanged. The sample app's properties dialog sets `identityStated` when an affiliation is
+  picked. New exports: `getColorByIdentity(hostility, stated)`, `statesUnknownIdentity(properties)`
+  and `identityColorOf(feature)`.
+- **`buildGraphicSidc(properties, options)`**, from the root: a graphic's 20- or 30-digit symbol
+  identification code, built from its entity code and its saved properties under MIL-STD-2525E
+  Change 1 Appendix A, for any edition in Table A-I (`SIDC_VERSIONS`, default MIL-STD-2525E).
+  The context follows `exercise`. The digit tables it writes with are exported
+  (`SIDC_STANDARD_IDENTITY`, `SIDC_STATUS`, `SIDC_ECHELON`, `SIDC_MOBILITY`, `SIDC_MINE_TYPE`,
+  `SIDC_TERRAIN`, `SIDC_CONTEXTS`, `CONTROL_MEASURE_SYMBOL_SET`), and the centre symbol's code
+  takes its identity digit from the same table.
+
+### Fixed
+
+- **A ring broken for its labels is cut exactly, from far fewer points.** The artillery maneuver
+  and reserved areas, the radiation dose rate contour line and both minimum safe distance zones
+  resampled every ring segment into 24 points, and each break ended on the nearest sample.
+  `breakRingAt` now returns **fewer points**: each run is the ring's own vertices plus the exact
+  points where its gaps start and stop, about 5 to 24 times fewer coordinates than before. The outline
+  is otherwise unchanged; each break end moves by up to one old sample step (a 24th of the ring
+  segment it falls on) to where the gap was computed, and a gap narrower than a sample step,
+  which the old form stepped over, is now cut.
+  The padding either side of the text in a break shrinks with the text, as every other label gap
+  does.
+- **The centre unit of Cover, Guard and Screen is Security.** `securitySymbolSidc` gave every
+  centre symbol MIL-STD-2525E land unit entity 130100, Fires/Air Defense. 2525E files the three
+  under Mission Tasks/Security, so their centre now asks for entity 141700, Protection/Security
+  (`130310001414170000000000000000` for a friend). `securitySymbolSidc(hostility, name?)` takes the graphic's
+  name; with no name it keeps returning 130100, so only a named security operation asks for
+  Security. The other seven centre-symbol graphics keep 130100, the escort included on both
+  renderers.
+
+## [4.8.0] — 2026-11-10
+
+Labels that follow the view and keep clear of each other, on every renderer.
+
+### Added
+
+- **A unit symbol on Search Area, Capture, Evacuate and Recover.** Their plates carry field A, a
+  unit symbol the host supplies; it is now drawn from the same center-symbol provider as Cover,
+  Guard and Screen: on Search Area's vertex, and inside the swept-arc tasks' circle, sized to it.
+  `CENTER_SYMBOL_GRAPHICS` has ten members, and the four take hostility, as a unit's frame is its
+  identity. New exports: `searchAreaSymbol`, `sweptArcTaskSymbol`, `UNIT_SYMBOL_GRAPHICS`.
+- **`setGraphicUnitSymbol(graphicId, unit)`**, from the root: gives one center-symbol graphic its
+  own unit, by entity (SIDC positions 11-16, keeping the identity its `hostility` gives) or by a
+  whole SIDC, drawn by whatever global provider is registered. The center-symbol guide now shows
+  `@zaes/military-symbols` (`setSecuritySymbolProvider(symbolImageProvider())`) beside milsymbol;
+  neither is imported.
+- **Labels follow the view.** A label whose usual place is off screen moves onto the visible
+  part of its graphic: phase line and axis labels, boundary and mid-line labels, linear target
+  and FPF labels, and area labels. Every renderer hands the paint functions its view through
+  the new optional **`PaintContext.view`**: MapLibre's native layers and canvas overlay, and
+  OpenLayers, which restyles once a pan settles. A caller that passes no view sees no change.
+- **Labels keep clear of each other.** Every renderer paints its graphics in one pass in which
+  each graphic's labels slide along their line, or across their area, clear of the labels
+  already placed and of the other graphics' lines, through the new optional
+  **`PaintContext.avoid`** and **`avoidLines`**. A label with no clear place keeps its usual one.
+  The pass is `paintWithClearance`, with `emptyLabelSpace`, `addGraphicLines`, `withClearance`,
+  `takeLabels` and `textBounds` for an engine or host that paints graphics itself.
+- **`autoPlaceLabels`** turns both on. It is off by default, so a host that does not set it sees
+  every label at its doctrinal place, as before.
+- **`fullSizeDecorations`** in `TacticalGraphicsConfigOptions` (default `false`), read with
+  `getFullSizeDecorations()`: keeps obstacle teeth, wire loops, ditch teeth and battlements at
+  full size however small the graphic is on screen. A ditch's teeth narrow to fit a short line
+  rather than vanish.
+- **Minefield, static depiction** (`TacticalGraphicName.MinefieldStaticDepiction`, 270701),
+  anchored to a line: a closed frame that follows the drawn line, with the `mineType` glyph
+  repeated inside at a constant screen size, `ENY` beyond each end when hostile, field H above
+  and W below. The unit symbol libraries (@zaes/military-symbols, milsymbol) draw 270701 as a
+  fixed-size point symbol; this is the depiction whose length follows the ground. Painted by
+  the new `minefieldStaticPaint`, with
+  `staticMinefieldLayout` for the geometry.
+- **`sampleBase(name)`** from the MapLibre entry: one sample-sheet cell's geometry and
+  properties, for a host drawing one graphic at a size of its own.
+- **`turnedSymbolLayer`** exported from the MapLibre entry beside `symbolLayer`.
+- **`engine.remove(id)`** on both engines, and `remove(id)` on `NativeLayerRenderer` and
+  `CanvasOverlayRenderer`: takes one
+  graphic off the map, deselecting it if it was selected, and calls `onChange`. Hiding a graphic
+  is removing it and adding it back later.
+- **`engine.setOpacity(id, opacity)`** on both engines, and `setOpacity` / `opacityOf` on
+  `NativeLayerRenderer` and `CanvasOverlayRenderer`: draws one graphic fainter, its lines,
+  fills, labels and center symbol together. View state like "name only": never in a snapshot,
+  gone after `restore` or `clearAll`. The native renderer reads it through every layer's
+  opacity; OpenLayers and the canvas overlay fade each color through the new
+  `withFadedPaints`.
+
+- **`openingDirection`** on a battle position, a prepared battle position or a strong point
+  picks the edge it opens on: degrees counter-clockwise from east, from the opening toward the
+  inside. Unset, the ring opens on its south edge as before. Every renderer reads it from the
+  saved properties.
+- **Echelons above corps, team and command.** `TacticalGraphicEchelon` gains `teamCrew` (Ø),
+  `army` (XXXX), `armyGroupFront` (XXXXX), `regionTheater` (XXXXXX) and `command` (++), drawn
+  on boundaries, battle positions, strong points and mobility corridors. Code that maps every
+  member, such as a `Record<TacticalGraphicEchelon, string>`, needs the five new entries.
+
+- **`minLabelSize`** sets the smallest size, in px, a label is shrunk to while fitting its
+  graphic. Below it the label keeps that size and may run over its outline, so a small area's
+  name stays readable from far out. Unset, nothing changes.
+- **Buttons of your own on the edit box.** `attachEditControls` takes **`actions`**: buttons
+  that are pressed rather than dragged, with an id, label, icon and corner. An action's
+  optional `visible` check picks the graphics it shows for, and `onPress` is handed the
+  selected graphic. The sample app uses one to open the properties dialog.
+
+### Changed
+
+- **`@zaes/military-symbols` is an optional peer dependency**, beside `milsymbol`: either can
+  supply the center symbol, and neither is imported. The guides and API notes name both.
+
+- **No echelon draws no echelon mark.** A boundary, battle position or strong point with no
+  echelon, or `Unknown`, used to draw a squad's dot. A boundary now draws an unbroken line and
+  a battle position a small opening with nothing in it. The mobility corridor still draws a
+  dot, since its field B is mandatory.
+
+- **A moved label keeps out of other graphics' areas** and prefers a place where it fits whole.
+  With `autoPlaceLabels` on, a label stepping aside no longer settles inside a different area
+  (the AO's name inside a kill zone), and an area's name no longer shrinks to illegibility
+  because the first clear place was cramped: it takes a roomier one, or stays at its usual
+  place when that reads larger.
+
+- **`ENY` on a hostile area is sized to the area.** It sits on the outline, so it takes the cap
+  every label there takes, and it is never larger than the area's name. It never goes
+  below the smallest legible size, so a hostile area keeps its marker when its name is too
+  small to show. Affects the action areas, the generic area and the corps support area.
+
+### Fixed
+
+- **The gap beside a label shrinks with the label.** Zoomed out, a label shrinks to fit its
+  graphic, but the gap between it and the line work kept its full pixel count, so a phase
+  line's `PL` sat a whole word's width off the end of its line. Every such gap is now stated
+  for a full-size label and scaled with the text, across 74 graphics: the line control
+  measures, routes, boundaries, arrows, the fire support areas' dates, the obstacle and mine
+  lines, linear targets, convoys and more. A date capped at its name's size takes its offset
+  down with it. Nothing changes where labels are drawn at full size.
+
+- **`/maplibre` ships no development notes.** The sample gallery behind `sampleBase` carried
+  comments about where a fix came from and when; they are gone, and the build now fails if any
+  emitted module, declaration or the published `package.json` carries such a note.
+
+## [4.7.0] — 2026-11-02
+
+A symbol-by-symbol audit against MIL-STD-2525E, FM 1-02.2 and APP-06, each graphic drawn in
+four directions on every engine, and the results reviewed.
+
+### Added
+
+- **`enemyLabels`** in `TacticalGraphicsConfigOptions` (default `true`), read with
+  `getEnemyLabels()`. Hostile graphics write `ENY` where the standards put field N: both ends of
+  every hostile line, the four direction of attack arrows, outside an axis's rails, the hostile
+  areas and obstacles. Set it `false` to rely on the hostile color alone.
+- **The zone of fire's boundary can be switched off** (APP-06 242600 note 2): a saved
+  `hideBoundary` boolean, offered by the dialog as "Hide boundary". `zoneOfFirePaint` is exported.
+- **Rectangular target attitude in mils:** `targetAttitudeDegrees`, `targetAttitudeMils` and
+  `MILS_PER_TURN`.
+- **Saved-file helpers:** `upgradeSavedLine`, `endsInWidthPoint`, `declaredSnapshotVersion` and
+  `TIP_FIRST_SINCE_SNAPSHOT_3`; `maxAreaVertices(name)` for the irregular zones' vertex cap.
+- `W` on delay, the passages of lines and the mined area; `T` and `W - W1` on frontal attack,
+  turning movement and bridge; the radius on the three circular target-acquisition zones that
+  lacked it.
+
+### Changed
+
+- **The four direction of attack arrows store their tip first** (`SNAPSHOT_VERSION` 3), as
+  APP-06 140601-140605 and 2525E number them. A file older than version 3, or one with no
+  version, is reversed on read. A base built in code for these four must now list the arrowhead
+  point first, or carry `tacticalGraphicsVersion` below 3.
+- **Point order and sides follow the plates.** Bridge and assault crossing number their points as
+  the plates do (point 3 across from point 1, point 4 across from point 2), and a base saved the
+  old way settles into this order with the same rails. The capture family's arc leaves the circle
+  at point 2; antitank ditch teeth and wire marks hang on the side 2525E draws; escort's point 1
+  stays on the middle of the bar.
+- **A versionless file is read base by base:** an axis arrow that already carries its width point
+  is no longer given a second one.
+- The irregular zones take up to 100 vertices; every engine closes the draw at the cap.
+
+### Fixed
+
+- **Shapes as 2525E draws them:** destroy, suppress and neutralize; the fix head; deny; the
+  obstacle disrupt's arrowheads; encirclement's teeth; isolate, cordon and retain; the line of
+  contact scallops; ford bars; the coordinated fire line and 271202 dashes; frontal attack,
+  turning movement and advance to contact proportions; breach and canalize ticks; the fields of
+  fire blade; the aviation axes' twist; avenue of approach's head.
+- **Labels where the plates put them:** axis T, dates and ENY; the crossings' dates against the
+  point 2 flares; area literals stacked over T; IFF lines; GRID and ATIZ text; route
+  identifiers; passage lane and munition flight path dates; engineer work line repeats; radar
+  search T; safe lane or gap's column on the left of point 1 to point 2, centered; avenue of
+  approach's H level and clear of the rail; frontal attack's A and turning movement's T in the
+  head, capped in size; a battle position's echelon on its south edge.
+- **Labels in every direction:** an exactly vertical line reads the same way at both ends; text
+  overlap is measured on the turned boxes, so dates under a diagonal line are no longer dropped;
+  labels stay clear of their line on every heading; arrow labels stay off the head and follow a
+  bent route; a vertical bearing line keeps H within the line.
+- **Mission task letters** are sized from the symbol on every engine, and the MapLibre label halo
+  scales with the label.
+- Kill zone stays straight with smooth lines on, and bridge, gap and assault crossing no longer
+  draw a hashed construction line while editing.
+
+## [4.6.3] — 2026-10-25
+
+### Fixed
+
+- **Graphics across the antimeridian draw where they were placed.** A base whose points straddle
+  longitude 180 arrives folded (179.99 and -179.99), and nine generators did their arithmetic on
+  those raw degrees: Capture, Seize, Evacuate and Recover swung their arc out to longitude 225, and
+  ford difficult, turning movement, the attack helicopter axis of advance, mobile defense and the
+  aviation direction of attack put marks 540 to 17,800 km away. Every base is now unwrapped before
+  it is drawn, so a crossing graphic draws as one continuous shape on every engine. Its drawn
+  longitudes can run past 180; a consumer writing them to a format limited to [-180, 180] folds them.
+
+## [4.6.2] — 2026-10-24
+
+### Fixed
+
+- **Labels stay on their graphic.** A movement label longer than the straight stretch behind
+  its arrowhead (a name and two date-time groups, say) now bends along the arrow instead of
+  running out through a wall, on smooth and hard lines alike. Axis of advance and its feint,
+  supporting axis, counterattack, aviation and attack helicopter axes, avenue of approach and
+  advance to contact.
+- **Labels too small to read are not drawn.** Text that shrinks with its graphic is dropped
+  below 6 px instead of smearing into a dot when zoomed out.
+- **ACP labels fit their circle, or go.** They used to keep a minimum size that overran small
+  circles, and zoomed far out that size went negative, which MapLibre drew as one "ACP" across
+  the world.
+- **ACP labels are the same size on every engine.** MapLibre and the add-ons sized them against
+  an assumed 12 px circle, about a third of OpenLayers' size, because an air corridor files its
+  `width` and the shared builder read only `radius`.
+- **A letter in a gap of a symbol never leaves an empty gap.** Destroy's D, block's B, contain's
+  C, the retrograde letters and the rest keep their share of the symbol. Once that would be under
+  6 px, the letter goes and the line work closes into the bare shape, instead of the letter going
+  and a hole staying where it was. Gaps the generator builds into the geometry (mobile defense,
+  defeat, cover, guard, screen) cannot close; cover, guard and screen hold their letter at 6 px.
+- **A designation's prefix outlasts its name.** Too small to read, `PL BLUE` becomes `PL` at
+  6 px and `AA HAWK` becomes `AA`, gone only once the graphic is under twice its size.
+- **Outside text follows the main label.** Dates, altitudes and field H are never drawn larger
+  than the name beside them, and go when it goes. A zone's dates were up to 2.4 times the
+  height of its name zoomed out.
+- **No empty breaks in an outline.** Artillery maneuver and reserved areas, the radiation dose
+  rate contour line and the minimum safe distance zones close their outline when the text in its
+  breaks is not drawn. AMA and ARA are drawn in the label color, not the line color.
+- **A graphic's name draws over other graphics' dates.** Names and doctrinal text now paint above
+  every amplifier (OpenLayers by zIndex, MapLibre by `symbol-sort-key`), and an amplifier that
+  would lie on its own graphic's name is left out. Text from two graphics can still overlap.
+- **MapLibre no longer rebuilds graphics on zoom.** A graphic's geometry stays where it was drawn
+  and saved at every zoom, as on OpenLayers.
+
+### Added
+
+- `MIN_LEGIBLE_TEXT_PX` (6) and `withLegibleText`, the floor above and the filter that applies it.
+- `withUnobscuredNames` and `NAME_TEXT_Z_INDEX`, the rule above and the draw order it sets.
+- `TextSpec.glyph`: marks one letter of a label bent along its graphic. A renderer that flips
+  turned text upright should leave these alone, or the run reads backward.
+
+## [4.6.1] — 2026-10-20
+
+### Fixed
+
+- **4.6.0 was published without its build and withdrawn.** Its package carried the 4.6.0
+  documentation over the 4.5.1 code, so none of the changes below were in it. It was unpublished
+  the same day. 4.6.1 is the release 4.6.0 describes, with no other changes.
+
+## [4.6.0] — 2026-10-20 (withdrawn)
+
+### Added
+
+- **MIL-STD-2525 is a third specification.** `TacticalGraphicSpecification.MIL_STD_2525` is on
+  every graphic MIL-STD-2525E Change 1 has: 288 of the 323, read from its control-measure table
+  by entity code. `getSpecifications(TacticalGraphicName.PhaseLine)` now returns
+  `['MIL-STD-2525', 'FM 1-02.2', 'APP-06']`, the governing standard first, and
+  `listNamesBySpecification` answers which 2525E control measures the library draws. Five of
+  them are in MIL-STD-2525 alone: antitank wall and the four fields-of-fire symbols below. Code
+  that compared a specification list to `['APP-06']` exactly should test membership instead.
+- **Antitank wall (`AntiTankWall`, 290204).** The obstacle line with its teeth on the right of the
+  direction of travel and no label, from MIL-STD-2525D Table H-XIX. It is in neither FM 1-02.2
+  nor APP-06, so it is tagged MIL-STD-2525 only.
+- **MIL-STD-2525E Change 1's fields-of-fire variants.** Change 1 (March 2025) coded four symbols on
+  the fields-of-fire V, and all four are new graphics: `FinalProtectiveFireLeft` (`140501`, the
+  same picture as fields of fire, which keeps APP-06's `140500`), `FinalProtectiveFireRight`
+  (`140502`, the blade on the other leg),
+  `PrincipalDirectionOfFire` (`140503`, no blade) and `SecondaryDirectionOfFire` (`140504`, no blade,
+  dashed). They share the V's geometry, handles and editing, and are tagged MIL-STD-2525 only.
+  `FIELD_OF_FIRE_GRAPHICS` and `isFieldOfFire` list the family. Like fields of fire, all four store
+  their vertex first, so `TIP_FIRST_GRAPHICS` grows from 27 to 31.
+- **Supply-route traffic codes resolve.** APP-06 codes each traffic pattern on a route as its
+  own subtype (`330301` is a main supply route with one-way traffic). This library draws those as
+  the route plus its `direction` amplifier, and now maps between the two: `resolveEntityCode(code)`
+  returns the graphic and the direction, `getNameByEntityCode` accepts the subtype codes, and
+  `getEntityCode(name, {direction})` returns the subtype code. `listEntityVariantCodes()` lists the
+  eight codes this covers.
+
+### Changed
+
+- **The obstacle line's teeth follow the drawing order.** They sit on the left of the direction
+  of travel and the label on the right, as APP-06 290100 orients the symbol by the order of its
+  anchor points. A line drawn west to east looks as before; one drawn east to west now has its
+  teeth below and its label above, where both used to stay up and down whichever way it was drawn.
+
+- **Line of contact has its own code, `140200`.** It used to report `141100`, which belongs to
+  line of departure/line of contact, a separate graphic. APP-06 and MIL-STD-2525E describe line
+  of contact with no code; MIL-STD-2525D codes it `140200`. `getEntityCode(TacticalGraphicName.LineOfContact)`
+  now returns `'140200'`, and `getNameByEntityCode('141100')` now returns the line of departure/line
+  of contact instead of `undefined`.
+
+- **Kill zone has a code, `242800`.** It is not in APP-06, but MIL-STD-2525E codes it, so
+  `getEntityCode(TacticalGraphicName.KillZone)` now returns `'242800'` instead of `undefined`, and
+  its specifications are MIL-STD-2525 and FM 1-02.2. Seven FM-only graphics remain uncoded.
+
+## [4.5.1] — 2026-10-12
+
+### Fixed
+
+- **Labels that sit on an area's outline are drawn again.** The four `PAA` markers on a
+  position area for artillery and the designation on a group or series of targets were shrunk
+  until they fit inside the shape, which a label riding the edge never does, so they came out
+  at size 0 on every engine. 4.5.0 made it visible: the group of targets now opens a gap in its
+  outline for the designation, and the gap was empty. The picker thumbnails had the same gap.
+
+## [4.5.0] — 2026-10-12
+
+### Added
+
+- **Smooth lines.** `configureTacticalGraphics({smoothLines: true})` draws every graphic the
+  user traces as a free path with its corners rounded: the control lines and boundaries, the
+  obstacle, wire and fortified lines, the irregular areas, the multiple-strike safe distance
+  zone, and the arrows, both the thin direction-of-attack lines and the axis arrows with a body.
+  162 graphics in all. The points the operator placed are still what is saved, edited and exported,
+  and a selected graphic shows them as a dashed line. An arrow keeps the segment its head is
+  built on, and an axis arrow's sides are rounded after the offset so a bend cannot fold the
+  body. Graphics whose points are anchors (mission tasks, the two- and three-point symbols,
+  rectangles) and the routes that mark every vertex (air corridors, overhead wire) stay hard.
+  Default off.
+- `refreshStyles()` rebuilds the graphics a `smoothLines` change reshapes, on both engines. On
+  OpenLayers without the facade, `rebuildGraphicsForConfig(manager)` does it.
+- On the root entry: `SMOOTHED_GRAPHICS`, `smoothingKindOf`, `getSmoothLines`,
+  `geometryConfigKey`, `rebuildPaintedGraphic`, `anchorConnectorRuns`, `hasClosingEdge`,
+  `takesInsertedVertices`, `nearestInsertionEdge`, `areaLabelRing`, `topEdgeLabel`,
+  `topmostSegmentIndex`, `filedBaseGeometry`, `editableBaseGeometry`, `filedStrikeBase`,
+  `editableStrikeBase`, `isFiledStrikeBase` and `strikeZone2`. On `/openlayers`:
+  `rebuildGraphicsForConfig`.
+- **A point can be added on the multiple-strike zone's closing edge**, the edge from its last
+  point back to its first, on both engines. While it is selected, the dashed line through its
+  points closes into the ring it traces.
+
+### Changed
+
+- **The multiple-strike safe distance zone (272101) is saved with both rings' points**, as
+  APP-06 lists them: zone 1's, then zone 2's, the same number of each, with zone 2 one `width`
+  outside zone 1. It is still edited as zone 1 alone; zone 2 is read back from the width on
+  load, so the two cannot disagree. Files from earlier versions, zone 1 and a width or two rings
+  and no width, open as before. A host that reads this graphic's coordinates out of a saved file
+  sees twice the points it did.
+- **MapLibre inserts a point on the multiple-strike zone's edges**, as OpenLayers always has. A
+  drag on an edge used to resize the whole zone on MapLibre. Neither engine inserts into the
+  zone's older two-ring record (no width), where a point would shift the split between the rings.
+- Renderers building from the shared adapter draw the hashed construction line from
+  `anchorConnectorRuns`, the rule both engines now share.
+
+### Fixed
+
+- **Outlines drawn with many points kept their gaps, glyphs and labels only on a hard drawing.**
+  Gaps and echelon glyphs were measured against the one segment they sat in, so on a dense
+  outline the battle position and strong point squeezed their echelon glyph and lost their
+  opening, the prepared battle position's dashes stopped partway round, group or series of
+  targets had no gap, and the UXO area dropped its labels. They are measured along the line
+  now. The picker thumbnails for those five changed accordingly. Boundary, munition flight
+  path, mobility corridor and the hostile encirclement's gaps follow the same rule.
+- Group or series of targets publishes its label anchor and segment on MapLibre, which never had
+  one. Its designation is still drawn at zero size on both engines; that is a separate fix.
+- OpenLayers' selection box no longer counts the hashed construction line, so it fits the
+  symbol as the other engines' boxes do.
+
+## [4.4.0] — 2026-09-28
+
+### Added
+
+- **Edit controls, as a new entry point: `@zaes/tactical-graphics/edit-controls`.**
+  `attachEditControls(container, engine)` draws the dashed selection box and its move, rotate
+  and resize buttons over any engine's map, in plain DOM with no framework. They were only in
+  the sample app before, so every host had to build its own. Icons, labels, corners, which
+  buttons appear and the colors can all be changed.
+- **"Name only" belongs to the host.** The engine facade has `setAmplifiersHidden(id, hidden)`
+  and `amplifiersHidden(id)`. Both renderers used to read the choice from the demo's own
+  `localStorage` key, so a host that hid amplifiers any other way lost it on every `restore()`.
+  The choice now lives on the drawn graphic; `restore()` and `clearAll()` draw everything in
+  full, and the host re-applies its own record.
+- **MapLibre hosts choose their own glyphs and fonts.** `NativeLayerRenderer` takes `glyphs` (a
+  URL, or `false` to keep the style's own) and `fontStack`. The defaults are exported as
+  `DEFAULT_GLYPHS_URL` and `DEFAULT_FONT_STACK`, with the `NativeLayerRendererOptions` and
+  `FontStack` types. The default still points at MapLibre's public demo glyph server, which a
+  production app should replace.
+- `subscribeSecurityOperationSymbolChange` on `/openlayers`, for a host drawing center symbols
+  on a layer of its own. The manager repaints its own graphics when a provider changes.
+- On the root entry, for renderers: the range fan's geodesic helpers (`geodesicBearingDeg`,
+  `geodesicDistanceM`, `BAND_SEPARATION_FRACTION`, `MIN_SECTOR_ARC_DEG`), the abatis side
+  helpers (`drawnSide`, `hasDrawnSide`, `northSide`), `rotationFromDrawnPoint` for the arc
+  mission tasks, and the handle constants `DEFAULT_OFFSET_SCALE`, `MIN_OFFSET_METERS`,
+  `MIRROR_FLIP_MIN_PX` and `setsWidthFromAnchor`.
+- **A documentation site.** The guides moved out of the README into `site/`, with an API
+  reference generated from the doc comments of all four entry points.
+
+### Changed
+
+- **Arc mission tasks start under the second click.** For the ten graphics whose APP-06 figures
+  make point 2 the start point and the radius (retain, occupy, secure, isolate, deny, area
+  defense and the rest), the second click now lands on the start point. Contain is not one of
+  them.
+- **The abatis tooth points north**, whichever way the line is drawn. The side is set when the
+  line is drawn, rotation keeps it, and the tooth shows on its final side while drawing.
+- **Dashed lines have square ends**, so a dash stays a dash when zoomed out.
+- **MapLibre line labels turn with the map** and flip to stay readable, keeping their side of
+  the line.
+- **The headline names FM 1-02.2 and APP-06** instead of MIL-STD-2525E, in the README, the npm
+  description, the docs and the demo. By entity code, 282 of the 318 graphics are in 2525E
+  Change 1, so the old wording overstated it. The graphics themselves are unchanged.
+
+### Fixed
+
+- **Every grip does on MapLibre what it does on OpenLayers.** A range fan's band grips were dead
+  on MapLibre; the rectangular-target family gets its width grip there; point-anchored grips
+  flip past the axis as they do on OpenLayers; Turn's apex reads its frame from its points; and
+  a width drag moves by the drag and flips only on a real crossing, on both engines.
+- **The center grip no longer resizes on MapLibre.** Dragging a point-anchored graphic's gray
+  center dot pans the map outside translate mode, as on OpenLayers. A 2 px slip used to take
+  Isolate's radius from 180 km to 4,399 km.
+- **MapLibre hatches keep their spacing between zoom levels** instead of growing with the map
+  and snapping back at each whole level.
+- **OpenLayers draws the center symbol** of cover, guard, screen and the follow tasks from a
+  provider registered with `setSecurityOperationSymbolProvider` alone, and repaints it when a
+  provider or the symbol size changes.
+- **`renderTacticalGraphic` is safer with bases no editor draws.** It no longer writes a `role`
+  into the feature it is given; a one-point graphic with no radius, or any base a generator
+  cannot draw from, throws a `TacticalGraphicError` naming the problem instead of a turf error;
+  and air corridors draw through a repeated vertex.
+
+## [4.3.1] — 2026-09-23
+
+Documentation only: the npm page shows the README of the latest version, and 4.3.0 shipped
+before these fixes landed. No code changed.
+
+### Documentation
+
+- **The README's counts are current again**, recomputed from the built library: 225 graphics in
+  both publications (it said 224, and 214 in a second place), twenty rectangular zones (eighteen,
+  and seventeen in the thumbnail section), 318 thumbnails (293), labels kept on the graphic
+  feature for 114 of 318 graphics (127 of 317), and 312 graphics without a center symbol
+  (280-odd). It also documents the graphic builder, and no longer points at notes that are not
+  published.
+- `docs/app6-field-validation.md` says plainly that it records the sweep rather than
+  today's field sets, and no longer cites line numbers that have drifted or paths that are not
+  in this repository.
+
+---
+
+## [4.3.0] — 2026-09-23
+
+### Added
+
+- **The graphic builder is on the root entry point**: `buildPaintedGraphic`, `paintGraphic`,
+  `PaintedGraphic`, `projectToMercator`, `restoreSnapshotGraphics` and `centerSymbolPlacement`,
+  plus `lonLatToMercator` / `mercatorToLonLat`. They turn a saved base into the paint layer's
+  input, with no map library involved, so any renderer can build its graphics the way the
+  MapLibre one does. `/maplibre` still exports them under their old names
+  (`buildTacticalGraphic`, `MapLibreTacticalGraphic`, `toMercator`, ...), so nothing breaks.
+  The helpers that came with them are exported too: `carryPaintFlags`, `DEFAULT_OFFSET_PX`,
+  `descriptionOf`, `withDrawingResolution`, `followTaskCenter`, `securityOperationCenter`, and
+  the `RestoredGraphic` type.
+- `describedProperties`, the rule a renderer applies before filing a bag.
+
+### Fixed
+
+- **MapLibre's selection box missed the graphic on a turned or tilted camera.** It projected two
+  corners of the graphic's bounds, which spans the whole box only north-up. It projects all
+  four now.
+
+- **`renderTacticalGraphic` threw a turf error for a bag with no `rotation` in it.** The
+  property is optional in the schema and required by the generators, and the ones that read it
+  most directly spend it without a guard — so `{name, radius}`, the most ordinary bag a
+  point-based graphic can be handed, came back as `coordinates must contain numbers` from
+  inside `@turf/destination`, naming neither the field nor the graphic. It defaults to zero,
+  which is what every generator that does guard already falls back to; no output changes.
+- **A file's contents no longer depend on which renderer wrote it.** The MapLibre adapter
+  completes the amplifier bag before drawing — a zero label gap for the arc mission tasks, a
+  rectangle's width read back off its ring, a drawn-anchor graphic's `radius` and `rotation`
+  recovered from its own points — and was filing that completed bag, so a MapLibre-written
+  snapshot carried `labelGapDegrees` for 192 graphics that an OpenLayers-written one did not.
+  Half of it was an instruction to the paint layer and half a second copy of the geometry,
+  which is what let 151204 contain report a 40 km radius beside a symbol drawn at 29.8. A
+  snapshot now carries the description: what the caller stated, plus what a renderer derived
+  from something the file does not hold — a screen-sized default spent at the drawing
+  resolution stays, since that metre value is the only record of it. It holds after the
+  graphic is touched, too: a gesture and the properties dialog both rebuild from the
+  description rather than from the bag the last draw rendered with.
+
+- **Opening a file on OpenLayers that another renderer wrote lost, and could misread, what it
+  said.** Three faults in one sentence, and the twenty rectangular areas had all three. A
+  `decorationSize` arriving beside a `width` **outranked it** when the base was rebuilt — the
+  precedence was written against the files this engine writes, which state one size per holder,
+  and MapLibre states both — so a box saved 87,465 m wide came back at 45,733 and drew 20.7 km
+  from where the same file draws on the other engine. A save then walked the holders and asked
+  each what it knew, which drops any field this engine does not itself manage: that was
+  `decorationSize` on 146 of the 318, each one a screen-sized default spent at the zoom the
+  graphic was drawn at, which is the one derived value a snapshot has to carry because it holds
+  no viewport. And a figure the *caller* stated could be replaced by the one a renderer had
+  substituted to draw with, so a bag stating `radius: 180000` came back filed at the tick size
+  MapLibre uses for a bridge.
+
+  A snapshot now survives a re-save on either engine: what the file said is kept, what the
+  caller stated is theirs, and the figures the library refuses to file beside the points that
+  already carry them — a drawn-anchor graphic's `radius` and `rotation`, and a radius sitting
+  next to the `length` and `width` that are the whole of the five axis-and-width plates' shape
+  — are refused at *both* doors rather than only on restore.
+
+- **A restored base was tidied only when it gained a point.** `restoreTacticalGraphics` ran
+  the library's `normalizeDrawnBase` over an incoming base and then wrote the result back only
+  if the point count had changed — but the normalizer also *re-places* points, which for the
+  demolition obstacles is its whole job. So the same file opened as two different saves:
+  MapLibre squared point 3 onto the perpendicular its plate describes, OpenLayers kept the raw
+  click, and the first drag of either endpoint then moved the symbol to two different places
+  (197 m apart on point 1, 981 m on point 2). The base is written back whenever it differs.
+- **A rotate, a resize or a translate left the base off its own construction.** Those gestures
+  transform it wholesale in projected metres while the constraint being transformed — a point
+  square to an axis, a stem on a perpendicular — is geodesic, so a planar transform shears it.
+  Measured over the registry: 35 graphics, up to 902 m after one rotate-resize-translate. The
+  OpenLayers line controller now settles the base when a gesture ends, once, which is the
+  guarantee MapLibre has always had from normalizing on every build.
+
+---
+
+## [4.2.2] — 2026-09-21
+
+### Fixed
+
+- **OpenLayers ended a three-point draw at two points.** Its `Draw` interaction finished any
+  line on a double-click once it had two, so roadblock complete and the three explosives
+  states of readiness could be saved with two points, and their side grip then had no vertex
+  to move. MapLibre always waited for the third click. Both engines now ask one rule,
+  `drawIsComplete`, so every graphic finishes at the same click on both.
+- **Files already saved that way are repaired when they load.** A demolition obstacle with two
+  points gets its third, square off the centreline's midpoint at a tenth of its length, on
+  either engine and whatever the file's version (`completeDemolitionBase`).
+- **The README listed roadblock complete (executed) as upcoming.** Its tracker row still
+  carried an old exclusion; it is listed as supported now, and appears in the sample gallery.
+
+### Added
+
+- `drawIsComplete` and `completeDemolitionBase`.
+
+---
+
+## [4.2.1] — 2026-09-21
+
+### Changed
+
+- **Roadblock complete (executed) is a demolition obstacle now, built and edited like the
+  three explosives states of readiness.** FM 1-02.2 lists it fourth in that group and APP-06
+  gives it 271201's centreline-and-width rule, so it is drawn with three clicks at any angle
+  and length: points 1 and 2 are the centreline, point 3 the width, and all three are grips.
+  Its first pair of bars is exactly the readiness states' pair, and the second is that pair
+  turned a quarter-turn about the midpoint. It used to be dropped at a fixed size and a
+  45 degree lean, with every grip inert. The width is held between
+  `ROADBLOCK_MIN_HALF_WIDTH_RATIO` and `ROADBLOCK_MAX_HALF_WIDTH_RATIO` of the centreline, so
+  the crossings reach at most halfway to the bar ends. Files saved with the old three points
+  open unchanged, since those points already meant centreline, centreline and side; a 3.4.0
+  file with one dropped point opens at its old size and angle.
+- **Every dash is sized to its graphic and capped at the planned dash.** A graphic at least
+  160 px across on screen draws 12/8 px dashes and never more. A smaller one steps down through
+  ¾, ½ and ¼ of that, and never goes solid: a planned line drawn solid would state the wrong
+  status. The rule covers status dashes (planned, suspected hostile, the circled ring, whose
+  18 px dash-dot is now 12), the dashes that are the symbol, and the crossed mission tasks'
+  hash. Each graphic gets one scale, so it never shows two dash sizes. `withFittedDashes`
+  applies it, and both renderers call it where they already call `withHiddenAmplifiers`.
+  The one exception is a small glyph repeated inside a larger graphic: the mine cluster glyph
+  on a mineline or in a mine area sizes its dash to itself (`StrokeSpec.dashSized`), so each
+  dome carries several dashes instead of one and a half.
+- **Seven graphics hand their dashed lines over whole.** Counterattack, counterattack by fire,
+  main axis of advance feint, direction of main attack feint, exploitation and both fords used
+  to cut their dashes into the GeoJSON in meters, so a dash grew without limit as the map
+  zoomed in and fell under a pixel as it zoomed out. Each dashed line is now one continuous
+  line, and the `graphic` feature carries `dashedParts`, the line indexes to draw dashed. A
+  consumer drawing `renderTacticalGraphic` output without either renderer has to dash those
+  lines itself, the same way it already handles `status: planned`.
+
+### Added
+
+- `withFittedDashes`, `dashScale`, `fitDash`, `strokedExtentPx`, `strokeParts`, `DASH_CAP_PX`,
+  `DASH_FULL_SIZE_PX`, `DASH_SCALE_STEPS`, `DASHED_PARTS` and `dashedPartsOf`.
+- `StrokeSpec.dashSized`, for a mark that sizes its own dash: `withFittedDashes` caps it and
+  leaves it otherwise alone.
+- `ROADBLOCK_MIN_HALF_WIDTH_RATIO`, `ROADBLOCK_MAX_HALF_WIDTH_RATIO` and
+  `clampRoadblockHalfWidth`.
+
+### Fixed
+
+- **Mineline mines follow the line.** Each Table 8-24 glyph strung along a mineline is turned
+  to the line where it sits, its top to the left of the drawing direction. Upright glyphs on
+  a steep line laid the antihandling mine's stem along the line itself, where it vanished,
+  and pointed antennae and arrows at fixed screen directions. The directional mine's arrow
+  points across the line, to its right. Mine areas still draw the row upright, as the table
+  does.
+- **The directional mine's arrow is APP-06's**: a solid shaft to 1.5 radii, a break, and a
+  small filled head from 1.74 to 2.1. It was a solid shaft to 2.2 under an open chevron.
+- **MapLibre drew every dash up to twice too long between integer zoom levels.** It lays a
+  dash out in tile space, so a 12 px dash measured 12 at zoom 6, 18 at 6.5 and 21 at 6.75.
+  The renderer now corrects for it in quarter-zoom steps, each its own dash layer, so a dash
+  stays between 84% and 100% of its length across the whole level, matching OpenLayers.
+- **Counterattack, the feint and the fords drew through a bare stroke on OpenLayers** rather
+  than the shared paint function MapLibre used. They now go through `movementGraphicPaint`
+  on both engines.
+
+---
+
+## [4.2.0] — 2026-09-13
+
+> ### ⚠️ Twelve graphics change the shape of their base, and the snapshot version is now 2
+>
+> The eleven axis arrows — the five axes of advance, avenue of approach, frontal attack,
+> turning movement, both counter-attacks and advance to contact — store their **width as
+> their last coordinate** rather than as a `width` amplifier, which is what APP-06 asks for:
+> *"Point N determines the width."* 343100 exploit stores **three anchor points** for the
+> same reason. Every base of these twelve gains a coordinate, and `properties.tacticalGraphic`
+> loses its `width` for the eleven.
+>
+> **Files written by 4.1.1 and earlier open unchanged and re-save in the new shape.** They are
+> converted on read, from the `width` they filed, and the picture is the one they were saved
+> with to within a tenth of a percent. `tacticalGraphicsVersion` is **2**, and a file that
+> declares no version is now read as version 1 rather than as the current one — which is what
+> an unversioned file actually is.
+>
+> A consumer that builds these bases by hand has to append the width point:
+> `axisWithWidthPoint(name, axis, halfWidthMetres)`. One that only reads them should ask
+> `halfWidthFromBase(name, coordinates)` instead of reading `width`.
+
+### Added
+
+- **`axisWithWidthPoint`, `halfWidthFromBase`, `axisOf`, `widthPointOf`, `squareWidthPoint`,
+  `upgradeAxisBase`, `axisBaseFromDraw`, `carriesWidthPointInBase`** and the rest of
+  `core/axisWidth.ts` — reading and writing the coordinate the eleven axis arrows keep their
+  width in, plus `DEFAULT_AXIS_HALF_WIDTH_PX` and `tipOverhangOf`, which both renderers now
+  read rather than each stating the same figure.
+- **`exploitationAnchors`, `exploitationParts`, `exploitationTailPoint`** and
+  `EXPLOITATION_ANGLE_DEG` — 343100's three anchor points and the runs it is drawn as.
+- **`pivotVertexIndex`** — which stored vertex a drawn line's gestures anchor on, as an index,
+  so OpenLayers can ask it in projected metres and MapLibre in degrees.
+- **`LEGACY_SNAPSHOT_VERSION`** — the version a file that declares none is read as.
+- **A width read-out** in the properties panel for the eleven, derived from their points.
+- **`reshapesByVertex` and `hidesAnchorGrip`** — the two rules a grip obeys. The first says
+  whether dragging a published point moves that point or scales the symbol, which is a
+  different question from `editStretches` and answered differently on 66 graphics; where both
+  are true the grip wins. The second says whether a graphic publishes a grip on its *first*
+  anchor at all, which it does not when the symbol is two points that only stretch. Both lived
+  in an OpenLayers holder, so the other renderer could not read them.
+- **`shapedByWidth` and `widthFromBase`** — which graphics take a default width, and the full
+  width a base states. The first replaced five negative guards a renderer had accumulated; the
+  second is the doubling from half-width to full, which had been written twice.
+
+### Changed
+
+- **343100 exploit's four angled lines are one length.** Its dashed tail was drawn at twice
+  the arrowhead; the plate gives all four the same anchor point. The two tail strokes are also
+  dashed separately now, so the pattern starts at point 2 on both of them rather than running
+  on through the bend and landing differently on each.
+- **152300 avenue of approach and 340700 counter-attack by fire answer `handleRole`.** Both
+  were in no handle contract at all, so their width grip resolved to a shape handle — which
+  OpenLayers ignored and MapLibre acted on, translating the whole graphic instead of widening
+  it.
+
+- **Division and corps echelons.** `TacticalGraphicEchelon` gains `division` and `corpsMef`,
+  drawn as XX and XXX per FM 1-02.2 table 5-3. Every graphic that carries an echelon picks
+  them up: the boundary, the battle position, the strong point and the mobility corridor.
+- **`formatBearing`, `measureReadout` and `RADAR_READOUT_CAPTIONS`.** What a measure read-out
+  says while a gesture runs, so a host and both renderers state a number the same way.
+  The radar search doctrine now reports all four values its plate names, two of which are
+  angles and had no read-out at all.
+- **A grip drag means the same gesture on both renderers.** `editStretches` says what a drag on
+  a graphic's *body* means and does not answer for a grip, so on the 23 graphics that stretch
+  and do not reshape the same dot scaled the symbol on one engine and pulled a single point out
+  of it on the other — 37.5 km apart on a bearing line. Where a graphic both stretches and
+  reshapes, the grip still wins.
+- **A grip is drawn the same colour on both renderers, and a red one always does something.**
+  25 of 679 published handles were drawn differently. 271204's three anchors are inert and were
+  drawn red on one engine, which promised a drag it then declined. The five one-anchor mission
+  tasks — defeat, destroy, interdict, neutralize, suppress — publish one point, their centre,
+  which carries neither a scale ratio nor an angle, and it is grey now on both. Eighteen
+  two-point lines that only stretch no longer draw a grip on the anchor their gesture is
+  measured from, and that grip does not answer the pointer either.
+- **An edit-mode drag that grabs no vertex does nothing on MapLibre**, which is what OpenLayers
+  does. It used to move the graphic. Moving is the selection box's job on both.
+- **A point-anchored graphic gets its registered paint** when nothing names it specifically.
+  The OpenLayers holder chose from a chain of hand-written names and anything matching none of
+  them fell through to a default, so registering a paint took two edits. It asks the registry
+  first now.
+- **The default obstacle colour is `#00AC00`**, where it was the plate's pure `#00FF00`.
+  8.1.4.3 says obstacles are green and names no value; the Example cell's green is exact as a
+  sample off a raster and reads as a highlight rather than as line work once it is drawn over a
+  map. Same hue, about two thirds the value. A host that wants the literal plate green sets
+  `obstacleColor` back, which is what that entry is for.
+
+### Fixed
+
+- **Turn, tactical turn and envelopment grips land under the cursor.** The tip grip and the
+  line end measured the drag in projected metres and wrote it into a size spent on the
+  ground, so at 55 degrees north the symbol came out 1.74 times too long.
+- **A turn's bend grip sits on its own curve**, at every latitude and size. It was the
+  geodesic apex while the curve was interpolated in degrees, which parted by 69 px on a
+  200 km turn at 75 degrees.
+- **Mobile defense's barbs stand on the line they decorate**, rather than on a great-circle
+  chord that lifted one corner off a straight leg and left the arc falling away beneath a
+  tangent base.
+- **The field of fire bar and the echelon glyph are capped against their own symbol**, and
+  the break cut for the echelon is measured from the glyph instead of from a constant.
+- **A rotate turns the radar search doctrine on MapLibre.** It advanced `rotation` and left
+  the stated axis alone, so the symbol did not turn and the saved graphic disagreed with
+  the other engine.
+- **A drag owns the pointer on MapLibre.** That engine stops dispatching its own mouse events
+  partway through a fast gesture, so a drag ended wherever the last delivered move left it —
+  and because the release never arrived, panning stayed switched off for the rest of the
+  session. A drag now reads the pointer from the window, from the moment it goes down.
+- **271204 turns the way the schema says, and about the point its plate names.** A stated
+  rotation is counter-clockwise from east everywhere in this library; the roadblock's module
+  spent it as a compass bearing, so it was the one graphic that turned the wrong way. Behind
+  that, the library's pivot was being used to *measure* the drag and not to place the result, so
+  it swung about its frame centre rather than about the crossing at point 3.
+- **The roadblock draws in the obstacle green it was always assigned.** 8.1.4.3 colours
+  obstacles green and `OBSTACLE_GRAPHICS` has always listed 271204; the shared paint drew it
+  green and one renderer never asked for that paint.
+- **The same drag lands in the same place however many moves it arrives in.** OpenLayers
+  re-derived a graphic's shape on every pointer move, and re-squaring an already-squared base is
+  not a no-op, so a drag delivered in four steps put 152901's third point 21.9 km from where the
+  one-step drag put it. The base is latched for the gesture now.
+- **A floor stated in screen pixels is spent at the resolution the screen is at.** The holder
+  kept the resolution it was drawn at, one holder had no floor at all, and one switch was
+  lifting two different floors — so a grip could take a Fix below the width its bow-tie needs.
+- **A bend is read on the ground, because the size it is a ratio of is.** The cursor arrived in
+  projected metres, so a turn bowed harder the further north it was drawn.
+- **A half-stated file is completed the same way by both renderers**, and a range-band graphic
+  is rebuilt from a radius alone. A saved bag carrying a radius and no width was finished three
+  different ways; one renderer reported no length at all, and the other spent a stray radius as
+  a rectangle's half-width and built its fallback in projected rather than ground metres.
+- **A graphic whose anchor points carry its frame stops filing a stale one.** 151204 contain
+  rebuilt at 29.8 km while the panel went on reporting the 40 km its file had recorded.
+- **A gesture turns and scales about the point the library names.** The OpenLayers line
+  controller restated its own rule, so 141700 ambush and the three security operations turned
+  about the wrong end — 230 and 336 km out. A resize also scales every dimension a symbol
+  states rather than its radius alone, so five plates that give a length *and* a width no longer
+  change shape as they change size.
+
+### Removed
+
+- **`minimumDrawnRadiusPx`.** The 50 px drawn-size floor it described became unreachable
+  when the three curves that carried it moved to a click-placed draw, and it was deleted
+  rather than re-armed: it governed the draw and never a resize, so a symbol could be
+  dragged under it a moment later anyway. Nothing about any graphic changes on screen.
+
+## [4.1.1] — 2026-09-08
+
+### Fixed
+
+- **`affiliationColorOf` is actually exported.** 4.1.0's notes listed it under Added and
+  it was not on the barrel — the function existed and was exported from its own module, so
+  it typechecked, grepped fine and worked internally, but no consumer could import it. A
+  changelog describing a symbol nobody can reach is worse than a patch release, so here is
+  the patch.
+
+  The release checklist has warned about exactly this since 1.6.0: *assert every
+  release-note symbol against `dist/`, not the source — an export missing from a barrel
+  passes typecheck and grep.* That check ran for 4.0.0's notes and not for 4.1.0's.
+  `publicSurface.test.ts` now asserts it from the built output, so the next omission fails
+  a gate rather than a release.
+
+## [4.1.0] — 2026-09-08
+
+> ### ⚠️ 35 graphics change colour on upgrade
+>
+> Obstacles and obstructions now draw **green** by default, for every affiliation
+> including hostile. Nothing is removed or renamed and no types change — this is a minor
+> — but a map that looked one way in 4.0.0 looks different in 4.1.0 without any code
+> change on your part.
+>
+> To keep the previous appearance: `configureTacticalGraphics({obstacleColors: false})`.
+
+### Added
+
+- **`obstacleColors`** (boolean, default `true`) and **`obstacleColor`** (default
+  `#00FF00`, part of `DEFAULT_PALETTE`). The boolean says *whether* the rule applies, the
+  palette entry says *which* green — a host on a night display softens the colour rather
+  than switching the rule off.
+- **`OBSTACLE_GRAPHICS`** and **`drawsAsObstacle(name)`** — the 35 graphics the rule
+  governs, so a consumer can ask rather than keep a list.
+- **`affiliationColorOf(feature)`** — the colour a graphic's affiliation gives it, with
+  the obstacle rule *not* applied. What a mark wants when the mark is not part of the
+  symbol.
+- `FORTIFIED_MERLON_PX`, `FORTIFIED_CRENEL_PX`, `FORTIFIED_HEIGHT_PX`, `FORTIFIED_MIN_PX`
+  and `castellatedPath`, matching the obstacle-tooth constants that were already public.
+- `npm run check:layering` — the two boundary rules as a runnable script rather than two
+  greps buried in CI.
+
+### Changed
+
+- **Obstacles draw green, and it beats affiliation.** APP-06 8.1.4.3: *"Obstacles and
+  obstructions as shown in this chapter (friendly, hostile, neutral, unknown, or
+  factional) are to be drawn using the colour green."* The parenthesis is exhaustive and
+  the same paragraph says the rule *"is in contradiction to the Standard Identities"*, so
+  a hostile obstacle is green, not red — the plates carry the affiliation on a red enemy
+  diamond beside the symbol. Membership was read off the plates pixel by pixel, not
+  inferred from code ranges; the Mobility category is **not** the same set, holding 17
+  graphics drawn black while UXO area is green and filed under Areas.
+- **Obstacle teeth and fortified merlons are laid out per run, not per chord.** Whole
+  items, centred, never straddling a corner, and free to follow a curve. Decorations
+  break at real corners — a bend past 30° — so a traced ellipse is one run rather than
+  fifty.
+- **The fortified merlon is capped on its width**, not its height. It stands 11 px proud
+  and is 15 wide, so a cap read off the height held full size on a shape half as small as
+  it should have. Full size now to ~165 px, and it survives to ~20 px rather than 30.
+- **The explosives states of readiness draw as a band on the diagonal** — a fifth of the
+  run at 45° — because 271201–3 say point 3 states a *width*, and both the Template and
+  the Example draw the band across the road it blocks.
+
+### Fixed
+
+- **The planned-status ring is no longer green.** 290400's plate draws a green mine
+  cluster inside a *black* dash-dot circle: the ring says *planned*, not *obstacle*.
+- **A decorated path no longer jumps a chord across its own curve.** Each run emitted its
+  decorations and then its remaining vertices, so the polyline walked to the last item and
+  jumped back to retrace. Invisible on a straight two-point run; visible the moment an
+  edit added vertices.
+- The README quotes APP-06 verbatim without tripping the US-English gate, which had no
+  way to tell a citation from prose.
+
+### Testing
+
+167 suites, 7,226 tests. New: `obstacleColor.test.ts`, `crenellatedLayout.test.ts`.
+`sampleGallery`'s hostility suite was re-aimed rather than trimmed — the 30 obstacles stay
+in the stamping test and swap only their colour assertions, so its count is unchanged.
+
+## [4.0.0] — 2026-09-07
+
+> **What shipped to npm is the `v4.0.0` tag, which is `develop` at the time of publish and
+> not the version-bump commit.** Three pull requests landed between the bump and the publish
+> — the MapLibre sample sheet, a development-dependency audit, and the three-point base depth
+> — and all three are in the tarball people install. They are described below. The tag was
+> moved to the commit whose tree is byte-identical to the published package, so a checkout of
+> `v4.0.0` is the code npm serves.
+
+**Thirty-eight graphics were rebuilt on the anchor points their plates number, and APP-06
+line and area coverage closed.** The registry goes 293 → 317. The headline is not the new
+symbols but the old ones: a graphic whose dimension used to be a `size` or `radius`
+amplifier — a number nobody could see and nowhere to put it — now has the operator place
+the point APP-06 gives it.
+
+**This is a major release for two reasons**, listed under *Removed* and *Changed* below:
+one enum member is gone, and one exported method lost a parameter. A fourth thing is not
+a breaking change but is why the major matters — **54 graphics changed how many points
+their base stores**, so this version writes a different file than 3.4.0 did. Files written
+by 3.4.0 open correctly here and that is pinned by a new suite; files written *here* will
+not be read correctly by 3.4.0.
+
+### Removed
+
+- **`TacticalGraphicName.FightingPosition`** — a duplicate. FM 1-02.2 table 5-22 and APP-06
+  291000 draw the *same* open three-sided bracket, beside the same trench line and with the
+  same note about facing the enemy, so two identical pictures with two captions were one
+  control measure. `FortifiedPosition` is the survivor — its draw model is the one 291000's
+  plate specifies — and it is displayed under **both** names and recorded as being in both
+  publications, so an operator searching for "fighting position" still finds it.
+
+  **A consumer referencing the removed member will not compile.** Saved data, however, is
+  migrated: `migrateRetiredGraphic` rewrites a file naming it, and both engines apply it on
+  restore. The rename alone would not be enough — the retired graphic was dropped on a point
+  and locked at 2:1, where the survivor's base is the two front corners — so the geometry is
+  rewritten too, from the saved `radius` and `rotation`, and those two amplifiers are dropped
+  because they described a shape that no longer exists.
+
+### Changed
+
+- **`LineGraphicController.enableVertexDragging(minimumVertices, anchorVertex)` no longer
+  takes the second argument.** *Breaking* — the class is exported from the
+  `/openlayers` entry point, so a call passing two arguments stops compiling; drop the
+  second and nothing else changes.
+
+  Which base vertex a reshape refuses to move was stated twice: once in the portable table
+  MapLibre reads, once as a literal here. The two sets barely overlapped, so **eight
+  graphics edited differently depending on which renderer a host loaded** — 343000 capture,
+  342300 seize, 344500 evacuate, 344600 recover, 343600 escort and 272100's zone refused a
+  drag on OpenLayers that MapLibre allowed, while 341900 did the reverse. Six of those have
+  plates that say *"point 1 defines the centre"*, so the answer was right and its address
+  was wrong; they are in the portable table now. Two had an answer their plates do not
+  support and lost it: 272101 numbers no centre at all, and 343700 exfiltrate's point 1 is
+  *"the end of the straight line portion of the graphic"*, so making it inert removed the
+  only grip that sets the run it defines.
+
+- **Fifty-four graphics changed how many points their base stores.** Not breaking — a file
+  written by 3.4.0 opens here — but it changes what the library writes. The two-rail
+  crossings (271100 bridge, 271300 assault crossing, FM's gap) go to four points, the fords
+  to three; 152100 support by fire and the security operations to four; ambush, attack by
+  fire, penetrate, block, disrupt, breach, bypass, canalize, clear, the seven cane arrows,
+  mobile defence, the infiltration lane and both turns to three; both hairpins and
+  envelopment to four.
+
+  Two mechanisms carry the back-compat and both are deliberate: some bases are upgraded on
+  the way in by `normalizeDrawnBase`, the rest keep drawing through their generator's
+  short-base branch. `legacyFormatRestore.test.ts` is new and puts a 3.4.0-shaped record —
+  two points plus the amplifiers that version filed — through the public API, the MapLibre
+  build and OpenLayers' restore for all 317 names.
+
+- **Defeat, Destroy, Interdict, Neutralize and Suppress publish one handle, at the centre.**
+  Each plate reads "requires one anchor point. The centre point defines the centre of the
+  symbol", and one anchor point is one handle. They had emitted `[edge, centre]`, which made
+  the edge the live grip and left the centre showing as a grey inert dot — a grab point
+  beside a symbol the standard describes by its middle.
+
+  **Nothing else changes: all five still move and resize**, and `allowedGestures` still
+  reports `{translate: true, rotate: false, resize: true}` for each. The handle set and the
+  gesture set had been one switch — `generateHandles` read `allowedGestures().resize` — and
+  are now separate, which is what lets the grip move to the centre without taking a
+  capability away. New export: `publishesAnchorHandleOnly(name)`, for a host drawing its own
+  handles. Saved graphics are unaffected.
+
+- **The arrowhead on `Fix` and `TacticalFix` is capped against the symbol's reach, not the
+  length of its zigzag.** `screenSizedArrowHead` limits a solid head to a share of the line
+  it terminates, and it was measuring how far the pen travels. A zigzag traverses about
+  twice its own run, so the head reached the absolute ceiling on a symbol half that wide —
+  15 px of head on 49.9 px of reach, against ferry crossing's proportionate 7.8 on 31.2.
+  Both are 0.25 of their own reach now. The helper takes a `measure` argument and defaults
+  to the old behaviour, so a route — where the drawn path *is* the symbol — is unchanged.
+
+- **`npm run check:docs`** runs the three freshness checks that guard generated artifacts —
+  picker thumbnails, the field matrix and the README's typed samples. Each had a `--check`
+  already; nothing ran any of them, which is how the field matrix went stale unnoticed.
+  `npm run gen:field-matrix` and `npm run check:field-matrix` are the two new scripts.
+
+### Added
+
+- **`RoadblockCompleteExecuted` is back, storing three points that nobody may drag.** It had
+  been switched off mid-branch: 271204's Draw Rules cell is empty, so the row inherits
+  271201's centreline-and-width rule and the Template is the only statement of how three
+  points lay four strokes out — read three ways in one session, three different pictures.
+
+  That reading is still open, so **the picture is 3.4.0's exactly** — dropped whole on one
+  click, byte for byte the same four strokes — and what changed is only what gets stored. It
+  used to file the dropped centre alone; it now writes the three anchor points the standard
+  names. Points 1 and 2 are the two extremes of the symbol's own 45-degree axis, the line
+  running *between* the two parallel bars, so their midpoint is the centre and the distance
+  between them is the span; point 3 is one of the crossings. That is enough to rebuild the
+  figure, and it matches the plate reading recorded before the symbol was switched off — *PT
+  3 at a crossing 48.5 px off the PT1–PT2 midpoint* — since that offset is the
+  half-separation.
+
+  **None of the three answers a drag.** `handlesAreInert(name)` is the new export that says
+  so, and both engines read it: OpenLayers routes the whole set to the inert handle feature,
+  MapLibre refuses the grab.
+
+  **Inert points are not a fixed symbol**, though: it moves, turns and scales as a whole, and
+  it turns for real — the bars lean off the symbol's own axis rather than off north, and the
+  rotation is read back out of the anchor points rather than carried beside them. Both
+  gestures pivot on **point 3**: the crossing is what the symbol marks on the ground, so
+  scaling about the centre points 1 and 2 straddle would slide it off the road it was placed
+  against. 3.4.0 shipped this graphic as resize-only, and unturned it draws exactly what that
+  version drew.
+
+  It is a third thing, distinct from the two that existed: `anchorVertex` makes *one* vertex
+  of an editable path inert, and `publishesAnchorHandleOnly` is about *how many* handles a
+  graphic publishes. Its tracker row still reads `N` for shape and handles, so it is listed
+  **upcoming** rather than counted as capability.
+
+- **APP-06 line and area coverage is closed** — every group at 100%. Twenty-six graphics
+  join the registry: the nine bearing lines and both navigational lines, nine maritime areas
+  (the launch, defended and ship-area ellipses and rectangles, the no-attack and active
+  manoeuvre zones, the AEGIS single target), the two convoys, `SearchArea` 152200,
+  `RadarSearchDoctrine` 200700, `CuedAcquisitionDoctrine` 200600, `MinedArea` 270800 and
+  `Defeat` 344300.
+
+  Three of those had been recorded as deliberate exclusions, and **the record was wrong** —
+  "excluded on purpose" had never been a reading of the plate.
+
+- **`MinedArea` (APP-06 270800, FM 1-02.2 table 5-20)** — a drawn area with `M` markers on
+  its boundary and the mine row inside, the unfenced sibling of `MinedAreaFenced`. The wire
+  is the whole of the difference between them, so one paint draws both and a `fenced` flag
+  picks; `minedAreaPaint` is exported alongside `minedAreaFencedPaint`.
+
+  It had been missed because Table A-32 lists 270801 *under* it, so a "parent rows are
+  headers" filter hid it — but 270800 carries its own Anchor Points block, and a header
+  does not.
+
+- **`Defeat` (APP-06 344300)** — four solid arrows converging on a `D`. Its proportions are
+  measured off the Template at 600 dpi rather than chosen: the tip stands 0.192 of the reach
+  off centre, the head is 0.222 long and 0.12 half-wide, the shaft 0.048. APP-06 only; FM
+  1-02.2 does not name the task.
+
+  Its Draw Rules cell is word for word Destroy's, so it takes Destroy's whole contract —
+  point-anchored, dropped at the crossed tasks' size, no rotation.
+
+- **New readers for the rebuilt point contracts**, all exported from the root:
+  `supportByFireAnchors`, `hairpinAnchors`, `arcAndArrowAnchorsFromClicks`,
+  `squareOntoBisector`, `railCrossingBase`, `supportByFireBase`, `RAIL_PREVIEW_GAP_PX` and
+  `SUPPORT_BY_FIRE_PREVIEW_REACH`. The two-rail crossings' own reader stays internal — the
+  generators and `normalizeDrawnBase` are the supported way in. Eighty names were added to the root entry point, two to
+  `/openlayers` and three to `/maplibre`; **none were removed from any of the three.**
+
+### Fixed
+
+- **The MapLibre sample sheet built its own bases, and built them wrongly.** Serialize and
+  restore always carried a complete bag, so a graphic drawn on one engine and opened on the
+  other was right — the fault only showed when the sheet was drawn *from* MapLibre, which is
+  what an operator sees, since the app restores from it. Measured before the fix, **53 of 318
+  graphics came out a different shape on the two sheets**:
+
+  - five plates need two dimensions from a one-number drag, and MapLibre read the pair only
+    in its *draw handler*. A sheet, a restore and an import each arrived with a radius and no
+    length, so a flat 2 km default supplied the other half: 3 km x 461 km, an aspect of 176
+    where the symbol is about 1.7 (`CuedAcquisitionDoctrine`, `DefendedAreaEllipse`,
+    `LaunchAreaEllipse`, `ShipAreaOfInterestEllipse`, and `TargetAreaRectangular` 240802)
+  - eighteen rectangular zones took their width from whatever zoom the sweep was started at
+  - `RadarSearchDoctrine` was given a one-band range fan, which describes a different symbol
+  - a double `storedOrder` in **both** sheets reversed eight tip-first graphics; because both
+    carried it, the two sheets agreed with each other and no parity check could see it
+  - the centre symbol had been unreachable for cover, guard and screen for a release and a
+    half, while the follow tasks were projected twice and placed off the world
+
+- **An unsized rectangular zone was a sliver.** Its width came from a constant whose comment
+  claimed it was "what the drawn defaults come to at an ordinary zoom"; a drawn half-width is
+  a screen constant, so the share a drag actually produces is 0.229 at 240 px, 0.125 at 440
+  and 0.069 at 800. A twentieth is the answer for an 1,100 px drag, which nobody makes. An
+  unsized zone is now stated as **half as deep as it is long**.
+
+- **A synthesised three-point base was a bar with a nub.** The twenty-two graphics whose
+  points are a front edge and a distance across it — the block family, the retrogrades, both
+  passages, the explosives set — put point 3 at 0.275 of the edge, where the stem is the part
+  that says which task it is. Point 3 now stands off by the edge's own full length.
+
+  Stating it as a distance rather than a ratio exposed a second fault underneath: the across
+  was documented as working in lon/lat and in projected metres alike, which is true of the
+  positions and false of the distance. A degree of longitude is `cos(latitude)` of a degree of
+  latitude, so the two sheets drew different shapes from one constant, and the degree sheet
+  drew a different shape in every row — 0.275 deep at the equator against 1.037 at 75 degrees
+  north. A caller laying out in degrees now says so.
+
+- **A count is not a reading, and four defects proved it** — each in a graphic that matched
+  the number of anchor points its plate states:
+
+  - the movement family's width grip sat on the corner of the arrowhead its Template leaves
+    unlettered, on all eight arrows
+  - 340700 counter-attack by fire's bracket stood 1.85 half-widths *outside* point 1, so the
+    anchor the operator placed was neither the tip of anything nor the end of the symbol
+  - 152100 support by fire drew a differently-shaped stand-in for every click before its
+    last, touching neither of the two points already placed
+  - eighteen picker thumbnails were built by a third synthesiser carrying its own copy of
+    the layout chain; nine drew a reversed base, so the cane arrows shipped as bare arches
+
+- **200600's white border is visible in the generated tiles.** It paints white because its
+  Note says so; on a white page that is an invisible symbol. Its own Note 2 reads *"Gray
+  background is used to show white border and is not part of the symbol"*, and the generator
+  now does what the plate does.
+
+- **Eight graphics were tagged `APP-06` only and are in FM 1-02.2 as well.** The four CBRN
+  contaminated areas (`BiologicalContaminatedArea` 271700, `ChemicalContaminatedArea`
+  271800, `NuclearContaminatedArea` 271900, `RadiologicalContaminatedArea` 272000) are FM
+  table 5-28; `MinefieldDynamicDepiction` 270707, `MinedAreaFenced` 270801 and `TripWire`
+  290500 are FM table 5-20; `Demonstration` 343300 is FM table 5-15, where the plate draws
+  the same `DEM` hook this library draws.
+
+  Every one had been classified on a text search of the manual that came back empty, and
+  **the search was the defect.** FM tables name a symbol by its position under a heading:
+  table 5-28's rows read `biological`, `chemical`, `nuclear` and `radiological` beneath a
+  heading `Contaminated area`, so the phrase "biological contaminated area" appears nowhere
+  in the document. `getSpecifications` and `listNamesBySpecification` now return these
+  eight under FM 1-02.2 as well, which is additive — nothing that was returned before has
+  stopped being returned. Across the release the split moves from 214 both / 69 APP-06-only
+  / 8 FM-only to **224 both / 85 APP-06-only / 8 FM-only**, and 309 graphics carry a
+  six-digit entity code. Pinned per graphic, by the table that carries it, in
+  `specifications.test.ts`.
+
+- **`docs/graphic-field-matrix.csv` / `.md` were four releases stale** and still listed
+  `axis of attack`, removed in 3.2.0. Regenerated; `npm run check:field-matrix` is new and
+  fails when they drift again.
+
+- **The README's `prepareFeatures` note** gave a stale count for the graphics that keep
+  every glyph on the graphic feature. Measured against the paint registry it is **127 of
+  317**; the denominator had been updated when the registry grew and the numerator had not.
+
+- **`docs/app6-field-validation.md` attributed the 3.2.0 amplifier changes to 4.0.0**, a
+  version that did not exist at the time. That included the range-fan kilometres-to-metres
+  change, which has no migration path, so the document named the wrong release for the one
+  thing a consumer most needs the right release number for.
+
+### Testing
+
+- **`engineRoundTrip`** takes every registered graphic out of one engine and into the other
+  and back, at two zooms, asserting the coordinates — the part a consumer reads as doctrine.
+  Nothing covered that trip before: the existing suites round-trip within one engine.
+- **`anchorVertexParity`** asserts the inert-vertex index against the library for all 317.
+- **`legacyFormatRestore`** opens a 3.4.0-shaped file on both engines, for all 317.
+
+## [3.4.0] — 2026-09-02
+
+**Three CBRN graphics finished, and the STRIKWARN zone redesigned around how it is
+actually drawn.** The tracker now records all 293 registered graphics as drawable,
+correctly shaped and fully editable.
+
+### Changed
+
+- **The multiple-strike minimum safe distance zone (APP-06 272101) is drawn from one
+  polygon, not two.** The operator traces zone 1; zone 2 is derived from it, held off by a
+  standoff that seeds at half a screen inch and is a real distance in metres thereafter.
+  Reshaping zone 1 reshapes zone 2 with it.
+
+  The plate has the operator place every point of both zones, with an equal number each.
+  The emitted symbol still satisfies that — the offset is a **miter**, one output vertex
+  per input vertex, not a buffer that would round corners into extra points.
+
+  **What it gives up:** a zone 2 that is not a uniform offset can no longer be drawn.
+
+  **Saved graphics are unaffected.** One saved before this carries no width and holds both
+  rings end to end; it still renders exactly as it did. The two forms are told apart by
+  whether a standoff is filed.
+
+  The standoff is editable as **Width (m)** in the properties dialog.
+
+### Added
+
+- `defaultStandoffMetres(name, groundResolution)` and
+  `MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX` — both renderers seed the gap from these, so
+  the same symbol cannot open with different gaps on the two engines.
+- `GeometryService.offsetRingOutward(ring, metres)` — a uniform outward miter offset of a
+  closed ring, winding-independent, with the miter capped so a near-reflex corner cannot
+  launch its vertex off the map.
+- `GraphicFieldSet.widthTyped` — says whether a graphic's width is **typed** or **measured
+  off the map**. A corridor's width is read from its rails and shown as a read-out; a
+  standoff has nothing to measure and must be an input. Presence alone cannot tell them
+  apart, so a host dialog needs this flag to pick the right control.
+
+### Fixed
+
+- A restore replayed a graphic's `width` through `setOffset` even when that width was an
+  amplifier rather than the holder's half-width, overwriting the stamped decoration size.
+- The properties dialog dropped a typed width when reopening, so the field showed empty and
+  offered to replace a real value with nothing. Safe lane's typed width had the same hole.
+- Editing a typed width changed the stored number without rebuilding the shape, so the gap
+  moved only when some later gesture happened to regenerate the graphic.
+- Fifteen graphics whose label is the `additionalInfo` amplifier were drawn without one in
+  the catalog and picker images — a symbol whose entire label is that field, the radiation
+  dose rate contour line, rendered as a bare outline.
+- The multiple-strike zone's catalog and picker images were a bare horizontal stroke: the
+  harness hands a line-based graphic two points, and two points cannot close into a ring.
+- **A label set in a break in a graphic's own line ignored `labelUsesHostilityColor`.** The
+  safe distance zones' `1` and `2`, and the radiation contour's dose, took the *line*
+  colour, so they came out hostility-coloured whatever the host had chosen. Every other
+  label in the library goes through `labelColorOf`, which is what reads that setting.
+
+
+### Changed
+
+- **The multiple-strike minimum safe distance zone (APP-06 272101) is drawn from one
+  polygon, not two.** The operator traces zone 1; zone 2 is derived from it, held off by a
+  standoff that seeds at half a screen inch and is then a real distance in metres. Editing
+  a zone-1 vertex reshapes both rings together, which the hand-traced form could never
+  guarantee.
+
+  The plate has the operator place every point of both zones — *"Points 1 through N/2
+  define the inner safe zone (zone 1). Points N/2 +1 though point N defines the outer zone
+  (zone 2)"* — with an equal number of points each. The emitted symbol still satisfies
+  that: the offset is a **miter**, one output vertex per input vertex, not a buffer that
+  would round the corners into extra points.
+
+  **What it gives up:** a zone 2 that is not a uniform offset — wider downwind, say — can
+  no longer be drawn. The plate allows it.
+
+  **Saved graphics are unaffected.** One saved before this change carries no width and
+  holds both rings end to end; it still renders exactly as it did. The two forms are told
+  apart by whether a standoff is filed, so nothing has to guess.
+
+  The standoff is editable as **Width (m)** in the properties dialog — the one thing about
+  the symbol that no handle can express.
+
+### Added
+
+- `defaultStandoffMetres(name, groundResolution)` and
+  `MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX`. Both renderers seed the gap from these
+  rather than each choosing a number, which is what stops the same symbol opening with
+  different gaps on the two engines.
+- `GeometryService.offsetRingOutward(ring, metres)` — a uniform outward miter offset of a
+  closed ring, winding-independent, with the miter capped so a near-reflex corner cannot
+  launch its vertex off the map.
+
+### Fixed
+
+- A restore replayed a graphic's `width` through `setOffset` even when that width was an
+  amplifier rather than the holder's half-width, overwriting the decoration size the
+  holder had stamped. The width families are unaffected — they file a width and no
+  decoration size.
+- The multiple-strike zone's picker thumbnail was a bare horizontal stroke: the harness
+  hands a line-based graphic two points, and two points cannot close into a ring.
+
+## [3.3.0] — 2026-09-01
+
+### Added
+
+- **A fourth entry point, `@zaes/tactical-graphics/thumbnails`** — one small SVG per
+  graphic, for a picker that has to show the operator what they are about to add. 293
+  thumbnails, keyed by `TacticalGraphicName`:
+
+  ```ts
+  import {getGraphicThumbnailUrl} from '@zaes/tactical-graphics/thumbnails';
+  <img src={getGraphicThumbnailUrl(name)} alt="" />
+  ```
+
+  `GRAPHIC_THUMBNAIL_SVGS` gives the raw markup, `getGraphicThumbnailSvg(name)` one of
+  them, and `getGraphicThumbnailUrl(name)` a percent-encoded `data:` URI built on first
+  ask and cached. Everything is inline — no external references, no bundler loader, no
+  network.
+
+  They are **drawn by the library's own paint layer**, through the same seam MapLibre
+  and the zaes.com catalog use, so a symbol and its thumbnail cannot disagree. Generated
+  by `npm run gen:thumbnails`; `npm run check:thumbnails` reports a stale file.
+
+  **The root entry point does not re-export them**, deliberately: `index.ts` never names
+  the module, so the ~630 KB of markup lands only on a consumer that imports the subpath.
+  Anyone using the package for geometry pays nothing.
+
+  What a thumbnail shows is tuned for a picker rather than for comparison against a
+  plate, which is what makes it different from the catalog tile of the same symbol:
+
+  - **areas** are drawn as a free-form bean, not the rectangle the catalog uses — a
+    rectangle is a *different symbol* here, and 94 traced areas were rendering as though
+    they were the 17 genuinely rectangular zones. Amplifiers are kept and held clear of
+    the boundary
+  - **point graphics** carry the designation and nothing else
+  - **line graphics** carry no text at all; a line's identity is its dashes, ticks and
+    arrowheads, and at picker size an amplifier only covers them
+  - **capture, seize, evacuate and recover** are drawn to the proportions in APP-06 Table
+    8-A-1 — a small circle and a long swept arrow, rather than the fat circle and stub
+    the evenly-spaced default base produced
+
+### Changed
+
+- Nothing in the published catalog SVGs on zaes.com. The generator gained a `--profile`
+  flag and the `catalog` profile's output is byte-for-byte what it was.
+
+## [3.2.0] — 2026-09-01
+
+**A plate-by-plate audit of the amplifier fields against APP-06 Chapter 8, and the
+corrections it turned up.** All 84 graphics that carry a distinctive field were read
+against their Chapter 8 row — name, template, draw rules and worked example — and compared
+with `graphicFieldRegistry`. The method and the full findings are in
+`docs/app6-field-validation.md`.
+
+**Shipped as a minor, on the maintainer's call, and the `Breaking` section below is
+therefore the only warning a consumer gets.** Semantic versioning would make this a major:
+five of the changes below alter what a *saved* graphic draws, and three of those have no
+migration path. A range fan stored before 3.2.0 draws a thousand times too small, a
+rectangular target will not restore as the same shape, and a radiation dose rate contour
+line loses its label. Read that section before upgrading.
+
+### Breaking
+
+- **`AxisOfAttack` is removed.** It was a generator registered under a hardcoded string with
+  no `TacticalGraphicName` member, no category, no controller and no field set — reachable
+  only by passing the raw name, and drawable in neither renderer. It appears in **neither
+  publication**: no APP-06 entity code, and nothing under that name in FM 1-02.2. The
+  registry and the enum now agree at **291**, where `listTacticalGraphicNames()` used to
+  return 292 against 291 members. A consumer passing `"AxisOfAttack"` will now get the
+  unknown-graphic error.
+
+- **`RangeFanBand.range` is metres, not kilometres.** Both range fan plates say so in as
+  many words — 242200 "All ranges in metres", 242100 "All units in metres" — and their
+  examples read `RG 5000` and `MAX RG(1) 28,500`. A 5 km band used to render `RG 5`. The
+  label now groups thousands, which answers the argument the old schema comment made for
+  kilometres without keeping the divergence. **There is no migration:** a fan saved before
+  3.2.0 carries a kilometre number and will draw a thousand times too small.
+- **The rectangular target is built from one anchor point.** APP-06 240802 "requires one
+  (1) anchor point" and states the shape outright — target length (AM1), target width (AM)
+  and target attitude (AN). It was a two-point drawn rectangle, so **a saved rectangular
+  target will not restore as the same shape.** It is no longer `isRectangular`, and the
+  new `RectangularTarget` generator takes a `Point` base.
+- **The radiation dose rate contour line's dose moved from `identifier1` to
+  `additionalInfo`.** APP-06 272200's Template carries one lettered box and it is `H`; its
+  Example fills it with `30 CGH`, a dose rate, which is exactly what a designation is not.
+  The dialog no longer offers a name. **A contour line saved before 3.2.0 keeps its dose in
+  `designation` and will draw without one** until the text is moved to additional
+  information — there is no read fallback here, because a name and a dose rate are
+  different things and silently promoting one to the other would be a guess.
+
+- **`Gap` is FM 1-02.2 only.** It carried APP-06 entity code `290600`, which is a different
+  symbol: *safe lane or gap* is a lane **through** an obstacle, lettered `T` / `AM` / `W` /
+  `W1` over two anchor points that set its length. FM 1-02.2 Table 5-16's `gap` is "an area
+  free of obstacles that enables forces to maneuver in a tactical formation" — two facing
+  brackets with `T` between them and no width amplifier at all. Both plates were read at
+  900 dpi. So `GRAPHIC_ENTITY_CODES.Gap` is now `null`, `GRAPHIC_SPECIFICATIONS.Gap` is
+  `FM 1-02.2` alone, and `getNameByEntityCode('290600')` returns the new `SafeLaneOrGap`
+  rather than `Gap`.
+
+- **Mobility corridor's free text moved from `identifier1` to `additionalInfo`.** Its
+  template is `H` over `B` with no `T`, and its example is a description of the going
+  rather than a name. The paint already called it field H in a comment while reading
+  `designation`, which is kept as a read fallback so saved corridors keep their text — but
+  the dialog now offers the additional-info input instead of a designation.
+
+### Added
+
+- **Two graphics, taking the registry from 291 to 293.**
+  - **`OverheadWire`** (APP-06 282003) — a line with a pylon standing on every anchor point,
+    not just the two ends: "additional points can be defined to extend the line". The pylon
+    is a screen-sized glyph, upright whatever the wire's direction, because the plate says
+    the symbol "varies only in length". It letters nothing at all.
+  - **`SafeLaneOrGap`** (APP-06 290600) — the lane through an obstacle described above, with
+    `T` / `AM` / `W` / `W1` stacked beside its entry. **It draws the same outline as the
+    FM's passage lane**, from the same function; the amplifiers are the whole of the
+    difference, so a lane carrying a name or a stated width can only be this one.
+
+- **Nine more lines offer a country code**, each from its own plate. The fire support
+  coordination, battlefield coordination, coordinated fire, battlefield handover, delay, no
+  fire and restrictive fire lines letter `T2 ( AS )` and bracket the code after the
+  designation; the decision line and the named area of interest **line** letter `T/AS` and
+  set the two apart with a slash. Field `T` stays the designation throughout — a second
+  designation with no first means nothing to an operator. The named area of interest *area*
+  (120200) letters no country code and is unchanged.
+
+- **The avenue of approach carries all three of its boxes.** Field `H` outside the casing
+  level with the `AA` label, and `ENY` at the rear of each rail when the graphic is hostile.
+  The generator now publishes the rail ends alongside the head span, so the placement is a
+  fact of the geometry rather than a guess in a renderer.
+
+- **Field `H` on `line, generic`** (110400), which boxes `H` beside `T` above each end and
+  runs the pair together as one line of text.
+
+- **Second date-time groups** on the assault crossing and the gap, and on the corps support
+  area — which also gains the two `ENY` flank marks its template boxes.
+
+- **The sector range fan has a handle for every bearing it prints.** Three per band now: the
+  rim on the centre bearing, and both ends of that band's arc. Dragging an arc end sets its
+  left or right azimuth, clamped so the wedge cannot close or invert.
+
+- **A width that nothing measures can be typed.** The dialog shows width as a read-out
+  because it is normally derived from the geometry — but the safe lane's `AM` is a *stated*
+  number on a symbol that is a single line, so nothing measured it and the field the plate
+  asks for could not be filled in. An input appears when there is no measurement to show.
+
+- New exports: `overheadWirePaint`, `safeLaneOrGapPaint`, `formatLaneWidth`,
+  `rotationToAzimuth`, and the doctrinal-completeness API above.
+
+- **`validateTacticalGraphic(name, properties)`** reports what a graphic still needs to be
+  doctrinally complete, with the plate each rule came from. A mobility corridor without its
+  echelon, restricted terrain without the cause of the restriction, a minefield whose field
+  H is neither `S` nor `+S`. `isTacticalGraphicComplete` is the boolean form, and
+  `getDoctrinalRequirements` exposes the rules. Deliberately sparse rather than an
+  exhaustive record: most of the standard requires nothing.
+- **The free, no and restrictive fire areas offer a country code.** Their plates letter the
+  pair `T2 ( AS )`, e.g. `FFA / 2AD (DEU)`. Nine graphics. **One** code, not two: a country
+  code pairs with a designation, so a host renders `countryCode` on `countryCodes` and
+  `secondCountryCode` on `countryCodes && identifier2`. Only boundary and the engineer work
+  line have two names to attach codes to. `countryCodePairing.test.ts` pins this for every
+  graphic.
+- **The airspace coordination areas offer a second designation.** Both publications give
+  them two name fields and merely letter them differently — APP-06 `T2`, FM `T1`.
+- **The rectangular target offers an attitude** (amplifier AN), backed by `rotation` in
+  degrees, and its **`length` now reaches the generator** — it was offered and accepted a
+  value that changed nothing.
+- **The rectangular target has two grips**, one per dimension: a length grip on the middle
+  of the leading short side and a width grip on the middle of a long side, both sitting on
+  the outline. Its handle contract is `['shape', 'offset']`, stated in the portable half so
+  both renderers agree. The sizing read-out now names the dimension being dragged — `WIDTH`
+  or `LENGTH` — and its line runs from the centre to the grip rather than projecting the
+  radius along the cursor's bearing, which for a rectangle ran out past the long side.
+
+### Fixed
+
+- **Country codes render in parentheses** — `326 EN BN (USA)`, not `326 EN BN USA`. APP-06
+  draws the brackets as part of the template, so they are the standard's punctuation rather
+  than something the operator types; a code that already carries them is passed through
+  unchanged. New `formatDesignationWithCountry` replaces two call sites that joined with a
+  bare space, one of them misusing `formatFullLabel`.
+- **The circular range fan stops printing `MIN RG` on every ring.** 242100 labels the
+  innermost band `MIN RG` and each band outside it `MAX RG(1)`, `MAX RG(2)`. The sector's
+  bare `RG` matches its own plate and is unchanged.
+- **`length` survives a save and restore.** It was missing from the persisted geometry keys.
+
+- **The country code reached MapLibre and not OpenLayers.** The table saying which lines take
+  one lived in the symbology registry, which MapLibre reads and OpenLayers does not — its
+  line style calls `defaultLinePaint(name)` with no options at all. One engine drew
+  `FSCL ALPHA (GBR)` and the other silently drew `FSCL ALPHA`, with the code round-tripping
+  correctly through save and restore the whole time. The table is now the paint's own
+  default, so neither engine has an opinion about it.
+
+- **The corps support area drew no hostile flank marks on OpenLayers.** Registering an area
+  label takes two edits — the symbology registry and `PAINT_LAYER_AREA_LABELS` — and only
+  the first had been made, so that engine fell through to the legacy switch while MapLibre
+  drew all three amplifiers.
+
+- **Rotating a sector range fan left its bearings behind.** They are absolute compass
+  bearings, and `resolveCenterAzimuth` prefers a stated centre azimuth over `rotation`
+  outright — so on a fan whose bearings had been typed, a rotate moved the axis arrow and
+  nothing else: the wedges stayed put, the printed bearings kept their old values, and the
+  arrow ended up pointing out of its own fan. Every stated bearing now turns with the
+  symbol.
+
+### Changed
+
+- `FIRE_SUPPORT_AREA` and `AIRSPACE_COORDINATION_AREA` were both named for graphics they do
+  not serve — the first is the fire *coordination* areas and not position area for
+  artillery, the second the engagement zones and not the ACAs. Split and renamed; position
+  area for artillery keeps a plain `T`, which its plate does show.
+
+- **The weapon/sensor range fans no longer offer a drag-resize.** A fan's size is not one
+  number — it is a list of bands, each with a stated range in metres and its own label — and
+  a whole-graphic resize can only multiply them all by the same factor, which turns a set of
+  real ranges into arbitrary ones and leaves the labels reading numbers nobody chose.
+  `allowedGestures` now returns `resize: false` for both, so a host draws no resize
+  affordance; the band editor and the per-band rim handles are unchanged.
+
+- **Thirty differences between a plate and the registry are recorded as deliberate.** Every
+  graphic has now been read against a publication. Most are a designation APP-06 does not
+  box where FM 1-02.2 does, and this library follows the FM. They are listed as differences
+  rather than reconciled, because "a person read this and chose it" is a different claim
+  from "these match".
+
+## [3.1.0] — 2026-08-31
+
+**Two fixes a consumer could not work around, and a field that was offered where nothing
+would draw it.** Additive throughout: nothing renamed, nothing removed.
+
+### Fixed
+
+- **`process` is no longer read at module load.** `const BASEMAP_ENABLED =
+  process.env.REACT_APP_BASEMAP !== 'off'` sat at module scope in the OpenLayers and
+  MapLibre entry points. `process` does not exist in a browser bundle, so importing either
+  one threw `process is not defined` for any consumer whose bundler does not shim it — and
+  `createBasemapStyle` is exported from the MapLibre barrel, so that half was unimportable
+  outright. Both reads are lazy and guarded now.
+
+  It survived nineteen releases because every check we run has a `process`: the consumer
+  tarball install, the build's smoke loads and the whole suite all pass in Node. The build
+  now asserts that no emitted file reads `process` at module scope.
+
+- **A lone range band's label stayed inside its ring.** The block was measured against its
+  neighbour's anchor, so a fan with one band was measured against nothing and held its size
+  while the ring shrank under it. Two or more bands never showed the bug, because the second
+  band is what holds the first one in.
+
+- **A sector's bearings stay on their arc.** They were anchored at `radius * 1.05` — a
+  metric offset baked into the geometry, so 5% of a 180 km band is 9 km of ground and the
+  bearing crept further off its edge the further you zoomed in. Anchored on the arc; the
+  clearance is the paint's own pixel nudge, which is constant at every zoom. Their scale is
+  capped against that arc too, where before it was not capped at all.
+
+### Added
+
+- **`countryCodes` on `GraphicFieldSet`.** `identifier2` meant "second identifier *and*
+  country codes", which is two different things: only boundary and engineer work line paint
+  a country code, and each pairs the **first** designation with `countryCode` and the second
+  with `secondCountryCode`. Final protective fire takes a second designation and no code at
+  all, so it was offered two inputs nothing would ever draw.
+
+  Read it from `getGraphicFields(name)` as before. If you *construct* a `GraphicFieldSet`
+  yourself — a mock, a fixture — it now needs the new key; every other consumer only
+  receives one and is unaffected.
+
+## [3.0.0] — 2026-08-30
+
+**A major, and it earns it.** Eight breaking changes, of which the four that reach data
+you have already **saved** are the ones worth planning for: the point order of
+thirty-two graphics, the base geometry of the eighteen rectangular zones, the base
+geometry of cover, guard and screen, and the amplifiers — both the two designations
+renamed, and the values four enums hold.
+
+Three of those four are handled on read. The zones migrate, the old amplifier names are
+aliased, and the recased enum values are translated. **The point order is not**, so it is
+the one that needs a migration on your side.
+
+The rest are compile-time: two enum members renamed along with their values, the members
+of two more enums recased to `lowerCamel`, and five exported identifiers respelled to US
+English. Your compiler finds all of them.
+
+### Changed — BREAKING
+
+- **Cover, guard and screen are drawn, not dropped.** APP-06 342201/342202/342203 are four-point symbols — *"Point 1 and Point 2 define the ends of one arrow and Point 3 and Point 4 define the ends of the other"* — and these were placed on a single anchor at a fixed screen size, marking a point on the display rather than a span of ground. The operator now draws **one arrow**, point 1 at the arrowhead and point 2 at its inner end, and the second arrow is derived from it: the standard's own symmetry, so the pair always agree in length and lie on one axis, which four hand-placed points cannot be relied on to do.
+
+  **No handles, and resize scales the whole symbol.** Every point but the two drawn ones is derived, and dragging one of those alone would break the symmetry the symbol is built on — so the generator publishes no handle points and the edit-mode resize scales the base, which is what these want. The centre symbol is capped at the same 96 px ceiling the escort and the follow tasks stop at, so zooming in does not inflate it.
+
+  Everything is a ratio of the drawn arm, recovered from the pixel constants the badge was built from, so the symbol looks as it did at whatever size it is drawn. One deliberate departure: the arms now sit close to what they surround — the gap is 0.42 of an arm, measured off the Template, where the badge's constants left a hole as wide as an arm was long. The fold in each arm, and the mirroring of the second, are the shipped shape and the plate's, unchanged.
+
+  The portable statements moved with it: `BASE_VERTEX_COUNT` says two points, `DROP_SIZE_PX` no longer names them (which is what tells a renderer to wait for the second click), and `ROTATE_ONLY_SYMBOLS` is empty — the library has no fixed-size symbol left.
+
+- **Every enum value a host can store is spelled one way.** Thirteen exported enums held their values in three conventions at once, and a single saved property bag could read `{hostility: 'Hostile/Faker', status: 'present', direction: 'ONE_WAY'}` — Title Case, lower case and UPPER_SNAKE in three adjacent fields. The dialogs print `Object.values(...)` straight into the menu, so the operator was shown all three side by side.
+
+  An enum value is either **what the operator reads** or **a literal somebody else wrote**, and there is no third kind. `TacticalGraphicStatus`, `TacticalGraphicConfidence`, `RouteDirection` and `AltitudeUnit` were the four holding neither, and now read as the words in the list: `Present`, `Planned`, `Known`, `Suspected`, `General`, `One Way`, `Two Way`, `Alternating`, `Meters`, `Feet`. Their members are `lowerCamel` like the other nine, so `RouteDirection.ONE_WAY` is `RouteDirection.oneWay` and `AltitudeUnit.Meters` is `AltitudeUnit.meters`.
+
+  Three enums are deliberately exempt, each for a stated reason. `TacticalGraphicName` is the dispatch key, a PascalCase identifier equal to its own key, with `getDisplayName()` as the label — the rule this library already followed. `AltitudeDatum` and `TacticalGraphicSpecification` hold someone else's literal: `MSL` / `AGL` / `FL` are printed on the plate exactly so, and `'FM 1-02.2'` is a document number.
+
+  **A graphic saved before this still loads.** `applyAmplifierAliases` gained `RECASED_AMPLIFIER_VALUES`, the sibling of the key-rename table one level down, applied at the same three read points. One direction only: nothing writes an old value back. `enumValueCasing.test.ts` asserts the rule by shape rather than by listing today's values, so a new enum is covered the day it is added.
+
+- **Thirty-two graphics store their drawn points in APP-06's order: the arrowhead is point 1.** The standard numbers an arrow symbol's anchor points from its tip — *"Point 1 defines the tip of the arrowhead. Point N-1 defines the rear of the symbol"* (152300 Avenue of Approach, and the same sentence across the offensive-maneuver family) — and this library filed them rear-first, so the head landed on the operator's *last* click.
+
+  The affected graphics are the axis-of-advance family, avenue of approach, both counterattacks, advance to contact, frontal attack, turning movement, mobile defense, the seven retrograde canes, exploit, both fixes, breach, bypass, canalize, clear, both blocks, penetrate, relief in place, and fields of fire. `TIP_FIRST_GRAPHICS` is the list.
+
+  **Nothing about a rendered symbol changes** — the shape, its decorations, its handles and its labels are what they were. What changes is the order of `geometry.coordinates` on the base a consumer draws, saves and restores, and therefore which end of a drag the arrow points at.
+
+  **Graphics saved by an earlier version are not migrated** and will render with their arrow at the opposite end. There is no version marker in `properties.tacticalGraphic` to detect them by; if you hold saved data for any of the thirty-two, reverse those coordinate arrays on load.
+
+  Twenty-two graphics whose point order the standard already agreed with are untouched — the six drawn from anchor points, demonstration, the obstacle bypasses, the swept-arc tasks, exfiltrate and infiltrate (numbered *to* the tip), the ferry and raft site, and the four direction-of-attack graphics, which APP-06 leaves free.
+
+  APP-06 also spends its **last** anchor point on an arrow's width; this library still carries width as a `width` / `radius` amplifier in meters. That divergence is unchanged.
+
+- **`TacticalGraphicCategory.OffenceOperationsPlanning` is now `OffenseOperationsPlanning`**, and its value changed from `'Offence Operations Planning'` to `'Offense Operations Planning'`. Both the member name and the string read out of `GRAPHIC_CATEGORIES` change.
+- **The two designation amplifiers are renamed: `label` is `designation`, `secondId` is `secondDesignation`.** Both `TacticalGraphicProperties` and `GraphicLabels` change, so the rename reaches the saved bag, the style functions, the Feature Properties dialog and any host reading amplifiers off a feature.
+
+  They are fields **T** and **T1** — FM 1-02.2: *"T — Identifies a unique designation"* — and the old names said neither what they were nor which was which. `label` also collided with the three other senses of that word in this library: the anchor features `renderTacticalGraphic` returns, the `role: 'label'` tag, and `GraphicLabels`, the bag it is a member of. `readGraphicLabels(f).label` read as the label of the labels and was none of them.
+
+  They are deliberately **not** `identifier1` / `identifier2`. Doctrine numbers these T and T1, so `identifier1` would be field T and `identifier2` would be field T1 — off by one against the plate a reader would check them against. `designation` / `secondDesignation` also matches the `countryCode` / `secondCountryCode` pair already in the schema.
+
+  **Saved data is not broken.** Unlike the point-order change above, this one is aliased: `applyAmplifierAliases` (exported) fills the current names in from the old ones, and it is applied wherever a stored bag is read — `readTacticalGraphicProperties` and therefore `renderTacticalGraphic`, both renderers' style paths, and both engines' `restore`. Nothing writes the old names back, they are absent from the types, and a bag carrying both keeps the current one. A file written by 1.x or 2.x opens with its designations intact and migrates the next time it is saved.
+
+  `RangeFanBand.label` is untouched — a band's own label is not field T.
+
+- **`AltitudeUnit.Metres` is now `AltitudeUnit.Meters`**, and its value changed from `'metres'` to `'meters'`. Both the member and the string it resolves to change, so anything persisting or comparing the value needs updating.
+
+  Both renames are for the same reason: the library implements a US Army field manual for US programs, and the neighboring members already used US spelling — `DefenseOperationsPlanning` sat three lines from `OffenceOperationsPlanning`.
+
+- **Five exported identifiers were respelled to US English**, as part of a sweep of the whole source tree:
+
+  | Was | Is |
+  |---|---|
+  | `decorationMetres` | `decorationMeters` |
+  | `arrowheadMetres` | `arrowheadMeters` |
+  | `crossedMissionTaskMetres` | `crossedMissionTaskMeters` |
+  | `centreSegmentIndex` | `centerSegmentIndex` |
+  | `centreOf` *(MapLibre entry point)* | `centerOf` |
+
+  These are the only renames that reach a consumer. The sweep changed roughly 1,350 further occurrences across 134 files — internal identifiers, comments and documentation — none of which is importable.
+
+- **The eighteen rectangular zones take a two-point base and a `width`, not a drawn box.** APP-06 says so in the same words eighteen times — *"This symbol requires two anchor points and a width, defined in metres, to define the boundary of the area. Points 1 and 2 will be located in the centre of two opposing sides of the rectangle"* (240202, and seventeen more).
+
+  `renderTacticalGraphic` now **throws** if one of them is handed a `Polygon`:
+
+  ```
+  Graphic "FreeFireAreaRectangular" expects a LineString base geometry, got Polygon.
+  ```
+
+  The eighteen are the rectangular variants of free fire area, no fire area, restrictive fire area, position area for artillery, artillery target intelligence zone, call for fire zone, target build-up area, target value area, zone of responsibility, censor zone, critical friendly zone, dead space area, blue and purple kill boxes, target area, fire support area, airspace coordination area, and the PsyOps zone. `isRectangular(name)` is the test.
+
+  **Saved data is migrated, on both engines.** `restore` reads the ring, recovers the axis and the width, and rebuilds the zone editable. A consumer calling the generator directly can do the same: `axisFromRectangleRing(ring)` is exported from the root entry point and returns the two anchor points and the half-width in meters.
+
+  What this buys is the reason to accept it: the width can now be **dragged**, the zone can be **turned**, and points 1 and 2 exist in the saved description instead of nowhere. Each gesture owns exactly one dimension — a side handle changes length, the bottom handle changes width, rotate changes neither.
+
+### Added
+
+- **`stylesFor(name)`: which style functions draw a graphic.** A host that renders saved graphics into its own layer — its own features, its own ids — needed the style pair each graphic uses, and that fact lived only in the holder classes, which are internal. So consumers guessed, and the guess is always `getStyle`, because it is exported, takes a name and returns styles.
+
+  `getStyle` is the **area outline** dispatcher. Its fallback is `areaOutlinePaint`, it draws no text at all, and for the two hundred graphics that are not areas it is simply the wrong function. A downstream integration shipped with every area unlabelled and every arc mission task missing the letter that identifies it — `R`, `I`, `AD` — because `getStyle` was applied to the label feature too. Nothing errored; the symbols were quietly wrong, which is the failure mode a missing API produces.
+
+  `stylesFor(name)` returns `{graphic, labels}`, read off the holder the controller registry would build rather than restated in a second table that would drift from it. **`labels` is `undefined` for the 84 graphics that keep every glyph on the graphic feature** — a phase line's `PL ALPHA` rides its own line work — so a host knows not to style their label geometry and draw the designation twice.
+
+  Exported from `@zaes/tactical-graphics/openlayers`. `getStyle` is unchanged and still correct for what it always was.
+
+- **`hideAmplifiers`: draw a graphic and its name, and hide the rest.** A planning map carries a lot of graphics, and most of what an operator types on one is reference detail rather than something to read at a glance. Set it and dates, altitudes, widths, field H and a corridor's information block stop drawing.
+
+  **The symbol itself is never hidden.** A cover's `C`, a mission task's letter, a `PL` prefix and a corridor's `ACP 2` are the graphic rather than an annotation on it. `TextSpec.kind` is where a paint says which a mark is — `doctrinal`, `designation` or `amplifier` — and a mark that says nothing counts as doctrinal, because a stray date is noise and a missing letter is a different symbol. Both renderers apply the same function where paints become marks, so a new paint inherits the behaviour without knowing the toggle exists.
+
+  **It is a renderer input, not part of the graphic.** `PaintFeature.hideAmplifiers`, supplied at render time the way `graphicSize` is — set it on the OpenLayers feature or on the MapLibre `PaintFeature`. It is deliberately not a field on `TacticalGraphicProperties`: it says nothing about what the symbol *is*, two identical graphics side by side may reasonably differ, and none of it should travel in a file another operator opens. A host keeps the choice wherever its other view state lives; the demo keeps a set of ids in local storage, which is the worked example.
+
+- **The two follow tasks take a host-supplied unit symbol where field T goes.** Same seam as the security operations and the escort — `setSecuritySymbolProvider` / `setGraphicSecuritySymbolProvider`, and nothing in this package imports milsymbol, so a host that registers nothing gets the designation the operator typed. When a provider answers, the symbol **replaces** the designation and the body widens to hold it: a picture of the unit says more than its name.
+
+  `followTaskSymbol` is the single statement of where it goes and how big it is, exported from the root entry point and read by the paint — which cuts the body to fit and skips the text — and by both renderers, which draw the image. Placing it from a second calculation is how a symbol ends up not sitting in its own hole, which is the lesson `escortSymbolStyle` already carries.
+
+- **Three tactical mission tasks: seize (342300), follow and assume (341200), follow and support (341300).** All three are defined by FM 1-02.2 *and* APP-06, so they carry both specifications and their entity codes.
+
+  **Seize** is the swept arc its family already draws, lettered `S` — FM 1-02.2 draws a circled unit with an arc arrow to the objective, and APP-06 342300 agrees. It differs from capture (343000) only in that letter, which is also why capture is APP-06 only and seize is not: seize is an FM 3-90 mission task and capture is not.
+
+  **The two follow tasks** are one shape read from the rear point to the tip — a hollow body carrying field T, a connector, and a head — and they differ in exactly two ways: assume dashes its connector and ends in an open chevron, support runs solid into a filled head and notches its rear edge. Both take two anchor points with point 1 at the arrowhead, so both are in `TIP_FIRST_GRAPHICS`, and both are drawn at paint time because the rule says the symbol "varies only in length".
+
+  Two details worth recording. APP-06 341200 notes that *"the dashed lines in this symbol shall be displayed in present and anticipated status"*, so the connector's dash is its own rather than the status dash — a planned follow-and-assume dashes for both reasons and the two must not cancel. And the standards disagree on the support variant's head: FM 1-02.2 draws it open, APP-06's example fills it. The fill is drawn; the divergence is recorded in `followTaskPaints.ts` rather than resolved silently.
+
+- **`prepareFeatures(rendered)` on the `/openlayers` entry point — one call from rendered GeoJSON to features you can put on a map.** Three steps had to happen in the right order: project the GeoJSON, ask `stylesFor` which style functions draw this graphic, and publish the shape's extent to the label feature. Miss the second and a designation is drawn twice; miss the third and every fitted symbol comes out at a fixed size in metres.
+
+  Missing the third fails **silently** — nothing throws, nothing warns, and the map looks plausible until somebody notices a symbol that does not grow with its shape. A host should not have to know a checklist to avoid that, so this is the checklist. No new capability: the same three calls, in the order they have to happen, and every part stays exported for a host that wants to do it by hand.
+
+- **`publishGraphicExtent(labels, graphic)` on the `/openlayers` entry point.** Several symbols are *fitted to the area they land in* rather than drawn at a fixed size — the CBRN triangle, the airfield zone's crossed runways, the sector-1 modifier glyphs, and every label held to a share of its own shape. The fit reads `bounds` and `ring`, and those ride the **label** feature, which is a bare anchor point with no shape of its own to measure.
+
+  A holder built by this package publishes them as a side effect of drawing. A host that builds its own features — the shape `stylesFor` exists to serve — published nothing, so `fitSymbolScale` fell back to its no-bounds answer and every fitted symbol came out at a fixed size in metres. Measured in a consuming app, a CBRN triangle drew **12 px across** at a zoom where its area was over 500: right while the graphic was being drawn, because the draw is holder-backed, and tiny the moment it was committed.
+
+  The keys therefore stop being private to the holders. This is the same stamp `AreaGraphicBase` makes, exported so a host can make it too, and so that what the keys are called stays this package's business rather than something a consumer reverse-engineers. A graphic with no interior — a line, a point — publishes an extent and no ring, because a ring invented from a bounding box reports room that is not there.
+
+- **Seventy-three graphics, taking the registry from 216 to 289.** APP-06 Chapter 8 is closed: everything in scope is built, drawn on both engines, and carries its entity code. By family:
+
+  | Family | Graphics |
+  |---|---|
+  | Lines | avenue of approach, counterattack by fire, light line, generic line, handover line, named area of interest line, holding line, no fire line, battlefield coordination line, decision line, mobility corridor, radiation dose rate contour line |
+  | Areas | generic area, bomb area, bridgehead, penetration box, joint tactical action area, submarine action area, submarine generated action area, enemy prisoner of war holding area, regimental support area, human terrain, extraction zone, fighter engagement zone, terminally guided munition footprint, airfield zone, zone of fire, restricted and severely restricted terrain, artillery maneuver area, artillery reserved area |
+  | Target acquisition | target build-up area, target value area and zone of responsibility, each in its irregular, rectangular and circular form |
+  | CBRN | the four contaminated areas, the three toxic-industrial-material variants, the three contour lines, and the two minimum safe distance zones |
+  | Protection | mineline, mine cluster, trip wire, raft site, fortified position, minefield dynamic depiction, mined area fenced, and the three obstacle bypasses |
+  | Mission tasks | capture, deny, escort, demonstration, evacuate, recover, cordon and knock, locate, advance to contact, battle position prepared but not occupied |
+  | PsyOps | the three PsyOps zones |
+
+- **`GRAPHIC_ENTITY_CODES`** — a graphic addressed by the six-digit identifier the standard gives it. 280 of the 288 enum members carry one; the eight that do not are the FM 1-02.2 graphics APP-06 does not publish, and `null` means exactly that. `GRAPHIC_SPECIFICATIONS` says which standard defines each: 211 in both, 69 APP-06 only, 8 FM 1-02.2 only.
+
+- **APP-06's Sector 1 and Sector 2 modifiers**, drawn rather than spelled. Sector 1 carries Table 8-24's seven mine glyphs, the mobility and terrain types; `MINE_GLYPH_EXTENT` states each glyph's own reach, so a row of them is spaced by what is in the slot rather than by the slot.
+
+- **Field H (`additionalInfo`)** on the graphics whose plates carry it.
+
+- **One edit mode, on both engines.** Four global gesture modes became a single `edit` button with per-graphic selection and a dashed selection box. The affordances are DOM above both maps, so an engine owes only `selectionBox()` and `beginGesture()`.
+
+- **A live draw preview on both engines** — the symbol is drawn while it is being drawn, not only when the sketch closes.
+
+- **`DERIVED_ANCHOR_GRAPHICS`** — a symbol whose anchor points describe one shape at one set of proportions. The operator places the first point and the rest are re-derived on every build, so a file whose points had drifted resolves to the canonical shape. Demonstration is the first member.
+
+- **`npm run check:readme-samples`** compiles every README code sample against `dist/`, so an example cannot outlive the API it demonstrates.
+
+- **`CORRIDOR_GRAPHICS`** — the eight air-coordinating corridors that share one shape: air corridor, low level transit route, minimum risk route, safe lane, special corridor, standard use Army aircraft flight route, transit corridor, unmanned aircraft corridor. Exported for the same reason as the other symbology tables: which graphics carry the corridor's rails, ACP markers and amplifier block is a fact about the symbols, and anything drawing them has to agree on the membership.
+
+- **`npm run drive` covers Export and Import.** The serialization under them was already covered exhaustively in jest; the layer either side was covered by nothing — the Blob and the `<a download>` click going out, `JSON.parse(await file.text())` coming back. The driver now presses Export, catches the download, clears the map, feeds the file back through the Import input, and compares whole `tacticalGraphic` bags rather than named fields, so it keeps working across a schema rename. Internal tooling.
+
+- **`npm run shoot-gallery` frames the shot on the graphics.** It used to capture the app's default view, which left a third of the frame as empty ocean; it now zooms to fill the visible map from the drawn extent. Internal tooling; the committed `docs/images/sample-gallery.png` is regenerated from it.
+
+- `scripts/gen-catalog-svgs.js` — generates one SVG per graphic by asking the library to paint it and transcribing the resulting marks, rather than drawing anything by hand. Internal tooling; not part of the published package.
+
+- The progress tracker gained a `Graphic Key` column linking each row to its `TacticalGraphicName` member, so the README generator can validate itself against the enum and report graphics separately from doctrinal variants.
+
+### Changed
+
+- **The README documents every selector enum in full.** `hostility` trailed off after four of its seven values and `direction`, `mineType`, `mobility` and `terrain` named none at all — a consumer cannot guess a string enum's members, and a value outside the set is ignored rather than rejected, so an incomplete list shows up as an amplifier that silently does not draw. Each field now names its enum, a table lists every accepted value, and a test asserts the table against the enums so it cannot drift.
+
+- **A label is the size the host configured, capped by the graphic — and no longer by the zoom it was drawn at.** `labelScale` multiplied the configured size by how far the map had moved since the graphic was drawn, clamped to [0.3, 1.5]. That clamp was what stopped a label swamping a small symbol, and `capLabelToGraphic` does that job properly now — against the graphic itself rather than against a moment in time.
+
+  What the old rule cost: two identical graphics could carry labels five times apart because of *when* someone drew them, and a saved map came back with different label sizes, because the drawing zoom is live view state and is deliberately not written to the file — a restore stamps whatever zoom the loading session opens at. Measured on the sample sweep, **116 of 224 labels changed size** when that remembered zoom changed. It is **0** now, at every zoom.
+
+  Nothing moves at the zoom a graphic was drawn at, where the old multiplier was 1. Zoomed out the cap was already deciding. Zoomed in, labels stop growing to 1.5x and stay the size that was asked for. `labelScale` remains as the fallback for a graphic that publishes no extent — none of the 202 labelled features in the sweep are in that position, but a consumer building features by their own path could be.
+
+- **`WIDTH` alone no longer brings a corridor's amplifier block into being.** The block's other five lines are things somebody typed. `width` is not: the holder mirrors the corridor's drawn half-width into the amplifier on every rebuild, and typing a width resizes the corridor to match, so the value can never disagree with the shape. A freshly drawn corridor got a block anyway, reading `WIDTH: 391 km` back at the person who had just dragged it — the only thing in it, on the preview and after the draw finished.
+
+  The width is now a *supporting* line: printed in its doctrinal place under the name whenever the block is drawn, never the cause of it. Enter a name, an altitude or a DTG and the block appears with the width alongside.
+
+- **A corridor draws its name at one size, on the legs that can hold it.** Each leg was sized independently, because legs differ in length and a label must not overrun the one it lies along. The consequence was that a corridor's own name rendered at as many sizes as it had legs: measured in a consuming app at a single zoom, one four-leg corridor drew `AC CORRIDOR BLUE` at 53, 78, 121 and 163 px. Four labels each politely fitting reads, on the map, as a rendering fault.
+
+  A corridor has one name, so it gets one size — the largest any leg can carry, held to the corridor's width — and a leg that cannot hold the label at that size is **skipped**, the way a road name appears only where the road has room for it. Sizing to the *shortest* leg was the alternative and it is worse: one stub leg would shrink the name along the whole corridor.
+
+  At least one leg always draws, by construction: the size is capped by the widest leg's own allowance, so that leg passes the test. The amplifier block is unaffected — it was already held to the largest of the per-leg answers, which is the same number this now draws with.
+
+- **A resize scales the sizes a graphic carries beside its vertices** — a corridor's rails and a line graphic's chevrons grow with the line instead of staying where they were. An area's `decorationSize` is deliberately exempt: on a hostile encirclement it is the width of the *gaps* the outline is cut into for the `ENY` amplifiers, a hole sized to hold text rather than a decoration sized to match the shape.
+
+- **Every screen-sized quantity is measured where the graphic is**, not at the equator, so a symbol drawn at 60° north is the size it looks.
+
+- **Turn and scale happen on the screen, not on the sphere.** Measuring a rotation in EPSG:3857 at world zoom shows several degrees of pure Mercator distortion that is not in the gesture.
+
+### Removed
+
+- **The MapLibre half's last two beliefs that cover, guard and screen are screen-sized.** They were fixed-size badges pinned to a screen constant until the four-anchor change above. Two pieces survived it: `securityOperationSize`, which overwrote the caller's `radius` with `SECURITY_OPERATION_HALF_EXTENT_PX × drawingResolution`, and their entry in `isScreenSized`, which rebuilt their geometry on every zoom.
+
+  Neither changed the picture — the generator builds the arms from the base and ignores `radius`, so rendering a cover with the override and without gives byte-identical geometry, and the per-zoom rebuild re-derived exactly what was already there. **Inert rather than wrong, which is worse in one way:** they put a bogus ground distance in the saved bag, spent work on every zoom for nothing, and left this half of the codebase asserting that MapLibre treats these three as screen-sized while OpenLayers routes them through `line(2)`. Read side by side, the two engines appeared to disagree about what a cover is. They did not.
+
+  `securityOperationsAreNotScreenSized.test.ts` pins the property that made the removal safe rather than the removal itself: a radius is ignored, and the size follows the base. Nothing in the library is screen-sized *geometry* now; what `isScreenSized` still answers for is a baked decoration, which is a decoration size and not the shape.
+
+- **`SecurityOperationsController` and `SecurityOperationGraphicBase`** (`/openlayers`). They placed a security operation on one anchor and sized it from the live map resolution; with the graphic drawn from two points there is nothing for them to do, and the generator they depend on no longer accepts a point base — so they could not work, not merely go unused. The three graphics are ordinary line holders now. A host that referenced either directly needs `getController(name, resolution)`, which is what the app has always used.
+
+### Fixed
+
+- **An area's centred label is capped against its shape too, at a larger share (0.4) than an outside label's 0.25.** A centred label is the shape's name and is meant to fill some of it; an outside label is an annotation beside it. The ring fit still has the last word, because only it can keep text off a concave outline — but the ring fit stops a label *overflowing* a shape and says nothing about one that fills it, which is what the zoom anchor had quietly been doing. Measured: the rectangular fire areas held 0.41 of their box at the drawing zoom and grew to 0.52 zoomed out; they now hold **0.40 at every zoom**.
+
+- **A label may no longer outgrow its own symbol.** `labelScale` floors its zoom multiplier at 0.3 so text stays readable, and the graphic under it has no floor at all — it is ground, and ground shrinks with the zoom. Far enough out, every zoom-anchored label was standing on a symbol smaller than itself: measured on the sample sweep three levels out, the envelopment's `E` reached 0.80 of the graphic it sits on and the turning movement's `T` 0.34, against the avenue of approach's steady 0.23.
+
+  Every label is now capped at **0.25 of the graphic's own on-screen size** — `LABEL_GRAPHIC_SHARE`, applied in `scaleOf` and at the handful of paints that source a scale for themselves. Against the same dimension the share *is* the ratio you see, so this number is not a knob: it is the measured ratio of the two graphics that already read correctly. It is a cap, never a raise, so nothing moves at the zoom a graphic was drawn at.
+
+  Turning movement, capture, seize, recover, evacuate, disengage, penetration, pursuit, the block family, the withdrawal family, the artillery areas' on-line labels and the boundary-break lines all now hold a constant ratio at every zoom, where each of them climbed before.
+
+- **A label's cap is told the size it actually renders at.** A scale is a multiplier on a font, and this library renders two: 16 px for most labels and 24 px for the ratio-locked families. The cap assumed 16 everywhere, so every 24 px label — the relief in place, the retrogrades, the block family, the crossed mission tasks — was capped half again too high and several never bit at all. The relief in place, reported as still growing, now holds 0.25 at every zoom where it climbed from 0.27 to 0.34.
+
+- **The corridors' amplifier block is held to the designation drawn on the corridor.** It sits outside the graphic and the designation sits on it, so the designation is what a reader measures everything else against; an amplifier larger than the symbol's own name reads as the more important of the two, which it is not. Capped at the largest of the per-leg designations, so one short leg cannot shrink the block to nothing.
+
+- **The area families' outside labels take the cap too** — the date-time group hung off the upper-left corner of a rectangular, circular or irregular zone, a position area's four `PAA` markers, and a group of targets' designation on its northern edge. Their centred labels are deliberately left alone: those are already held by the ring fit, which shrinks a label until it genuinely fits the outline, and capping them again would only make a label smaller than the shape it comfortably sits in.
+
+- **The corridors' amplifier block sits outside the corridor at every zoom.** It anchored on the bounding box of the *turning points* — which are the center line, with the rails half a width either side — so zooming in grew that half width until the block was printed inside the corridor. Lifting it by the corridor's own radius fixed a straight corridor and not a bent one: a corridor that turns north climbs past whatever a local lift can clear, by fifteen thousand pixels at six zoom levels in. The block now sits **west of the graphic's whole extent**, level with the north-west-most turning point — outside for any shape at any zoom, and still beside the vertex it belongs to. Its designation is capped by the leg it lies along *and* by the corridor's width, so it cannot print over its own rails.
+
+- **OpenLayers publishes a graphic's extent to its label features**, which MapLibre's adapter has always done. It came from four keys that only `AreaGraphicBase` stamps, so any rule measured against a graphic's size worked on one engine and quietly did nothing on the other. It now falls back to the holder's own drawn feature through the registry that already maps features to holders — nothing to stamp, and nothing for a new holder to remember.
+
+- **The follow tasks' unit symbol stops growing at 96 px.** Everything else about these two is drawn in metres, so zooming in makes all of it bigger — right for the body and the arrowhead, wrong for the symbol inside them: measured in the browser, it reached 279 px in a 436 px body. It now stops at the ceiling the escort already used and `setSecuritySymbolSize` is clamped to, so every centre symbol agrees on how large it ever draws. The escort's *floor* is deliberately not copied: its size comes from the span of a bar that can be short while the graphic is still perfectly visible, where this one comes from the body it sits inside, and a symbol held at 8 px inside a 4 px body is bigger than its own container.
+
+- **The escort and the two follow tasks offer an affiliation.** All three are tactical mission tasks, which carry no amplifiers, so hostility was switched off for them — and all three draw a host-supplied unit symbol, whose frame *is* its standard identity. The one amplifier that decides what the symbol looks like was the one that could not be set, so it drew `pending` for ever. The exemption reads `CENTER_SYMBOL_GRAPHICS` rather than naming them again: a graphic cannot gain a centre symbol without gaining the identity that frames it. Their line work follows the affiliation too, as `Exfiltrate` already did.
+
+- **The follow tasks' unit symbol fits the body it sits in.** Two ways it did not. The support variant's rear edge is a notch cut forward into the body, and the content was centred on the whole body — so the notch ran through the middle of the symbol, and through field T before it. And both renderers size an icon by its *width*, letting the height follow the image's own aspect, so a box measured as though the image were square was not a box: a 2525E land unit runs from 0.86 tall per unit wide to 1.23, and the hostile frame is 1.18. The symbol is asked for at a width that fits whatever comes back, and both it and field T are centred on the interior the body actually offers.
+
+- **A corridor's name never runs into an `ACP n` circle.** Every turning point carries one, and the designation is centred on the leg between two of them — but it was measured against the *whole* leg, so it grew straight through the circles at either end, and the closer together they were the more of the name they covered. It is now measured against the clear run between them, `leg − 2 × radius`.
+
+  A leg whose circles already meet carries no label at all, which is the only honest answer: there is no size at which the name would not collide. The amplifier block is deliberately exempt from that zero — it sits outside the graphic, cannot collide with anything, and when no leg can carry the name it is the only thing left saying what the corridor is.
+
+- **A label's size no longer depends on who built the feature.** `scaleOf` asks the host how big a label should be and the symbol how big it may be — and it used to ask a third thing whenever the graphic's extent was missing: the zoom the operator happened to be at when they drew it.
+
+  That fallback made the answer depend on the *renderer's bookkeeping*. A holder-backed feature carries bounds, which the OpenLayers layer recovers through the registry that maps features to holders; a host that builds its own features carries none. So the same corridor at the same zoom drew its designation at **1.00** in this library's own app and **0.55** in a consuming one, with nothing in the configuration to explain the difference.
+
+  The zoom anchor is the thing `scaleOf` was changed to stop using — it is not saved with the graphic, so a label sized by it cannot be reproduced — and leaving it as the fallback kept it in use for exactly the consumers who had no way to see why. A missing extent now means **no cap**, not a different rule.
+
+- **The ambush's arrowhead line kinked where the hashes ended.** APP-06 141700's Draw Rules make it one line — *"the rear of the arrowhead line shall connect to the midpoint of the line between points 2 and 3"* — and on a 120 degree arc that midpoint is `r·cos(60°)` = 0.5r out along the axis, exactly where the hashes start. The generator emitted it as two: a seventh hash from 0.5r to r, then an arrow from the bulge at r out to the tip.
+
+  Both halves are walked from the centre on the same bearing, so they are collinear in the plane the generator works in and every measurement of *its* numbers agreed. But each was emitted as a bare pair of endpoints, and a chord does not follow the great circle it subtends — so the whole of the curvature landed on the join, as a corner. Drawn at the demo's opening zoom the two halves met at **7.1 degrees**, plainly at different angles; the pieces that read as one line have to be one line for the corner to have nowhere to go.
+
+  It is now a single run from the chord to the tip, and the hash on the axis is gone with it — which is also what APP-06's Template and Example draw, six hashes with none on the axis and the arrowhead line passing between them. The arrowhead's barbs now lean off the run as rendered rather than off the shorter piece. `Ambush.generateGraphics` emits nine sub-lines where it emitted ten.
+
+- **A draw's double-click zoomed the map for a host that builds an engine per draw.** The map's `DoubleClickZoom` is pulled off for the duration of a draw and put back on the next press that is not the second half of the double-click that ended it. That state was held **per manager**, and a host may build more than one manager on one map — a fresh engine for each draw, another for an edit session.
+
+  So the second manager looked for a `DoubleClickZoom`, found none because the first had already removed it, and recorded that it had nothing to restore — while the first manager's armed listener was still on the viewport and reinstalled the zoom on the next press. For a host that destroys its engine at `drawend`, that press is the first click of the *next* draw, which then ran with the zoom installed and jumped when the double-click ended it.
+
+  The suspension is keyed on the map now, so every manager on it sees the same one, and `destroy()` gives the interaction back rather than leaving it detached with a listener behind to reattach it at some later moment. `doubleClickZoom.test.ts` walks the reported sequence — draw, destroy, draw again — and three of its five fail against the old code.
+
+- **A stored metre is a ground metre, and the paints were treating it as a projected one.** The portable description states *real* distances — a radius, a corridor's half-width — while a map resolution is projected metres per pixel, and Web Mercator inflates those by `1 / cos(latitude)`. `metres / resolution` is therefore the symbol's on-screen size only on the equator; everywhere else it under-reports, by 1.6x at 50 degrees and **5.8x at 80**.
+
+  `mercator.ts` already states this rule for the generators, which convert the other way when a symbol is drawn — a corridor dragged out at 60 degrees came out 79 px wide instead of 40 until they did. The paints had the same defect on the way back out, at the three sites that read a stored size: a corridor's ACP circle radius, the crossed mission tasks' label width, and the base defence zone's radius.
+
+  The consequence was a cap fed a wrong number. On a plan near 80 degrees north a corridor 40 px wide measured as 7, and its designation was shrunk to fit the 7 — scale 0.30 where the same corridor on the equator got 1.50.
+
+  **It was invisible because every test and every demo screenshot was taken near the equator.** `paintLatitude.test.ts` now draws the same graphic at 0, 35, 60 and 80 degrees and asserts the on-screen size does not move; `groundPixels` is the one conversion, beside `featureLatitude`, which recovers the latitude from the geometry rather than reprojecting through a map library.
+
+- **Thirteen graphics kept an amplifier when told to show their name only.** `hideAmplifiers` is enforced per *mark* — `withHiddenAmplifiers` drops a paint whose `text.kind` is `amplifier` — but several paints stack an annotation and a designation into one mark, which cannot be filtered apart. The amplifier line has to be emptied inside the stack instead, which is what `amplifierText` is for, and nothing made a paint author choose between the two.
+
+  So the date range survived under a coordinated fire line, a munition flight path and a passage lane; field H survived on human terrain, both restricted terrains, all three psyops zones and the limited access area; the start date survived under the dynamic minefield and the fenced mined area; and the weapon survived under a final protective fire.
+
+  Found by sweeping all 291 paintable graphics at once rather than checking them one at a time — each looked right on its own, because the toggle was never asked about it. `amplifierSweep.test.ts` is that sweep, kept: it paints every graphic twice with every amplifier the schema offers, and asserts that nothing an amplifier could have written survives while the doctrinal abbreviation and the designation both do. The sweep also caught the helper in `midLabelLinePaints.ts` named `amplifier` that set no kind at all; it is `textMark` now, and takes one.
+
+- **A corridor's designation shrank with every character typed.** The label runs along a leg, rotated, so two things bound it: its length against the leg, and its **height** against the gap between the rails. The height bound was applied as a *width* cap — the label's natural width held to 1.4 of the corridor's width — on the reasoning that a bounded aspect ratio makes one a proxy for the other.
+
+  It is not. A width cap divides by the text's natural width, so the answer falls as the name grows. `AC BLUE` came out at scale 0.79 and `AC CORRIDOR ONE`, on the same corridor at the same zoom, at 0.36 — and on a corridor 25 px wide, at 0.23, which is a four-pixel-tall label: correctly inside its rails and impossible to read.
+
+  The height is what the rule was always about, so it is what is measured now. A long name and a short one get the same scale on a corridor that has room for either, and both give way together when it does not.
+
+- **The airfield's designation is measured off the drawn runway, not off a stamped size.** APP-06 131900's Template boxes the `T` immediately past the end of the horizontal line, and the runway is the wider of the two arms — so the graphic's own eastern edge is that end. Deriving it from `graphicSize` assumes that number is the runway's half length, which holds only on the path that stamps it: the catalog generator hands the paint the sample's `radius`, which is smaller, and the designation printed 17 px *inside* the runway it was supposed to clear. Visible on the published catalog rather than in the app, which is why no test caught it.
+
+- **`gen-catalog-svgs.js --only` no longer rewrites the catalog manifest.** It was built from whatever the run drew, so regenerating one tile left `catalog.json` and `catalog.js` holding a single entry — and the catalog page reads `catalog.js`, so the site would have listed one graphic out of 291. `--only` is the obvious way to check a thumbnail after changing its paint, which is exactly when it did the most damage.
+
+- **Setting the affiliation on a hand-drawn Cover, Guard or Screen did nothing.** The centre symbol is the largest thing these three draw and the natural place to click — and its feature belonged to the controller rather than the holder, so it was outside every write the holder makes by iterating its own features. It carried no `symbolId`, and the properties dialog identifies its graphic by exactly that: the form opened on an empty selection, showed defaults, and dropped the edit on OK. Drawn into the sample sheet the same graphic honoured its affiliation, because that path never goes through a click.
+
+  The feature belongs to the holder now, so `setSymbolId`, the amplifier bag and the rotation all reach it the way they reach everything else. MapLibre had the same hole and had already closed it on its side.
+
+- **`axis of attack` is gone from the tracker, and so from the Upcoming table.** It is registered in the core registry without a `TacticalGraphicName` member and is named by neither standard; the row asserted work that has no graphic to do.
+
+- The **Supported** and **Upcoming** graphics sections credit the standard that actually defines each graphic. Both said "checked against FM 1-02.2", which stopped being the whole truth when APP-06 became a first-class source: 211 graphics are defined by both, 69 by APP-06 alone, 8 by FM 1-02.2 alone.
+
+- **The aviation direction of attack keeps its bow-tie on its own line.** The mark is baked into the geometry at a fixed multiple of the decoration size along the first segment, so a base shorter than that multiple placed it *past* the end of the line — at a quarter of the length it needs, the furthest bow-tie vertex sat six times the line's own length beyond it. It is now clamped to the segment and held clear of the arrowhead: it slides back while there is room to slide, shrinks when there is not, and is omitted rather than misplaced when there is no room at all. The clamp is in the generator, so it holds for an imported file and for a host calling `renderTacticalGraphic` directly, not only for the two renderers.
+
+- **`minimumFirstSegmentPx` — the draw-time floor that keeps that from happening in the first place, now applied by both engines.** Aviation direction of attack (80 px) and both fixes (145 px) carry a mark near the start of the line and need room for it and for the arrowhead. The rule lived as two hard-coded literals inside an OpenLayers holder, so MapLibre had none: measured, the same 40-pixel drag gave a line held to 80 px on OpenLayers and left at 40 px on MapLibre, where the bow-tie then sat off the end of the graphic. Both engines read the shared table now, on the draw *and* on a vertex drag, and a parity test guards the pair.
+
+- A movement label's alignment now flips with its rotation, so a westward graphic's text is not upside down, and its span scale is capped.
+- The counterattack label sits behind the arrowhead; the avenue of approach no longer offers date fields it does not carry.
+- Exfiltrate and infiltrate are built on their own draw rule rather than reconciled against each other.
+- The envelopment's handle is on point 3, where its own drag already looked.
+- The mined anti-tank ditch is drawn mined — it had been rendering identically to the unmined one.
+- The CBRN contamination mark is a crossing X, transcribed from a vector reference.
+- MapLibre's hatch layer draws under its solid fills.
+- Twenty-two graphics gained the fixed-vertex draw limit only OpenLayers knew about; without it a fields-of-fire could not be drawn on MapLibre at all.
+- The catalog no longer projects an empty coordinate array as `NaN`.
+- **A retrograde task's mirror handle flips it on OpenLayers again**, as it always has on MapLibre. The handle is a one-point feature, and the manager's hit test answered "no handle" for anything that was not a multi-point one, so the drag fell through to the width path: dragging a withdraw's mirror handle left `mirrored` untouched and *resized* the symbol instead — 195 km to 1,522 km of decoration in three drags.
+- **A width drag flips a graphic to the side the cursor is on, on both engines.** The side handed to the generator is absolute, and OpenLayers measured it against the stored point order while MapLibre measured it against the generator's; for the graphics whose points were renumbered, those are opposite.
+- US English throughout the README prose and the whole source tree, and a broader word list in the spelling test that guards it. The previous list had eleven terms and did not include `synthesise` or `realise`, which is how both reached the published README.
+
+---
+
+## [2.1.0] — 2026-08-12
+
+### Changed
+
+- **Depends on the individual `@turf/*` modules instead of the `@turf/turf` meta-package.** No public API changes — `@turf/turf` was never re-exported, so nothing a consumer can import is affected. This is a patch-level change shipped as a minor only because the dependency list itself changed.
+
+  It removes **`marchingsquares`, which is AGPL-3.0**, from the production dependency tree. It was reachable only through `@turf/isobands` and `@turf/isolines`, neither of which this library has ever used; they arrived because the source imported the meta-package rather than the 26 functions it calls. **It was present in every release from 1.0.0 through 2.0.0.**
+
+  | | Before | After |
+  |---|---|---|
+  | Components | 142 | 32 |
+  | Licenses | 126 MIT, 7 ISC, 3 BSD-3-Clause, 2 Unlicense, 3 unreported, 1 AGPL-3.0 | 31 MIT, 1 Unlicense |
+
+  Three components that reported no license at all — `jsts`, `@turf/jsts`, `splaytree-ts` — went with it, so the tree is now fully attributable as well as fully permissive.
+
+  **If you vendor, audit or redistribute this package, this is the entry to read.** Copyleft in a dependency tree is what software-composition scanners raise first, and several organizations' approved-software policies reject AGPL outright. Upgrading from any 1.x or 2.0.0 clears it.
+
+---
+
+## [2.0.0] — 2026-08-11
+
+The MapLibre renderer ships. A second engine draws every graphic from the same
+map-agnostic symbology, so choosing a map library is no longer a choice about which
+symbols you can have.
+
+### Added
+
+- **`@zaes/tactical-graphics/maplibre`** — a third entry point exposing the same `createTacticalGraphics` as the OpenLayers one, with native GeoJSON layers, draw and edit interactions, and the same editor chrome. `maplibre-gl` is an optional peer.
+- Range-fan band descriptions, including per-band altitude amplifiers and the resolvers a renderer needs to place its own band labels.
+- `maplibre` added to the npm keywords.
+
+### Changed
+
+- **BREAKING:** the package's second major. Symbology facts that had lived inside OpenLayers holders moved into the map-agnostic half so both engines read one source; consumers reaching past the façade into renderer internals may be affected.
+- The center-symbol provider is handed the amplifiers and asked for one symbol rather than two, and rasters are keyed on the image so they are not rescaled.
+- The sample gallery dims the basemap rather than hiding it.
+
+### Fixed
+
+- Neither view can come up blank — a first frame is forced.
+- A canvas is never sized smaller than the box it fills.
+- Route lines are identified by their coordinates rather than by object identity, which a port had made unreliable.
+- A sector fan's range block no longer sits on its own center axis.
+
+---
+
+## [1.13.0] — 2026-08-07
+
+Sixteen new graphics, mostly obstacles.
+
+### Added
+
+- **Nine wire obstacles** — single, double and high/low wire fence, double apron fence, and the single, double and triple strand concertinas.
+- **Three explosives states of readiness**, plus the planned state.
+- **Three anti-tank ditches** — under construction, completed, and reinforced with mines — reworked as line graphics.
+- **Roadblock complete (executed)**.
+
+### Fixed
+
+- Anti-tank ditch teeth are equilateral and meet exactly; the mines are legible.
+- The two-rail wire graphics stay genuinely parallel.
+- Readiness bars take a fixed heading with level ends and left hashing, and drop in one click.
+
+---
+
+## [1.12.0] — 2026-08-05
+
+### Added
+
+- The FM table 5-19 obstacle effects, as twins of their mission tasks.
+
+### Changed
+
+- Envelopment is point-anchored, with its circle derived from the approach, its handle at the arrow tip, and a two-click draw.
+- Solid arrowheads hold a screen size rather than scaling with the ground.
+- Broader npm keywords.
+
+### Fixed
+
+- The retrograde cane hook, the airfield symbol size, and envelopment's label gap.
+- Infiltration's `IN` takes the same flat label gap as envelopment.
+
+---
+
+## [1.11.0] — 2026-08-05
+
+### Fixed
+
+- Every size-proportional label is capped, and the arc circles' gap is cut from the rendered glyph rather than estimated.
+
+---
+
+## [1.10.0] — 2026-08-04
+
+### Fixed
+
+- **Security operations hold their on-screen size**, and every graphic is subscribed to zoom changes — previously some paths put graphics on the map without subscribing, so they scaled with the ground instead of the screen.
+- Repeating decorations shrink once they exceed a share of the graphic's own on-screen size, and drop out entirely below a floor, so a small shape is not swamped by its own teeth.
+- The line of contact scales with the rest and keeps its pair apart.
+
+---
+
+## [1.9.0] — 2026-08-03
+
+### Fixed
+
+- Obstacle teeth, and fortified and wave decoration, are drawn in screen space.
+
+---
+
+## [1.8.0] — 2026-08-03
+
+### Changed
+
+- The config surface is pared to **one palette**.
+- Hostility is read from the amplifier bag everywhere, rather than from a loose feature key.
+- DTGs are written with a two-digit year.
+- The README's generated numbers are genuinely generated.
+
+### Fixed
+
+- Obstacle teeth direction, and the obstacle line's label placement, segment association and color on restore.
+- The obstacle areas get their DTGs.
+
+### Removed
+
+- The `status` field on the obstacle line.
+
+---
+
+## [1.7.0] — 2026-08-02
+
+Configuration moves to the map-agnostic half, so a host configures the library once
+however many renderers it has.
+
+### Added
+
+- **`TacticalGraphicsConfig`** and `configureTacticalGraphics`, living beside the geometry rather than in a renderer. Label size, line width, affiliation colors and the default palette.
+- The route traffic-direction figure, carried onto the configurable line width.
+
+### Removed — BREAKING in effect
+
+- **The dark-mode flag and the library-side dark palette.** A boolean choosing between two hardcoded color literals is a worse version of the config, and only the host can see its own basemap. Editor chrome became config instead.
+- The `name` field on the crossing-site graphics.
+- The convoy symbols are excluded.
+
+> Shipped as a minor despite removing five exports — a deliberate call at the time, and
+> not one to repeat. Removals belong in a major.
+
+---
+
+## [1.6.0] — 2026-07-31
+
+### Added
+
+- `PointDropController` is exported from the OpenLayers entry point.
+
+### Changed
+
+- Five tactical mission tasks reshaped; excluded graphics are now tracked explicitly.
+
+---
+
+## [1.5.1] — 2026-07-30
+
+### Fixed
+
+- The always-visible center dot, which now also moves the graphic.
+
+---
+
+## [1.5.0] — 2026-07-30
+
+### Added
+
+- **Save and restore.** Graphics serialise to GeoJSON and come back *editable*, not merely visible. Snapshot properties are split into `tacticalGraphic` (the portable description) and a renderer object.
+
+### Fixed
+
+- `MovementToContact`'s side arrows lock to the graphic rather than the screen.
+- The dark-mode palette reads blue rather than purple, and pending yellow stays bright.
+
+---
+
+## [1.4.0] — 2026-07-30
+
+### Added
+
+- Doctrinal fire-position symbols and the exfiltrate route, with label parity across them.
+- Contributors credited on both public surfaces.
+
+### Fixed
+
+- Label scale is clamped to a readable range and updates during the zoom.
+
+---
+
+## [1.3.1] — 2026-07-29
+
+### Fixed
+
+- **The ESM build.** Bare deep imports are resolved, and the build now smoke-loads what it ships — the previous ESM output failed to load for consumers.
+
+---
+
+## [1.3.0] — 2026-07-29
+
+The renderer ships. Styling and interaction had been unreachable for consumers, so a
+fix like "hostile line work goes red" could never leave the demo.
+
+### Added
+
+- **`@zaes/tactical-graphics/openlayers`** — a second entry point carrying the adapter, feature holders, controllers, and the draw and edit interactions. `ol` and `milsymbol` are optional peers.
+
+### Fixed
+
+- Hostile line work goes red on the last seven graphics.
+
+---
+
+## [1.2.1] — 2026-07-28
+
+### Changed
+
+- README only, to correct the live demo link.
+
+---
+
+## [1.2.0] — 2026-07-28
+
+### Added
+
+- The README's *Upcoming graphics* table.
+- Range fans get one drag handle per band, clamped between neighbors.
+
+### Changed
+
+- Circle graphics resize on edit, with the center as an inert anchor.
+- Edit mode stretches fixed-vertex graphics instead of panning the map.
+- Width handles sit on the graphic, with the drag scale corrected to match.
+- Movement arrowheads land on the operator's last vertex.
+- Handles moved onto the graphic for ambush, pursuit and exploitation.
+
+### Fixed
+
+- Hostility follows FM Field N: on for 174 graphics, off for the 24 mission tasks that take no identity.
+- Labels stay black under hostility; only strokes take the color.
+
+---
+
+## [1.1.0] — 2026-07-24
+
+### Fixed
+
+- Handle and interaction fixes across the graphic families, including handle geometry across the block family and the movement graphics.
+
+---
+
+## [1.0.1] — 2026-07-24
+
+### Changed
+
+- Documentation: the doctrinal source is named (MIL-STD-2525E / FM 1-02.2), and references to internal directories are removed from the public tree.
+
+---
+
+## [1.0.0] — 2026-07-14
+
+First public release: MIL-STD-2525E / FM 1-02.2 tactical graphics as plain GeoJSON.
+
+### Added
+
+- `renderTacticalGraphic(feature)` — the public API. Describe a graphic with a `tacticalGraphic` object on any GeoJSON feature and get back the drawn symbol, label anchors and edit handles, all in EPSG:4326.
+- `toFeatureCollection()`, `listTacticalGraphicNames()`, `getLabel()`, `getDisplayName()`, and the `TacticalGraphicName` enum.
+- A sample gallery drawing one of every proven graphic.
+
+### Fixed
+
+- Unspecified hostility no longer turns friendly-blue on edit.
+- `withOpacity` accepts hex colors, not only `rgb()`.
+
+### Removed
+
+- SIDC codes.
+
+---
+
+[Unreleased]: https://github.com/zaes-code/tactical-graphics/compare/v4.10.0...develop
+[4.10.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.9.0...v4.10.0
+[4.9.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.8.0...v4.9.0
+[4.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.7.0...v4.8.0
+[4.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.3...v4.7.0
+[4.6.3]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.2...v4.6.3
+[4.6.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.6.1...v4.6.2
+[4.6.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
+[4.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.1...v4.6.1
+[4.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.5.0...v4.5.1
+[4.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.4.0...v4.5.0
+[4.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.1...v4.4.0
+[4.3.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.3.0...v4.3.1
+[4.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.2...v4.3.0
+[4.2.2]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.1...v4.2.2
+[4.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.2.0...v4.2.1
+[4.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.1...v4.2.0
+[4.1.1]: https://github.com/zaes-code/tactical-graphics/compare/v4.1.0...v4.1.1
+[4.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v4.0.0...v4.1.0
+[4.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.4.0...v4.0.0
+[3.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.3.0...v3.4.0
+[3.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.2.0...v3.3.0
+[3.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.1.0...v3.2.0
+[3.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v3.0.0...v3.1.0
+[3.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.1.0...v3.0.0
+[2.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.13.0...v2.0.0
+[1.13.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.12.0...v1.13.0
+[1.12.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.11.0...v1.12.0
+[1.11.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.10.0...v1.11.0
+[1.10.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.5.1...v1.6.0
+[1.5.1]: https://github.com/zaes-code/tactical-graphics/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.3.1...v1.4.0
+[1.3.1]: https://github.com/zaes-code/tactical-graphics/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/zaes-code/tactical-graphics/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/zaes-code/tactical-graphics/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/zaes-code/tactical-graphics/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/zaes-code/tactical-graphics/releases/tag/v1.0.0

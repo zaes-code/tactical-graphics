@@ -1,0 +1,200 @@
+/**
+ * # `createTacticalGraphics` — the MapLibre half of the shared façade
+ *
+ * The same function, with the same signature and the same return type, as the one
+ * `@zaes/tactical-graphics/openlayers` exports. A consumer changes the import line and
+ * nothing else. @see TacticalGraphicsEngine
+ *
+ * This is the half the façade was most needed for. OpenLayers had a single object a
+ * host could hold; MapLibre had two — a renderer and an interaction layer — that had to
+ * be constructed in the right order and handed to each other. That assembly is not a
+ * decision a consumer benefits from making, so it happens here.
+ */
+
+import type {Map as MapLibreMap} from 'maplibre-gl';
+import type {FeatureCollection} from 'geojson';
+import {
+    TacticalGraphicName,
+    allowedGestures,
+    type AllowedGestures,
+    type DrawPreset,
+    type EditMode,
+    type GestureKind,
+    type SelectedGraphic,
+    type SelectionBox,
+    type EngineCallbacks,
+    type EngineCapabilities,
+    type TacticalGraphicsEngine,
+} from '@zaes/tactical-graphics';
+import {NativeLayerRenderer, type NativeLayerRendererOptions} from './native/NativeLayerRenderer';
+import {MapLibreInteractions, type EditMode as InteractionMode} from './interaction/MapLibreInteractions';
+import {amplifiersHiddenOn, stampAmplifierVisibility} from './amplifierVisibility';
+import {restoreSnapshotGraphics} from './restoreGraphic';
+import {resolutionOf} from './projection';
+
+/**
+ * Options for {@link createTacticalGraphics}.
+ *
+ * `glyphs` and `fontStack` go to the {@link NativeLayerRenderer} this constructs. Their
+ * defaults point at MapLibre's **public demo glyph server**, which is fine for a sample
+ * and not for production: set your own glyphs URL (or `glyphs: false` when your style
+ * already has one) and a stack it serves. @see NativeLayerRendererOptions
+ */
+export interface MapLibreEngineOptions extends EngineCallbacks, NativeLayerRendererOptions {
+    /**
+     * An existing renderer to wrap, instead of constructing one.
+     *
+     * That renderer already owns its glyphs and font stack, set when it was constructed
+     * (`new NativeLayerRenderer(map, {glyphs, fontStack})`). Passing `glyphs` or
+     * `fontStack` here as well throws rather than being ignored.
+     */
+    renderer?: NativeLayerRenderer;
+}
+
+/** Every gesture is implemented here. @see EngineCapabilities */
+const CAPABILITIES: EngineCapabilities = {draw: true, edit: true, io: true};
+
+/**
+ * `drawing` has no counterpart in the interaction layer's own mode set — a draw there
+ * is armed by `startDraw` and tracked separately — so it maps to `view`, which is what
+ * a drag means while a draw is in progress.
+ */
+const toInteractionMode = (mode: EditMode): InteractionMode => (mode === 'drawing' ? 'view' : mode);
+
+/**
+ * Tactical graphics on a MapLibre map.
+ *
+ * Adds the sources and layers to `map` and binds the pointer handlers. Call `destroy()`
+ * to take them off again.
+ */
+export function createTacticalGraphics(map: MapLibreMap, options: MapLibreEngineOptions = {}): TacticalGraphicsEngine {
+    if (options.renderer && (options.glyphs !== undefined || options.fontStack !== undefined)) {
+        // The renderer set its glyphs and built its symbol layers when it was constructed;
+        // there is nothing here that could honor these now.
+        throw new Error(
+            'createTacticalGraphics: `glyphs` and `fontStack` configure the renderer it constructs. ' +
+                'With `renderer`, pass them to `new NativeLayerRenderer(map, {glyphs, fontStack})` instead.',
+        );
+    }
+    const renderer = options.renderer ?? new NativeLayerRenderer(map, {glyphs: options.glyphs, fontStack: options.fontStack});
+    let mode: EditMode = 'view';
+
+    const interactions = new MapLibreInteractions(map, renderer, {
+        onChange: () => options.onChange?.(),
+        onSelect: graphic =>
+            options.onSelect?.(graphic ? {id: graphic.id, name: graphic.name, base: graphic.base} : null),
+        onDrawEnd: () => {
+            // A finished draw leaves `drawing` behind, exactly as OpenLayers does.
+            if (mode === 'drawing') setMode('view');
+            options.onDrawEnd?.();
+        },
+    });
+
+    function setMode(next: EditMode): void {
+        mode = next;
+        interactions.setMode(toInteractionMode(next));
+        options.onModeChange?.(next);
+    }
+
+    /** The selection as the portable façade describes it. */
+    const asSelected = (): SelectedGraphic | null => {
+        const id = renderer.selection;
+        const graphic = id ? renderer.find(id) : undefined;
+        return graphic ? {id: graphic.id, name: graphic.name, base: graphic.base} : null;
+    };
+
+    return {
+        capabilities: CAPABILITIES,
+
+        getSelection: asSelected,
+
+        select(id: string | null) {
+            renderer.select(id);
+            options.onSelect?.(asSelected());
+        },
+
+        selectionGestures(): AllowedGestures | null {
+            const selected = asSelected();
+            return selected ? allowedGestures(selected.name) : null;
+        },
+
+        selectionBox: (): SelectionBox | undefined => interactions.selectionBox(),
+
+        beginGesture: (kind: GestureKind, event: PointerEvent) => interactions.beginGesture(kind, event),
+
+        startDrawing(name: TacticalGraphicName, preset?: DrawPreset) {
+            // A draw already under way ends first, and says so. Ending it from inside `startDraw`
+            // instead put the mode back to `view` after it had been set to `drawing`, so a pick
+            // made mid-draw left the engine out of drawing and the host needed a second pick.
+            interactions.cancelDraw();
+            mode = 'drawing';
+            interactions.startDraw(name, preset);
+            options.onModeChange?.('drawing');
+        },
+
+        cancelDrawing() {
+            interactions.cancelDraw();
+            setMode('view');
+        },
+
+        setInteractionMode: setMode,
+        getInteractionMode: () => mode,
+
+        clearAll() {
+            renderer.clear();
+            setMode('view');
+            options.onChange?.();
+        },
+
+        snapshot: () => renderer.snapshot(),
+
+        restore(snapshot: FeatureCollection) {
+            renderer.clear();
+            for (const {graphic, symbolId} of restoreSnapshotGraphics(snapshot, resolutionOf(map))) {
+                /*
+                 * **The saved `symbolId` is the graphic's identity, and it was being thrown
+                 * away here.** `buildTacticalGraphic` mints a fresh `mlb-N`, so a graphic
+                 * handed over from OpenLayers arrived under a new name — while OpenLayers'
+                 * own restore has always adopted the incoming id. The two directions
+                 * disagreed, and anything the host keys by id lost track of the graphic on
+                 * one leg of the round trip.
+                 *
+                 * A host that keeps its own state per graphic, such as the "name only"
+                 * choice, finds the graphic again by that id. Every graphic comes back drawn
+                 * in full: the snapshot carries no such choice, so re-applying it is the
+                 * host's call. @see TacticalGraphicsEngine.setAmplifiersHidden
+                 */
+                renderer.add({...graphic, id: symbolId ?? graphic.id});
+            }
+            options.onChange?.();
+        },
+
+        setAmplifiersHidden(id: string, hidden: boolean) {
+            // Onto the held graphic's paint features, and nowhere else: the flag there is
+            // the whole of the state. @see amplifierVisibility
+            stampAmplifierVisibility(renderer, id, hidden);
+        },
+
+        amplifiersHidden: (id: string) => amplifiersHiddenOn(renderer, id),
+
+        remove(id: string) {
+            const wasSelected = renderer.selection === id;
+            if (!renderer.remove(id)) return false;
+            if (wasSelected) options.onSelect?.(null);
+            options.onChange?.();
+            return true;
+        },
+
+        setOpacity(id: string, opacity: number) {
+            renderer.setOpacity(id, opacity);
+        },
+
+        refreshStyles: () => renderer.realize(),
+
+        destroy() {
+            interactions.destroy();
+            renderer.clear();
+            renderer.destroy?.();
+        },
+    };
+}

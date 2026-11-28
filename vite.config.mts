@@ -1,0 +1,153 @@
+import {defineConfig, type PluginOption} from 'vite';
+import react from '@vitejs/plugin-react';
+import {existsSync, readFileSync} from 'node:fs';
+import {fileURLToPath, pathToFileURL} from 'node:url';
+import {resolve} from 'node:path';
+
+/*
+ * **`.mts`, and no `__dirname`.** Vite loads this file natively as ESM; as `vite.config.ts`
+ * under a CommonJS `package.json` it warned that ESM syntax in a file loaded as CommonJS
+ * stops working in a future major. Renaming is the fix that does not require setting
+ * `"type": "module"` on the package, which every `require()` in `scripts/` depends on.
+ */
+
+/**
+ * The sample app imports the library by its published name so it exercises the same entry
+ * point a consumer gets. TypeScript resolves this through `paths` in tsconfig.json; the
+ * bundler and the test runner need their own mapping. Keep all three in sync — this is the
+ * bundler's and, via `test.alias` below, the runner's.
+ */
+const LIBRARY_NAME = '@zaes/tactical-graphics';
+const LIBRARY_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/index.ts', import.meta.url));
+const THUMBNAILS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/assets/graphicThumbnails.ts', import.meta.url));
+const EDIT_CONTROLS_ENTRY = fileURLToPath(new URL('./src/tacticalgraphics/ui/editControls.ts', import.meta.url));
+
+/**
+ * Anchored, because a plain `{name: path}` alias is a prefix match: the root's entry would
+ * swallow `@zaes/tactical-graphics/thumbnails` and resolve it to `index.ts/thumbnails`.
+ * The subpath comes first for the same reason.
+ */
+const LIBRARY_ALIASES = [
+    {find: new RegExp(`^${LIBRARY_NAME}/thumbnails$`), replacement: THUMBNAILS_ENTRY},
+    {find: new RegExp(`^${LIBRARY_NAME}/edit-controls$`), replacement: EDIT_CONTROLS_ENTRY},
+    {find: new RegExp(`^${LIBRARY_NAME}$`), replacement: LIBRARY_ENTRY},
+];
+
+/**
+ * **Engines and tools from outside this repo, on a developer's machine only.** @see src/components/demoAddons.ts
+ *
+ * `npm run start:addons` runs Vite in `addons` mode, which loads the Vite plugins named in
+ * `demo-addons.local.json` (untracked, so each developer lists their own). Each plugin names its
+ * entry module as `demoAddonEntry`, and `@demo/addons` becomes those entries' lists joined, so
+ * several add-ons can be loaded at once. In every other mode `@demo/addons` is the empty list.
+ * Nothing here names an add-on: this repo is MIT and an add-on's code stays in the add-on.
+ */
+const ADDONS_MODE = 'addons';
+const ADDONS_FILE = fileURLToPath(new URL('./demo-addons.local.json', import.meta.url));
+const NO_ADDONS = {find: /^@demo\/addons$/, replacement: fileURLToPath(new URL('./src/components/demoAddonsNone.ts', import.meta.url))};
+
+type AddonPlugin = PluginOption & {demoAddonEntry?: string};
+
+/** `@demo/addons` as one module re-exporting every add-on entry's engines and tools. */
+function addonSlot(entries: string[]): PluginOption {
+    const id = '\0demo-addons';
+    return {
+        name: 'demo-addon-slot',
+        enforce: 'pre',
+        resolveId: source => (source === '@demo/addons' ? id : undefined),
+        load(loaded) {
+            if (loaded !== id) return undefined;
+            const imports = entries.map((entry, i) => `import * as addon${i} from ${JSON.stringify(entry.replaceAll('\\', '/'))};`);
+            const join = (list: string) => `[${entries.map((_, i) => `...(addon${i}.${list} ?? [])`).join(', ')}]`;
+            return [...imports, `export const demoAddons = ${join('demoAddons')};`, `export const demoTools = ${join('demoTools')};`].join('\n');
+        },
+    };
+}
+
+async function addonPlugins(): Promise<{plugins: PluginOption[]; entries: string[]}> {
+    if (!existsSync(ADDONS_FILE)) {
+        throw new Error(`addons mode needs demo-addons.local.json: {"plugins": ["<path to an add-on's Vite plugin>"]}`);
+    }
+    const {plugins = []} = JSON.parse(readFileSync(ADDONS_FILE, 'utf8')) as {plugins?: string[]};
+    const loaded = await Promise.all(plugins.map(async path => {
+        const module = await import(pathToFileURL(resolve(fileURLToPath(new URL('.', import.meta.url)), path)).href);
+        return (module.default ?? module.plugin)() as AddonPlugin;
+    }));
+    const entries = loaded.flatMap(plugin => (plugin && typeof plugin === 'object' && 'demoAddonEntry' in plugin && plugin.demoAddonEntry ? [plugin.demoAddonEntry] : []));
+    return {plugins: [addonSlot(entries), ...loaded], entries};
+}
+
+export default defineConfig(async ({command, mode}) => {
+    const addons = mode === ADDONS_MODE;
+    // A build is what gets deployed, and the public sample must never carry an add-on.
+    if (addons && command === 'build') throw new Error('addons mode is for the dev server only; it never builds');
+    const slot = addons ? await addonPlugins() : undefined;
+    return {
+        plugins: [react(), ...(slot?.plugins ?? [])],
+
+        /**
+         * **The dependency scan has to be told where the add-ons are.** It crawls from
+         * `index.html` and cannot see through the virtual `@demo/addons` module, so an add-on's
+         * own dependencies (Cesium's 12 MB, for one) were found only when the add-on loaded.
+         * Vite then bundled a second time and forced a full reload, and a lazy import still in
+         * flight failed with a 504. Listing each entry beside `index.html` finds them at startup.
+         */
+        optimizeDeps: slot ? {entries: ['index.html', ...slot.entries.map(entry => entry.replaceAll('\\', '/'))]} : undefined,
+
+        resolve: {
+            alias: addons ? LIBRARY_ALIASES : [NO_ADDONS, ...LIBRARY_ALIASES],
+        },
+
+        /**
+         * **`PUBLIC_URL` is what the Pages workflow sets, and it is not a Vite name.**
+         * Read here rather than renamed in the workflow so the deploy keeps working unchanged;
+         * `base` is Vite's equivalent and has to end in a slash where CRA's did not.
+         */
+        base: process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL.replace(/\/$/, '')}/` : '/',
+
+        /**
+         * **`outDir` is pinned, and this is the one setting that must never be left at its
+         * default.** Vite's default is `dist/`, which in this repository is the *published
+         * library* — three entry points, built by `scripts/build-lib.js` from tsc. A demo build
+         * at the default would delete it and replace it with a bundled app, and `npm publish`
+         * would ship that. CRA wrote to `build/`, the Pages workflow uploads `build/`, and
+         * `.gitignore` covers both, so `build/` it stays.
+         */
+        build: {
+            outDir: 'build',
+            sourcemap: true,
+        },
+
+        /**
+         * The library reads two environment values and both must survive bundling **as the exact
+         * text a bundler matches**, which is why they are replaced here rather than rewritten to
+         * `import.meta.env` in the source: `openlayerStyles.ts` and `maplibre/basemapStyle.ts`
+         * ship inside the published package, where `import.meta.env` would be a Vite-ism baked
+         * into a library that has no Vite. They read `process.env.REACT_APP_BASEMAP` inside a
+         * try/catch, so a consumer whose bundler defines nothing gets the catch and the default.
+         */
+        define: {
+            'process.env.REACT_APP_BASEMAP': JSON.stringify(process.env.REACT_APP_BASEMAP ?? ''),
+            'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'development'),
+        },
+
+        server: {port: 3000, strictPort: true},
+        preview: {port: 3000},
+
+        test: {
+            // `describe`, `it` and `expect` without an import in all 165 suites, which is what
+            // they were written against under CRA's Jest.
+            globals: true,
+            environment: 'jsdom',
+            setupFiles: ['./src/setupTests.ts'],
+            // Vite resolves ESM natively, so the ESM_DEPS allow-list `craco.config.js` carried
+            // for turf v7, polyclip-ts and the rest is gone rather than translated. That list
+            // existed only because CRA's Jest excluded node_modules from Babel.
+            alias: [NO_ADDONS, ...LIBRARY_ALIASES],
+            include: ['src/**/*.test.{ts,tsx}'],
+            // The Playwright drivers under `scripts/` and `tmp/` drive a running app and are not
+            // unit tests; `dist/` holds built copies of the same suites.
+            exclude: ['node_modules/**', 'dist/**', 'build/**', 'tmp/**'],
+        },
+    };
+});

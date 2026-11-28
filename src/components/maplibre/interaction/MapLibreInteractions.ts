@@ -1,0 +1,2118 @@
+/**
+ * # Drawing and editing, for MapLibre
+ *
+ * The counterpart to `TacticalGraphicsManager` and the OpenLayers controllers,
+ * built on a different footing.
+ *
+ * OpenLayers gives you `Draw` and `Modify` interactions and a graph of live
+ * features to mutate; a controller there transforms rendered geometry and keeps
+ * the numbers that produced it on a holder. MapLibre gives you pointer events and
+ * a canvas, and its drawn output is derived — realized into GeoJSON sources and
+ * discarded on the next rebuild. So there is nothing to mutate in place, and the
+ * only thing worth editing is what survives: the base geometry and the property
+ * bag. @see editGeometry.ts
+ *
+ * That turns out to be the better shape rather than a concession. A gesture edits
+ * the *portable description*, the generator redraws from it, and what the operator
+ * manipulates is exactly what gets saved.
+ *
+ * ## Modes, and why the map has to be told to stop
+ *
+ * MapLibre pans on drag by default. Every gesture here therefore starts by
+ * disabling `dragPan` on pointer-down and restoring it on pointer-up — without
+ * that a resize drags the graphic *and* the map out from under it.
+ */
+
+import type {Map as MapLibreMap, MapMouseEvent} from 'maplibre-gl';
+import type {Geometry, Position} from 'geojson';
+import {
+    TacticalGraphicName,
+    allowedGestures,
+    baseGeometryFor,
+    clampEnvelopmentBend,
+    envelopmentBendFrom,
+    clampTurnBend,
+    turnBendFrom,
+    RANGE_FAN_BAND_OFFSET,
+    handleContract,
+    hasClosingEdge,
+    nearestInsertionEdge,
+    takesInsertedVertices,
+    handleRole,
+    type TacticalGraphicProperties,
+} from '@zaes/tactical-graphics';
+import {buildTacticalGraphic, descriptionOf, type MapLibreTacticalGraphic} from '../maplibreAdapter';
+import type {NativeLayerRenderer} from '../native/NativeLayerRenderer';
+import {resolutionOf, toLonLat, toMercator} from '../projection';
+import {acceptsInsertedVertex, maxAreaVertices, axisBaseFromDraw, drawnSide, carriesWidthPointInBase, DEFAULT_AXIS_HALF_WIDTH_PX, type MeasurePart, RADAR_READOUT_CAPTIONS, anchorVertex, drawIsComplete, handlesAreInert, axisAndWidth, baseVertexCount, boundsOf, carriesRectangleLength, constrainRectangleAxis, defaultStandoffMetres, drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsInTwoClicks, dropSizePx, frameFromDrag, projectedLength, editStretches, reshapesByVertex, groundLength, groundMeters, hasBakedDecoration, isRectangular, normalizeDrawnBase, radarSearchFromClicks, drawnAnchorFrame, drawnAnchors, latitudeFromMercatorY, RSD_DEFAULT_RELATIVE_BEARING_DEG, minimumFirstSegmentPx, rotationFromDrawnPoint, unionBounds, rectangleAmplifiers, screenMeters, showsSizeReadout, usesDrawnAnchors, usesStandoffWidth, presetAmplifiers, type DrawPreset, type GestureKind, type ProjectedPosition, type SelectionBox} from '@zaes/tactical-graphics';
+import {
+    centerOf,
+    insertVertex,
+    moveVertex,
+    positionsOf,
+    resize,
+    rotate,
+    setBandRange,
+    setExtend,
+    setSectorOpening,
+    setBend,
+    setMirror,
+    setOffset,
+    setReach,
+    translate,
+    type GraphicDescription,
+} from './editGeometry';
+
+/**
+ * What a drag currently means. Mirrors OpenLayers' `InteractionType`.
+ *
+ * `edit` is the unified mode: click to select, then reshape by the selected graphic's
+ * own handles or drive a gesture from an affordance the host draws around it.
+ */
+export type EditMode = 'view' | 'edit' | 'translate' | 'rotate' | 'resize' | 'modify';
+
+/** How close a click must land on a base vertex to grab it, in screen pixels. */
+const VERTEX_GRAB_PX = 10;
+
+/**
+ * How close a drag must start to a segment to add a vertex there, in screen pixels.
+ *
+ * Tighter than `VERTEX_GRAB_PX`, and deliberately so: a grab near a corner is within
+ * reach of both tests, and moving the vertex that is already there is almost always
+ * what was meant. The vertex test runs first for the same reason.
+ */
+const SEGMENT_GRAB_PX = 8;
+
+/**
+ * How close two consecutive draw clicks have to be to count as one.
+ *
+ * Small, because it only has to catch a double-click — which lands on the same pixel
+ * or within a hand-tremor of it — without refusing two deliberate vertices an operator
+ * placed close together. @see addSketchVertex
+ */
+const DUPLICATE_CLICK_PX = 4;
+
+/**
+ * How far the pointer must move before a press counts as a drag.
+ *
+ * Without it every click is a one-pixel drag, which rebuilds the graphic and — far
+ * worse — makes a click that was meant to *select* also nudge the thing it
+ * selected.
+ */
+const DRAG_THRESHOLD_PX = 3;
+
+/** Default size for a point-anchored graphic, in meters, when one is drawn fresh. */
+const DEFAULT_RADIUS_METERS = 40_000;
+
+/**
+ * The id the in-progress draw's preview is realised under.
+ *
+ * Reserved and constant: there is only ever one draw, and a fixed id means the preview
+ * can be replaced in place on every pointer move rather than added and removed.
+ */
+const DRAW_PREVIEW_ID = '__tg-draw-preview';
+
+/**
+ * How long after a draw ends a press is still assumed to belong to it.
+ *
+ * The same window OpenLayers uses, and for the same reason.
+ * @see MapLibreInteractions.resumeDoubleClickZoomOnNextPress
+ */
+const DRAW_END_DOUBLE_CLICK_GUARD_MS = 1000;
+
+/** Below this the second draw click landed on the anchor and carries no size. */
+const MIN_DRAWN_RADIUS_M = 1;
+
+export interface InteractionCallbacks {
+    /** A graphic was added, edited or removed — the host may want to save. */
+    onChange?(): void;
+    /** Selection moved. Null when the operator clicked empty map. */
+    onSelect?(graphic: MapLibreTacticalGraphic | null): void;
+    /** A draw finished or was canceled, so a host can un-arm its button. */
+    onDrawEnd?(): void;
+}
+
+/**
+ * The modes that put handles on every graphic. Mirrors
+ * `TacticalGraphicsManager.enableHandleModes` — the two must agree, because the same
+ * button in the same panel drives both.
+ */
+const HANDLE_MODES: readonly EditMode[] = ['edit', 'translate', 'rotate', 'resize', 'modify'];
+
+/** How near the pivot a grab counts as *on* it, in screen pixels. @see startedOnPivot */
+const PIVOT_GRAB_PX = 6;
+
+/**
+ * What a handle of *this* graphic does.
+ *
+ * The vertex count comes from the drawn base, because one contract splits on it: a
+ * corridor's generator emits `[...vertices, ...tangent points]` and the tail sets the
+ * width. Calling `handleRole` without it left every corridor handle a `shape` handle,
+ * so MapLibre drew the width handles and gave them nothing to do — a corridor could
+ * not be widened in that engine at all. @see handleRole
+ */
+function roleOfHandle(graphic: MapLibreTacticalGraphic, index: number) {
+    return handleRole(graphic.name, index, vertexCountOf(graphic));
+}
+
+/** How many points the operator drew — the length of the base's own coordinate list. */
+function vertexCountOf(graphic: MapLibreTacticalGraphic): number {
+    const coordinates = (graphic.base.geometry as {coordinates?: unknown}).coordinates;
+    if (!Array.isArray(coordinates)) return 0;
+    return typeof coordinates[0] === 'number' ? 1 : coordinates.length;
+}
+
+/**
+ * The rim handle: the one **farthest** from the centre, in projected metres.
+ *
+ * Two things this gets right that the first version did not.
+ *
+ * **Farthest, not "the first one that is not exactly at the centre".** The centre handle
+ * is found by position rather than by index and lands a few thousand metres off zero at
+ * these scales — measured, 8 460 m against a rim at 1 180 011 — so a `> 0` test happily
+ * accepted it and drew a read-out that stopped a whisker from the middle.
+ *
+ * **Its own position, not a rescale to `properties.radius`.** That field is in *ground*
+ * metres while the handles and the drawn circle are in projected metres, and the two
+ * differ by 22% at this latitude: rescaling put the end of the line nowhere near the rim
+ * the operator was dragging. The handle *is* the rim, so use it.
+ */
+/** A band's stated range, or undefined when the graphic has no such band. */
+function bandRangeOf(graphic: MapLibreTacticalGraphic, index: number): number | undefined {
+    // 200700 has two named ranges rather than a stack of rings. @see radarRanges
+    const named = radarRanges(graphic.properties);
+    if (named) return named[index];
+    const bands = graphic.properties.rangeFan?.bands;
+    if (!bands || index < 0 || index >= bands.length) return undefined;
+    return [...bands].sort((a, b) => a.range - b.range)[index]?.range;
+}
+
+/**
+ * 200700's two ranges, near first, or nothing when this is not a radar search doctrine.
+ *
+ * The one place the read-out and the change-detector both ask "which distances does this
+ * symbol have", so the two cannot disagree about whether a drag moved one.
+ */
+function radarRanges(props: TacticalGraphicProperties): (number | undefined)[] | undefined {
+    // By name, as `setBandRange` decides it: a weapon fan can hold these fields too.
+    if (props.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
+    return [props.startRange, props.stopRange];
+}
+
+/**
+ * Which band a gesture just changed, or undefined when it changed none.
+ *
+ * Compared by sorted range, because that is the order the rim handles are published in and
+ * the order `setBandRange` indexes into — an unsorted comparison would name a different ring
+ * from the one under the cursor the moment two ranges crossed.
+ */
+function changedBand(before: GraphicDescription, after: GraphicDescription): number | undefined {
+    // 200700 states its two as named fields; the fans carry a sorted stack.
+    const namedBefore = radarRanges(before.properties);
+    const namedAfter = radarRanges(after.properties);
+    if (namedBefore && namedAfter) {
+        for (let i = 0; i < namedAfter.length; i++) if (namedBefore[i] !== namedAfter[i]) return i;
+        return undefined;
+    }
+    const was = [...(before.properties.rangeFan?.bands ?? [])].sort((a, b) => a.range - b.range);
+    const now = [...(after.properties.rangeFan?.bands ?? [])].sort((a, b) => a.range - b.range);
+    if (!was.length || was.length !== now.length) return undefined;
+    for (let i = 0; i < now.length; i++) if (was[i].range !== now[i].range) return i;
+    return undefined;
+}
+
+/**
+ * The word naming the ring, or nothing.
+ *
+ * 200700's two rings are named individually by its plate — a start range and a stop range —
+ * so an unlabelled figure beside one of them does not say which the drag is changing. A
+ * weapon fan's rings are an arbitrary stack with no doctrinal names, so it keeps the bare
+ * figure. The same split `RangeFanGraphicBase.measureCaption` makes.
+ */
+function bandCaption(graphic: MapLibreTacticalGraphic, bandIndex: number | undefined): string | undefined {
+    if (bandIndex === undefined || graphic.name !== TacticalGraphicName.RadarSearchDoctrine) return undefined;
+    return [RADAR_READOUT_CAPTIONS.startRange, RADAR_READOUT_CAPTIONS.stopRange][bandIndex];
+}
+
+/** `reach` metres from `center` along the direction of `towards`, in projected metres. */
+function projectOnto(center: ProjectedPosition, towards: ProjectedPosition, reach: number): ProjectedPosition {
+    const dx = towards[0] - center[0];
+    const dy = towards[1] - center[1];
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) return towards;
+    // `reach` is a ground distance and these are EPSG:3857 metres, inflated by
+    // 1/cos(latitude) — laid out raw the line stops short of the ring it is measuring.
+    // @see MissionTaskGraphicBase.measureEdge, which states the same correction.
+    const projected = projectedLength(reach, latitudeFromMercatorY(center[1]));
+    return [center[0] + (dx / len) * projected, center[1] + (dy / len) * projected] as ProjectedPosition;
+}
+
+function rimHandleOf(graphic: MapLibreTacticalGraphic, center: ProjectedPosition): ProjectedPosition | undefined {
+    let best: ProjectedPosition | undefined;
+    let bestDistance = 0;
+    for (const position of graphic.handles ?? []) {
+        const distance = Math.hypot(position[0] - center[0], position[1] - center[1]);
+        if (distance > bestDistance) {
+            bestDistance = distance;
+            best = position;
+        }
+    }
+    return best;
+}
+
+/**
+ * Rewrites the amplifiers a graphic's own geometry defines, after a gesture has moved it.
+ *
+ * A rectangular zone's width is doctrinal *input* — APP-06 calls these "two anchor points
+ * and a width, defined in metres" — so the shape and the number drive each other, and a
+ * drag that changes one has to write the other. OpenLayers does this in
+ * `AreaGraphicBase.publishRectangleWidth`; without it here, resizing a rectangular
+ * airspace zone on MapLibre left `width` at whatever it was drawn with, and the snapshot
+ * disagreed with its own geometry. @see rectangleAmplifiers
+ */
+function withDerivedAmplifiers(
+    name: TacticalGraphicName,
+    description: GraphicDescription,
+    before?: GraphicDescription,
+    gesture?: string,
+): GraphicDescription {
+    if (usesDrawnAnchors(name)) return withAnchorFrame(name, description);
+
+    /*
+     * **A rectangle's length is its two anchor points', so a gesture that moves them has
+     * to rewrite it.** Only the rectangular target files one — every other rectangle takes
+     * its length from the points and states nothing — and left alone it went on reporting
+     * the length it was drawn at: measured, 197 km against OpenLayers' 270 for the same
+     * resize. Its `width` is an amplifier the gesture already carries, so only the length
+     * is derived here. @see carriesRectangleLength, rectangleAxisLength
+     */
+    // A rotate moves the two anchor points about point 1, so only one of them changes —
+    // the same shape a length drag has. The constraint has to be told which it is.
+    if (isRectangular(name)) return withRectangleAxis(name, description, gesture === 'rotate' ? undefined : before);
+    return description;
+}
+
+/**
+ * A rectangle after a gesture: its axis held to its own bearing, and its length refiled.
+ *
+ * The constraint is the library's — one endpoint moving is a length change, never a turn
+ * — and it is applied here rather than in the drag itself for the same reason
+ * OpenLayers applies it in the holder: that is the one place both a vertex drag and a
+ * rebuild pass through. @see constrainRectangleAxis
+ */
+function withRectangleAxis(
+    name: TacticalGraphicName,
+    description: GraphicDescription,
+    before?: GraphicDescription,
+): GraphicDescription {
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    let axis = geometry.type === 'LineString' ? geometry.coordinates : undefined;
+    if (!axis || axis.length < 2) return description;
+
+    const was = before?.geometry as {type: string; coordinates?: Position[]} | undefined;
+    const held = constrainRectangleAxis(was?.type === 'LineString' ? was.coordinates : undefined, axis);
+    let next = held === axis ? description : {...description, geometry: {type: 'LineString' as const, coordinates: held}};
+    axis = held;
+    if (carriesRectangleLength(name)) {
+        const geometry = description.geometry as {type: string; coordinates?: Position[]};
+        const length = Math.round(groundMeters(axis[0] as [number, number], axis[axis.length - 1] as [number, number]));
+        if (description.properties.length !== length) {
+            next = {...next, properties: {...next.properties, length}};
+        }
+    }
+    return next;
+
+    const ring = (description.geometry as {type: string; coordinates?: unknown}).type === 'Polygon'
+        ? ((description.geometry as unknown as {coordinates: [number, number][][]}).coordinates?.[0])
+        : undefined;
+    const derived = rectangleAmplifiers(name, ring);
+    if (derived.width === undefined) return description;
+    if (description.properties.width === derived.width && description.properties.length === derived.length) return description;
+    return {...description, properties: {...description.properties, ...derived}};
+}
+
+/**
+ * The same idea for the six graphics drawn from anchor points: **the points are the
+ * truth, so the numbers follow them.**
+ *
+ * Their `radius` and `rotation` are a description of where the anchors are, not a second
+ * input beside them — which is why moving one has to rewrite them. Left alone, a Turn
+ * dragged twice as long went on reporting the radius it was drawn with, the size read-out
+ * quoted a distance nobody could measure on the map, and a snapshot rebuilt the *old*
+ * symbol wherever the amplifier outranks the geometry. OpenLayers has always done this,
+ * in each holder's `adoptAnchors`; the readers are shared, only the dispatch was not.
+ *
+ * @see drawnAnchorFrame, which is that dispatch
+ */
+function withAnchorFrame(name: TacticalGraphicName, description: GraphicDescription): GraphicDescription {
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    if (geometry.type !== 'LineString') return description;
+
+    const frame = drawnAnchorFrame(name, geometry.coordinates);
+    if (!frame) return description;
+
+    const properties = {
+        ...description.properties,
+        radius: frame.size,
+        rotation: frame.rotation ?? 0,
+        ...(frame.bend === undefined ? {} : {bend: frame.bend}),
+        ...(frame.mirrored === undefined ? {} : {mirrored: frame.mirrored}),
+    };
+    return {...description, properties};
+}
+
+/**
+ * What a drag starts from. **On the six anchor graphics the frame is read from the points first**,
+ * as OpenLayers' holders adopt it: their `radius` and `rotation` describe the points, and a bag
+ * can lack them or hold stale ones (a file, a sample). The bend grip then had no size to divide
+ * by and returned the graphic unchanged, so Turn's apex grip did nothing on MapLibre and ArcGIS
+ * while it bowed the turn on OpenLayers. @see withAnchorFrame
+ */
+function dragStartOf(graphic: MapLibreTacticalGraphic): GraphicDescription {
+    const start = {geometry: graphic.base.geometry, properties: descriptionOf(graphic)};
+    return usesDrawnAnchors(graphic.name) ? withAnchorFrame(graphic.name, start) : start;
+}
+
+/**
+ * The other direction: a gesture that set a **number** rewrites the points from it.
+ *
+ * `setBend`, `setReach` and `setMirror` change a property, and for these six the picture
+ * comes from the anchors — so without this the number moved and the symbol did not.
+ * OpenLayers hit the same defect from the same cause and fixed it the same way, by
+ * republishing the base from holder state. @see drawnAnchors
+ *
+ * The current frame is read back first so the drag changes only what it grabbed: a bend
+ * drag must not reset Pursuit's line ratio to the family default on its way past.
+ */
+function withAnchorGeometry(description: GraphicDescription): GraphicDescription {
+    const name = description.properties.name;
+    if (!usesDrawnAnchors(name)) return description;
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    if (geometry.type !== 'LineString') return description;
+
+    const current = drawnAnchorFrame(name, geometry.coordinates);
+    const anchors = drawnAnchors(name, {
+        ...current,
+        center: current?.center ?? geometry.coordinates![0],
+        size: description.properties.radius ?? current?.size ?? 0,
+        rotation: description.properties.rotation ?? current?.rotation ?? 0,
+        bend: description.properties.bend ?? current?.bend,
+        mirrored: description.properties.mirrored ?? current?.mirrored,
+    });
+    if (!anchors) return description;
+    return {...description, geometry: {type: 'LineString', coordinates: anchors}};
+}
+
+export class MapLibreInteractions {
+    private mode: EditMode = 'view';
+    /** The graphic being drawn, or null when not drawing. */
+    private drawing: TacticalGraphicName | null = null;
+    /** The properties the draw under way was started with. @see startDraw */
+    private drawPreset: DrawPreset | undefined;
+    /** Vertices collected so far, in lon/lat. */
+    private sketch: Position[] = [];
+
+    /**
+     * Takes the window listeners down again, or null when no drag owns them.
+     *
+     * @see attachDragToWindow for why a drag cannot be driven by the map's own events.
+     */
+    private releaseDragPointer: (() => void) | null = null;
+
+    /** State for the drag in progress. */
+    private dragging: {
+        graphic: MapLibreTacticalGraphic;
+        /** Which base vertex is being dragged in `modify`, or -1. */
+        vertex: number;
+        /** Where to add a vertex when this drag starts, or -1. @see grabSegment */
+        insertAt: number;
+        /** Whether the drag began on the center dot, which is only ever claimed in translate. */
+        onCenter: boolean;
+        /** Whether the drag began on the rotate/resize pivot. @see startedOnPivot */
+        onPivot: boolean;
+        /** Which handle was grabbed, or -1 for a drag that started on the body. */
+        handle: number;
+        /**
+         * Where the pointer went down, in lon/lat — **not where it was last seen.**
+         *
+         * Every move of a gesture is measured from here and applied to {@link start}, so the
+         * answer depends on where the cursor is rather than on how it got there.
+         * @see dragTo
+         */
+        origin: Position;
+        /**
+         * The description the gesture started from, which every move is applied to afresh.
+         *
+         * Applying a move to the *previous* move's result is the obvious way to write this
+         * and it is wrong, because a build is not a no-op: `normalizeDrawnBase` re-squares an
+         * axis arrow's width point against the axis, and a vertex drag moves the axis. Ten
+         * intermediate readings then compose and the width lands 6.4% narrower than the same
+         * drag delivered in one step — measured, 6,582 m against OpenLayers' 7,007. That
+         * engine squares once, at `modifyend`, which is why its answer does not depend on the
+         * path.
+         *
+         * Re-set once, and only once, when a drag on a segment turns into a vertex.
+         */
+        start: GraphicDescription;
+        /** Whether the pointer has moved far enough to count. @see DRAG_THRESHOLD_PX */
+        started: boolean;
+        startPixel: {x: number; y: number};
+    } | null = null;
+
+    /**
+     * The gesture a host's affordance started, held for one drag.
+     *
+     * `edit` is not itself a gesture — a drag inside it reshapes, as `modify` does. When
+     * the host presses a rotate or resize affordance the drag has to mean *that*, so it
+     * is latched here and read by {@link effectiveMode}, then dropped on release.
+     */
+    private activeGesture: GestureKind | null = null;
+    /** Whether a draw preview is currently on the map. @see previewDraw */
+    private previewing = false;
+    /** When the last draw ended, and how to stop waiting. @see resumeDoubleClickZoomOnNextPress */
+    private drawEndedAt = 0;
+    private unlistenDoubleClickRestore: (() => void) | undefined;
+
+    /**
+     * What a drag means right now: the latched gesture if one is running, else the mode.
+     *
+     * `applyGesture` switches on this rather than on `this.mode`, which is what lets the
+     * one `edit` mode host all three gestures without any of them being reimplemented.
+     */
+    private effectiveMode(): EditMode {
+        return this.activeGesture ?? this.mode;
+    }
+
+    constructor(
+        private readonly map: MapLibreMap,
+        private readonly renderer: NativeLayerRenderer,
+        private readonly callbacks: InteractionCallbacks = {},
+    ) {
+        map.on('mousedown', this.onPointerDown);
+        map.on('mousemove', this.onPointerMove);
+        map.on('mouseup', this.onPointerUp);
+        map.on('click', this.onClick);
+        map.on('dblclick', this.onDoubleClick);
+        // A hint left behind when the cursor leaves the map offers an edit at a place
+        // the pointer is no longer near. @see updateVertexHint
+        map.on('mouseout', this.onMouseOut);
+        // `keydown` is not a map event — the canvas has to be focusable for it, and
+        // it is simpler to listen on the document than to manage focus.
+        document.addEventListener('keydown', this.onKeyDown);
+    }
+
+    destroy(): void {
+        // A drag in flight holds `window` listeners; torn down here so a destroyed
+        // interaction layer cannot go on reading the pointer. @see attachDragToWindow
+        this.releaseDragPointer?.();
+        this.unlistenDoubleClickRestore?.();
+        this.unlistenDoubleClickRestore = undefined;
+        this.map.off('mousedown', this.onPointerDown);
+        this.map.off('mousemove', this.onPointerMove);
+        this.map.off('mouseup', this.onPointerUp);
+        this.map.off('click', this.onClick);
+        this.map.off('dblclick', this.onDoubleClick);
+        this.map.off('mouseout', this.onMouseOut);
+        document.removeEventListener('keydown', this.onKeyDown);
+    }
+
+    // ── modes ───────────────────────────────────────────────────────────────
+
+    setMode(mode: EditMode): void {
+        this.cancelDraw();
+        this.mode = mode;
+        // The old mode's answer does not survive the change: a pointer left over a handle
+        // that view mode does not drag would promise a gesture that no longer exists.
+        this.setCursor('default');
+        // The hint belongs to modify alone, and a stale one left behind would offer an
+        // edit the new mode does not perform. @see updateVertexHint
+        this.renderer.setVertexHint(null);
+        /*
+         * **Entering edit starts with nothing selected**, on both engines.
+         *
+         * MapLibre keeps a selection from whatever was last clicked or drawn —
+         * `finishDraw` selects what it just made, and the properties dialog reads it —
+         * while OpenLayers had no selection concept at all until edit mode gave it one.
+         * Left alone, the same button produced a graphic already wearing handles and a
+         * box on one engine and a bare map on the other, which is the class of
+         * divergence this repository keeps finding. The panel says "click a graphic";
+         * both engines now mean it.
+         */
+        if (mode === 'edit') this.renderer.select(null);
+
+        // Every graphic wears its handles in a handle-bearing mode and none in view,
+        // which is what the OpenLayers manager does on the same button — except in
+        // `edit`, where the handles belong to the selection alone.
+        // @see NativeLayerRenderer.setHandleMode
+        this.renderer.setHandleMode(HANDLE_MODES.includes(mode), mode === 'edit');
+    }
+
+    getMode(): EditMode {
+        return this.mode;
+    }
+
+    /**
+     * Runs one gesture from a host's affordance, outside the map's own pointer handlers.
+     *
+     * The affordance is a DOM element over the map, so its `pointerdown` never reaches
+     * MapLibre — and even if it did, the pointer is nowhere near the graphic, so the hit
+     * test would find nothing. The drag is therefore driven from `window`, and the state
+     * `onPointerDown` would have latched is set here from the *selection* instead of
+     * from a hit test.
+     *
+     * Everything after that is the existing machinery: `activeGesture` makes
+     * {@link effectiveMode} answer for the gesture, and each move goes through the same
+     * `applyGesture` a handle drag uses. @see TacticalGraphicsManager.beginGesture, the
+     * OpenLayers twin — the two must stay the same gesture.
+     */
+    beginGesture(kind: GestureKind, event: PointerEvent): boolean {
+        if (this.activeGesture || this.dragging || this.drawing) return false;
+        const id = this.renderer.selection;
+        const graphic = id ? this.renderer.find(id) : undefined;
+        if (!graphic) return false;
+        if (!allowedGestures(graphic.name)[kind]) return false;
+
+        const origin = this.positionFromPointer(event);
+        if (!origin) return false;
+
+        this.activeGesture = kind;
+        this.dragging = {
+            graphic,
+            vertex: -1,
+            insertAt: -1,
+            onCenter: false,
+            // An affordance is never on the anchor, so a resize from one always carries
+            // a ratio. The pivot guard is for a handle dragged from on top of it.
+            onPivot: false,
+            handle: -1,
+            origin,
+            start: dragStartOf(graphic),
+            // Already past the threshold: the host decided a drag began by pressing the
+            // affordance, and re-measuring it against a pixel distance would swallow the
+            // first few degrees of every rotate.
+            started: true,
+            startPixel: {x: event.clientX, y: event.clientY},
+        };
+
+        const move = (moveEvent: PointerEvent) => {
+            const to = this.positionFromPointer(moveEvent);
+            if (to) this.dragTo(to);
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+            this.activeGesture = null;
+            this.endDrag();
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        return true;
+    }
+
+    /** A DOM pointer event's position in lon/lat, or undefined if the map is not ready. */
+    private positionFromPointer(event: {clientX: number; clientY: number}): Position | undefined {
+        const canvas = this.map.getCanvasContainer();
+        if (!canvas) return undefined;
+        const rect = canvas.getBoundingClientRect();
+        const lngLat = this.map.unproject([event.clientX - rect.left, event.clientY - rect.top]);
+        return [lngLat.lng, lngLat.lat];
+    }
+
+    /**
+     * The selected graphic's on-screen extent, in map-container pixels.
+     *
+     * From the **rendered** geometry's projected bounds, which is the same box the
+     * OpenLayers side measures from its rendered features — the two engines have to draw
+     * the host's chrome in the same place. @see boundsOf
+     */
+    selectionBox(): SelectionBox | undefined {
+        const id = this.renderer.selection;
+        const graphic = id ? this.renderer.find(id) : undefined;
+        /*
+         * **Line work *and* where the labels sit**, which is what OpenLayers measures: it
+         * unions every non-handle feature the controller owns, and a designation anchored
+         * clear of the shape is one of them. An ambush's sits 9 px past its arrowhead, so
+         * measuring the line work alone drew a box 63 px wide here against 72 there — and
+         * since the affordances are placed on that box, the same drag started from a
+         * different corner and meant a different gesture: 16 degrees of rotation and 14%
+         * of scale apart on the identical fixture.
+         *
+         * From the label geometry rather than `labels.bounds`: that field deliberately
+         * carries the *graphic's* extent, because an area label needs the shape's box to
+         * fit itself inside. @see boundsOf, unionBounds
+         */
+        const bounds = unionBounds(graphic?.graphic.bounds, boundsOf(graphic?.labels?.geometry));
+        if (!bounds) return undefined;
+
+        // All four corners, and min and max re-derived on screen. Flat and north-up two
+        // opposite corners were enough; a turned or tilted camera maps the box to a
+        // rotated quadrilateral, and two corners of that span only part of it.
+        const corners: ProjectedPosition[] = [
+            [bounds.minX, bounds.minY],
+            [bounds.minX, bounds.maxY],
+            [bounds.maxX, bounds.minY],
+            [bounds.maxX, bounds.maxY],
+        ];
+        const onScreen = corners.map(corner => this.map.project(toLonLat(corner)));
+        const xs = onScreen.map(p => p.x);
+        const ys = onScreen.map(p => p.y);
+        const x = Math.min(...xs);
+        const y = Math.min(...ys);
+        return {x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y};
+    }
+
+    /**
+     * Arms the draw tool.
+     *
+     * A point graphic finishes on the first click and never enters the sketch, so
+     * `baseGeometryFor` is consulted up front rather than at the end — a draw tool
+     * that asked afterwards would need a click to discover it did not need one.
+     */
+    startDraw(name: TacticalGraphicName, preset?: DrawPreset): void {
+        this.cancelDraw();
+        this.drawing = name;
+        this.drawPreset = preset;
+        this.mode = 'view';
+        this.map.doubleClickZoom.disable();
+        // **And drop any restore the last draw armed.** It fires on the next press on the
+        // canvas, which — once a second has passed — is the first click of *this* draw:
+        // the zoom came back mid-draw and the double-click that ended the graphic zoomed
+        // the map after all. Only the very first draw of a session was unaffected, which
+        // is what made it look like a per-graphic defect.
+        // @see resumeDoubleClickZoomOnNextPress
+        this.unlistenDoubleClickRestore?.();
+        this.unlistenDoubleClickRestore = undefined;
+    }
+
+    cancelDraw(): void {
+        if (!this.drawing) return;
+        this.drawing = null;
+        this.drawPreset = undefined;
+        this.sketch = [];
+        this.renderer.setSketch(null);
+        // An abandoned sizing click would otherwise leave its read-out — or its preview,
+        // which is a real graphic and would otherwise become a permanent one — on the map.
+        this.clearPreview();
+        this.renderer.setMeasure(null);
+        this.resumeDoubleClickZoomOnNextPress();
+        this.callbacks.onDrawEnd?.();
+    }
+
+    /**
+     * Puts double-click zoom back — but not until the browser has finished delivering
+     * the double-click that ended the draw.
+     *
+     * **A fixed-vertex graphic finishes on the second *click* of that double-click**, so
+     * by the time the trailing `dblclick` arrives the draw is over and nothing absorbs
+     * it: finishing a bridge zoomed the map a level, while a free-form line — which ends
+     * on the `dblclick` itself — did not. It made the symbol look twice the size it is,
+     * which is what sent this investigation off after a size defect that was not there.
+     *
+     * Waiting for the next press sidesteps the timing entirely. `detail` is the
+     * consecutive-click count, so `> 1` means this press is the second half of the
+     * double-click still being waited out. The one-second guard covers the other end: a
+     * one-click drop is over before the double-click even starts, so its second press is
+     * a genuine `detail === 1` that would re-arm the zoom in time for its own `dblclick`.
+     *
+     * OpenLayers reached the same two rules from the same symptom, and the comment on
+     * `resumeDoubleClickZoomOnNextClick` there is the longer version of this one.
+     */
+    private resumeDoubleClickZoomOnNextPress(): void {
+        this.drawEndedAt = Date.now();
+        if (this.unlistenDoubleClickRestore) return;
+
+        const container = this.map.getCanvasContainer();
+        const onMouseDown = (event: MouseEvent): void => {
+            if (event.detail > 1 || Date.now() - this.drawEndedAt < DRAW_END_DOUBLE_CLICK_GUARD_MS) return;
+            this.unlistenDoubleClickRestore?.();
+            this.unlistenDoubleClickRestore = undefined;
+            this.map.doubleClickZoom.enable();
+        };
+        container.addEventListener('mousedown', onMouseDown);
+        this.unlistenDoubleClickRestore = () => container.removeEventListener('mousedown', onMouseDown);
+    }
+
+    get isDrawing(): boolean {
+        return this.drawing !== null;
+    }
+
+    // ── drawing ─────────────────────────────────────────────────────────────
+
+    private readonly onClick = (event: MapMouseEvent): void => {
+        if (this.drawing) {
+            this.addSketchVertex([event.lngLat.lng, event.lngLat.lat]);
+            return;
+        }
+        // A click that ended a drag is not a selection: the pointer went down on the
+        // graphic that is already selected and the operator was moving it, not picking it.
+        if (this.dragging?.started) return;
+
+        const graphic = this.renderer.hitTest(event.point);
+        this.renderer.select(graphic?.id ?? null);
+        this.callbacks.onSelect?.(graphic ?? null);
+    };
+
+    private addSketchVertex(position: Position): void {
+        const name = this.drawing;
+        if (!name) return;
+
+        // **A one-click graphic is done on the first click**, whether or not it can
+        // afterwards be resized, and **whatever shape its base ends up being**. It is
+        // dropped at `dropSizePx` worth of metres and the operator drags its edge handle
+        // if they want it bigger — which is what OpenLayers' `PointDropController` does,
+        // and the two engines have to agree about it or the same button behaves
+        // differently depending on the renderer.
+        //
+        // This used to key off `allowedGestures(name).resize`, on the reasoning that a
+        // resizable point graphic is *sized by the draw* in two clicks. True of the
+        // point-anchored graphics OpenLayers draws through a Circle interaction, and
+        // false of every one-click drop — so the airfield took two clicks here and one
+        // there the moment it stopped being a fixed-size badge, and the completed
+        // roadblock had been doing it all along.
+        //
+        // And it sat **inside** the `Point` branch until the demonstration arrived: four
+        // derived anchor points make its base a `LineString`, so the drop fell through to
+        // the multi-click path and the draw never ended — one click on OpenLayers, an
+        // unfinishable sketch here. The base's shape and the draw's length are two
+        // different questions. @see dropSizePx, anchorDraw
+        if (dropSizePx(name) !== undefined) {
+            this.finishDraw([position]);
+            return;
+        }
+
+        /*
+         * **And the same distinction one step along: a centre-to-edge draw ends on the
+         * second click whatever its base is.** The six anchor graphics store a `LineString`
+         * of derived points, so they fell past the `Point` branch below into the multi-click
+         * path and waited for a double-click — while OpenLayers drew each of them with a
+         * `Circle` interaction that ends itself, and the panel promised "2 points (center →
+         * edge)". Two clicks put nothing on the map at all.
+         *
+         * **It asks `drawsInTwoClicks`, not `drawsCentreToEdge`**, and the difference is not
+         * cosmetic: contain moved to an end-to-end draw, left the
+         * centre-to-edge list, and immediately stopped drawing here while OpenLayers went on
+         * drawing it — because what this branch needs to know is *how long the draw runs*,
+         * and that predicate had been answering *what the clicks mean*. @see drawsInTwoClicks
+         */
+        if (drawsInTwoClicks(name)) {
+            if (!this.sketch.length) {
+                this.sketch.push(position);
+                return;
+            }
+            this.finishDraw([this.sketch[0], position]);
+            return;
+        }
+
+        const wants = baseGeometryFor(name);
+        /*
+         * **A `Point` base does not mean a short draw.** 200700 stores one anchor point and
+         * four numbers, and is placed with three clicks that state them — so it has to fall
+         * through to the multi-click path below, which closes it at `drawClickCount`. Read
+         * off `wants` alone it finished on the second click with the stop range unstated.
+         * @see drawsByRangeClicks, radarSearchFromClicks
+         */
+        if (wants === 'Point' && !drawsByRangeClicks(name)) {
+            // **A graphic that can be resized is otherwise sized by the draw**, in two
+            // clicks: the first plants the anchor, the second sets how far out it reaches
+            // and which way it faces. Finishing on the first click instead dropped these at
+            // a fixed metre default, which at a typical zoom is a symbol a few pixels
+            // across with its handles piled on top of each other and nothing grabbable.
+            if (!allowedGestures(name).resize) {
+                this.finishDraw([position]);
+                return;
+            }
+            if (!this.sketch.length) {
+                this.sketch.push(position);
+                return;
+            }
+            this.finishDraw([this.sketch[0], position]);
+            return;
+        }
+
+        // **The second click of a double-click is not a new vertex.** MapLibre delivers
+        // both of them as ordinary `click`s before it delivers the `dblclick`, and they
+        // land on the same pixel — so double-clicking the apex of a fields-of-fire
+        // pushed that apex twice, hit the three-vertex count, and finished the draw with
+        // a leg of zero length. The V had nothing to open, and the tip handle sat
+        // exactly on the apex handle, so the operator grabbed the apex whichever they aimed
+        // for. That is the "V angle cannot be modified" this fixes.
+        //
+        // Measured in screen pixels rather than degrees: whether two clicks are the same
+        // click is a question about the cursor, not about the ground.
+        const previous = this.sketch[this.sketch.length - 1];
+        if (previous && this.pixelsApart(previous, position) < DUPLICATE_CLICK_PX) return;
+
+        this.sketch.push(position);
+
+        // A graphic with a fixed base finishes on its own last click. It never sends
+        // the double-click a free-form line ends on, so waiting for one meant a
+        // fields-of-fire could not be drawn here at all: five clicks, no graphic.
+        // @see baseVertexCount
+        // **The clicks, which are not always the points.** Ambush stores three anchors and
+        // is drawn with two; comparing the sketch against the stored count waited for a
+        // third click that never comes. @see drawClickCount
+        // And an outline with a cap closes on its last allowed click. @see maxAreaVertices
+        const wanted = drawClickCount(name) ?? baseVertexCount(name) ?? maxAreaVertices(name);
+        if (wanted !== undefined && this.sketch.length >= wanted) {
+            this.finishDraw(this.sketch.slice(0, wanted));
+            return;
+        }
+
+        this.renderer.setSketch(this.sketch.map(p => toMercator([p[0], p[1]])));
+    }
+
+    private readonly onMouseOut = (): void => {
+        this.renderer.setVertexHint(null);
+        this.setCursor('');
+    };
+
+    /**
+     * A pointer over something a click or drag would act on, and an ordinary arrow
+     * everywhere else — the same rule and the same hit-testing as
+     * `TacticalGraphicsManager.updateHoverCursor`.
+     *
+     * **MapLibre's default is an open hand**, set by its own CSS on the interactive
+     * canvas, and it says "you can pan" over every pixel of the map — including over a
+     * graphic, where it is wrong, and over the vertex hint, where it hides the dot it
+     * sits on. So the arrow here is not a preference: it is the absence of a claim,
+     * which is what lets the pointer mean something when it appears.
+     */
+    private updateHoverCursor(point: {x: number; y: number}): void {
+        if (this.drawing) return;
+
+        let interactive: boolean;
+        if (HANDLE_MODES.includes(this.mode)) {
+            // Only a handle that would move. The center dot is inert except in translate,
+            // where it is the one place an operator naturally reaches to drag a symbol bodily.
+            const grabbed = this.renderer.hitTestHandle(point);
+            interactive = !!grabbed
+                && (grabbed.index !== this.renderer.centerHandleOf(grabbed.graphic) || this.mode === 'translate');
+        } else {
+            interactive = !!this.renderer.hitTest(point);
+        }
+
+        this.setCursor(interactive ? 'pointer' : 'default');
+    }
+
+    /** The canvas cursor. Inline, because it has to beat MapLibre's own class. */
+    private setCursor(cursor: string): void {
+        const canvas = this.map.getCanvas();
+        if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
+    }
+
+    /**
+     * The size and bearing a point-anchored draw supplies, from its two clicks.
+     *
+     * The second click is a point on the rim: how far it is from the anchor is the
+     * radius, and the direction it lies in gives the graphic's bearing — both read exactly
+     * as OpenLayers reads them off a Circle sketch. Planar, in projected meters, which is
+     * also the frame `rotation` is expressed in: degrees counter-clockwise from east, not
+     * a compass bearing. For an arc mission task that click is APP-06's start point, so
+     * the bearing is turned to put the start point there. @see rotationFromDrawnPoint
+     *
+     * Falls back to the default for a one-click draw, so a fixed-size symbol is
+     * unaffected and a canceled sizing click cannot leave a graphic with no size at all.
+     */
+    private sizeFromDraw(
+        name: TacticalGraphicName,
+        wants: string | undefined,
+        vertices: Position[],
+    ): {radius?: number; length?: number; width?: number; rotation: number} {
+        // **A graphic whose size *is* its decoration gets no radius at all.** For the
+        // direction-of-attack family and the crossings, `size` means "how big is the
+        // chevron", which the renderer derives from the zoom — so a placeholder radius
+        // here is not a default, it is a wrong answer that outranks the right one:
+        // `bakedDecorationSize` cannot tell a placeholder from a genuinely saved size, so
+        // it honored 40 km where OpenLayers derived 196 km, and the handles that hang off
+        // the arrow landed nowhere near it. @see hasBakedDecoration
+        if (hasBakedDecoration(name)) return {rotation: 0};
+        // A one-click drop has no second vertex to measure, and its size is a screen size
+        // converted here — the same number OpenLayers hands its holder. Falling through to
+        // `DEFAULT_RADIUS_METERS` is what made these land at a fixed metre size regardless
+        // of zoom. @see dropSizePx
+        const drop = dropSizePx(name);
+        // Converted where it lands: a pixel count times the bare resolution is a projected
+        // length, so the same badge dropped at 60 degrees north came out twice the size it
+        // does on the equator. @see screenMeters
+        if (drop !== undefined) {
+            return {radius: screenMeters(drop, resolutionOf(this.map), vertices[0]?.[1] ?? 0), rotation: 0};
+        }
+        /*
+         * **A drawn graphic gets no placeholder radius.** On a LineString, `radius` is
+         * the graphic's half-width — what `LineGraphicBase.setOffset` replays — and
+         * `sizeDefaults` already derives it as `drawingResolution × 20`, which is the
+         * rule the OpenLayers holders use. Stamping `DEFAULT_RADIUS_METERS` here handed
+         * that derivation a value it could not tell from a genuinely saved one, so it
+         * won: an air corridor drawn on MapLibre came out 80 km wide where the same
+         * corridor drawn on OpenLayers came out 391 km.
+         *
+         * This is the same mistake the `hasBakedDecoration` guard above already
+         * describes — a placeholder is not a default, it is a wrong answer that outranks
+         * the right one — and it applies to every drawn width graphic, not just the
+         * corridors.
+         */
+        if (wants !== 'Point') return {rotation: 0};
+        // A point-anchored graphic with no second vertex has no size to measure, and a
+        // radius of nothing is worse than a fixed one.
+        if (vertices.length < 2) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
+
+        const center = toMercator([vertices[0][0], vertices[0][1]]);
+        const rim = toMercator([vertices[1][0], vertices[1][1]]);
+        const dx = rim[0] - center[0];
+        const dy = rim[1] - center[1];
+        const radius = Math.hypot(dx, dy);
+
+        // A click on the anchor carries no size and no direction; the default is better
+        // than a graphic with a radius of nothing.
+        if (radius < MIN_DRAWN_RADIUS_M) return {radius: DEFAULT_RADIUS_METERS, rotation: 0};
+        // **On the ground, not on the screen.** `radius` is a real distance the generator
+        // builds from geodesically; these are mercator metres, 1.56x too long at 50
+        // degrees north. Stamping them made the rim outrun the cursor that sized it — the
+        // same defect OpenLayers had, from the same measurement. @see mercator.ts
+        const drawn = groundLength(radius, vertices[0][1]);
+        // The angle to the second click, turned by the library's rule: an arc mission task's
+        // second click is its start point, not its axis. @see rotationFromDrawnPoint
+        const rotation = rotationFromDrawnPoint(name, (Math.atan2(dy, dx) * 180) / Math.PI);
+        /*
+         * **Five graphics need a `length` as well, and stamping only a radius drew a line.**
+         *
+         * 240802 and the four maritime areas built like it take *two* dimensions off one
+         * anchor point. A drag gives one number, so the other has to be derived — the
+         * OpenLayers holder has always done that, in a private constant of its own, and
+         * this engine had no way to know. The result was a box 2 km long (the generator's
+         * flat default) and as wide as the drag, which renders as a vertical stroke: what
+         * 240802 has looked like here since 3.2.0 and what the three maritime ellipses
+         * inherited on the day they were added.
+         *
+         * `axisAndWidth` is that derivation, stated once for both engines. @see
+         * hasAxisAndWidth, and the OpenLayers twin in `RectangularTargetGraphicBase`.
+         */
+        const axis = axisAndWidth(name, drawn);
+        // `{length, width}`, not `{length, radius}`: a **public** `radius` is the graphic's
+        // size and reaches the generator as `size`, where this family's half-width comes in
+        // as the public `width` halved. Stamping a `radius` here would have set a field the
+        // generator does not read and changed nothing. @see toGraphicOptions
+        if (axis) return {length: axis.length, width: axis.width, rotation};
+
+        return {radius: drawn, rotation};
+    }
+
+    private readonly onDoubleClick = (event: MapMouseEvent): void => {
+        if (!this.drawing) return;
+        event.preventDefault();
+        // The double-click also fired two `click`s, so the last vertex is already in.
+        //
+        // **And it only ends a draw that has enough points**, which is what
+        // `sketchIsComplete` has always documented and never got asked. Ending early
+        // built a half symbol: a two-point ferry crossing is not a ferry crossing.
+        if (!this.sketchIsComplete()) return;
+        this.finishDraw(this.sketch);
+    };
+
+    /** Screen distance between two lon/lat positions, for the questions that are about the cursor. */
+    private pixelsApart(a: Position, b: Position): number {
+        const p = this.map.project([a[0], a[1]]);
+        const q = this.map.project([b[0], b[1]]);
+        return Math.hypot(p.x - q.x, p.y - q.y);
+    }
+
+    /**
+     * Whether the sketch has enough points to become a graphic.
+     *
+     * A fixed-vertex graphic needs **exactly** its count, so an Enter or a
+     * double-click part-way through is refused rather than producing a half symbol —
+     * a one-segment fields-of-fire is a line with an arrowhead at each end, which is
+     * a different graphic. @see baseVertexCount
+     */
+    /** The shared rule, so the two engines finish a draw at the same click. @see drawIsComplete */
+    private sketchIsComplete(): boolean {
+        return this.drawing ? drawIsComplete(this.drawing, this.sketch) : false;
+    }
+
+    private readonly onKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') this.cancelDraw();
+        else if (event.key === 'Enter' && this.sketchIsComplete()) this.finishDraw(this.sketch);
+    };
+
+    /**
+     * The same floor, applied to a description a gesture just produced.
+     *
+     * Only the first segment's length can offend, so only a LineString is touched and a
+     * graphic without a floor comes back as it went in.
+     */
+    private withFirstSegmentFloor(description: GraphicDescription): GraphicDescription {
+        if (description.geometry.type !== 'LineString') return description;
+        const held = this.minimumFirstSegment(description.properties.name, description.geometry.coordinates);
+        return held === description.geometry.coordinates
+            ? description
+            : {...description, geometry: {...description.geometry, coordinates: held}};
+    }
+
+    /**
+     * Hold a graphic's first segment to its floor while the shape is being authored.
+     *
+     * Three line graphics bake a mark into the geometry near the start and need room for
+     * it and for the arrowhead. `minimumFirstSegmentPx` says which and how many pixels;
+     * this engine had no equivalent at all, so the same short drag gave a readable symbol
+     * on OpenLayers and, here, a bow-tie sitting off the end of its own line.
+     *
+     * Extends P1 away from P0 along the bearing they already have and carries the rest of
+     * the line with it, so nothing but the length changes. Applied on the DRAW path only
+     * — `buildTacticalGraphic` is the door restore and import come through, and a floor
+     * there would stretch a saved line at whatever resolution the session happens to be
+     * at. @see LineGraphicBase.suspendMinimumLength for the same distinction.
+     */
+    private minimumFirstSegment(name: TacticalGraphicName, vertices: Position[]): Position[] {
+        const floorPx = minimumFirstSegmentPx(name);
+        if (floorPx === undefined || vertices.length < 2) return vertices;
+
+        const asPair = (position: Position): [number, number] => [position[0], position[1]];
+        const [p0, p1] = [toMercator(asPair(vertices[0])), toMercator(asPair(vertices[1]))];
+        const dx = p1[0] - p0[0];
+        const dy = p1[1] - p0[1];
+        const length = Math.hypot(dx, dy);
+        // Projected metres, to match the projected coordinates they are compared with —
+        // which is exactly the pixel count asked for, at any latitude.
+        const floor = floorPx * resolutionOf(this.map);
+        if (length === 0 || length >= floor) return vertices;
+
+        const shiftX = dx * (floor / length - 1);
+        const shiftY = dy * (floor / length - 1);
+        return vertices.map((vertex, index) => {
+            if (index === 0) return vertex;
+            const [x, y] = toMercator(asPair(vertex));
+            return toLonLat([x + shiftX, y + shiftY]);
+        });
+    }
+
+    /**
+     * The graphic a set of clicked vertices describes.
+     *
+     * Shared by the commit and the live preview, which is the point: a preview built by
+     * a second, similar-looking rule would be a picture of a different symbol, and it
+     * would diverge the moment either rule changed. Everything specific to a family —
+     * the box a rectangle is drawn as, the vertex a fields-of-fire has implied, the size
+     * read off a centre-to-edge drag — is decided once, here.
+     *
+     * Returns undefined while the vertices do not yet describe anything: two points of a
+     * polygon, one point of a line. The caller shows nothing rather than a half symbol.
+     */
+    private graphicFrom(name: TacticalGraphicName, vertices: Position[]): MapLibreTacticalGraphic | undefined {
+        const ranged = this.rangeClickDraw(name, vertices);
+        if (ranged) return buildTacticalGraphic(name, ranged.geometry, this.withPreset(ranged.properties), resolutionOf(this.map));
+
+        const drawn = this.anchorDraw(name, vertices);
+        if (drawn) return buildTacticalGraphic(name, drawn.geometry, this.seedStandoff(name, this.withPreset(drawn.properties), drawn.geometry), resolutionOf(this.map));
+
+        const wants = baseGeometryFor(name);
+        // What the operator clicked becomes what is stored — repeated clicks dropped, and an
+        // implied vertex made real so it gets a handle. @see normalizeDrawnBase
+        // What the operator clicked becomes what is stored, for a rectangle too: the drawn
+        // axis is the rectangle's axis, the way the rectangular target has
+        // always behaved. They used to be squared up here and turned by a later gesture.
+        // `previewDraw` and the commit both come through this function, so the preview
+        // cannot disagree with what the last click produces.
+        /*
+         * **A draw is the one caller that may append a width point**, so it does it here rather
+         * than inside the normalizer — the same division that keeps a rectangle's levelling in
+         * the draw paths. A sketch of clicks and a settled base are the same array of
+         * coordinates and only the caller knows which it is holding, and this function holds
+         * clicks: `previewDraw` and the commit both come through it. @see axisBaseFromDraw
+         *
+         * The half-width is the generic drawn offset both engines seed one of these with — 20
+         * screen pixels at the drawing zoom, converted where it lands. @see sizeDefaults
+         */
+        const seeded = carriesWidthPointInBase(name)
+            ? axisBaseFromDraw(name, vertices, screenMeters(DEFAULT_AXIS_HALF_WIDTH_PX, resolutionOf(this.map), vertices[0]?.[1] ?? 0))
+            : vertices;
+        const tidied = wants === 'LineString'
+            ? this.minimumFirstSegment(name, normalizeDrawnBase(name, seeded, resolutionOf(this.map)))
+            : seeded;
+        const geometry = buildBase(wants, tidied);
+        if (!geometry) return undefined;
+
+        const properties: TacticalGraphicProperties = {
+            name,
+            // The generators need both, and neither has a safe absent value: `rotation`
+            // reaches `Math.cos` and comes back NaN, and a point-anchored graphic with
+            // no radius has no size at all. @see maplibreAdapter
+            ...this.sizeFromDraw(name, wants, vertices),
+            // Which side a decoration takes, decided once from the way it was drawn: an
+            // abatis tooth faces north. Only a draw sets it, so rotation keeps it. @see drawnSide
+            ...drawnSide(name, tidied),
+        };
+
+        return buildTacticalGraphic(name, geometry, this.seedStandoff(name, this.withPreset(properties), geometry), resolutionOf(this.map));
+    }
+
+    /**
+     * The properties the draw worked out, over the preset the draw was started with: the points,
+     * size and turn the clicks gave are the draw's, the identity and amplifiers the host's.
+     * @see TacticalGraphicsEngine.startDrawing
+     */
+    private withPreset(properties: TacticalGraphicProperties): TacticalGraphicProperties {
+        return this.drawPreset ? {...properties, ...presetAmplifiers(this.drawPreset)} : properties;
+    }
+
+    /**
+     * Opens a newly drawn standoff-width graphic with a gap, and leaves every other build
+     * alone.
+     *
+     * **Here rather than in `sizeDefaults`, because only this function means "new".** That
+     * one runs on a restore and a rebuild too, and for the multiple-strike zone an absent
+     * width is not a gap to fill — it is the legacy two-ring description saying its base
+     * carries both rings. Seeding one there made the generator read those points as a
+     * single traced ring and the symbol came back as a self-crossing star, on both engines.
+     * OpenLayers gates the same seed on `shapingFromGesture`; this is that gate here.
+     * @see usesStandoffWidth, LineGraphicBase.standoff
+     */
+    private seedStandoff(name: TacticalGraphicName, properties: TacticalGraphicProperties, geometry: Geometry): TacticalGraphicProperties {
+        if (!usesStandoffWidth(name) || properties.width !== undefined) return properties;
+        /*
+         * **A ground length, at the graphic's first point**, as OpenLayers seeds it: a pixel size
+         * times the bare resolution is a projected length and comes out 1/cos(latitude) too
+         * large. The same draw at 40 degrees north seeded 57.6 km here and 44.4 km there.
+         * @see LineGraphicBase.standoff
+         */
+        const first = (geometry as {coordinates?: unknown}).coordinates;
+        const firstPoint = Array.isArray(first) && Array.isArray(first[0]) ? (first[0] as number[]) : undefined;
+        const latitude = firstPoint ? firstPoint[1] : 0;
+        const standoff = defaultStandoffMetres(name, groundLength(resolutionOf(this.map), latitude));
+        return standoff === undefined ? properties : {...properties, width: standoff};
+    }
+
+    /**
+     * The six graphics APP-06 describes by **anchor points**, drawn centre to edge.
+     *
+     * Their base is a `LineString`, so the generic path stored the two raw clicks and let
+     * each generator's own reader make of them what it would — for Turn, the ends of the
+     * chord. OpenLayers reads the same two clicks as a centre and an edge, writes the
+     * symbol's own point layout, and files `radius` and `rotation`. The panel promises
+     * "2 points (center → edge)" on both engines, so this one was breaking its own hint:
+     * measured, the identical gesture gave 240 x 31 px there and 120 x 24 px here.
+     *
+     * The layout comes from `drawnAnchors`, which is the library's statement of it and
+     * which the OpenLayers holders now use too — so the two engines cannot describe the
+     * same symbol differently. Returns undefined for everything else, and for a first
+     * click with nothing to measure yet.
+     */
+    /**
+     * 200700's three clicks, read into the four numbers its plate names.
+     *
+     * The sibling of `anchorDraw` for the one graphic whose clicks are **values rather than
+     * anchor points**: the base stays a single `Point` and what the clicks state travels in
+     * the amplifiers. The reading is `radarSearchFromClicks`, which is also what the
+     * OpenLayers controller calls, so the third click cannot mean one thing here and another
+     * there. Returns undefined for every other graphic, and before there is an axis to state.
+     *
+     * **The axis rides `rotation`, not `centerAzimuthDeg`**, for the same reason it does on
+     * the other engine: `centerAzimuthDeg` outranks it, so an axis filed there would pin the
+     * symbol against every later rotate. @see RangeFanGraphicBase.applyRadarSearchFrame
+     */
+    /**
+     * What the read-out states while 200700 is being clicked out.
+     *
+     * Its plate names four numbers and one click can set two of them: the second fixes the
+     * axis and the near range together, the third settles the far one. So the label names
+     * the azimuth throughout and adds whichever range is under the cursor — where before
+     * the axis had no read-out at all, because a measure line reports its own length and an
+     * azimuth is not one.
+     *
+     * `undefined` for every other draw, which keeps the plain distance it already showed.
+     * @see RangeFanGraphicBase.applyRadarSearchFrame, the same statement on the other engine
+     */
+    private rangeClickReadout(event: MapMouseEvent): MeasurePart[] | undefined {
+        if (!this.drawing || !drawsByRangeClicks(this.drawing)) return undefined;
+        const frame = radarSearchFromClicks([...this.sketch, [event.lngLat.lng, event.lngLat.lat]]);
+        if (!frame) return undefined;
+        const placed = frame.ranges[frame.ranges.length - 1];
+        return [
+            {caption: RADAR_READOUT_CAPTIONS.azimuth, degrees: ((frame.centerAzimuthDeg % 360) + 360) % 360},
+            {
+                caption: frame.ranges.length > 1 ? RADAR_READOUT_CAPTIONS.stopRange : RADAR_READOUT_CAPTIONS.startRange,
+                meters: placed,
+            },
+        ];
+    }
+
+    private rangeClickDraw(
+        name: TacticalGraphicName,
+        vertices: Position[],
+    ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        if (!drawsByRangeClicks(name)) return undefined;
+        const frame = radarSearchFromClicks(vertices);
+        if (!frame) return undefined;
+        const stop = frame.ranges[frame.ranges.length - 1];
+        return {
+            geometry: {type: 'Point', coordinates: frame.center},
+            properties: {
+                name,
+                /*
+                 * **The four the plate names, and nothing else.** This wrote a `rotation`, a
+                 * `radius` and a pair of `rangeFan` bands — a range fan's description of a
+                 * different symbol, in which two of 200700's four values did not appear under
+                 * their own names at all. The OpenLayers holder
+                 * writes exactly these, so a graphic drawn on either engine saves identically.
+                 * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+                 */
+                searchAxisAzimuthDeg: ((frame.centerAzimuthDeg % 360) + 360) % 360,
+                // Absent until the third click settles which of the two ranges is which,
+                // which is what the generator reads as "half drawn".
+                startRange: frame.ranges.length > 1 ? frame.ranges[0] : undefined,
+                stopRange: stop,
+                stopRelativeBearingDeg: RSD_DEFAULT_RELATIVE_BEARING_DEG,
+            },
+        };
+    }
+
+    private anchorDraw(
+        name: TacticalGraphicName,
+        vertices: Position[],
+    ): {geometry: Geometry; properties: TacticalGraphicProperties} | undefined {
+        /*
+         * **The four placed point by point never come through here.** `anchorDraw` reads a
+         * two-click drag as a centre and a rim; ambush, turn, envelopment and pursuit are
+         * drawn by clicking the plate's own anchor points, so they take
+         * the ordinary vertex path and `normalizeDrawnBase` turns those clicks into the
+         * stored anchors — the same function OpenLayers runs at its own door.
+         * @see drawsByAnchorClicks, anchorsFromClicks
+         */
+        if (drawsByAnchorClicks(name)) return undefined;
+        if (!usesDrawnAnchors(name) || !vertices.length) return undefined;
+
+        // A drop has one vertex and states its own size, so there is no second point to
+        // measure — but the anchors still have to be written, or the base would hold the
+        // single click and the four points the standard names would never exist.
+        const drop = dropSizePx(name);
+        if (vertices.length < 2) {
+            if (drop === undefined) return undefined;
+            const size = screenMeters(drop, resolutionOf(this.map), vertices[0][1]);
+            const anchors = drawnAnchors(name, {center: vertices[0], size, rotation: 0});
+            return anchors && {
+                geometry: {type: 'LineString', coordinates: anchors},
+                properties: {name, radius: size, rotation: 0},
+            };
+        }
+
+        const center0 = toMercator([vertices[0][0], vertices[0][1]]);
+        const edge = toMercator([vertices[1][0], vertices[1][1]]);
+        const dx = edge[0] - center0[0];
+        const dy = edge[1] - center0[1];
+        // A real distance, like every other drawn size. @see mercator.ts
+        const radius = groundLength(Math.hypot(dx, dy), vertices[0][1]);
+        if (!(radius > 0)) return undefined;
+
+        const rotationDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+        /*
+         * **Not every one of the six is drawn centre-to-edge**, and which are is the
+         * library's answer rather than this file's. Contain's plate marks its two clicks as
+         * the ends of the semicircle's opening, so its frame sits half way along the drag at
+         * half the reach, a quarter turn round. @see frameFromDrag
+         */
+        const drag = frameFromDrag(name, radius, rotationDeg);
+        const size = drag.size;
+        // Walked in projected metres and converted back, which is the space this file
+        // measured the drag in -- the same two lines OpenLayers' controller runs, because
+        // each renderer walks its own coordinates and only the *rule* is shared.
+        const bearing = (drag.bearingDeg * Math.PI) / 180;
+        const reach = projectedLength(drag.reach, vertices[0][1]);
+        const center = drag.reach
+            ? toLonLat([center0[0] + reach * Math.cos(bearing), center0[1] + reach * Math.sin(bearing)])
+            : vertices[0];
+        const rotation = drag.rotation;
+        const anchors = drawnAnchors(name, {center, size, rotation});
+        if (!anchors) return undefined;
+
+        return {
+            geometry: {type: 'LineString', coordinates: anchors},
+            properties: {name, radius: size, rotation},
+        };
+    }
+
+    /**
+     * Turns the collected vertices into a graphic.
+     *
+     * A ring is closed here rather than by the operator: a polygon whose last vertex is
+     * not its first is not a polygon, and asking an operator to click the start point
+     * again — accurately — is a worse interaction than assuming it.
+     */
+    private finishDraw(vertices: Position[]): void {
+        const name = this.drawing;
+        if (!name) return;
+        this.renderer.setMeasure(null);
+
+        const graphic = this.graphicFrom(name, vertices);
+        this.cancelDraw();
+        if (!graphic) return;
+
+        this.renderer.add(graphic);
+        this.renderer.select(graphic.id);
+        this.callbacks.onSelect?.(graphic);
+        this.callbacks.onChange?.();
+    }
+
+    // ── dragging ────────────────────────────────────────────────────────────
+
+    private readonly onPointerDown = (event: MapMouseEvent): void => {
+        if (this.drawing) return;
+
+        // **The handle decides which graphic is being edited**, not the selection.
+        // In a handle mode every graphic wears its handles, exactly as OpenLayers does,
+        // so the one under the pointer is the one the operator means — requiring them to
+        // select it first would make the same button behave differently in the two
+        // engines. Falls back to the selection when nothing is grabbed, which is what
+        // a body drag needs.
+        const grabbed = this.renderer.hitTestHandle(event.point);
+        const selectedId = this.renderer.selection;
+        const graphic = grabbed?.graphic ?? (selectedId ? this.renderer.find(selectedId) : undefined);
+        if (!graphic) return;
+
+        /*
+         * **Some graphics publish points nobody may drag.** They are stored and shown so the
+         * operator can see the symbol's anchors and a file carries them, but the shape they
+         * describe is not editable point by point — the whole graphic moves, turns and scales
+         * instead. OpenLayers refuses the same grab through the handle feature's `inert`
+         * flag; this is where that fact reaches this engine. @see handlesAreInert
+         */
+        if (grabbed !== undefined && handlesAreInert(graphic.name)) return;
+
+        // A handle carrying a role of its own works in **view** mode too: its meaning
+        // comes from the handle, not from a mode button, so requiring the operator to pick
+        // one first would be asking them to answer a question the handle has already
+        // answered.
+        // **The gray center dot is a grip in translate only.** Under any other mode it is
+        // not claimed at all, so the press goes to the map and pans it, which is what
+        // OpenLayers does: its `handleDownEvent` returns false on an `inert` handle unless
+        // it is translating. Claiming it in `edit` resized about the center with the
+        // press's distance from it as the lever, measured on Isolate as 180 km to 4,399 km
+        // from a 2 px miss. @see applyGesture
+        const onCenter = grabbed !== undefined && grabbed.index === this.renderer.centerHandleOf(graphic);
+        if (onCenter && this.mode !== 'translate') return;
+
+        const roleDrag = grabbed !== undefined && roleOfHandle(graphic, grabbed.index) !== 'shape';
+        if (this.mode === 'view' && !roleDrag) return;
+
+        // The drag has to start *on* the graphic, or on one of its handles. Starting
+        // it anywhere on the map would mean an operator who wanted to pan instead resized
+        // whatever happened to be selected.
+        const handle = grabbed?.index ?? -1;
+        const onHandle = handle >= 0;
+        const onGraphic = this.renderer.hitTest(event.point)?.id === graphic.id;
+        const reshaping = this.mode === 'modify' || this.mode === 'edit';
+        const vertex = reshaping ? this.grabVertex(graphic, event.point) : -1;
+        // Noted now, added on the first real move — a click that inserted a vertex would
+        // mean every click on a line reshaped it. @see grabSegment
+        const insertAt = reshaping && vertex < 0 ? this.grabSegment(graphic, event.point) : -1;
+        if (!onHandle && !onGraphic && vertex < 0 && insertAt < 0) return;
+
+        // Grabbing another graphic's handle makes it the selected one, so everything
+        // downstream — the properties panel, a later body drag — agrees about what the
+        // user is working on.
+        if (graphic.id !== selectedId) {
+            this.renderer.select(graphic.id);
+            this.callbacks.onSelect?.(graphic);
+        }
+
+        this.dragging = {
+            graphic,
+            // Only ever true in translate, where the center dot means "move this". Every
+            // other mode refused the press above: rotate and resize are both degenerate
+            // there, since the scale ratio divides by distance-to-center and a point on
+            // the axis has no angle. The dot is drawn gray to say so.
+            onCenter,
+            onPivot: this.startedOnPivot(graphic, event.point),
+            handle,
+            vertex,
+            insertAt,
+            origin: [event.lngLat.lng, event.lngLat.lat],
+            start: dragStartOf(graphic),
+            started: false,
+            startPixel: {x: event.point.x, y: event.point.y},
+        };
+        // Otherwise the map pans out from under the gesture.
+        this.map.dragPan.disable();
+        this.attachDragToWindow();
+    };
+
+    /**
+     * Drives the rest of the drag from the **window**, not from the map's own event stream.
+     *
+     * MapLibre stops dispatching `mousemove` and `mouseup` partway through a gesture that
+     * moves far enough in a single step — its handler manager claims the pointer — and the
+     * drag then simply stops receiving positions. Measured on the running app: a drag
+     * delivered as two pointer moves had its second move and its *mouseup* swallowed, while
+     * a `window` listener on the same page saw all of them. Two things followed, and the
+     * second is the worse one:
+     *
+     * - The gesture ended wherever the last delivered move left it. A tip drag came out at
+     *   exactly half the distance the cursor travelled.
+     * - `endDrag` never ran, so `this.dragging` stayed set, `onChange` never fired, and
+     *   **`dragPan` was left disabled** — the map could not be panned again for the rest of
+     *   the session.
+     *
+     * A `window` listener is the same machinery {@link beginGesture} already uses for a
+     * host's affordance, and for the same reason: the pointer belongs to the gesture from
+     * the moment it goes down, not to whichever element it happens to be over.
+     *
+     * The map's own `mousemove` keeps the *hover* half — the vertex hint and the cursor —
+     * because that is not part of a drag and reads better from the map's own projection.
+     */
+    private attachDragToWindow(): void {
+        this.releaseDragPointer?.();
+
+        const move = (event: PointerEvent) => {
+            const drag = this.dragging;
+            if (!drag) return;
+
+            const point = this.pointFromPointer(event);
+            const to = this.positionFromPointer(event);
+            if (!point || !to) return;
+
+            // The same threshold the map stream applied, measured in the same container
+            // pixels `startPixel` was recorded in. @see DRAG_THRESHOLD_PX
+            if (!drag.started) {
+                if (Math.hypot(point.x - drag.startPixel.x, point.y - drag.startPixel.y) < DRAG_THRESHOLD_PX) return;
+                drag.started = true;
+            }
+            this.dragTo(to);
+        };
+        const up = () => {
+            this.releaseDragPointer?.();
+            this.endDrag();
+        };
+
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        this.releaseDragPointer = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+            this.releaseDragPointer = null;
+        };
+    }
+
+    /** A DOM pointer event's position in **map-container pixels**, or undefined if there is no map. */
+    private pointFromPointer(event: {clientX: number; clientY: number}): {x: number; y: number} | undefined {
+        const canvas = this.map.getCanvasContainer();
+        if (!canvas) return undefined;
+        const rect = canvas.getBoundingClientRect();
+        return {x: event.clientX - rect.left, y: event.clientY - rect.top};
+    }
+
+    /**
+     * Whether the grab landed on the point a rotate or a resize turns about.
+     *
+     * Measured in **screen pixels**, because "did the operator grab the pivot" is a
+     * question about the cursor, not about the ground: the same few meters is a hit at
+     * one zoom and a miss at another.
+     */
+    private startedOnPivot(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): boolean {
+        const pivot = centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name);
+        const projected = this.map.project([pivot[0], pivot[1]] as [number, number]);
+        return Math.hypot(projected.x - point.x, projected.y - point.y) <= PIVOT_GRAB_PX;
+    }
+
+    /**
+     * The graphic being drawn, shown at its current size before the second click.
+     *
+     * **OpenLayers has always drawn this and MapLibre drew nothing.** Every OpenLayers
+     * holder rebuilds itself from the sketch on each pointer move — a circle from its
+     * radius, a corridor from its vertices — so an operator watches the symbol they are
+     * making. Here they got a rubber-band line between the clicks and, for a circle, a
+     * distance in metres; the symbol itself appeared only once the gesture was over. So
+     * the questions the gesture asks — how big, which way round, how far does this bend
+     * — could only be answered after committing to an answer.
+     *
+     * It is a real graphic through the real paint path, so the preview *is* the symbol
+     * rather than an impression of it. The renderer holds it apart from the ones it owns;
+     * `clearPreview` takes it off however the draw ends.
+     *
+     * Every family, not only the point-anchored ones: a line, a polygon and a rectangle
+     * all describe a symbol before their last click, and the ones that do not yet — two
+     * points of a polygon — simply preview nothing until they do.
+     */
+    private previewDraw(vertices: Position[]): void {
+        const name = this.drawing;
+        if (!name) return;
+
+        // The same construction the next click will commit, not a second one that happens
+        // to agree — a preview that disagreed with the commit would make the symbol jump
+        // at the moment the operator stopped being able to change it. @see graphicFrom
+        const built = this.graphicFrom(name, vertices);
+        // A generator that cannot draw this yet simply shows nothing, rather than leaving
+        // the last shape it accepted standing under a cursor that has moved on.
+        this.renderer.setPreview(built ? {...built, id: DRAW_PREVIEW_ID} : null);
+        this.previewing = true;
+    }
+
+    /** Takes the preview off, whichever way the draw ended. @see previewDraw */
+    private clearPreview(): void {
+        if (!this.previewing) return;
+        this.previewing = false;
+        this.renderer.setPreview(null);
+    }
+
+    private readonly onPointerMove = (event: MapMouseEvent): void => {
+        if (this.drawing) {
+            // A rubber band to the cursor, so the operator can see the segment they are
+            // about to commit rather than only the ones they already have.
+            if (this.sketch.length) {
+                const center = toMercator([this.sketch[0][0], this.sketch[0][1]]);
+                const cursor = toMercator([event.lngLat.lng, event.lngLat.lat]);
+                this.renderer.setSketch(
+                    [...this.sketch, [event.lngLat.lng, event.lngLat.lat]].map(p => toMercator([p[0], p[1]])),
+                );
+                // Sizing a point-anchored graphic reads out the radius as it goes, the
+                // way a resize does — the second click is otherwise blind, and the number
+                // it is about to commit is the whole point of the gesture.
+                if (baseGeometryFor(this.drawing) === 'Point' && showsSizeReadout(this.drawing)) {
+                    this.renderer.setMeasure([center, cursor], undefined, this.rangeClickReadout(event));
+                }
+                this.previewDraw([...this.sketch, [event.lngLat.lng, event.lngLat.lat]]);
+            }
+            return;
+        }
+
+        const drag = this.dragging;
+        if (!drag) {
+            // Nothing held: the pointer is only shopping, so show where a vertex would go
+            // and say whether there is anything here to act on.
+            this.updateVertexHint(event.point);
+            this.updateHoverCursor(event.point);
+            return;
+        }
+
+        // **The window owns the drag once it has begun.** Advancing it from here as well
+        // would apply every move twice, and this stream is the one that goes quiet halfway
+        // through. @see attachDragToWindow
+        if (this.releaseDragPointer) return;
+
+        if (!drag.started) {
+            const moved = Math.hypot(event.point.x - drag.startPixel.x, event.point.y - drag.startPixel.y);
+            if (moved < DRAG_THRESHOLD_PX) return;
+            drag.started = true;
+        }
+
+        this.dragTo([event.lngLat.lng, event.lngLat.lat]);
+    };
+
+    /**
+     * Advances the drag in progress to `to`, in lon/lat.
+     *
+     * Split out of `onPointerMove` so an affordance gesture and a handle drag are the
+     * same code — the map's own pointer stream is one source of positions, and a host's
+     * `pointermove` on an element above the map is another. @see beginGesture
+     */
+    private dragTo(to: Position): void {
+        const drag = this.dragging;
+        if (!drag) return;
+
+        /*
+         * **The description the gesture started from, not the one the last move produced.**
+         *
+         * Every gesture in `applyGesture` is absolute — it takes the graphic, the pointer's
+         * origin and where the pointer is now — so applying it afresh to the starting shape
+         * gives the same answer however many times the pointer reported itself on the way.
+         * Feeding it the previous result instead does not, because the rebuild between two
+         * moves is not a no-op: `normalizeDrawnBase` re-squares an axis arrow's width point
+         * against its axis, and a vertex drag moves the axis, so ten intermediate squarings
+         * compose into a width 6.4% narrower than the one-step drag's. OpenLayers squares
+         * once, at `modifyend`; this is the same guarantee reached the same way.
+         *
+         * It also holds the two gestures that used to change meaning halfway through. A
+         * rotate reads "did the grab land on the pivot" from the position it is measuring
+         * from, and a resize reads its refusal off the same one — both answered yes on the
+         * first move and no on every move after it, because the cursor had left by then.
+         */
+        let before = drag.start;
+
+        // The drag began on a segment: add the vertex now that it is a drag, then carry
+        // on as though the operator had grabbed it. Done once — `insertAt` is cleared — so
+        // the rest of the gesture moves the new vertex instead of sowing a trail of them.
+        // The insertion belongs to the starting shape, since that is what every later move
+        // is applied to.
+        if (drag.insertAt >= 0) {
+            before = insertVertex(before, drag.insertAt, drag.origin);
+            drag.start = before;
+            drag.vertex = drag.insertAt;
+            drag.insertAt = -1;
+        }
+
+        const after = withDerivedAmplifiers(
+            drag.graphic.name,
+            this.withPastAxisMirror(this.applyGesture(before, drag, to), drag, to),
+            before,
+            this.effectiveMode(),
+        );
+        if (after === before) return;
+
+        const rebuilt = buildTacticalGraphic(
+            drag.graphic.name,
+            after.geometry,
+            after.properties,
+            resolutionOf(this.map),
+        );
+        // A generator that refuses the edited description — a line dragged onto itself,
+        // a radius driven to nothing — leaves the graphic as it was. Dropping it
+        // mid-drag would delete what the operator is holding.
+        if (!rebuilt) return;
+
+        // **The "name only" choice rides along.** The rebuild reads the portable bag, which
+        // deliberately does not carry it, so a drag used to put every amplifier back. Only
+        // that flag is carried; what a drag does to the label anchor is left as it was.
+        // @see carryPaintFlags, TacticalGraphicsEngine.setAmplifiersHidden
+        const hidden = drag.graphic.graphic.hideAmplifiers;
+        const next = hidden
+            ? {
+                ...rebuilt,
+                id: drag.graphic.id,
+                graphic: {...rebuilt.graphic, hideAmplifiers: hidden},
+                labels: rebuilt.labels ? {...rebuilt.labels, hideAmplifiers: drag.graphic.labels?.hideAmplifiers} : rebuilt.labels,
+            }
+            : {...rebuilt, id: drag.graphic.id};
+        this.renderer.replace(drag.graphic.id, next);
+        drag.graphic = next;
+        // **Only once the gesture has actually changed the size**, which is the rule
+        // OpenLayers states in `MissionTaskController.handleResize`: a resize becomes one
+        // when the radius moves, not when a pointer goes down. Arming on pointer-down
+        // instead put the read-out on screen for a plain move, where it measures a radius
+        // nobody is changing. The read-out then follows the drag, reporting the radius
+        // the operator is dragging *to*, which is the whole point of showing it.
+        if (after.properties.radius !== before.properties.radius) this.showMeasure(next);
+        /*
+         * **A band drag changes a range, and that is a size too.** The test above is
+         * `radius`, which for a fan is the *outermost* range — so dragging 200700's start
+         * arc changed a number the read-out was not watching and reported nothing at all,
+         * while the stop arc reported. OpenLayers arms its own
+         * on the same gesture. @see RangeFanGraphicBase.setBandRange
+         */
+        const moved = changedBand(before, after);
+        if (moved !== undefined) this.showMeasure(next, moved);
+
+        // The two angles 200700 is described by. Each is armed by the gesture that sets it,
+        // which is the rule the other engine states in `RangeFanGraphicBase.measureParts`.
+        if (next.name === TacticalGraphicName.RadarSearchDoctrine) {
+            if (after.properties.stopRelativeBearingDeg !== before.properties.stopRelativeBearingDeg) {
+                this.showAngleMeasure(next, RADAR_READOUT_CAPTIONS.relativeBearing, after.properties.stopRelativeBearingDeg);
+            } else if (after.properties.searchAxisAzimuthDeg !== before.properties.searchAxisAzimuthDeg) {
+                this.showAngleMeasure(next, RADAR_READOUT_CAPTIONS.azimuth, after.properties.searchAxisAzimuthDeg);
+            }
+        }
+    }
+
+    /**
+     * **A grip dragged well past a point-anchored graphic's own axis flips it**, as OpenLayers'
+     * `mirrorIfDraggedPastAxis` does on every shape-grip drag in edit and resize: that is how a
+     * hook or an envelopment changes flanks. MapLibre applied the rule only to the dedicated
+     * mirror grip, so the same drag flipped a graphic on one engine and not the other.
+     *
+     * Not for a drag started from the selection box, which says only "bigger" or "turn", and
+     * not for a grip with a role of its own (width, band, mirror), which OpenLayers routes
+     * elsewhere before it gets here. @see setMirror, isAffordanceGesture on the other engine
+     */
+    private withPastAxisMirror(after: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
+        const mode = this.effectiveMode();
+        if (this.activeGesture || drag.handle < 0 || drag.onCenter) return after;
+        if (mode !== 'edit' && mode !== 'resize' && mode !== 'modify') return after;
+        if (after.geometry.type !== 'Point') return after;
+        if (roleOfHandle(drag.graphic, drag.handle) !== 'shape') return after;
+        return setMirror(after, to, resolutionOf(this.map), 'across');
+    }
+
+    /**
+     * Ends the drag in progress, however it began.
+     *
+     * The body of what `onPointerUp` did, so an affordance gesture releases through the
+     * same door: the read-out comes down, pan goes back on, and a change is announced
+     * only if the drag moved something.
+     */
+    private endDrag(): void {
+        this.releaseDragPointer?.();
+        this.renderer.setMeasure(null);
+        if (!this.dragging) return;
+        const changed = this.dragging.started;
+        this.dragging = null;
+        this.map.dragPan.enable();
+        if (changed) this.callbacks.onChange?.();
+    }
+
+    /**
+     * The gesture the current mode means, applied to the description.
+     *
+     * **A graphic that refuses a gesture is left alone**, rather than the mode being
+     * blocked. Refusing at the point of application means the operator can still select
+     * it, still move it, and still see why nothing happened — a mode that switched
+     * itself off would look like a broken button. @see allowedGestures
+     */
+    private applyGesture(before: GraphicDescription, drag: NonNullable<typeof this.dragging>, to: Position): GraphicDescription {
+        // Read once, at the top: an affordance gesture outranks the mode for the whole
+        // of this drag. @see effectiveMode
+        const mode = this.effectiveMode();
+
+        // The center dot is a **shortcut to move**, and only in translate mode. Under any
+        // other mode it does nothing: `onPointerDown` does not claim it, and this guards
+        // the same rule for a drag that got here anyway. Falling through let an `edit`
+        // drag resize from the center, and treating it as "move" in every mode made a
+        // graphic that refuses resize move instead. OpenLayers leaves it alone in both.
+        if (drag.onCenter) return mode === 'translate' ? translate(before, drag.origin, to) : before;
+
+        // A handle with a *role* means that role, whatever mode is selected — an
+        // offset handle sets a width and nothing else, and a band handle sets its own
+        // band. Reading the mode first would make the same handle do four different
+        // things depending on a button, which is not what the handle is for.
+        const byRole = this.applyHandleRole(before, drag, to);
+        if (byRole) return byRole;
+
+        const allowed = allowedGestures(drag.graphic.name);
+        if (mode === 'rotate' && !allowed.rotate) return before;
+        if (mode === 'resize' && !allowed.resize) return before;
+        // **Resize only, and decided once at pointer-down.** A grab on the pivot carries
+        // no scale — the ratio is a tiny number over a tiny number — and testing per
+        // step let the refusal lapse the moment the cursor left, after which every step
+        // scaled from the *first step* rather than from the start: one drag on its own
+        // anchor grew a fields-of-fire sixteenfold.
+        //
+        // Rotate is **not** refused, because OpenLayers does not refuse it: its start
+        // angle at the pivot is `atan2(0, 0)` = 0, so the graphic turns by the direction
+        // of the drag, which is a defined and useful gesture. Measured on a fields of
+        // fire, grabbing handle 0: OpenLayers rotates, MapLibre did nothing.
+        if (drag.onPivot && mode === 'resize') return before;
+
+        switch (mode) {
+            case 'translate':
+                return translate(before, drag.origin, to);
+            case 'rotate':
+                return rotate(before, drag.origin, to);
+            case 'resize':
+                return resize(before, drag.origin, to);
+            // `edit` reshapes, exactly as `modify` does — the difference between the two
+            // is the selection, the box and the affordances, none of which change what a
+            // drag on a handle means. Sharing the case rather than duplicating it is what
+            // keeps them from drifting.
+            case 'edit':
+            case 'modify':
+                // **A graphic that stretches on an edit drag resizes**, whether or not it
+                // reshapes — that is what makes a fields-of-fire's two arms feel like an
+                // editable line: dragging a leg opens or closes the V. Translating
+                // instead slid the whole graphic, so the angle could not be changed that
+                // way at all. @see editStretches
+                //
+                // **A grip is not an exception, unless the graphic reshapes.** Grabbing a
+                // handle used to fall through to the vertex move below whatever the symbol
+                // was, and this engine reshapes wherever `modify` is allowed — 272
+                // graphics — while OpenLayers reshapes on the 81 the library now names. On
+                // the 23 that stretch and do not reshape, the same dot therefore scaled the
+                // symbol there and pulled one point out of it here. Measured on the handle
+                // sweep, the bearing lines' second grip landed 37.5 km apart.
+                // @see reshapesByVertex
+                if (editStretches(drag.graphic.name) && !reshapesByVertex(drag.graphic.name)) {
+                    return resize(before, drag.origin, to);
+                }
+                // A graphic that does not reshape and does not stretch is left alone.
+                // Falling through to the move below would make "edit" a second "move" for
+                // the point-anchored symbols, where OpenLayers does nothing at all.
+                if (!allowed.modify) return before;
+                // The anchor vertex is inert under a reshape — dragging it would bend the
+                // graphic about the point the operator thinks of as its origin. Moving is
+                // what translate mode is for. @see anchorVertex
+                if (drag.vertex >= 0 && drag.vertex === anchorVertex(drag.graphic.name)) return before;
+                /*
+                 * **A drag that grabbed no vertex does nothing**, which is what OpenLayers
+                 * does and not what the comment here used to claim. Its `Modify` drags
+                 * vertices and inserts them; it never translates the feature, and its own
+                 * manager declines an edit-mode drag outright unless the graphic stretches
+                 * or a mirror handle was grabbed. So this fallback had no counterpart:
+                 * pressing inside a rectangular zone and pulling moved it here and did
+                 * nothing there — seventeen rows of the handle sweep, on graphics where
+                 * neither engine even draws a grip at that spot.
+                 *
+                 * Moving is what the selection box's translate affordance is for, on both
+                 * engines. Edit mode shapes.
+                 *
+                 * A vertex drag authors the shape, so it takes the same floor a draw does
+                 * — otherwise a graphic that could not be DRAWN below 80 px could be
+                 * dragged below it a moment later, and OpenLayers refuses both.
+                 */
+                return drag.vertex >= 0 ? this.withFirstSegmentFloor(moveVertex(before, drag.vertex, to)) : before;
+
+            default:
+                return before;
+        }
+    }
+
+    /**
+     * The gesture a *specific handle* means, or null when it carries no role of its
+     * own and the mode should decide.
+     *
+     * @see handleContract for why the index alone cannot answer this: the movement
+     * family puts its offset handle last and the block family puts it first.
+     */
+    private applyHandleRole(
+        before: GraphicDescription,
+        drag: NonNullable<typeof this.dragging>,
+        to: Position,
+    ): GraphicDescription | null {
+        if (drag.handle < 0) return null;
+
+        const name = drag.graphic.name;
+        // A handle role sets a **number** — a bend, a reach, a side — and for the six
+        // graphics drawn from anchor points the picture comes from the points. So each
+        // answer is turned back into points before it is applied, or the number would
+        // move and the symbol would not. @see withAnchorGeometry
+        const byRole = (next: GraphicDescription | null): GraphicDescription | null =>
+            next && withAnchorGeometry(next);
+
+        switch (roleOfHandle(drag.graphic, drag.handle)) {
+            case 'offset':
+                return setOffset(before, to, {
+                    offsetScale: handleContract(name).offsetScale,
+                    resolution: resolutionOf(this.map),
+                    // Where the press was, so the width moves by the drag, not to the cursor.
+                    grab: drag.origin,
+                });
+            case 'bend':
+                // Each curve family clamps its own bend, and the two ranges differ —
+                // Envelopment's hook bows much harder than a turn. It also *reads* the
+                // bend differently: its tip lies along the axis rather than off it, so it
+                // brings its own rule. @see envelopmentBendFrom
+                return byRole(name === TacticalGraphicName.Envelopment
+                    ? setBend(before, to, clampEnvelopmentBend, envelopmentBendFrom)
+                    // **Turn reads its own bend too, now that its handle is the curve's
+                    // apex rather than the Bezier's control point.** The offset is half the
+                    // bend's own depth, and the doubling belongs beside the geometry that
+                    // causes it. @see turnBendFrom
+                    : setBend(before, to, clampTurnBend, turnBendFrom));
+            case 'mirror':
+                // Side only — no width, no vertex. @see setMirror
+                return byRole(setMirror(before, to, resolutionOf(this.map), handleContract(name).mirrorAxis));
+            case 'reach':
+                return byRole(setReach(before, to));
+            case 'extend':
+                // The other end of the chord, pinned. @see setExtend
+                return byRole(setExtend(before, to, handleContract(name).extendAnchor));
+            case 'band':
+                // The fans put their center first, so the handle index is one ahead of
+                // the band it drives. @see RANGE_FAN_BAND_OFFSET
+                return setBandRange(before, drag.handle - RANGE_FAN_BAND_OFFSET, to);
+            case 'opening':
+                // One grip, one number, both edges — 200700's stop relative bearing.
+                // @see setSectorOpening, RangeFanGraphicBase.setRadarHalfAngle
+                return setSectorOpening(before, to);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * The radius read-out, for a graphic that reports one.
+     *
+     * Shown for the whole gesture, as OpenLayers' `showMeasure` is: from the pivot to
+     * the rim, so the operator can read the number they are dragging to.
+     * `showsSizeReadout` — **not** the dialog's field list, which is a different
+     * question: a read-out is feedback on a gesture, an amplifier is what the symbol
+     * carries. Seven circle graphics have the first without the second. The OpenLayers
+     * holder reads the same predicate, so a graphic
+     * cannot report a radius in one place and not the other.
+     */
+    private showMeasure(graphic: MapLibreTacticalGraphic, bandIndex?: number): void {
+        if (!showsSizeReadout(graphic.name)) return;
+        /*
+         * **The ring being dragged, not the outermost one.** A fan has a range per ring, so
+         * "the size" is not one number: measuring to `radius` while the hand is on the inner
+         * arc reports a figure that is not moving. `MissionTaskGraphicBase.measureStated` is
+         * the same rule on the other engine. @see bandRangeOf
+         */
+        const radius = bandIndex === undefined ? graphic.properties.radius : bandRangeOf(graphic, bandIndex);
+        if (!radius || radius <= 0) return;
+
+        const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name) as [number, number]);
+
+        /*
+         * **To the rim handle, which is where OpenLayers points it too.**
+         *
+         * This used to run due east on the grounds that the direction carries no meaning.
+         * It carries one thing that matters: it says *which* dimension the number belongs
+         * to. Pointing it away from the handle the operator has hold of leaves a line ending
+         * in open water while the dot they are dragging sits somewhere else entirely —
+         * which is what "the measurement line stops halfway" turned out to be.
+         *
+         * `MissionTaskGraphicBase.measureEdge` states the rule: project `radius` along
+         * centre → anchor, so the line stays under the hand while staying exactly one
+         * radius long. The handle is the anchor here, and its own bearing is whatever
+         * `rotation` put it at — which is precisely what makes the two engines agree.
+         */
+        const rim = rimHandleOf(graphic, center) ?? ([center[0] + radius, center[1]] as ProjectedPosition);
+        // For a named band the line stops **on that ring**, projected along centre → rim, so
+        // the label — which MapLibre derives from the line's own length — states the range
+        // the hand is changing rather than the outermost one.
+        const edge = bandIndex === undefined ? rim : projectOnto(center, rim, radius);
+        this.renderer.setMeasure([center, edge], bandCaption(graphic, bandIndex));
+    }
+
+    /**
+     * The read-out for a gesture that swings an **angle** rather than dragging a distance.
+     *
+     * 200700's plate names four numbers and two of them are in degrees — the search axis
+     * and the stop relative bearing — so the grips that set those had no read-out at all:
+     * a measure line reports its own length, and an angle is not one. The line still runs
+     * centre to rim, because it says which symbol is being edited; the label states the
+     * angle.
+     * @see RangeFanGraphicBase.measureParts, the same statement on the other engine
+     */
+    private showAngleMeasure(graphic: MapLibreTacticalGraphic, caption: string, degrees: number | undefined): void {
+        if (degrees === undefined || !isFinite(degrees)) return;
+        const center = toMercator(centerOf(graphic.base.geometry as Parameters<typeof centerOf>[0], graphic.name) as [number, number]);
+        const radius = graphic.properties.radius ?? graphic.properties.stopRange;
+        const rim = rimHandleOf(graphic, center)
+            ?? ([center[0] + projectedLength(radius ?? 0, latitudeFromMercatorY(center[1])), center[1]] as ProjectedPosition);
+        this.renderer.setMeasure([center, rim], undefined, [{caption, degrees}]);
+    }
+
+    private readonly onPointerUp = (): void => {
+        this.endDrag();
+    };
+
+    /** The base vertex under a screen point, or -1. */
+    /**
+     * Where a vertex would go if the operator dragged the segment under the pointer, or -1.
+     *
+     * **Only for a base the operator may add vertices to.** A graphic with a fixed vertex
+     * count is defined by exactly those points — a fields-of-fire is two legs and an
+     * apex, and a fourth vertex makes it a different symbol — and one that stretches on
+     * an edit drag has already given that gesture another meaning. Measured against
+     * OpenLayers, which inserts on a phase line and an assembly area and refuses on a
+     * fields-of-fire; this reproduces that split from the same two library facts rather
+     * than from a list. @see baseVertexCount, editStretches
+     *
+     * **A graphic that takes vertices need not take one *here*.** An abatis's route runs
+     * through its own chevron, so the head of the line is inside the symbol and a point
+     * dropped in there breaks the tooth. `acceptsInsertedVertex` is that third fact, asked
+     * of the place the vertex would actually land. Refusing here also takes the hint marker
+     * away with it, so nothing offers an insertion that would be refused.
+     * @see updateVertexHint
+     */
+    private grabSegment(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
+        /*
+         * **The multiple-strike zone stretches and takes vertices both**, as it does on OpenLayers,
+         * where `Modify` claims a press on an edge before the stretch sees it: an edge inserts a
+         * point, anywhere else on the symbol resizes. Refusing every stretching graphic here made
+         * an edge drag resize the zone on this engine and add a point on that one.
+         */
+        const stretchesOnly = editStretches(graphic.name) && !usesStandoffWidth(graphic.name);
+        if (baseVertexCount(graphic.name) !== undefined || stretchesOnly) return -1;
+        // Not the older two-ring record, on either engine. @see takesInsertedVertices
+        if (!takesInsertedVertices(graphic.name, graphic.properties.width)) return -1;
+        // A rectangle's base is two anchor points and nothing else, so there is no
+        // segment to insert into — `baseVertexCount` already says so above, and this
+        // second guard was for the drawn box. @see RectangularArea
+
+        const positions = positionsOf(graphic.base.geometry);
+        if (positions.length < 2) return -1;
+
+        const near = this.nearestSegment(graphic, point);
+        if (!near) return -1;
+
+        const toPixel = (position: Position): [number, number] => {
+            const projected = this.map.project([position[0], position[1]]);
+            return [projected.x, projected.y];
+        };
+        if (!acceptsInsertedVertex(graphic.name, positions.map(toPixel), toPixel(near.position))) return -1;
+        return near.index;
+    }
+
+    /**
+     * The insertable segment nearest the cursor, with the point a new vertex would
+     * land on — or undefined when there is none within reach.
+     *
+     * Shared by the grab and the hover hint on purpose: the marker has to appear at
+     * exactly the place the drag would act, or it promises something the gesture does
+     * not deliver.
+     */
+    private nearestSegment(
+        graphic: MapLibreTacticalGraphic,
+        point: {x: number; y: number},
+    ): {index: number; position: Position} | undefined {
+        const positions = positionsOf(graphic.base.geometry);
+        if (positions.length < 2) return undefined;
+
+        // The edge back to the first point counts where the base is a ring stored as a line; its
+        // index is one past the end, which `insertVertex` reads as an append. @see nearestInsertionEdge
+        const pixels = positions.map(p => {
+            const q = this.map.project([p[0], p[1]]);
+            return [q.x, q.y] as [number, number];
+        });
+        const closes = hasClosingEdge(graphic.name, graphic.properties.width);
+        const near = nearestInsertionEdge(pixels, [point.x, point.y], closes, SEGMENT_GRAB_PX);
+        if (!near) return undefined;
+        const lngLat = this.map.unproject(near.at);
+        return {index: near.index, position: [lngLat.lng, lngLat.lat]};
+    }
+
+    /**
+     * Shows or hides the marker for the vertex a drag here would create.
+     *
+     * OpenLayers' Modify draws one by default — a blue dot that slides along the
+     * geometry under the cursor — and it is the only thing that says the gesture is
+     * available at all. Without it an operator has to discover that dragging a line adds a
+     * point by trying it, which is how MapLibre felt: the capability existed and
+     * nothing announced it.
+     *
+     * Only in `modify`, only when not already dragging, and only over a graphic that
+     * accepts a new vertex — so it never promises an edit that would be refused.
+     * @see grabSegment for which graphics those are
+     */
+    private updateVertexHint(point: {x: number; y: number}): void {
+        if ((this.mode !== 'modify' && this.mode !== 'edit') || this.dragging || this.drawing) {
+            this.renderer.setVertexHint(null);
+            return;
+        }
+
+        const graphic = this.renderer.hitTest(point) ?? (this.renderer.selection ? this.renderer.find(this.renderer.selection) : undefined);
+        // A cursor already on a vertex means moving that one, not making another —
+        // the same order of precedence the grab uses.
+        if (!graphic || this.grabSegment(graphic, point) < 0 || this.grabVertex(graphic, point) >= 0) {
+            this.renderer.setVertexHint(null);
+            return;
+        }
+
+        this.renderer.setVertexHint(toMercator(this.nearestSegment(graphic, point)!.position as [number, number]));
+    }
+
+    private grabVertex(graphic: MapLibreTacticalGraphic, point: {x: number; y: number}): number {
+        const positions = positionsOf(graphic.base.geometry);
+        let best = -1;
+        let bestDistance = VERTEX_GRAB_PX;
+        positions.forEach((position, index) => {
+            const projected = this.map.project([position[0], position[1]]);
+            const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
+            if (distance <= bestDistance) {
+                best = index;
+                bestDistance = distance;
+            }
+        });
+        return best;
+    }
+}
+
+function buildBase(wants: 'Point' | 'LineString' | 'Polygon' | undefined, vertices: Position[]): Geometry | null {
+    if (!vertices.length) return null;
+
+    switch (wants) {
+        case 'Point':
+            return {type: 'Point', coordinates: vertices[0]};
+        case 'Polygon': {
+            if (vertices.length < 3) return null;
+            const ring = [...vertices];
+            const [first] = ring;
+            const last = ring[ring.length - 1];
+            if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+            return {type: 'Polygon', coordinates: [ring]};
+        }
+        default:
+            if (vertices.length < 2) return null;
+            return {type: 'LineString', coordinates: vertices};
+    }
+}

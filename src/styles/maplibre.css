@@ -1,0 +1,47 @@
+/* NO dark-mode filter here, deliberately.
+
+   MapLibre composites every layer into a single canvas, so a CSS filter intended
+   for the basemap repaints the tactical graphics along with the tiles — washed-out,
+   inverted line work, and worst of all only under the native-layer renderer, since
+   the canvas overlay lives on a separate element and escapes it.
+
+   The OpenLayers view can use a filter because it gives its graphics their own
+   canvas (`className: 'tg-graphics'`, see map.css). MapLibre has no equivalent, so
+   dark mode is done properly instead: `raster-*` paint properties on the basemap
+   layer, which apply to that layer alone. See basemapStyle.ts, DARK_RASTER_PAINT.
+
+   Don't reintroduce a filter here. */
+
+/* The graphics overlay. Sits above the WebGL canvas and below the controls, and
+   never takes pointer events — the MapLibre canvas underneath keeps them, so
+   panning and zooming behave exactly as they do on a bare map. Draw and edit
+   gestures are read from the map's own handlers, not from this element. */
+.tg-maplibre-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ── MapLibre chrome — matched to the OpenLayers dark theme in map.css ─────── */
+.maplibregl-ctrl-attrib {
+    background: rgba(22, 27, 34, 0.85) !important;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #8b949e;
+}
+
+.maplibregl-ctrl-attrib a {
+    color: #3fb950 !important;
+}
+
+.maplibregl-ctrl-scale {
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid #30363d;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    color: #8b949e;
+    font-size: 11px;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}

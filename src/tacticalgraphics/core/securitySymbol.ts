@@ -1,0 +1,459 @@
+/**
+ * # The center symbol of a security operation, described without a renderer
+ *
+ * Cover, Guard and Screen each render a unit symbol between their two arms. That
+ * symbol is a *single-point* icon, which is a unit symbol library's job
+ * (@zaes/military-symbols, milsymbol) and not this library's — so the library does
+ * not draw it and imports neither. It asks a provider, and a host registers one.
+ *
+ * ## Why this is here and not only in the OpenLayers half
+ *
+ * `openlayers/securityOperationSymbol.ts` came first and lets a provider return an
+ * `ol` `Style` for full control. That escape hatch is what pins it to one
+ * renderer: a second renderer cannot import the registry without dragging `ol`
+ * with it, and the build asserts it must not.
+ *
+ * But almost nothing about the question is renderer-specific. *Which* symbol —
+ * the SIDC, derived from the graphic's affiliation — and *how big* are symbology,
+ * and the answer a provider gives is nearly always an image. So the image-shaped
+ * half lives here, where every renderer can read it, and the `Style` hatch stays
+ * an OpenLayers extension layered on top.
+ *
+ * A host registers once and both engines draw the symbol.
+ *
+ * Registering nothing is a supported state: the arms and letters draw, the center
+ * is simply empty.
+ */
+
+import {TacticalGraphicHostility, TacticalGraphicName} from './type';
+import {SIDC_STANDARD_IDENTITY} from './sidc';
+import type {GraphicLabels} from './render';
+import type {PaintFeature} from './paint';
+
+/** What the provider is told about the symbol it is being asked for. */
+export interface SecuritySymbolRequest {
+    /** Cover, Guard or Screen. */
+    name: TacticalGraphicName;
+    /**
+     * This graphic's own id, when the renderer knows one.
+     *
+     * Only used to find a provider registered for this graphic alone — @see
+     * setGraphicSecuritySymbolProvider. A provider may read it, but two graphics of
+     * the same kind are otherwise indistinguishable here, which is the whole reason
+     * the per-graphic registry exists.
+     */
+    graphicId?: string;
+    /** The graphic's affiliation, defaulted to `pending` when it carries none. */
+    hostility: TacticalGraphicHostility;
+    /** The 30-character MIL-STD-2525E SIDC this library would use. */
+    sidc: string;
+    /** Intended on-screen size in CSS pixels. */
+    sizePx: number;
+    /**
+     * This graphic's amplifiers.
+     *
+     * Do not reach for this to tell two graphics of the same kind apart: Cover,
+     * Guard and Screen are `SHAPE_ONLY` in the field registry and carry
+     * **hostility and nothing else** — the letter between the arms is
+     * `getLabel(name)`, fixed by doctrine, so two Screens are indistinguishable
+     * here. It is passed because a provider is a host's code and may key on
+     * whatever it likes, and because which amplifiers a graphic carries is the
+     * registry's business rather than this module's.
+     *
+     * Present on the OpenLayers provider from the start and absent here, which
+     * made a provider that read it work on one renderer and quietly not on the
+     * other.
+     */
+    labels: GraphicLabels;
+}
+
+/** An image to draw at the center, and optionally the size to draw it at. */
+export interface SecuritySymbolImage {
+    /** A `data:` URI or a URL. */
+    src: string;
+    /** On-screen size in CSS px. Omitted means the library's current size. */
+    sizePx?: number;
+}
+
+/**
+ * Produces the center symbol as an image, or nothing.
+ *
+ * Deliberately narrower than the OpenLayers provider: no `Style`, because a
+ * renderer-neutral registry cannot speak one engine's style objects. A host that
+ * needs that level of control registers the OpenLayers provider as well, and it
+ * takes precedence there.
+ */
+export type SecuritySymbolProvider = (request: SecuritySymbolRequest) => SecuritySymbolImage | string | undefined;
+
+/** On-screen size of the center symbol in CSS pixels, with no host setting. */
+export const DEFAULT_SYMBOL_SIZE_PX = 25;
+
+/**
+ * Readable bounds. Below 8 px a framed unit symbol is a smudge; past 96 px it
+ * swamps the arms it sits between — they are about 410 px end to end at the size
+ * the graphic is generated at.
+ */
+export const MIN_SYMBOL_SIZE_PX = 8;
+export const MAX_SYMBOL_SIZE_PX = 96;
+
+let symbolSizePx = DEFAULT_SYMBOL_SIZE_PX;
+let provider: SecuritySymbolProvider | undefined;
+/** Bumped on every change, so a renderer can tell its cache is stale. */
+let revision = 0;
+const listeners = new Set<() => void>();
+
+/**
+ * Records a change and tells every renderer about it.
+ *
+ * The revision alone is a *pull*: a renderer notices it is stale the next time it
+ * happens to look, and neither renderer looks on its own. MapLibre realizes its
+ * sources on zoom, and OpenLayers re-runs a style function only when the map
+ * redraws, so both would show the old symbol until something unrelated moved the
+ * map. Both subscribe: MapLibre's native renderer, and OpenLayers'
+ * `TacticalGraphicsManager` through `subscribeSecurityOperationSymbolChange`. A
+ * provider set and nothing visibly happening is not an API worth shipping.
+ */
+function bump(): void {
+    revision++;
+    listeners.forEach(listener => listener());
+}
+
+/**
+ * Subscribes to provider and size changes. Returns the unsubscribe.
+ *
+ * For a renderer that has to be *told*. @see bump
+ */
+export function subscribeSecuritySymbolChange(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+}
+
+/** Sets how big the center symbol draws, in CSS pixels, clamped to the readable range. */
+export function setSecuritySymbolSize(px: number): void {
+    const next = Math.min(MAX_SYMBOL_SIZE_PX, Math.max(MIN_SYMBOL_SIZE_PX, px));
+    if (next === symbolSizePx) return;
+    symbolSizePx = next;
+    bump();
+}
+
+/** The current center-symbol size in CSS pixels. */
+export function getSecuritySymbolSize(): number {
+    return symbolSizePx;
+}
+
+/**
+ * Share of an escort's bar its unit symbol may span.
+ *
+ * **An escort's symbol is sized from the escort.** The operator sets its length, and *"the
+ * escort symbol appears above the convoy or escorted unit symbol"*, so the two have to read
+ * as one group: a 25 px unit symbol on a bar the width of the screen looks like a speck, and
+ * on a short one it swallows the bar.
+ *
+ * This used to be what set the escort apart from cover, guard and screen — badges whose
+ * every dimension was a screen constant, where a constant symbol stayed in proportion at any
+ * zoom. They are drawn from two points and take a share of the gap between
+ * their arms, so all four now size from the graphic and stop at `MAX_SYMBOL_SIZE_PX`.
+ * `setSecuritySymbolSize` no longer governs any of them; it remains the size for a symbol a
+ * host places itself.
+ */
+const ESCORT_SYMBOL_SHARE = 0.16;
+
+/**
+ * How big an escort's centre symbol draws, from its bar's on-screen span.
+ *
+ * Clamped to the same readable range a host's `setSecuritySymbolSize` is, so a very long or
+ * very short bar still gets a symbol somebody can identify. **The paint layer sizes the
+ * break in the bar from this same number**, or the hole and the symbol disagree.
+ */
+export function escortSymbolSizePx(spanPx: number): number {
+    return Math.min(MAX_SYMBOL_SIZE_PX, Math.max(MIN_SYMBOL_SIZE_PX, spanPx * ESCORT_SYMBOL_SHARE));
+}
+
+/**
+ * The graphics that carry a host-injected centre symbol.
+ *
+ * Cover, guard and screen put one between their arms; the escort puts one in the break in
+ * its bar. **A symbology fact, so it lives here** — it had been a private `SECURITY_OPERATIONS`
+ * set inside MapLibre's native renderer, which is the shape of thing that ends up true on
+ * one engine and not the other.
+ */
+export const CENTER_SYMBOL_GRAPHICS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+    TacticalGraphicName.Escort,
+    // Both follow tasks carry a unit *in* their body, where field T would otherwise be
+    // drawn. Same provider, same reason: no renderer-agnostic description of an entity
+    // symbol exists in this package, so the space is reserved and the host fills it or
+    // does not. @see followTaskSymbol
+    TacticalGraphicName.FollowAndAssume,
+    TacticalGraphicName.FollowAndSupport,
+    // Field A on four more plates: Search Area's tactical symbol indicator, centred over the
+    // vertex, and the unit inside Capture, Evacuate and Recover's circle. @see unitSymbolPaints
+    TacticalGraphicName.SearchArea,
+    TacticalGraphicName.Capture,
+    TacticalGraphicName.Evacuate,
+    TacticalGraphicName.Recover,
+]);
+
+/**
+ * Registers the provider for every security operation on every map.
+ *
+ * Global, like `configureTacticalGraphics`, and for the same reason: the center
+ * symbol describes the symbology rather than one view, so a host should not have
+ * to say it once per map. Pass `undefined` to go back to drawing no symbol.
+ */
+export function setSecuritySymbolProvider(next: SecuritySymbolProvider | undefined): void {
+    provider = next;
+    bump();
+}
+
+/** The registered provider, or `undefined` if a host has registered none. */
+export function getSecuritySymbolProvider(): SecuritySymbolProvider | undefined {
+    return provider;
+}
+
+/**
+ * Providers bound to one graphic, by id.
+ *
+ * The global provider is chosen once for the whole application and is told the
+ * graphic's `name` and its amplifiers — enough to give Cover, Guard and Screen
+ * three different symbols, and not enough to give *this* Screen a different one
+ * from that Screen. These three graphics are `SHAPE_ONLY` in the field registry
+ * and carry only `hostility`, so no amount of reading the bag separates two of
+ * them. A map routinely wants exactly that: one Screen is a cavalry troop and the
+ * next is something else.
+ *
+ * Held here rather than on a renderer's object so that **one call covers both
+ * engines**. OpenLayers can hang a provider on its holder because it keeps one per
+ * graphic; MapLibre derives its features from GeoJSON on every realize and has no
+ * such object to hang anything on. Keying by id is the mechanism that works for
+ * both, and it is the only one that could be shared.
+ */
+const graphicProviders = new Map<string, SecuritySymbolProvider>();
+
+/**
+ * Gives one graphic its own center-symbol provider, on every renderer.
+ *
+ * `undefined` removes it, putting that graphic back on the global provider. The id
+ * is the graphic's own — `symbolId` on an OpenLayers holder, `id` on a
+ * `MapLibreTacticalGraphic`.
+ */
+export function setGraphicSecuritySymbolProvider(graphicId: string, next: SecuritySymbolProvider | undefined): void {
+    if (next) graphicProviders.set(graphicId, next);
+    else graphicProviders.delete(graphicId);
+    bump();
+}
+
+/** The provider bound to one graphic, or `undefined` if it uses the global one. */
+export function getGraphicSecuritySymbolProvider(graphicId: string): SecuritySymbolProvider | undefined {
+    return graphicProviders.get(graphicId);
+}
+
+/**
+ * Gives one graphic its own unit: the global provider draws it, asked for `unit` instead of the
+ * doctrinal code.
+ *
+ * `unit` is either the **entity**, SIDC positions 11-16 (`'121300'`, reconnaissance), which keeps
+ * the rest of the code, so the standard identity the graphic's `hostility` gives survives the swap,
+ * or a **whole 20- or 30-digit SIDC**, drawn as given. `undefined` puts the graphic back on the
+ * doctrinal symbol.
+ *
+ * Whatever draws the symbol is the global provider's business, so this works the same with any
+ * symbol library registered there; the provider is read when the symbol is drawn, so registering
+ * it later is fine. A provider bound to the graphic with `setGraphicSecuritySymbolProvider`
+ * is replaced, as this is one.
+ */
+export function setGraphicUnitSymbol(graphicId: string, unit: string | undefined): void {
+    if (unit === undefined) {
+        setGraphicSecuritySymbolProvider(graphicId, undefined);
+        return;
+    }
+    if (!/^(\d{6}|\d{20}|\d{30})$/.test(unit)) {
+        throw new Error(`setGraphicUnitSymbol: ${unit} is neither an entity (6 digits) nor a 20- or 30-digit SIDC`);
+    }
+    setGraphicSecuritySymbolProvider(graphicId, request => {
+        const sidc = unit.length === 6 ? request.sidc.slice(0, 10) + unit + request.sidc.slice(16) : unit;
+        return provider?.({...request, sidc});
+    });
+}
+
+/**
+ * Forgets every per-graphic provider.
+ *
+ * For a host tearing down a map: the registry is keyed by id and nothing in the
+ * library knows when an id stops existing, so without this a long-lived page that
+ * draws and clears repeatedly accumulates providers for graphics that are gone.
+ */
+export function clearGraphicSecuritySymbolProviders(): void {
+    if (!graphicProviders.size) return;
+    graphicProviders.clear();
+    bump();
+}
+
+/**
+ * A counter that changes whenever the provider or the size does.
+ *
+ * A renderer that rasterises the symbol needs to know when to throw that away, and
+ * comparing providers by identity misses a size change. One number covers both.
+ */
+export function securitySymbolRevision(): number {
+    return revision;
+}
+
+/**
+ * The doctrinal SIDC, with the standard-identity digit and the entity left as placeholders.
+ *
+ * Version 13, reality context (digit 3), symbol set 10 (land unit). Digit **4** is
+ * standard identity; digit 3 is context, and putting the placeholder there instead
+ * produces a valid-looking code for the wrong thing.
+ *
+ * Positions 9-10 are the echelon — `14`, platoon — and 11-16 the entity. They are
+ * what milsymbol draws the three dots above the frame from, and the detail inside
+ * it. **A template of all zeros is not a neutral default; it is a bare frame.**
+ * This module carried exactly that while the OpenLayers half carried the code with
+ * the digits filled in, so the same graphic drew a full symbol in one renderer and
+ * an empty outline in the other — reported as MapLibre "clipping the top", which is
+ * what a missing echelon looks like. Rendered through milsymbol the two differ by
+ * 6 drawn elements against 2.
+ *
+ * What matters here is that both renderers start from **one** code. A host that
+ * wants a particular unit substitutes its own through a provider or
+ * `setGraphicUnitSymbol`.
+ */
+const SIDC_TEMPLATE = '130#100014@00000000000000';
+
+/**
+ * MIL-STD-2525E land unit entity 141700, Protection/Security (Appendix A, symbol set 10).
+ *
+ * The unit a security operation's centre carries. Cover, guard and screen are 2525E's
+ * Mission Tasks/Security (342201-342203), and their plates centre "the tactical symbol"
+ * between points 2 and 3 without naming one, so the security unit is the reading that says
+ * what the graphic is about.
+ */
+const SECURITY_UNIT_ENTITY = '141700';
+
+/**
+ * The entity the other centre-symbol graphics carry, and an unnamed call: 130100, Fires/Air Defense.
+ *
+ * Their plates leave the unit to the operator — the unit that follows, searches, escorts or
+ * captures — and no 2525E entity is a better default for every one of them, so they keep the
+ * code they have always drawn and a host names the real unit.
+ */
+const DEFAULT_UNIT_ENTITY = '130100';
+
+/** The security operations, whose centre unit is {@link SECURITY_UNIT_ENTITY}. */
+const SECURITY_OPERATIONS: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.Cover,
+    TacticalGraphicName.Guard,
+    TacticalGraphicName.Screen,
+]);
+
+/**
+ * Standard-identity digit per MIL-STD-2525E, position 4 of the SIDC.
+ *
+ * `assumedFriend` and `suspectJoker` are distinct identities in the standard and
+ * get their own digits here, even though the *color* accessors alias them onto
+ * friend and pending — color is a rendering choice, identity is what the symbol
+ * asserts. The same table a graphic's own code is written with. @see buildGraphicSidc
+ */
+const IDENTITY_DIGIT = SIDC_STANDARD_IDENTITY;
+
+/**
+ * The MIL-STD-2525E SIDC for a centre symbol at a given affiliation.
+ *
+ * For a security operation (cover, guard, screen) the unit is 141700 Security. The other
+ * centre-symbol graphics carry 130100, and so does a call that names no graphic, which is what
+ * this returned for every graphic before the name was taken. Every caller in this library
+ * passes the name. @see SECURITY_UNIT_ENTITY
+ *
+ * Exported so a host writing its own provider can start from the doctrinal code
+ * rather than reverse-engineering one.
+ */
+export function securitySymbolSidc(hostility: TacticalGraphicHostility, name?: TacticalGraphicName): string {
+    const entity = name !== undefined && SECURITY_OPERATIONS.has(name) ? SECURITY_UNIT_ENTITY : DEFAULT_UNIT_ENTITY;
+    return SIDC_TEMPLATE.replace('#', IDENTITY_DIGIT[hostility] ?? IDENTITY_DIGIT[TacticalGraphicHostility.pending]!).replace('@', entity);
+}
+
+/** The shape of the milsymbol module this library needs, and no more of it. */
+export interface MilsymbolModule {
+    Symbol: new (sidc: string, ...options: never[]) => {asSVG(): string};
+}
+
+/**
+ * Registers milsymbol as the provider, for **both** renderers.
+ *
+ * ```ts
+ * import ms from 'milsymbol';
+ * import {useMilsymbolSecuritySymbols} from '@zaes/tactical-graphics';
+ *
+ * useMilsymbolSecuritySymbols(ms);
+ * ```
+ *
+ * `options` is merged into every `ms.Symbol` call, so a host can pass its own
+ * fill, mono-color or frame settings and have the center symbol match the rest of
+ * its map.
+ *
+ * **`size` is not how you make the symbol bigger** — use
+ * {@link setSecuritySymbolSize}. milsymbol's `size` sets the SVG's internal
+ * resolution; the icon built around it still draws at the library's size, so
+ * passing `{size: 40}` here changes the sharpness and nothing else.
+ *
+ * Uses `asSVG()` rather than `asCanvas().toDataURL()`: the canvas route needs a
+ * real DOM, which is why a restore had to wrap the symbol build in a try/catch to
+ * survive Node and jsdom, and it rasterises at one fixed size so the glyph is soft
+ * on a HiDPI display. An SVG data URI has neither problem.
+ */
+export function useMilsymbolSecuritySymbols(ms: MilsymbolModule, options: Record<string, unknown> = {}): void {
+    setSecuritySymbolProvider(({sidc, sizePx}) => {
+        const svg = new ms.Symbol(sidc, {size: sizePx * 2, ...options} as never).asSVG();
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    });
+}
+
+/**
+ * The id a paint looks a per-graphic provider up by.
+ *
+ * `graphicId` is what a renderer sets on the paint feature (OpenLayers, from the
+ * feature's `symbolId`); a `symbolId` in the bag is how the MapLibre placement hands it
+ * over. OpenLayers used to set neither, so a provider bound to one graphic never reached
+ * the paint there and the five paint-placed graphics drew nothing for it.
+ */
+export function symbolGraphicId(feature: PaintFeature): string | undefined {
+    return feature.graphicId || ((feature.properties as unknown as Record<string, unknown>).symbolId as string | undefined) || undefined;
+}
+
+/**
+ * The provider's answer as an image, whichever shape it returned.
+ *
+ * **Three providers, most specific first:** one bound to this graphic, then
+ * `rendererProvider` (a renderer's own, which the paints receive as
+ * `PaintContext.centerSymbolProvider`), then the shared global one. The first that is
+ * registered answers, and an answer of nothing is final: a per-graphic provider that
+ * returns `undefined` means "no symbol on this one", not "ask the next".
+ *
+ * The middle slot is how the OpenLayers provider reaches the paints that leave room for
+ * the symbol. Without it they skipped straight to the shared provider, and a host that
+ * registered only the OpenLayers one got no room cut and no symbol drawn.
+ *
+ * A provider that throws costs the center symbol and nothing else. The arms, the letter
+ * and every interaction are already in place, and losing a whole graphic over its
+ * decoration is not a trade worth making — a host's provider is a host's code, and a
+ * bad SIDC or a missing DOM is the ordinary way it fails.
+ */
+export function resolveSecuritySymbol(
+    request: SecuritySymbolRequest,
+    rendererProvider?: SecuritySymbolProvider,
+): SecuritySymbolImage | undefined {
+    const active = (request.graphicId ? graphicProviders.get(request.graphicId) : undefined) ?? rendererProvider ?? provider;
+    if (!active) return undefined;
+
+    let answer: ReturnType<SecuritySymbolProvider>;
+    try {
+        answer = active(request);
+    } catch {
+        return undefined;
+    }
+    if (!answer) return undefined;
+    return typeof answer === 'string' ? {src: answer, sizePx: request.sizePx} : {sizePx: request.sizePx, ...answer};
+}

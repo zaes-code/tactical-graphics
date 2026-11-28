@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2019",
+    "lib": ["es2019"],
+    "moduleResolution": "node",
+    "rootDir": "src/tacticalgraphics",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false
+  },
+  "include": ["src/tacticalgraphics/**/*.ts"],
+  "exclude": [
+    "src/tacticalgraphics/**/*.test.ts"
+  ]
+}

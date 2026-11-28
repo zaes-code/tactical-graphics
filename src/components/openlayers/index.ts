@@ -1,0 +1,205 @@
+/**
+ * `@zaes/tactical-graphics/openlayers` — the OpenLayers renderer.
+ *
+ * The root package is deliberately map-agnostic: it turns a GeoJSON feature into
+ * more GeoJSON and stops there, so the geometry stays portable. That leaves the
+ * part every consumer still has to write — reprojecting into EPSG:3857, stamping
+ * the amplifiers a style function reads, choosing the right style per graphic,
+ * and wiring draw/modify interactions. This entry point is that part, extracted
+ * from the demo app.
+ *
+ * `ol` is a **peer** dependency: you bring your own OpenLayers and share the one copy the
+ * rest of your map already uses. A unit symbol library (`@zaes/military-symbols` or
+ * `milsymbol`) is peer too, and **optional in a stronger sense**: nothing in this package
+ * imports either. Six graphics draw a centre symbol, and a
+ * host supplies it by registering a provider — register nothing and the centre is simply
+ * empty. @see setSecuritySymbolProvider, on the root entry
+ *
+ * ```ts
+ * import {TacticalGraphicName} from '@zaes/tactical-graphics';
+ * import {TacticalGraphicsManager} from '@zaes/tactical-graphics/openlayers';
+ *
+ * const manager = new TacticalGraphicsManager(map);   // it brings its own vector layer
+ * manager.startDrawing(TacticalGraphicName.PhaseLine);
+ * ```
+ *
+ * Not exported here: the React demo (`MapControls`, `OpenLayers.tsx`) and the
+ * sample gallery, which exist to exercise the library rather than to be
+ * consumed.
+ *
+ * @module @zaes/tactical-graphics/openlayers
+ */
+
+// The entry point: wires draw / modify / pointer interactions onto a map.
+export {createTacticalGraphics} from './createTacticalGraphics';
+export type {OpenLayersEngineOptions} from './createTacticalGraphics';
+export {TacticalGraphicsManager} from './TacticalGraphicsManager';
+
+// Generator → OpenLayers features, including the 4326 → 3857 reprojection.
+export {default as openLayersTacticalGraphics} from './openlayersAdapter';
+export type {TacticalGraphic, TacticalGraphicHandler, TacticalGraphicShape} from './openlayersAdapter';
+
+// name → controller. Call this if you are driving graphics yourself instead of
+// through the manager.
+export {getController} from './controllerRegistry';
+
+// The bridge between an OpenLayers feature and the library's amplifier schema.
+// Style functions read amplifiers through `readGraphicLabels`; publish them with
+// `writeGraphicProperties`, never `feature.set`, or the map can keep drawing the
+// old label.
+export {TACTICAL_GRAPHIC_KEY, readGraphicLabels, writeGraphicProperties} from './graphicProperties';
+
+// Which amplifier inputs a graphic accepts — drives a properties dialog.
+export {getGraphicFields, supportsHostility} from './graphicFieldRegistry';
+export type {GraphicFieldSet} from './graphicFieldRegistry';
+
+// Every style function, plus the color and width constants they share.
+export * from './openlayerStyles';
+
+// **Which** of those style functions draws a given graphic. A host rendering saved
+// graphics into its own layer needs the pairing the holders make, and `getStyle` — the
+// one that looks like this answer — is the area outline alone. @see stylesFor
+export {stylesFor} from './stylesFor';
+// The other half of what a host building its own features needs: `stylesFor` says how a
+// graphic is drawn, this says how big the shape it is drawn against is. @see publishGraphicExtent
+export {publishGraphicExtent} from './publishGraphicExtent';
+// Both of the above in the order they have to happen. @see prepareFeatures
+export {prepareFeatures} from './prepareFeatures';
+export type {PreparedFeatures, PrepareOptions} from './prepareFeatures';
+export type {GraphicStyles} from './stylesFor';
+
+// Configuration — label size, line width, colors. These are **re-exports**: the config
+// is defined in the root entry point (`@zaes/tactical-graphics`), because none of it is
+// specific to OpenLayers. Pixel sizes and affiliation colors mean the same thing to any
+// renderer, so a second one inherits them rather than reinventing them.
+//
+// Mirrored here as a convenience, so a host wiring up this renderer does not need a
+// second import line for the config it is about to apply. Same symbols, same singleton —
+// `import {configureTacticalGraphics} from '@zaes/tactical-graphics'` is equivalent and
+// is the canonical path if you are not using this renderer at all.
+//
+// After changing the config, invalidate your features
+// (`source.forEachFeature(f => f.changed())`) so the style functions re-evaluate.
+export {
+    BASE_FONT_SIZE_PX,
+    DEFAULT_LINE_WIDTH,
+    DEFAULT_PALETTE,
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
+    MIN_LINE_WIDTH,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    getTacticalGraphicsConfig,
+    resetTacticalGraphicsConfig,
+    setDefaultLabelSize,
+    setDefaultLineWidth,
+    setTacticalGraphicsConfig,
+} from '@zaes/tactical-graphics';
+export type {TacticalGraphicsConfigOptions} from '@zaes/tactical-graphics';
+
+// Editor-chrome colors, resolved. Handle dots, the inert center and the draw marker —
+// the affordances this renderer draws so an operator can edit a graphic. Each falls back to
+// `DEFAULT_PALETTE` until the host overrides it through the config.
+//
+// The library has no concept of light or dark: it has colors, and the host decides
+// them. Keep whatever sets your app needs and send one on a mode change — that is the
+// whole of it. `defaultDrawStyleFunc` is the draw-time style built from the marker pair;
+// the manager installs it for every graphic, and it is exported for a host driving the
+// `Draw` interaction itself.
+export {
+    defaultDrawStyleFunc,
+    drawMarkerStyle,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+} from './openlayerStyles';
+export {securityOperationStyleFunc} from './openlayerStyles';
+
+// Save and restore. `serializeTacticalGraphics` emits one GeoJSON feature per graphic —
+// the base — and `restoreTacticalGraphics` rebuilds them editable. A record carries one
+// object, `tacticalGraphic`: the portable description any renderer understands, and
+// everything needed to rebuild. No viewport state travels with it; see persistence.ts.
+/*
+ * The saved-file format is the library's now, so a consumer gets the same names from either
+ * subpath — which is what the façade rule asks for, and what it was not while
+ * `SNAPSHOT_VERSION` was an OpenLayers-only name. @see core/snapshot.ts
+ */
+export {SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from '@zaes/tactical-graphics';
+export type {TacticalGraphicsSnapshot} from '@zaes/tactical-graphics';
+export {
+    applyRestoredGeometry,
+    rebuildGraphicsForConfig,
+    restoreTacticalGraphics,
+    serializeTacticalGraphics,
+} from './persistence';
+export type {
+    RestoreFailure,
+    RestoreReport,
+    SerializeOptions,
+} from './persistence';
+
+// Feature-property helpers for hosts that build or inspect graphics themselves.
+export {ROLE_KEY, assignRole, readGraphicGeometryState, readRole} from './graphicProperties';
+export type {GraphicGeometryState} from './graphicProperties';
+
+// The feature holders: subclass one to add a graphic without forking the package.
+export {AirCorridor} from './graphics/AirCorridor';
+export {AreaGraphicBase} from './graphics/AreaGraphicBase';
+export {Block} from './graphics/Block';
+export {Boundary} from './graphics/Boundary';
+export {Exfiltrate} from './graphics/Exfiltrate';
+export {LineGraphicBase} from './graphics/LineGraphicBase';
+export {CircularAreaGraphicBase, MissionTaskGraphicBase} from './graphics/MissionTaskGraphicBase';
+export {MovementGraphicBase} from './graphics/MovementGraphicBase';
+export {RangeFanGraphicBase} from './graphics/RangeFanGraphicBase';
+export {ReliefInPlace} from './graphics/ReliefInPlace';
+export {RetrogradeTask} from './graphics/RetrogradeTask';
+
+// The controllers: they translate pointer events into translate / rotate /
+// resize calls on a holder.
+export {LineGraphicController, SAME_POINT_EPSILON_M} from './controllers/LineGraphicController';
+// `PointDropController` is the click-to-place variant — a graphic with no
+// draggable dimension is placed by one click rather than drawn. Exported
+// alongside its base for the same reason the others are: a host registering its
+// own graphic needs to be able to name the controller it routes through.
+export {MissionTaskController, PointDropController} from './controllers/MissionTaskController';
+export {PolygonGraphicController, RectangularAreaGraphicController} from './controllers/PolygonGraphicController';
+
+// The center symbol a security operation draws between its arms. A single-point
+// 2525E icon, which is a unit symbol library's job — so this package asks a provider
+// for it and imports none. Register `symbolImageProvider()` from @zaes/military-symbols
+// with `setSecuritySymbolProvider`, `useMilsymbolSecurityOperationSymbols(ms)` for
+// milsymbol, or `setSecurityOperationSymbolProvider` to draw it yourself. Register nothing
+// and the arms and labels draw with an empty center.
+// Its on-screen size is the library's rather than the provider's, because the
+// library is what builds the Icon around a provider that returns a `src` string:
+// `setSecurityOperationSymbolSize`, not a symbol library's own size option.
+// A provider bound to one graphic wins over this one, and this one over the shared
+// provider on the root entry. The manager repaints its graphics when any of them
+// changes; `subscribeSecurityOperationSymbolChange` is for a host drawing on a layer
+// of its own.
+export {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    getSecurityOperationSymbolProvider,
+    getSecurityOperationSymbolSize,
+    securityOperationSidc,
+    setSecurityOperationSymbolProvider,
+    setSecurityOperationSymbolSize,
+    subscribeSecurityOperationSymbolChange,
+    useMilsymbolSecurityOperationSymbols,
+} from './securityOperationSymbol';
+export type {
+    MilsymbolModule,
+    SecurityOperationSymbolImage,
+    SecurityOperationSymbolProvider,
+    SecurityOperationSymbolRequest,
+} from './securityOperationSymbol';
+
+// Route-direction arrows, inlined as data URIs so no asset loader is needed.
+export {ALTERNATING_ARROW, ONE_WAY_ARROW, TWO_WAY_ARROW} from './assets/routeDirectionIcons';

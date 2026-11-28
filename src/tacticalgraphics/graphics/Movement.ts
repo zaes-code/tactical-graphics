@@ -1,0 +1,609 @@
+import {TacticalGraphicsBase} from "./TacticalGraphicsBase";
+import {MovementGraphicOptions, TacticalGraphicName} from "../core/type";
+import {Feature, LineString, MultiLineString, MultiPoint, Position} from "geojson";
+import geometryService from "../core/GeometryService";
+import * as turf from '../core/turf';
+import {BY_FIRE_SHAFT, BY_FIRE_STANDOFF, tipOverhangOf, widthPointForBuiltAxis} from '../core/axisWidth';
+import {getSmoothLines} from '../core/config';
+import {chaikinKeepingEnds, smoothingKindOf} from '../core/smoothing';
+
+/**
+ * How long the aviation axes' twist is, in half-widths of the body: about the width of the
+ * arrow and a half, as 151401 and 151402 draw it. @see MovementGraphicBase.twistWalls
+ */
+export const TWIST_HALF_WIDTHS = 3;
+
+/** Where an aviation axis's walls cross: halfway along the twist behind the head. @see MovementGraphicBase.twistWalls */
+function twistCenterOf(centerline: Position[], radius: number): Position {
+    const last = centerline[centerline.length - 1];
+    const secondToLast = centerline[centerline.length - 2];
+    const legLength = turf.distance(secondToLast, last, {units: 'meters'});
+    const back = legLength > 0 ? Math.min(1, (radius * TWIST_HALF_WIDTHS) / legLength) / 2 : 0.5;
+    return [last[0] + back * (secondToLast[0] - last[0]), last[1] + back * (secondToLast[1] - last[1])];
+}
+
+export abstract class MovementGraphicBase extends TacticalGraphicsBase<MovementGraphicOptions> {
+    type = "LineString";
+
+    /**
+     * The center line the arrow body is built from: the operator's line with the
+     * arrowhead's overhang taken off the far end.
+     *
+     * The overhang was a `protected tipOverhang` field here and on three subclasses.
+     * It is a table in the map-agnostic half now, because the width point the
+     * eleven axis arrows store is drawn off this *trimmed* line — so a renderer republishing
+     * that point, a draw seeding one, and a sample sheet laying one out all have to spend the
+     * same number, and none of them can reach a protected field. @see tipOverhangOf
+     */
+    protected arrowCenterline(base: Feature<LineString>, radius: number): Position[] {
+        return geometryService.trimLineEnd(base.geometry.coordinates, radius * tipOverhangOf(this.name));
+    }
+
+    /**
+     * Crosses the two walls over their last `TWIST_HALF_WIDTHS` half-widths, so the body stays
+     * full width until a short twist just behind the head.
+     *
+     * 151401 and 151402 (APP-06 and MIL-STD-2525E Table L-X): "the crossover point on the
+     * symbol shall occur between Points 1 and 2", and both Templates draw it as a short twist
+     * right behind the head. The walls used to be joined across the whole last segment of the
+     * centre line, so a long last leg converged from point 2 all the way to the head and read
+     * as a long X. A last leg shorter than the twist crosses over the whole of it, as before.
+     *
+     * Pops each wall's end, pushes where the twist starts on it, then the *other* wall's end.
+     * Returns the two ends and the two twist starts, for the bars the attack helicopter draws.
+     */
+    protected twistWalls(left: Position[], right: Position[], radius: number) {
+        const [lastLeft] = left.splice(left.length - 1, 1);
+        const [lastRight] = right.splice(right.length - 1, 1);
+        const prevLeft = left[left.length - 1];
+        const prevRight = right[right.length - 1];
+        const lerp = (a: Position, b: Position, t: number): Position => [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+        const legLength = turf.distance(prevLeft, lastLeft, {units: 'meters'});
+        const twist = radius * TWIST_HALF_WIDTHS;
+        let startLeft = prevLeft;
+        let startRight = prevRight;
+        if (legLength > twist) {
+            const t = 1 - twist / legLength;
+            startLeft = lerp(prevLeft, lastLeft, t);
+            startRight = lerp(prevRight, lastRight, t);
+            left.push(startLeft);
+            right.push(startRight);
+        }
+        left.push(lastRight);
+        right.push(lastLeft);
+        return {lastLeft, lastRight, startLeft, startRight};
+    }
+
+    /**
+     * One wall of the arrow's body: the center line offset by `offset` meters, **rounded when
+     * smooth lines is on**.
+     *
+     * The wall is rounded after the offset rather than the center line before it. A curve
+     * offset by the body's half-width folds back on itself wherever it bends tighter than
+     * that, and the corridors are wide enough that the folds showed; a wall offset first and
+     * rounded after can only be as tangled as the hard wall already was. Each wall keeps its
+     * last segment straight, so the head, the twist and the bars built on it come out exactly
+     * as they do on a hard line, and the turning movement keeps its first, where its bar is.
+     * @see chaikinKeepingEnds, SMOOTHED_GRAPHICS
+     */
+    protected parallel(centerline: Position[], offset: number): Position[] {
+        const wall = geometryService.computeParallelLineString(centerline, offset) as Position[];
+        const kind = smoothingKindOf(this.name);
+        if (!getSmoothLines() || (kind !== 'corridor' && kind !== 'corridorFixedTail')) return wall;
+        return chaikinKeepingEnds(wall, kind === 'corridorFixedTail', true);
+    }
+
+    /**
+     * The line a label follows along the arrow: the center line, rounded as the walls are when
+     * smooth lines is on. Published after a layout's own label anchors, so a label longer than
+     * the straight stretch it is anchored on bends with the arrow instead of running out through
+     * a wall. @see textAlongPath
+     */
+    protected labelPath(centerline: Position[]): Position[] {
+        const kind = smoothingKindOf(this.name);
+        if (!getSmoothLines() || (kind !== 'corridor' && kind !== 'corridorFixedTail')) return centerline;
+        return chaikinKeepingEnds(centerline, kind === 'corridorFixedTail', true);
+    }
+
+    /**
+     * `[p0, tip, width]` — and the width grip sits on **the corner of the arrowhead's back
+     * that the plate letters `PT N`.**
+     *
+     * > 151403 main attack. Point 1 defines the tip of the arrowhead. Point N-1 defines the
+     * > rear of the symbol. **Point N defines the back of the arrowhead.**
+     *
+     * The rule names the point but not its side; the Template does. It draws `PT N`'s leader
+     * into the back corner lying to the **right of point 1 → point 2** — the direction from
+     * the tip toward the rear, which is the order the points are stored in. 151402's Template
+     * on the same page letters it identically, and every graphic in this family inherits this
+     * method, so one statement settles all of them.
+     *
+     * **That is the far side from where this was drawn**, which put the grip on the corner
+     * the plate leaves unlettered. Note the offset is negated *twice*: once for the parallel
+     * line and once for the step across the head, matching how every `generateGraphics` below
+     * builds its right-hand edge. And note the stored line is reversed on the way in for a
+     * tip-first graphic, so "right of point 1 → point 2" is the **left** of the line this
+     * method sees. @see drawOrder.ts, TIP_FIRST_GRAPHICS
+     *
+     * The tip handle is the operator's own last vertex — the arrowhead points *at* it — so a
+     * vertex-editing tool can pick it up and it tracks the cursor exactly.
+     */
+    generateHandles(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius: number = opts?.radius || 20;
+        const baseCoords = base.geometry.coordinates;
+        /*
+         * **Through the library's own statement of that position**, rather than the three
+         * expressions that used to stand here. Eleven of these arrows store the corner as their
+         * last coordinate, so a renderer moving the grip and this method
+         * drawing it have to land on one point — and two copies of `trimLineEnd`,
+         * `computeParallelLineString` and `getPerpendicularPoint` are how they would stop.
+         * @see widthPointForBuiltAxis
+         */
+        const headBackCorner = widthPointForBuiltAxis(baseCoords, radius, tipOverhangOf(this.name));
+        return this.asMultiPointFeature(
+            headBackCorner
+                ? [baseCoords[0], baseCoords[baseCoords.length - 1], headBackCorner]
+                : [baseCoords[0], baseCoords[baseCoords.length - 1]],
+        );
+    }
+
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([
+            ...geometryService.labelCoordsAtFraction(centerline[0], centerline[1], 0.5, radius),
+            ...this.labelPath(centerline),
+        ]);
+    }
+}
+
+export class AttackHelicopterAxisOfAdvance extends MovementGraphicBase {
+    name: string = TacticalGraphicName.AttackHelicopterAxisOfAdvance;
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        let radius: number = opts?.radius || 20;
+        let baseCoords = this.arrowCenterline(base, radius);
+        let lastLinePoint = baseCoords[baseCoords.length - 1];
+        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
+
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
+        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            leftArrowBase[leftArrowBase.length - 1],
+            leftArrowBase[leftArrowBase.length - 2],
+            radius);
+        const rightArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            rightArrowBase[rightArrowBase.length - 1],
+            rightArrowBase[rightArrowBase.length - 2],
+            -radius,
+        );
+        // The twist just behind the head. @see twistWalls
+        const {lastLeft, lastRight, startLeft: secondToLastLeft, startRight: secondToLastRight} =
+            this.twistWalls(leftArrowBase, rightArrowBase, radius);
+        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
+
+        let arrowCoords: Position[] = [lastLeft, leftArrowHeadBase, arrowTipCoord, rightArrowHeadBase, lastRight];
+
+        // Two bars parallel to the arrowhead base, snapped to the twist edges.
+        // Bar direction is parallel to lastLeft→lastRight (the arrowhead base).
+        // Endpoints are found by intersecting that bar line with the two twist edges:
+        //   Edge A: secondToLastLeft → lastRight
+        //   Edge B: secondToLastRight → lastLeft
+        const barDir: Position = [lastRight[0] - lastLeft[0], lastRight[1] - lastLeft[1]];
+        const edgeADir: Position = [lastRight[0] - secondToLastLeft[0], lastRight[1] - secondToLastLeft[1]];
+        const edgeBDir: Position = [lastLeft[0] - secondToLastRight[0], lastLeft[1] - secondToLastRight[1]];
+
+        // 2D cross product: a × b = a[0]*b[1] - a[1]*b[0]
+        const cross = (a: Position, b: Position) => a[0] * b[1] - a[1] * b[0];
+
+        const lerp = (a: Position, b: Position, t: number): Position =>
+            [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+
+        const bars: Position[][] = [];
+        // The twist's own centre line, from where it starts to the head's base.
+        const twistFrom = lerp(secondToLastLeft, secondToLastRight, 0.5);
+        const twistTo = lerp(lastLeft, lastRight, 0.5);
+        for (const t of [0.3, 0.7]) {
+            const center = lerp(twistFrom, twistTo, t);
+            // Intersect line (center + s*barDir) with Edge A (secondToLastLeft + u*edgeADir)
+            const dA: Position = [center[0] - secondToLastLeft[0], center[1] - secondToLastLeft[1]];
+            const denomA = cross(barDir, edgeADir);
+            const uA = denomA !== 0 ? cross(barDir, dA) / denomA : 0;
+            const ptA: Position = [secondToLastLeft[0] + uA * edgeADir[0], secondToLastLeft[1] + uA * edgeADir[1]];
+
+            // Intersect line (center + s*barDir) with Edge B (secondToLastRight + v*edgeBDir)
+            const dB: Position = [center[0] - secondToLastRight[0], center[1] - secondToLastRight[1]];
+            const denomB = cross(barDir, edgeBDir);
+            const vB = denomB !== 0 ? cross(barDir, dB) / denomB : 0;
+            const ptB: Position = [secondToLastRight[0] + vB * edgeBDir[0], secondToLastRight[1] + vB * edgeBDir[1]];
+
+            bars.push([ptA, ptB]);
+        }
+        const [bar1, bar2] = bars;
+
+        return this.asMultiLineStringFeature([
+            leftArrowBase, arrowCoords.reverse(), rightArrowBase.reverse(),
+            bar1, bar2,
+        ]);
+    }
+
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const baseCoords = this.arrowCenterline(base, radius);
+        // coords[0..1]: text label position (near tail, same as AviationAxisOfAdvance)
+        const textCoords = geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius);
+        // coords[2]: where the walls actually cross, halfway along the twist. @see twistWalls
+        const secondToLast = baseCoords[baseCoords.length - 2];
+        // coords[3]: direction point (for computing arrow heading)
+        return this.asMultiPointFeature([...textCoords, twistCenterOf(baseCoords, radius), secondToLast, ...this.labelPath(baseCoords)]);
+    }
+}
+
+export class AviationAxisOfAdvance extends MovementGraphicBase {
+    name: string = 'AviationAxisOfAdvance';
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        let radius: number = opts?.radius || 20;
+        let baseCoords = this.arrowCenterline(base, radius);
+        let lastLinePoint = baseCoords[baseCoords.length - 1];
+        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
+
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
+        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            leftArrowBase[leftArrowBase.length - 1],
+            leftArrowBase[leftArrowBase.length - 2],
+            radius);
+        const rightArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            rightArrowBase[rightArrowBase.length - 1],
+            rightArrowBase[rightArrowBase.length - 2],
+            -radius,
+        );
+        // The twist just behind the head. @see twistWalls
+        const {lastLeft, lastRight} = this.twistWalls(leftArrowBase, rightArrowBase, radius);
+        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
+
+        let arrowCoords: Position[] = [lastLeft, leftArrowHeadBase, arrowTipCoord, rightArrowHeadBase, lastRight];
+        return this.asMultiLineStringFeature([leftArrowBase, arrowCoords.reverse(), rightArrowBase.reverse()]);
+    }
+
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const baseCoords = this.arrowCenterline(base, radius);
+        // coords[2] is where the walls cross, which the dates stay behind. @see aviationAxisLabelPaint
+        return this.asMultiPointFeature([
+            ...geometryService.labelCoordsAtFraction(baseCoords[0], baseCoords[1], 0.1, radius),
+            twistCenterOf(baseCoords, radius),
+            ...this.labelPath(baseCoords),
+        ]);
+    }
+}
+
+/**
+ * Emits a 2-point label span lying along the last segment of the arrow's center
+ * line, ending where the body does. The style function uses this span for
+ * rotation + scale and places the right-aligned "name DTG" label just behind the
+ * arrowhead.
+ *
+ * Takes the center line rather than the base feature: the body stops short of
+ * the operator's last vertex by the arrowhead's overhang, and a label anchored on
+ * the raw vertex would sit inside the head.
+ */
+export function labelSpanNearArrowhead(centerline: Position[], radius: number): Position[] {
+    const baseCoords = centerline;
+    const last = baseCoords[baseCoords.length - 1];
+    const secondToLast = baseCoords[baseCoords.length - 2];
+    const segLen = turf.distance(secondToLast, last, {units: 'meters'});
+    if (segLen === 0) return [secondToLast, last];
+    const t0 = Math.max(0, 1 - radius / segLen);
+    const c0: Position = [
+        secondToLast[0] + t0 * (last[0] - secondToLast[0]),
+        secondToLast[1] + t0 * (last[1] - secondToLast[1]),
+    ];
+    return [c0, last];
+}
+
+export class MainAttack extends MovementGraphicBase {
+    name: string = TacticalGraphicName.MainAxisOfAdvance;
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        let radius: number = opts?.radius || 20;
+        let baseCoords = this.arrowCenterline(base, radius);
+
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
+        let arrowCoords: Position[] = geometryService.createMainAttackArrow(baseCoords, leftArrowBase, rightArrowBase, radius);
+        return this.asMultiLineStringFeature([leftArrowBase, arrowCoords, rightArrowBase.reverse()]);
+    }
+
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
+    }
+}
+
+export class MainAttackFeint extends MovementGraphicBase {
+    name: string = TacticalGraphicName.MainAxisOfAdvanceFeint;
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        let radius: number = opts?.radius || 20;
+        let baseCoords = this.arrowCenterline(base, radius);
+
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
+        let arrowCoords: Position[] = geometryService.createMainAttackArrow(baseCoords, leftArrowBase, rightArrowBase, radius);
+
+        const feintDashes = this.computeFeintOutline(baseCoords, radius);
+
+        return this.asMultiLineStringFeature([
+            leftArrowBase,
+            arrowCoords,
+            rightArrowBase.reverse(),
+            ...feintDashes.dashes,
+        ]);
+    }
+
+    /**
+     * Dashed 3-point chevron (leftWing → apex → rightWing) in front of the
+     * solid arrow casing, matching the solid arrowhead's angle.
+     *
+     * Solid arrowhead: wings at (0, ±2r) relative to `last`, tip at 1.5r
+     * forward → half-angle atan2(2r, 1.5r) ≈ 53°.
+     *
+     * Feint uses the same perp / forward ratio so the angle matches:
+     *   wings at (wingForward, ±2r), apex at (wingForward + 1.5r, 0).
+     * `wingForward` = 1.75r sits 0.25r (= 5 px at draw time) past the solid
+     * tip, keeping the chevron close. All distances scale with `radius`.
+     */
+    private computeFeintOutline(baseCoords: Position[], radius: number): {
+        dashes: Position[][];
+        tip: Position;
+    } {
+        const last = baseCoords[baseCoords.length - 1];
+        const secondToLast = baseCoords[baseCoords.length - 2];
+        const lineBearing = turf.bearing(secondToLast, last);
+
+        //const wingForward = radius * .60; //.60
+
+        const apexForward = radius * 2.25;      // fixed — this is the tip
+        const armLength = radius * 3.7;         // ← lengthen by increasing this
+        const wingForward = apexForward - armLength * 0.6;   // pulls wing back
+        const wingPerp    = armLength * 0.8;                 // spreads wing out
+
+        const wingCenter = turf.destination(last, wingForward, lineBearing, {units: 'meters'})
+            .geometry.coordinates as Position;
+        const feintLeftWing = turf.destination(wingCenter, wingPerp, lineBearing - 90, {units: 'meters'})
+            .geometry.coordinates as Position;
+        const feintRightWing = turf.destination(wingCenter, wingPerp, lineBearing + 90, {units: 'meters'})
+            .geometry.coordinates as Position;
+        const feintTip = turf.destination(last, apexForward, lineBearing, {units: 'meters'})
+            .geometry.coordinates as Position;
+
+        // Whole, not cut: the dash is a stroke property sized on screen. @see DASHED_PARTS
+        return {dashes: [[feintLeftWing, feintTip, feintRightWing]], tip: feintTip};
+    }
+
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
+    }
+}
+
+export class SupportingAttack extends MovementGraphicBase {
+    name: string = TacticalGraphicName.SupportingAxisOfAdvance;
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        let radius: number = opts?.radius || 20;
+        let baseCoords = this.arrowCenterline(base, radius);
+
+        let lastLinePoint = baseCoords[baseCoords.length - 1];
+        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
+
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
+        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            leftArrowBase[leftArrowBase.length - 1],
+            leftArrowBase[leftArrowBase.length - 2],
+            radius);
+        const rightArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            rightArrowBase[rightArrowBase.length - 1],
+            rightArrowBase[rightArrowBase.length - 2],
+            -radius,
+        );
+
+        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
+
+        let arrowCoords: Position[] = [
+            leftArrowBase[leftArrowBase.length - 1],
+            leftArrowHeadBase,
+            arrowTipCoord,
+            rightArrowHeadBase,
+            rightArrowBase[rightArrowBase.length - 1]
+        ];
+        return this.asMultiLineStringFeature([leftArrowBase, arrowCoords, rightArrowBase.reverse()]);
+    }
+
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
+    }
+}
+
+/**
+ * Avenue of approach (APP-06 152300) — the supporting axis of advance's hollow arrow, with
+ * its single-outline head, carrying `AA` instead of a bare designation.
+ *
+ * > Points 1 through N-1 and 2 determine the symbol's centreline and Point N determines
+ * > the width.
+ *
+ * Which is `SupportingAttack`'s construction exactly, so it is that class under another name
+ * rather than a second copy of the same arrow. It extended `MainAttack` and
+ * so wore the main attack's double-outlined head, which the plate does not draw: neither FM
+ * 1-02.2 nor MIL-STD-2525E defines the symbol, so 152300 is the only authority. Both heads
+ * overhang the body by the same `DEFAULT_TIP_OVERHANG`, so a saved width point still lands
+ * where it did. What the plate adds and this does not is a
+ * free-text amplifier at **each** intermediate anchor point — the Example reads "ENY"
+ * twice down the tail — and the schema carries one label per graphic, not one per vertex.
+ */
+export class AvenueOfApproach extends SupportingAttack {
+    name: string = TacticalGraphicName.AvenueOfApproach;
+
+    /**
+     * Four anchors, not two: the head span the family publishes, then the **rear end of
+     * each rail**.
+     *
+     * 152300's Template boxes an `N` on both rails at the back of the symbol, and an `H`
+     * outside it. Neither can be placed from the head span alone, and a paint cannot go
+     * looking for the rails -- it is handed one feature. The generator already computes
+     * both parallels to draw the arrow, so publishing where they start costs nothing and
+     * keeps the placement a fact of the geometry rather than a guess in a renderer.
+     *
+     * `anchors()` in the paint layer reads the first two for rotation and scale exactly as
+     * before, so the axis-of-advance placement is unchanged.
+     */
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        const left = this.parallel(centerline, radius);
+        const right = this.parallel(centerline, -radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), left[0], right[0], ...this.labelPath(centerline)]);
+    }
+}
+
+export class Counterattack extends MovementGraphicBase {
+    name: string = TacticalGraphicName.Counterattack;
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        let radius: number = opts?.radius || 20;
+        let baseCoords = this.arrowCenterline(base, radius);
+
+        let lastLinePoint = baseCoords[baseCoords.length - 1];
+        let secondToLastLinePoint = baseCoords[baseCoords.length - 2];
+
+        const leftArrowBase: Position[] = this.parallel(baseCoords, radius);
+        const rightArrowBase: Position[] = this.parallel(baseCoords, -radius);
+        const leftArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            leftArrowBase[leftArrowBase.length - 1],
+            leftArrowBase[leftArrowBase.length - 2],
+            radius);
+        const rightArrowHeadBase: Position = geometryService.getPerpendicularPoint(
+            rightArrowBase[rightArrowBase.length - 1],
+            rightArrowBase[rightArrowBase.length - 2],
+            -radius,
+        );
+
+        const arrowTipCoord: Position = geometryService.getExtendedPoint(lastLinePoint, secondToLastLinePoint, radius);
+
+        let arrowCoords: Position[] = [
+            leftArrowBase[leftArrowBase.length - 1],
+            leftArrowHeadBase,
+            arrowTipCoord,
+            rightArrowHeadBase,
+            rightArrowBase[rightArrowBase.length - 1]
+        ];
+        // One outline, dashed when painted. @see DASHED_PARTS
+        return this.asMultiLineStringFeature([[leftArrowBase, arrowCoords, rightArrowBase.reverse()].flat()]);
+    }
+
+    /**
+     * The same span the axis-of-advance family publishes: `radius` long, ending where the
+     * body does, so the label sits **just behind the arrowhead** rather than at the middle
+     * of the last segment.
+     *
+     * It used to be `labelCoordsAtFraction(..., 0.5, radius)` — a pair straddling the
+     * segment's midpoint — which put `CATK` halfway down the arrow. The span also sets the
+     * label's size, and taking it from the arrow's *width* rather than its length is what
+     * stops a long counterattack carrying an enormous designation.
+     * @see labelSpanNearArrowhead
+     */
+    generateLabels(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiPoint> {
+        const radius = opts?.radius || 20;
+        const centerline = this.arrowCenterline(base, radius);
+        return this.asMultiPointFeature([...labelSpanNearArrowhead(centerline, radius), ...this.labelPath(centerline)]);
+    }
+}
+
+/**
+ * The by-fire bracket's dimensions, as multiples of the arrow's half-width, measured off
+ * the plate: the bar stands twice the body's half-width either side of the axis, the shaft
+ * runs about one, and the head is a third of that.
+ */
+const BY_FIRE_BAR_HALF = 2.0;
+const BY_FIRE_HEAD = 0.3;
+
+/**
+ * Counter-attack by fire (APP-06 340700) — the counterattack arrow with the *by fire*
+ * bracket standing beyond its tip.
+ *
+ * The arrow is the counterattack's, unchanged and dashed for the same reason: FM 1-02.2
+ * says outright that "there are certain control measures such as counterattack which are
+ * drawn in the present status with dashed lines", and APP-06 repeats it as a note on this
+ * row. The break is the symbol, not a status.
+ *
+ * The bracket is `getAttackByFireSymbol`'s — the same feathered bar and shaft that attack
+ * by fire draws, because it is the same amplifier meaning the same thing. Its bar is
+ * dashed with the arrow; **the little shaft and head are solid**, which is what the plate
+ * draws and is the only place in this symbol where a line is not broken.
+ */
+export class CounterattackByFire extends Counterattack {
+    name: string = TacticalGraphicName.CounterattackByFire;
+
+    /**
+     * **The bracket stands inside point 1, not beyond it.**
+     *
+     * 340700's Template letters `PT. 1` on the head of the little by-fire arrow — the
+     * rightmost mark in the symbol — where 340600's, one row above, letters it on the
+     * counterattack arrow's own `>`. The two rows share every word of their Draw Rules, so
+     * the drawing is the only place that distinction is made, and it is made clearly: the
+     * leader passes the bar and lands on the small solid head.
+     *
+     * Inheriting the counterattack's overhang put the operator's own click on the arrow's
+     * point and hung the whole bracket 1.85 half-widths off the end of it &mdash; so point 1
+     * was neither the tip of anything nor the end of the symbol, and a click placed against
+     * an enemy position drew a mark past it. Trimming the body by the bracket's own reach as
+     * well slides the figure back along its axis until the head lands on the click, which is
+     * exactly what the inherited 1.5 does for the arrow alone.
+     *
+     * **Stated as the sum, because it is the sum.** Both terms are the ones
+     * `generateGraphics` steps along the axis with, so the head cannot drift off the click
+     * if the bracket is ever redrawn — which is why the two of them moved into
+     * `core/axisWidth.ts` with the overhang table rather than the sum being split from its
+     * terms across two modules. 340600 keeps the default and is untouched.
+     * @see TIP_OVERHANG, BY_FIRE_STANDOFF
+     */
+
+    generateGraphics(base: Feature<LineString>, opts?: MovementGraphicOptions): Feature<MultiLineString> {
+        const radius: number = opts?.radius || 20;
+        const arrow = super.generateGraphics(base, opts);
+
+        const centerline = this.arrowCenterline(base, radius);
+        const last = centerline[centerline.length - 1];
+        const secondToLast = centerline[centerline.length - 2];
+        const tip = geometryService.getExtendedPoint(last, secondToLast, radius);
+        const axis = turf.bearing(turf.point(secondToLast), turf.point(last));
+
+        const along = (from: Position, meters: number): Position =>
+            turf.destination(turf.point(from), meters / 1000, axis, {units: 'kilometers'}).geometry.coordinates;
+
+        // The bracket stands clear of the tip rather than touching it: the arrow's own
+        // point is a `>`, and a bar hard against it reads as one closed shape.
+        const bracketAt = along(tip, radius * BY_FIRE_STANDOFF);
+        const shaftEnd = along(bracketAt, radius * BY_FIRE_SHAFT);
+
+        // Built here rather than through `getAttackByFireSymbol`, which derives its
+        // arrowhead from the bar's height — right for attack by fire, where the head is
+        // the symbol, and far too big here, where it is a mark beside a much larger arrow.
+        const bracket = geometryService.getFirePositionBracket(bracketAt, axis, radius * BY_FIRE_BAR_HALF);
+        const head = geometryService.computeArrowheadPoints(bracketAt, shaftEnd, radius * BY_FIRE_HEAD, 45);
+
+        return this.asMultiLineStringFeature([
+            ...arrow.geometry.coordinates,
+            bracket,
+            [bracketAt, shaftEnd],
+            head,
+        ]);
+    }
+}

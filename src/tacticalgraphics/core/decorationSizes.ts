@@ -1,0 +1,357 @@
+import {TacticalGraphicName} from './type';
+
+/**
+ * How large, in screen pixels at the drawing zoom, each graphic's baked-in decoration is
+ * meant to be.
+ *
+ * **Symbology, so it lives in the map-agnostic half.** It says how big a decoration
+ * should look, which is the same answer for any renderer; only the multiplication by
+ * a live resolution belongs to one. It was in `openlayers/graphics/decorationPx.ts`
+ * until MapLibre needed it, and that file re-exports it so nothing else moved.
+ * A second renderer guessing one number for all of them drew bridge and gap at
+ * nearly twice the size OpenLayers does.
+ *
+ * These constants used to live *inside* the generators as `size * 20` / `size * 15`,
+ * which only worked because the holders passed the map resolution into the generator's
+ * `size` slot. That made the map-agnostic half consume meters-per-pixel while its schema
+ * promised meters, so anyone calling `renderTacticalGraphic` with a real distance got a
+ * graphic 15-20x too large — silently.
+ *
+ * Moving them here changes nothing on screen: `20 * resolution` is the same number
+ * whichever side of the boundary multiplies. What changes is that the generator now
+ * consumes the meters it documents, and the viewport quantity stays in the renderer
+ * where it belongs.
+ *
+ */
+const DECORATION_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.DirectionOfMainAttack]: 20,
+    [TacticalGraphicName.DirectionOfSupportingAttack]: 20,
+    [TacticalGraphicName.DirectionOfMainAttackFeint]: 20,
+    [TacticalGraphicName.AviationDirectionOfAttack]: 20,
+    [TacticalGraphicName.FollowAndAssume]: 20,
+    [TacticalGraphicName.FollowAndSupport]: 20,
+    [TacticalGraphicName.FieldsOfFire]: 20,
+    [TacticalGraphicName.FinalProtectiveFireLeft]: 20,
+    [TacticalGraphicName.FinalProtectiveFireRight]: 20,
+    [TacticalGraphicName.PrincipalDirectionOfFire]: 20,
+    [TacticalGraphicName.SecondaryDirectionOfFire]: 20,
+    // The zigzag's half-wavelength: the distance from one apex to the next. Driving the
+    // symbol off a screen size rather than off the drawn length is what lets a long
+    // obstacle carry *more* teeth instead of bigger ones. @see Fix
+    [TacticalGraphicName.Fix]: 14,
+    [TacticalGraphicName.TacticalFix]: 14,
+    [TacticalGraphicName.PassageLane]: 20,
+    // The same splay, because it is the same picture -- APP-06 290600 and the FM's
+    // passage lane draw one outline and differ only in what they letter. Missing from
+    // this table the fallback is **1 px**, so the arms came out a metre long and the
+    // symbol rendered as a bare line: a safe lane that looked like a phase line.
+    [TacticalGraphicName.SafeLaneOrGap]: 20,
+    [TacticalGraphicName.FerryCrossing]: 15,
+    [TacticalGraphicName.Bridge]: 15,
+    [TacticalGraphicName.Gap]: 15,
+    [TacticalGraphicName.AssaultCrossing]: 15,
+    [TacticalGraphicName.Encirclement]: 20,
+
+    // Abatis. APP-06 280100 is explicit that "the size of the tooth does not change"
+    // as the drawn line lengthens, which is precisely what this table is for. Sized
+    // between the wire marks (14) and the anti-tank teeth (30): it is one tooth
+    // rather than a run of them, so it has to read on its own.
+    [TacticalGraphicName.Abatis]: 26,
+
+    // The wire obstacles. Their mark width is the unit the whole density ladder is built
+    // from — gaps are counted in mark widths — so this one number sets both the size of
+    // the X and the spacing between groups. Omitting them was not a missing tuning value
+    // but a bug: the fallback below is 1 px, so every wire graphic drew a one-pixel X and
+    // looked like a bare line until you zoomed several levels in.
+    [TacticalGraphicName.WireUnspecified]: 14,
+    [TacticalGraphicName.WireSingleFence]: 14,
+    [TacticalGraphicName.WireDoubleFence]: 14,
+    [TacticalGraphicName.WireDoubleApronFence]: 14,
+    [TacticalGraphicName.WireLowWireFence]: 14,
+    [TacticalGraphicName.WireHighWireFence]: 14,
+    [TacticalGraphicName.WireSingleConcertina]: 14,
+    [TacticalGraphicName.WireDoubleStrandConcertina]: 14,
+    [TacticalGraphicName.WireTripleStrandConcertina]: 14,
+
+    /*
+     * **The three whose furniture must survive a vertex drag.**
+     *
+     * 218400's ticks and the two convoys' body widths were briefly shares of the drawn run,
+     * so lengthening the line by dragging its red handle fattened the symbol — and a line
+     * the operator is lengthening is a line, not a bigger symbol. Being in this table makes each
+     * of them a `decorationSize`: fixed against a vertex drag, and scaled by the resize
+     * gesture, which multiplies it. Exactly what `Fix` above has always done, and for the
+     * same reason.
+     *
+     * The convoys' two numbers keep the plates' relationship to each other -- 50/448 against
+     * 60/483, so the halted body is about a tenth deeper than the moving one -- while both
+     * are now screen sizes rather than shares. @see convoyPaints
+     */
+    [TacticalGraphicName.NavigationalLine]: 26,
+    [TacticalGraphicName.MovingConvoy]: 13,
+    [TacticalGraphicName.HaltedConvoy]: 14,
+};
+
+/**
+ * The default decoration size in meters for `name` at `resolution`.
+ *
+ * Falls back to 1 px worth for graphics that carry no baked decoration — they ignore the
+ * value, and passing the bare resolution is what they got before.
+ */
+export const decorationMeters = (name: TacticalGraphicName, resolution: number): number =>
+    (DECORATION_PX[name] ?? 1) * resolution;
+
+/**
+ * Whether this graphic's `size` option *is* a decoration size.
+ *
+ * For the graphics in the table above, `size` means "how big is the chevron / the X
+ * / the tick", not "how far does this reach" — so it belongs to the renderer, which
+ * knows the zoom, rather than to a caller passing a ground distance. Handing one of
+ * them a `radius` meant for reach draws a bridge tick kilometers tall.
+ *
+ * Exported so a renderer can tell the two meanings apart without keeping its own
+ * copy of the list.
+ */
+export function hasBakedDecoration(name: TacticalGraphicName): boolean {
+    return DECORATION_PX[name] !== undefined;
+}
+
+/**
+ * The graphics whose fixed decoration is built **on the head of the drawn base itself**,
+ * so the first stretch of the line is inside the symbol rather than beside it.
+ *
+ * Abatis is the one, and 280100 is why: the route runs *into* the chevron and out the
+ * other side, so the first `size` metres of the base are the tooth's own opening — the
+ * two legs and the gap between them. A vertex placed in there is a vertex inside the
+ * symbol. @see Abatis.path
+ *
+ * Distinct from every other entry in `DECORATION_PX`. A bridge's ticks, a wire's crosses
+ * and the convoys' body all hang *off* the line and leave it whole underneath, so a
+ * vertex anywhere along those is a bend in a road and nothing more.
+ */
+const HEAD_DECORATION_GRAPHICS: readonly TacticalGraphicName[] = [TacticalGraphicName.Abatis];
+
+/**
+ * How much of this graphic's base, from its first point, its own furniture occupies — in
+ * screen pixels at the drawing zoom — or `undefined` for a graphic that reserves nothing.
+ *
+ * Read off `DECORATION_PX` rather than restated, because it *is* the decoration's size:
+ * the chevron spans exactly the `size` the renderer hands the generator, and a second copy
+ * of 26 here would be a number that could drift from the one being drawn.
+ * @see HEAD_DECORATION_GRAPHICS, acceptsInsertedVertex
+ */
+export function reservedLeadPx(name: TacticalGraphicName): number | undefined {
+    return HEAD_DECORATION_GRAPHICS.includes(name) ? DECORATION_PX[name] : undefined;
+}
+
+/**
+ * Arrowhead length in screen pixels at the drawing zoom, for the two point-anchored
+ * curves that take it as a **flat distance** rather than a fraction of their size.
+ *
+ * Deliberately not in `DECORATION_PX`: for the graphics in that table `size` *is* the
+ * decoration, so a renderer overrides `radius` with it. These two have a real reach
+ * as well — the run and the circle — so the arrowhead travels as `decorationSize`
+ * instead, and `radius` keeps meaning what it means everywhere else. Feeding them
+ * through the other table would set the arrowhead's length as the graphic's size.
+ *
+ * `headSize` is a flat distance so the arrowhead survives a resize at the size it
+ * was drawn — a fraction of `size` grows with the graphic, which is what the
+ * generators fall back to and what made a second renderer draw a visibly smaller
+ * head than OpenLayers.
+ */
+const ARROWHEAD_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.Turn]: 26,
+    [TacticalGraphicName.TacticalTurn]: 26,
+    [TacticalGraphicName.Envelopment]: 22,
+};
+
+/** The arrowhead length this graphic is drawn with, in meters, or undefined. @see ARROWHEAD_PX */
+export function arrowheadMeters(name: TacticalGraphicName, resolution: number): number | undefined {
+    const px = ARROWHEAD_PX[name];
+    return px === undefined ? undefined : px * resolution;
+}
+
+/**
+ * Half-extent of a crossed mission task, in screen pixels.
+ *
+ * Destroy, Interdict, Neutralize and Suppress are dropped whole on one click, at a screen
+ * constant times the resolution they were placed at. They are **not** fixed-size any more
+ * — they carry a real size and resize, and what they refuse is the *rotate*, because a
+ * crossed symbol turned 45 degrees is a different symbol. `allowedGestures` is the
+ * authority; this constant is only what they are dropped at.
+ *
+ * It lived as `res * 50` inside a factory in the OpenLayers controller registry, so
+ * MapLibre had no way to know it and fell back to the generic 40 km default. Measured
+ * side by side, the same Destroy drew at 489,197 m in one engine and 40,000 m in the
+ * other — a symbol an order of magnitude smaller, from a number written in a file the
+ * other renderer cannot see.
+ */
+export const CROSSED_MISSION_TASK_PX = 50;
+
+/**
+ * That half-extent in meters at a given resolution, or `undefined` when there is no
+ * resolution to spend — a caller with no viewport cannot size a screen-constant symbol.
+ */
+export function crossedMissionTaskMeters(drawingResolution?: number): number | undefined {
+    return drawingResolution ? CROSSED_MISSION_TASK_PX * drawingResolution : undefined;
+}
+
+/**
+ * The size the **block family** is drawn at, in screen pixels at the drawing zoom.
+ *
+ * Block and its table 5-19 twin are a line with a bar across it, and that bar is a screen
+ * constant like any other decoration — but a much larger one than the generic 20 px a
+ * line graphic's offset defaults to, because the bar is the symbol rather than an
+ * ornament on it.
+ *
+ * **It lived in `openlayers/graphics/Block.ts` as a private `DEFAULT_SIZE_PX`,** which is
+ * the shape of defect this repository keeps finding: a symbology fact in a holder, in the
+ * half of the codebase the other renderer cannot see. MapLibre fell back to the generic
+ * 20 px, so the same block drawn on the two engines came out 120 px tall against 40 —
+ * three times the difference, from one number written where only one renderer could read
+ * it.
+ */
+const DRAWN_SIZE_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.TacticalBlock]: 60,
+    [TacticalGraphicName.Block]: 60,
+};
+
+/**
+ * That size in meters at a given resolution, or `undefined` for a graphic that does not
+ * state one — in which case the caller's own default stands. @see DRAWN_SIZE_PX
+ */
+export function drawnSizeMeters(name: TacticalGraphicName, resolution: number): number | undefined {
+    const px = DRAWN_SIZE_PX[name];
+    return px === undefined ? undefined : px * resolution;
+}
+
+/*
+ * **There is no floor on how small a curve may be drawn, and there deliberately is not.**
+ *
+ * Turn, its table 5-19 twin and Envelopment used to be held to 50 px on the way in, so a
+ * barely-dragged one was committed at a legible size rather than as a kink. Two families
+ * had already left that list for the same reason — the arc mission-task circles and the
+ * crossed four both refused a shrink the operator was entitled to make — and the last
+ * three left it when they became click-placed: the floor sat on the centre-to-edge drag
+ * they no longer use, so nothing reached it on either engine.
+ *
+ * It was not re-armed. It only ever governed the draw, never a later resize, so a symbol
+ * could be dragged under it a moment afterwards and the guard was partial at best; and
+ * arming it on a click-placed draw pins the size while the cursor keeps going, which is
+ * the "jumpy and not smooth" preview reported. Keeping the constant on those
+ * terms would state a protection the code cannot deliver.
+ *
+ * If small curves need guarding, the answer is something after the draw that the operator
+ * can see and overrule, not a size the gesture silently overrides.
+ */
+
+
+/**
+ * How short the **first segment** of these graphics may be drawn, in pixels.
+ *
+ * Three line graphics carry a mark baked into the geometry near the start of the line,
+ * and each needs room for it *and* for the arrowhead at the far end. Drawn shorter, the
+ * mark and the head occupy the same stretch of line and the symbol stops being readable
+ * — and shorter still, the mark runs off the end of the line it annotates entirely,
+ * because it is placed by interpolating a fixed distance along the segment.
+ *
+ * - **Aviation direction of attack** — 80 px: the bow-tie reaches 3x the 20 px
+ *   decoration unit from the start, and the arrowhead reaches cos(45 deg) x it back
+ *   from the tip.
+ * - **Fix** and its table 5-19 twin — 145 px: 50 px for the F-labelled first segment,
+ *   45 px for the three triangles, 50 px into the arrowhead. The twin draws no "F" but
+ *   the geometry is otherwise identical, so it takes the same floor.
+ *
+ * **Here so that both renderers apply the same floor at the same moment.** It lived in
+ * `LineGraphicBase.setBaseFeature` as two hard-coded literals, which is the shape of
+ * defect this repository keeps finding: MapLibre had no equivalent, so the same short
+ * drag produced a readable symbol on one engine and a bow-tie sitting off the end of
+ * its own line on the other.
+ *
+ * A floor is a **draw-time affordance and only that** — see `suspendMinimumLength`.
+ * Re-running it on a restore stretches a line that was already valid, at whatever
+ * resolution the restoring session happens to be at.
+ */
+const MIN_FIRST_SEGMENT_PX: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.AviationDirectionOfAttack]: 80,
+    [TacticalGraphicName.Fix]: 145,
+    [TacticalGraphicName.TacticalFix]: 145,
+};
+
+/**
+ * The floor this graphic's first segment is held to while it is being **shaped**, in
+ * pixels, or `undefined` when it has none. Convert with `screenMeters`.
+ * @see MIN_FIRST_SEGMENT_PX
+ */
+export function minimumFirstSegmentPx(name: TacticalGraphicName): number | undefined {
+    return MIN_FIRST_SEGMENT_PX[name];
+}
+
+/**
+ * # The point-anchored graphics whose shape is a **length and a width**, not a radius
+ *
+ * APP-06 240802, 200101, 200201, 200401 and 200600 all read the same way: *one* anchor
+ * point at the centre, with the two dimensions and the attitude stated as amplifiers. So a
+ * drag away from the anchor has to produce *both* numbers, and the share the width takes
+ * of the length is a fact about each plate.
+ *
+ * ## Why this is here rather than in a holder
+ *
+ * **It was in one, and the other engine drew a line.** `RectangularTargetGraphicBase`
+ * returned `{length: size * 2, radius: size * 0.66}` from a constant of its own, and
+ * MapLibre's draw stamps `radius` and nothing else — so on MapLibre the length fell back to
+ * the generator's flat 2 km default while the width came out as whatever the drag measured.
+ * A 2 km by 500 km ellipse is a vertical stroke, which is exactly what 240802 has rendered
+ * as on MapLibre since it became point-anchored in 3.2.0, and what the three maritime
+ * ellipses inherited on the day they were added.
+ *
+ * The rule "a drag of `r` means a box `2r` long and `2·k·r` wide" is symbology: it is the
+ * same answer for any renderer, and only the multiplication by a live drag belongs to one.
+ *
+ * ## The ratios
+ *
+ * Each is `AM / AM1` — half-width over half-length — off its own plate:
+ *
+ * | code | source | ratio |
+ * |---|---|---|
+ * | 240802 | the Template's own box, roughly half again as wide as deep | 0.66 |
+ * | 200101 / 200201 / 200401 | the Examples state it: `AM = 60 Metres`, `AM1 = 112 Metres` | 0.536 |
+ * | 200600 | measured off the Template at 300 dpi — 353.8 px by 210.0 px on its own axes | 0.593 |
+ */
+const AXIS_WIDTH_RATIO: Partial<Record<TacticalGraphicName, number>> = {
+    [TacticalGraphicName.TargetAreaRectangular]: 0.66,
+    [TacticalGraphicName.LaunchAreaEllipse]: 0.536,
+    [TacticalGraphicName.DefendedAreaEllipse]: 0.536,
+    [TacticalGraphicName.ShipAreaOfInterestEllipse]: 0.536,
+    [TacticalGraphicName.CuedAcquisitionDoctrine]: 0.593,
+};
+
+/**
+ * Whether this graphic's shape is a length and a width about a single anchor point.
+ *
+ * Distinct from {@link isRectangular}, which is the *two*-anchor-point family, and from
+ * the circles, which have one dimension. @see AXIS_WIDTH_RATIO
+ */
+export function hasAxisAndWidth(name: TacticalGraphicName): boolean {
+    return name in AXIS_WIDTH_RATIO;
+}
+
+/**
+ * The `length` and `width` a drag of `radius` metres produces for one of them, or
+ * `undefined` for every other graphic.
+ *
+ * **Both are full figures, in the public schema's own terms** -- `TacticalGraphicProperties`
+ * carries a full `length` and a full `width`, and it is `toGraphicOptions` that halves the
+ * width on the way to a generator's `radius`. Returning the generator's vocabulary here
+ * would be the trap it already was: a public `radius` means the graphic's *size*, so a
+ * caller stamping this bag's `radius` would have set the wrong field and changed nothing.
+ * The same pair `persistedGeometryState` files, so a restore and a fresh draw agree.
+ */
+export function axisAndWidth(
+    name: TacticalGraphicName,
+    radius: number,
+): {length: number; width: number} | undefined {
+    const ratio = AXIS_WIDTH_RATIO[name];
+    if (ratio === undefined || !(radius > 0)) return undefined;
+    return {length: radius * 2, width: radius * ratio * 2};
+}

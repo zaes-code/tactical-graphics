@@ -1,0 +1,149 @@
+import {TacticalGraphicsBase} from './TacticalGraphicsBase';
+import {BaseGraphicOptions, TacticalGraphicName} from '../core/type';
+import {Feature, LineString, MultiLineString, MultiPoint, Position} from 'geojson';
+import * as turf from '../core/turf';
+
+/**
+ * Apex height as a multiple of the chevron's base width.
+ *
+ * The old point-anchored build used 0.85 of a half-span, which is the same
+ * proportion read the other way round; keeping it means the tooth is the shape it
+ * always was, only now it no longer grows with the route.
+ */
+export const ABATIS_HEIGHT_RATIO = 0.588;
+
+/**
+ * Abatis — "an obstacle constructed by the felling and interlacing of trees across a
+ * route" (FM 1-02.2 table 5-19).
+ *
+ * **A drawn route carrying one fixed-size tooth**, in the anti-tank ditches' mold.
+ * The operator draws the line the obstacle lies along, adding as many vertices as the
+ * road needs, and the chevron sits at the leading end at a constant screen size.
+ *
+ * APP-06 Ed E (280100) states both halves of that:
+ *
+ * > This symbol requires at least two anchor points, points 1 and 2, to define the
+ * > line. Additional points can be defined to extend the line.
+ * >
+ * > The first and last anchor points determine the length of the line. **The size of
+ * > the tooth does not change.**
+ *
+ * FM 1-02.2 agrees in its plate, whose example lays four abatis of visibly different
+ * lengths across one road with the same tooth on each.
+ *
+ * **This used to be point-anchored** with a fixed 6:1 route derived from one `size`,
+ * so the tooth grew with the obstacle and the obstacle could not follow a road at
+ * all.
+ *
+ * **The route runs *into* the chevron and out the other side** rather than continuing
+ * beneath it: drawing the base line straight through would close the chevron into a
+ * triangle, which is a different symbol. So the emitted path is the two chevron legs
+ * followed by whatever is left of the drawn route.
+ *
+ * `size` is the chevron's base width **in meters**, and is a decoration size rather
+ * than a reach — the renderer derives it from the zoom through `decorationMeters`, so
+ * the tooth holds its size on screen.
+ *
+ * **The tooth is drawn pointing north, and then belongs to the line.** Which side it stands
+ * on is decided once, when the line is drawn: the side facing north, so a route drawn right
+ * to left no longer puts it underneath (`drawnSide`, which both engines apply). It is stored
+ * as `mirrored`, the other side from the default left of the line, and from then on it turns
+ * with the line: rotated half a turn, the tooth points south, as the operator asked.
+ * Nothing but the draw sets it; there is no grip to flip it. @see drawnSide, northSide
+ */
+/**
+ * Which way to turn off a line drawn on `heading` (degrees clockwise from north) to face
+ * north: -90, its left, when it runs east of north-south; +90, its right, when it runs west.
+ * A line running due north or south has no north side, and gets its west one.
+ */
+export function northSide(heading: number): -90 | 90 {
+    const east = Math.sin((heading * Math.PI) / 180);
+    if (Math.abs(east) > 1e-9) return east > 0 ? -90 : 90;
+    return Math.cos((heading * Math.PI) / 180) > 0 ? -90 : 90;
+}
+
+/** Whether a draw decides which side of its line this graphic's decoration takes. @see drawnSide */
+export function hasDrawnSide(name: string): boolean {
+    return name === TacticalGraphicName.Abatis;
+}
+
+/**
+ * The side a newly drawn graphic's decoration takes, decided from the direction it was drawn.
+ *
+ * Only abatis has one: its tooth goes on the side of the first segment that faces north, which
+ * is `mirrored` when the line runs westward. Both engines apply this when a draw finishes, and
+ * nothing applies it again, so a later rotation turns the tooth with the line. `{}` for every
+ * other graphic and for a line too short to have a direction.
+ */
+export function drawnSide(name: string, coords: Position[]): {mirrored?: true} {
+    if (!hasDrawnSide(name) || coords.length < 2) return {};
+    const [a, b] = coords;
+    if (a[0] === b[0] && a[1] === b[1]) return {};
+    return northSide(turf.bearing(turf.point(a), turf.point(b))) === 90 ? {mirrored: true} : {};
+}
+
+export class Abatis extends TacticalGraphicsBase<BaseGraphicOptions> {
+    name: string = TacticalGraphicName.Abatis;
+    type: string = 'LineString';
+
+    /**
+     * The chevron's three points plus the rest of the route, as one open path.
+     *
+     * Returns `null` when the drawn line is too short to carry a tooth, so callers can
+     * fall back to the bare route instead of emitting a degenerate zigzag.
+     */
+    private path(base: Feature<LineString>, opts?: BaseGraphicOptions): Position[] | null {
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return null;
+
+        const line = turf.lineString(coords);
+        const total = turf.length(line, {units: 'meters'});
+        if (!isFinite(total) || total <= 0) return null;
+
+        // Never let the tooth eat more than half the obstacle: on a route drawn shorter
+        // than the tooth is wide there is no "rest of the route" left to run away, and
+        // the symbol reads as a bare triangle.
+        const span = Math.min(Math.max(opts?.size ?? 0, 0), total / 2);
+        if (span <= 0) return null;
+
+        const height = span * ABATIS_HEIGHT_RATIO;
+        const start = coords[0];
+        const mid = turf.along(line, span / 2, {units: 'meters'}).geometry.coordinates;
+        const foot = turf.along(line, span, {units: 'meters'}).geometry.coordinates;
+
+        const heading = turf.bearing(turf.point(start), turf.point(foot));
+        const apex = turf.destination(turf.point(mid), height, heading + (opts?.mirrored ? 90 : -90), {
+            units: 'meters',
+        }).geometry.coordinates as Position;
+
+        // `lineSliceAlong` keeps the intermediate vertices, which is what lets the
+        // obstacle bend with the road rather than straightening to its endpoints.
+        const tail = turf.lineSliceAlong(line, span, total, {units: 'meters'}).geometry.coordinates;
+        return [start, apex, ...tail];
+    }
+
+    generateGraphics(base: Feature<LineString>, opts?: BaseGraphicOptions): Feature<MultiLineString> {
+        const coords = base.geometry.coordinates;
+        // Mid-draw the interaction hands us a one-point sketch on every pointer move;
+        // a one-point LineString is not a line.
+        if (coords.length < 2) return this.asMultiLineStringFeature([]);
+        return this.asMultiLineStringFeature([this.path(base, opts) ?? coords]);
+    }
+
+    /**
+     * `[start, end]`, the two ends of the drawn line.
+     *
+     * There was a third, on the chevron's apex, whose only job was to be dragged across the
+     * route to flip it. The side is set when the line is drawn now. @see drawnSide
+     */
+    generateHandles(base: Feature<LineString>): Feature<MultiPoint> {
+        const coords = base.geometry.coordinates;
+        if (coords.length < 2) return this.asMultiPointFeature(coords);
+        return this.asMultiPointFeature([coords[0], coords[coords.length - 1]]);
+    }
+
+    /** No amplifiers: affiliation and nothing else. */
+    generateLabels(): Feature<MultiPoint> {
+        return this.asMultiPointFeature([]);
+    }
+}

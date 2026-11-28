@@ -1,0 +1,629 @@
+/**
+ * @zaes/tactical-graphics — FM 1-02.2 / APP-06 tactical graphics as plain GeoJSON.
+ *
+ * Describe a graphic by adding a `tacticalGraphic` object to any GeoJSON
+ * feature's properties, then render it:
+ *
+ * ```ts
+ * import {renderTacticalGraphic, TacticalGraphicName} from '@zaes/tactical-graphics';
+ *
+ * const {graphic, labels} = renderTacticalGraphic({
+ *     type: 'Feature',
+ *     geometry: {type: 'LineString', coordinates: [[-77.04, 38.89], [-76.95, 38.95]]},
+ *     properties: {tacticalGraphic: {name: TacticalGraphicName.MainAxisOfAdvance, designation: '1-508 IN'}},
+ * });
+ * ```
+ *
+ * The output is GeoJSON in EPSG:4326 — render it with OpenLayers or anything
+ * else that reads GeoJSON.
+ *
+ * @module @zaes/tactical-graphics
+ */
+
+// ── The entry point ─────────────────────────────────────────────────────────
+export {
+    renderTacticalGraphic,
+    toFeatureCollection,
+    readTacticalGraphicProperties,
+    applyAmplifierAliases,
+    isTacticalGraphicFeature,
+    listTacticalGraphicNames,
+    TacticalGraphicError,
+    TACTICAL_GRAPHIC_KEY,
+    toGraphicOptions,
+    migrateRetiredGraphic,
+} from './core/render';
+
+export type {GraphicLabels, TacticalGraphicProperties, TacticalGraphicRender, TacticalGraphicRole} from './core/render';
+
+// ── Names, categories, symbology ────────────────────────────────────────────
+export {
+    TacticalGraphicName,
+    TacticalGraphicHostility,
+    AltitudeDatum,
+    TacticalGraphicStatus,
+    TacticalGraphicConfidence,
+    TacticalGraphicEchelon,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
+    RouteDirection,
+    getLabel,
+    getDisplayName,
+} from './core/type';
+
+export type {
+    Coordinate,
+    PositionType,
+    GraphicOptions,
+    MovementOptions,
+    /** @deprecated Use {@link MovementOptions}. */
+    MovementGraphicOptions,
+    RangeFanBand,
+    RangeFanConfig,
+    RangeFanOptions,
+    TurnOptions,
+    ITacticalGraphic,
+    IGraphicGenerator,
+} from './core/type';
+
+/**
+ * Range-fan band resolvers. A renderer that draws its own band labels needs the
+ * same defaults the geometry generator applied — otherwise its labels drift from
+ * the arcs. Exported for exactly that reason; the OpenLayers sample app uses
+ * them in `RangeFanGraphicBase`.
+ */
+export {
+    BAND_SEPARATION_FRACTION,
+    geodesicBearingDeg,
+    geodesicDistanceM,
+    MIN_SECTOR_ARC_DEG,
+    resolveBands,
+    resolveBandAzimuths,
+    resolveCenterAzimuth,
+    resolveRangeFanBands,
+    rotationToAzimuth,
+} from './graphics/RangeFan';
+
+/**
+ * Turn's bend limits and the clamp that enforces them. A renderer that lets the
+ * user drag the sharpness has to clamp with the same numbers the generator
+ * does, or the handle drifts off the curve at the extremes.
+ */
+export {TURN_DEFAULT_BEND, TURN_MIN_BEND, TURN_MAX_BEND, clampTurnBend, turnBendFrom, turnBendFromOffset} from './graphics/Turn';
+/** Envelopment's half-circle radius, exported for the same reason as Turn's bend. */
+export {
+    ENVELOPMENT_DEFAULT_BEND,
+    ENVELOPMENT_MIN_BEND,
+    ENVELOPMENT_MAX_BEND,
+    clampEnvelopmentBend,
+    ENVELOPMENT_FLIP_THRESHOLD,
+    envelopmentBendFrom,
+} from './graphics/FormsOfManeuver';
+
+export {TacticalGraphicCategory, GRAPHIC_CATEGORIES} from './core/categories';
+export {TacticalGraphicSpecification, GRAPHIC_SPECIFICATIONS, getSpecifications, hasSpecification, listNamesBySpecification} from './core/specifications';
+export {GRAPHIC_ENTITY_CODES, getEntityCode, getNameByEntityCode, listNamesByEntityCode, listEntityCodes, listEntityVariantCodes, resolveEntityCode} from './core/entityCodes';
+export type {EntityCodeAmplifiers, EntityCodeResolution} from './core/entityCodes';
+export {
+    CONTROL_MEASURE_SYMBOL_SET,
+    SIDC_CONTEXTS,
+    SIDC_ECHELON,
+    SIDC_MINE_TYPE,
+    SIDC_MOBILITY,
+    SIDC_STANDARD_IDENTITY,
+    SIDC_STATUS,
+    SIDC_TERRAIN,
+    SIDC_VERSIONS,
+    buildGraphicSidc,
+    isGraphicSidc,
+    parseGraphicSidc,
+} from './core/sidc';
+export type {ParsedGraphicSidc, SidcContext, SidcGraphicProperties, SidcOptions, SidcProperties, SidcStandard} from './core/sidc';
+export {
+    DoctrinalIssueKind,
+    getDoctrinalRequirements,
+    hasDoctrinalRequirements,
+    isTacticalGraphicComplete,
+    validateTacticalGraphic,
+} from './core/doctrine';
+export type {DoctrinalIssue, DoctrinalValidation} from './core/doctrine';
+
+// ── Escape hatches for advanced use ─────────────────────────────────────────
+export {TacticalGraphicsRegistry} from './core/TacticalGraphicsRegistry';
+export {default as geometryService} from './core/GeometryService';
+
+/**
+ * Configuration — label size, line width, and the colors. All optional; omit a field
+ * and you get the doctrinal FM 1-02.2 value.
+ *
+ * Lives in the map-agnostic half deliberately. None of it knows what a renderer is:
+ * pixel sizes and affiliation colors are properties of the symbology, so a second
+ * renderer inherits them rather than reinventing them, and a host configures the library
+ * once no matter how many views it has.
+ *
+ * There is one palette — `DEFAULT_PALETTE`. The library cannot see your basemap, so it
+ * never picks colors for you: keep whatever sets your app needs and send one. After
+ * changing anything, tell your renderer to invalidate; with OpenLayers that is
+ * `source.forEachFeature(f => f.changed())`.
+ */
+export {
+    BASE_FONT_SIZE_PX,
+    DEFAULT_LINE_WIDTH,
+    AltitudeUnit,
+    ALTITUDE_UNIT_SUFFIX,
+    getAltitudeUnit,
+    DEFAULT_PALETTE,
+    MAX_LABEL_SIZE,
+    MAX_LINE_WIDTH,
+    MIN_LABEL_SIZE,
+    MIN_LEGIBLE_TEXT_PX,
+    MIN_LINE_WIDTH,
+    TacticalGraphicsConfig,
+    configureTacticalGraphics,
+    getDefaultLabelSize,
+    getDefaultLineWidth,
+    geometryConfigKey,
+    getFullSizeDecorations,
+    getSmoothLines,
+    getEnemyLabels,
+    getMinLabelSize,
+    getAutoPlaceLabels,
+    getTacticalGraphicsConfig,
+    resetTacticalGraphicsConfig,
+    setDefaultLabelSize,
+    setDefaultLineWidth,
+    setTacticalGraphicsConfig,
+} from './core/config';
+export type {TacticalGraphicsConfigOptions} from './core/config';
+export {SMOOTHED_GRAPHICS, smoothingKindOf} from './core/smoothing';
+export type {SmoothingKind} from './core/smoothing';
+
+/**
+ * Override readers, for a renderer resolving a color. Each returns `undefined` when the
+ * host has not overridden that color, leaving the renderer to supply the doctrinal
+ * default — the fallback is the renderer's, because only it knows its own defaults.
+ */
+export {
+    getDefaultLineColorOverride,
+    getDrawMarkerColorOverride,
+    getDrawMarkerOutlineColorOverride,
+    getHandleColorOverride,
+    getHostilityColorOverride,
+    getInertHandleColorOverride,
+    getLabelFillColorOverride,
+    getLabelHaloColorOverride,
+} from './core/config';
+export {WIRE_STYLES, DEFAULT_WIRE_STYLE, WIRE_MARK_PX} from './graphics/WireObstacle';
+export type {WireStyle} from './graphics/WireObstacle';
+export {BAR_SYMBOL_DASHES} from './graphics/ExplosivesReadiness';
+export {MILS_PER_TURN, targetAttitudeDegrees, targetAttitudeMils} from './graphics/RectangularTarget';
+export {ROADBLOCK_MAX_HALF_WIDTH_RATIO, ROADBLOCK_MIN_HALF_WIDTH_RATIO, clampRoadblockHalfWidth} from './graphics/RoadblockComplete';
+export {ANTI_TANK_DITCH_STYLES, ANTI_TANK_TOOTH_PX, ANTI_TANK_HEIGHT_RATIO} from './graphics/AntiTankDitch';
+export {drawnSide, hasDrawnSide, northSide} from './graphics/Abatis';
+export type {AntiTankDitchStyle} from './graphics/AntiTankDitch';
+
+/**
+ * ## Symbology — colors, line weight and label scale
+ *
+ * The doctrinal color table and the three label-scale formulas, resolved against the
+ * live config. These lived in `openlayerStyles.ts` until the MapLibre work, which made
+ * the problem obvious: not one of them mentions OpenLayers, and a second renderer that
+ * cannot reach them has to reinvent the palette and then drift from it.
+ *
+ * The OpenLayers layer re-exports every name here, so its surface is unchanged and there
+ * is one implementation of each.
+ */
+export {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_LABEL_FRACTION,
+    fontStyle,
+    getColorByHostility,
+    getColorByIdentity,
+    statesUnknownIdentity,
+    getDefaultLineColor,
+    getObstacleColor,
+    getDoctrinalHostilityColor,
+    getDrawMarkerColor,
+    getDrawMarkerOutlineColor,
+    getHandleColor,
+    getInertHandleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    graphicLabelScale,
+    labelScale,
+    labelZoomMultiplier,
+    maxGraphicLabelScale,
+    ratioLockedLabelScale,
+    withOpacity,
+    allowedGestures,
+    dropSizePx,
+    supportsHostility,
+    publishesAnchorHandleOnly,
+    ANCHOR_CONNECTOR_DASH_PX,
+    anchorConnectorRun,
+    anchorConnectorRuns,
+    areaLabelRing,
+    topEdgeLabel,
+    drawsAnchorConnector,
+    CROSSED_MISSION_TASKS,
+    RADIUS_GRAPHICS,
+    formatBearing,
+    formatDistance,
+    measureReadout,
+    measureReadoutScale,
+    MEASURE_READOUT_MIN_SCALE,
+    RADAR_READOUT_CAPTIONS,
+    type MeasurePart,
+    formatAltitude,
+    getLabelUsesHostilityColor,
+    hasRadiusReadout,
+    showsSizeReadout,
+    GLYPH_CUT_GAP_GRAPHICS,
+    RATIO_LOCKED_MISSION_TASKS,
+} from './core/symbology';
+
+/**
+ * ## Paint lists — what a symbol looks like, as data
+ *
+ * `renderTacticalGraphic` says where a graphic is; a paint list says how it is drawn.
+ * The decorations this library synthesizes at render time — obstacle teeth, the gap cut
+ * around a mission task's letter, a screen-sized arrowhead — live in 128 places inside
+ * OpenLayers style functions today, so a raw-GeoJSON consumer gets a skeleton. A paint
+ * function returns those marks as plain data that any renderer can paint.
+ *
+ */
+export {boundsOf, HANDLE_Z_INDEX, hatchTileSegments, NAME_TEXT_Z_INDEX, mapPaintGeometry, outerRingOf, paintFilledRings, paintGeometryMembers, paintGeometryPositions, paintLineWork, unionBounds} from './core/paint';
+export type {TextKind, 
+    CircleSpec,
+    FillSpec,
+    HatchSpec,
+    Paint,
+    PaintColor,
+    PaintContext,
+    PaintFeature,
+    PaintFunction,
+    ProjectedBounds,
+    ProjectedGeometry,
+    ProjectedInputGeometry,
+    ProjectedPosition,
+    StrokeSpec,
+    TextSpec,
+} from './core/paint';
+
+/**
+ * ## Symbology — paint functions
+ *
+ * The renderer-agnostic style layer: what a graphic looks like, as data. `isPaintable`
+ * is how a renderer asks whether a graphic has a paint function — true for 215 of the
+ * 216 registered names.
+ *
+ * ### Everything below is a renderer contract, not a helper
+ *
+ * `/openlayers` and `/maplibre` are **separately published entry points**. They consume
+ * the map-agnostic half by package name, exactly as a third-party renderer would:
+ *
+ * ```ts
+ * // src/components/openlayers/graphics/decorationPx.ts
+ * export {decorationMeters} from '@zaes/tactical-graphics';
+ * ```
+ *
+ * So these exports are not incidental surface that leaked out of the barrel — they are
+ * the interface between the geometry and anything that draws it, and un-exporting one
+ * stops the renderer subpaths compiling for every consumer. They look like internals
+ * because their names describe what they compute rather than who they are for; that is
+ * the only reason this needs saying.
+ *
+ * The same applies to the sizing helpers further down (`decorationMeters`,
+ * `arrowheadMeters`, `crossedMissionTaskMeters`) and to the handle contract. **Before
+ * removing anything here, grep `src/components/` — a renderer probably imports it.**
+ */
+export {
+    DECORATION_MIN_PX,
+    OBSTACLE_TOOTH_BASE_PX,
+    OBSTACLE_TOOTH_GAP_PX,
+    OBSTACLE_TOOTH_HEIGHT_PX,
+    angleBetween,
+    FORTIFIED_CRENEL_PX,
+    FORTIFIED_HEIGHT_PX,
+    FORTIFIED_MERLON_PX,
+    FORTIFIED_MIN_PX,
+    castellatedPath,
+    centerSegmentIndex,
+    crenellatedPath,
+    cutArcAtLabel,
+    decorationScale,
+    obstacleToothSize,
+    offsetAbove,
+    offsetBelow,
+    pathLength,
+    textWidth,
+    topmostSegmentIndex,
+    uprightRotation,
+} from './symbology/decorations';
+export {
+    DASH_CAP_PX,
+    DASH_FULL_SIZE_PX,
+    DASH_SCALE_STEPS,
+    dashScale,
+    fitDash,
+    strokeParts,
+    strokedExtentPx,
+    withFittedDashes,
+} from './symbology/dashFit';
+export {DASHED_PARTS, dashedPartsOf} from './core/dashedParts';
+export {FIELD_OF_FIRE_BLADE, FIELD_OF_FIRE_GRAPHICS, isFieldOfFire} from './core/fieldOfFire';
+export {drawIsComplete} from './core/drawCompletion';
+export {completeDemolitionBase} from './core/drawnBase';
+export {
+    PLANNED_DASH_PX,
+    arcMissionTaskPaint,
+    areaFillPaint,
+    areaOutlinePaint,
+    defaultLinePaint,
+    affiliationColorOf,
+    identityColorOf,
+    amplifierDash,
+    formatDesignationWithCountry,
+    formatFullLabel,
+    getFullLabel,
+    missionTaskLabelPaint,
+    obstacleLinePaint,
+    phaseLinePaint,
+} from './symbology/paintFunctions';
+export type {DefaultLineOptions} from './symbology/paintFunctions';
+export {addGraphicLines, emptyLabelSpace, paintWithClearance, takeLabels, textBounds, withClearance} from './symbology/labelClearance';
+export type {ClearanceItem, LabelSpace} from './symbology/labelClearance';
+export {CARDINAL_LABEL_AREAS, CBRN_AREAS, CBRN_TOXIC_AREAS, CORRIDOR_GRAPHICS} from './symbology/registry';
+export {
+    breakRingAt,
+    cardinalBoundaryPaint,
+    cardinalLabelPaint,
+    contourLineBoundaryPaint,
+    contourLineLabelPaint,
+    nestedZonePaint,
+} from './symbology/boundaryBreakPaints';
+export {cbrnContaminatedAreaPaint, cbrnMarkPaint} from './symbology/cbrnPaints';
+export {
+    dashedOutlinePaint,
+    zoneOfFirePaint,
+    encirclementPaint,
+    fortifiedAreaPaint,
+    freeFireAreaCircularPaint,
+    groupOrSeriesOfTargetsPaint,
+    limitedAccessAreaPaint,
+    obstacleAreaPaint,
+    plainOutlinePaint,
+    restrictedTerrainPaint,
+} from './symbology/areaPaints';
+export {
+    areaDateLabel,
+    areaDefaultLabelPaint,
+    areaLabelStackPaint,
+    groupOrSeriesOfTargetsLabelPaint,
+    positionAreaArtilleryLabelPaint,
+    smokeObscurantLabelPaint,
+    zoneLabelPaint,
+} from './symbology/areaLabelPaints';
+export {capLabelToSpan, fitLabelScale, LABEL_SPAN_SHARE, liftedAnchor} from './symbology/labelFit';
+export {antiTankDitchPaint, antiTankWallPaint, fortifiedLinePaint, wireObstaclePaint} from './symbology/obstaclePaints';
+export {
+    fortifiedPositionPaint,
+    mineClusterPaint,
+    minefieldStaticPaint,
+    minelinePaint,
+    raftSitePaint,
+    staticMinefieldLayout,
+    tripWirePaint,
+} from './symbology/protectionLinePaints';
+export type {StaticMinefieldLayout} from './symbology/protectionLinePaints';
+export {decisionLinePaint, mobilityCorridorPaint} from './symbology/endGlyphLinePaints';
+export {sweptArcTaskPaint} from './symbology/sweptArcTaskPaints';
+export {followTaskPaint, followTaskSymbol} from './symbology/followTaskPaints';
+export {searchAreaSymbol, sweptArcTaskSymbol, UNIT_SYMBOL_GRAPHICS, type UnitSymbolPlacement} from './symbology/unitSymbolPaints';
+export type {FollowVariant} from './symbology/followTaskPaints';
+export {obstacleBypassPaint} from './symbology/obstacleBypassPaints';
+export {demonstrationPaint, escortPaint} from './symbology/escortAndDemonstrationPaints';
+export {avenueOfApproachLabelPaint} from './symbology/movementPaints';
+export {PSYOPS_ZONES, psyOpsMarkPaint, psyOpsZonePaint} from './symbology/psyOpsPaints';
+export {mineFillPaint, minedAreaPaint, minedAreaFencedPaint, minefieldAreaPaint, mineRowMarks} from './symbology/minePaints';
+export {BEARING_LINES, BEARING_LINE_DASHED, bearingLinePaint, navigationalLinePaint, rhumbLinePaint} from './symbology/maritimeLinePaints';
+export type {MobilityGlyph} from './symbology/sectorModifierPaints';
+export {
+    GLYPH_HALF_WIDTH,
+    MOBILITY_GLYPHS,
+    TERRAIN_HATCH_COLORS,
+    mobilityMarks,
+    sectorModifierLabelPaint,
+    terrainHatchColor,
+    terrainWord,
+} from './symbology/sectorModifierPaints';
+export {OBSTACLE_BYPASS_STYLES} from './graphics/ObstacleBypass';
+export type {ObstacleBypassRear} from './graphics/ObstacleBypass';
+export {directionArrowPaint} from './symbology/linePaints';
+export {routeControlMeasurePaint} from './symbology/routePaints';
+export {finalProtectiveFirePaint, linearSmokeTargetPaint, linearTargetPaint} from './symbology/linearTargetPaints';
+export {acpLabelScale, airCorridorLabelPaint, airCorridorPaint, formatWidthAmplifier} from './symbology/corridorPaints';
+export {retrogradeTaskPaint} from './symbology/retrogradePaints';
+export {advanceToContactLabelPaint, attackHelicopterAxisLabelPaint, aviationAxisLabelPaint, axisOfAdvanceLabelPaint, counterattackLabelPaint, envelopmentLabelPaint, frontalAttackLabelPaint, infiltrationLabelPaint, mobileDefenseLabelPaint, movementGraphicPaint, movementLabelPaint, spanProportionalScale, turningMovementLabelPaint} from './symbology/movementPaints';
+export {blockPaint, breachPaint, clearPaint} from './symbology/blockPaints';
+export {
+    CROSSED_HALF_WIDTH_PX,
+    barSymbolPaint,
+    baseDefenseZoneLabelPaint,
+    crossedMissionTaskLabelPaint,
+    crossedMissionTaskLabelScale,
+    crossedMissionTaskPaint,
+    defeatPaint,
+    movementToContactPaint,
+    pursuitPaint,
+} from './symbology/missionTaskPaints';
+export {coordinatedFireLinePaint, dateRangeLabel, engineerWorkLinePaint, munitionFlightPathPaint} from './symbology/midLabelLinePaints';
+export {arrowheadedLinePaint, forwardLineOfOwnTroopsPaint, lineOfContactPaint} from './symbology/scallopPaints';
+export {fieldsOfFirePaint, passageLanePaint} from './symbology/mobilityPaints';
+export {formatLaneWidth, overheadWirePaint, safeLaneOrGapPaint} from './symbology/overheadWirePaints';
+export {exfiltratePaint, reliefInPlacePaint, turnPaint} from './symbology/routedTaskPaints';
+export {battlePositionPaint, echelonMarks, strongPointPaint, unexplodedOrdnanceAreaPaint} from './symbology/echelonPaints';
+export {aegisSingleTargetPaint} from './symbology/aegisTargetPaints';
+export {
+    ACTIVE_MANEUVER_AMBER,
+    CUED_ACQUISITION_COLOR,
+    CUED_ACQUISITION_FILL,
+    RADAR_SEARCH_FILL,
+    RADAR_SEARCH_STROKE,
+    DEFENDED_AREA_COLOR,
+    DEFENDED_AREA_FILL,
+    LAUNCH_AREA_COLOR,
+    LAUNCH_AREA_FILL,
+    activeManeuverAreaPaint,
+    cuedAcquisitionDoctrinePaint,
+    radarSearchDoctrinePaint,
+    radarSearchLabelPaint,
+    axisAmplifierPaint,
+    maritimeFilledAreaPaint,
+    withAxisAmplifiers,
+} from './symbology/maritimeAreaPaints';
+export {convoyPaint} from './symbology/convoyPaints';
+export {searchAreaPaint} from './symbology/searchAreaPaints';
+export {SEARCH_AREA_ARM, SearchArea, asSearchVee} from './graphics/SearchArea';
+export {EllipticalArea, RadarSearchDoctrine, RSD_DEFAULT_RELATIVE_BEARING_DEG, RSD_DEFAULT_START_SHARE, RSD_MIN_OPENING_DEG, radarSearchFromClicks, radarSectorOpening} from './graphics/MaritimeArea';
+export type {RadarSearchFrame} from './graphics/MaritimeArea';
+export {AIRFIELD_DROP_HALF_WIDTH_PX, airfieldPaint, airfieldPointLabelPaint, airfieldPointPaint} from './symbology/airfieldPaints';
+export {airCoordinatingAreaLabelPaint, airspaceCoordinationAreaLabelPaint} from './symbology/airPaints';
+export {boundaryPaint, rangeFanLabelPaint} from './symbology/boundaryPaints';
+export type {ResolvedRangeFanBand} from './symbology/boundaryPaints';
+export {securityOperationCentre, securityOperationLabelPaint, securityOperationPaint, securityOperationSymbol} from './symbology/securityPaints';
+export {securityOperationArm, securityOperationHalfExtent, SECURITY_OPERATION_PX} from './graphics/SecurityOperation';
+// The size a security operation is built at and files, so both engines say one thing
+// rather than two. @see SECURITY_OPERATION_HALF_EXTENT_PX
+export {SECURITY_OPERATION_HALF_EXTENT_PX} from './core/symbology';
+export {maxAreaVertices} from './core/handles';
+export {drawClickCount, drawsByAnchorClicks, drawsByRangeClicks, drawsCentreToEdge, drawsEndToEnd, drawsInTwoClicks, frameFromDrag, statesShapeAsRangeBands} from './core/symbology';
+// Where an arc mission task's second click lands: on its start point, so the draw files the
+// rotation that puts it there. @see START_POINT_GRAPHICS
+export {rotationFromDrawnPoint} from './core/symbology';
+export {declaredSnapshotVersion, describedProperties, editableBaseGeometry, filedBaseGeometry, LEGACY_SNAPSHOT_VERSION, SNAPSHOT_PROPERTY, SNAPSHOT_VERSION, snapshotVersionOf, toSnapshot} from './core/snapshot';
+export type {TacticalGraphicsSnapshot} from './core/snapshot';
+export type {DragFrame} from './core/symbology';
+// The seed gap between a multiple-strike zone's two rings, in screen pixels; a holder
+// turns it into metres once at draw time. @see MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX
+export {defaultStandoffMetres, usesStandoffWidth, MINIMUM_SAFE_DISTANCE_DEFAULT_STANDOFF_PX} from './core/symbology';
+export {editableStrikeBase, filedStrikeBase, isFiledStrikeBase, strikeZone2} from './graphics/SafeDistanceZone';
+export {baseGeometryFor} from './core/render';
+/**
+ * Decoration sizing — **renderer contract**. How big a decoration looks is a statement
+ * about the symbol, not about a map library, so it lives here and both renderers read
+ * it: `maplibreAdapter.ts` imports all three by package name, and the OpenLayers
+ * holders reach them through `graphics/decorationPx.ts`, which re-exports
+ * `decorationMeters` from `@zaes/tactical-graphics` for exactly that reason.
+ *
+ * Removing any of these breaks `/openlayers` and `/maplibre` for consumers.
+ */
+export {CROSSED_MISSION_TASK_PX, arrowheadMeters, axisAndWidth, crossedMissionTaskMeters, decorationMeters, drawnSizeMeters, hasAxisAndWidth, hasBakedDecoration, minimumFirstSegmentPx, reservedLeadPx} from './core/decorationSizes';
+export {DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIRROR_FLIP_MIN_PX, RANGE_FANS, RANGE_FAN_BAND_OFFSET, RATIO_LOCK, acceptsInsertedVertex, anchorVertex, hasClosingEdge, nearestInsertionEdge, takesInsertedVertices, handlesAreInert, baseVertexCount, carriesSeparationInBase, editStretches, handleContract, handleRole, hidesAnchorGrip, isMovementGraphic, isRectangular, pivotVertexIndex, ratioLockOf, reshapesByVertex, rotationAnchor, rotationPivot, setsWidthFromAnchor, supportsMirror} from './core/handles';
+export {OBSTACLE_GRAPHICS, drawsAsObstacle} from './core/obstacles';
+export {EXPLOITATION_ANGLE_DEG, exploitationAnchors, exploitationParts, exploitationTailPoint} from './graphics/exploitationAnchors';
+export {
+    BY_FIRE_SHAFT,
+    BY_FIRE_STANDOFF,
+    DEFAULT_AXIS_HALF_WIDTH_PX,
+    DEFAULT_TIP_OVERHANG,
+    axisBaseFromDraw,
+    axisFeature,
+    axisOf,
+    axisWithWidthPoint,
+    carriesWidthPointInBase,
+    halfWidthFromBase,
+    optionsFromWidthPoint,
+    squareWidthPoint,
+    tipOverhangOf,
+    upgradeAxisBase,
+    widthFromBase,
+    widthPointFor,
+    widthPointForBuiltAxis,
+    widthPointOf,
+} from './core/axisWidth';
+export {acrossPointAtEnd, arcAndArrowBase, axisSampleBase, drawsAsHairpin, exploitationBase, firePositionBase, frontEdgeBase, hairpinBase, FRONT_EDGE_ACROSS, FRONT_EDGE_ACROSS_RULE, circleAndArrowBase, normalizeDrawnBase, railCrossingBase, supportByFireBase, synthesizedBase, usesFrontEdgeBase} from './core/drawnBase';
+// The point layout each drawn-anchor symbol is described by — the direction both
+// renderers were missing. @see core/drawnAnchors
+export {drawnAnchorFrame, drawnAnchors} from './core/drawnAnchors';
+// The rectangles' own construction: two anchor points and a width. @see rectangleFromAxis
+export {
+    axisFromRectangleRing,
+    constrainRectangleAxis,
+    rectangleDefaultHalfWidth,
+    levelRectangleAxis,
+    rectangleFromAxis,
+    RECTANGLE_DEFAULT_HALF_WIDTH_PX,
+} from './core/anchors';
+export type {DrawnAnchorFrame} from './core/drawnAnchors';
+// Which end of a drawn line APP-06 numbers first. A draw tool, a sample sheet or a
+// panel hint needs the answer, and only one table may hold it. @see core/drawOrder
+export {endsInWidthPoint, upgradeSavedLine} from './core/savedBase';
+export type {UpgradedLine} from './core/savedBase';
+export {TIP_FIRST_GRAPHICS, TIP_FIRST_SINCE_SNAPSHOT_3, drawsTipFirst, featureInGeneratorOrder, generatorOrder, storedOrder} from './core/drawOrder';
+// The projected-vs-ground conversion both renderers apply to a measured drag. @see core/mercator
+export {clampGeometryToMercator, clampToMercator, groundLength, latitudeFromMercatorY, MERCATOR_MAX_LATITUDE, mercatorScale, projectedLength, screenMeters} from './core/mercator';
+export {ARC_ARROW_MIN_REACH, RAIL_PREVIEW_GAP_PX, SUPPORT_BY_FIRE_PREVIEW_REACH, supportByFireAnchors, arcAndArrowAnchorsFromClicks, squareOntoBisector, anchorsForArcAndArrow, anchorsForBow, anchorsForHook, anchorsForRunAndArc, anchorsFromFrame, frameFromAnchors, hairpinAnchors, hairpinFourthPoint, HOOK_DEFAULT_LINE_RATIO, ARC_ARROW_DEFAULT_REACH, arcAndArrowFromAnchors, bowFromAnchors, hookFromAnchors, hookPose, runAndArcFromAnchors} from './core/anchors';
+export {carriesRectangleLength, groundMeters, rectangleAmplifiers, shapedByWidth, usesCornerAnchors, usesDrawnAnchors} from './core/handles';
+export type {ArcAndArrowFrame, BowFrame, DrawnFrame, HookFrame, HookPose, RunAndArcFrame} from './core/anchors';
+export {HANDLE_EDIT_MODES, presetAmplifiers} from './core/engine';
+export type {DrawPreset, EditMode, EngineCallbacks, EngineCapabilities, GestureKind, SelectedGraphic, SelectionBox, TacticalGraphicsEngine} from './core/engine';
+export type {HandleContract, HandleRole} from './core/handles';
+export {
+    DEFAULT_SYMBOL_SIZE_PX,
+    MAX_SYMBOL_SIZE_PX,
+    MIN_SYMBOL_SIZE_PX,
+    clearGraphicSecuritySymbolProviders,
+    getGraphicSecuritySymbolProvider,
+    CENTER_SYMBOL_GRAPHICS,
+    escortSymbolSizePx,
+    getSecuritySymbolProvider,
+    getSecuritySymbolSize,
+    resolveSecuritySymbol,
+    securitySymbolRevision,
+    securitySymbolSidc,
+    setGraphicSecuritySymbolProvider,
+    setGraphicUnitSymbol,
+    setSecuritySymbolProvider,
+    setSecuritySymbolSize,
+    subscribeSecuritySymbolChange,
+    useMilsymbolSecuritySymbols,
+} from './core/securitySymbol';
+export type {MilsymbolModule, SecuritySymbolImage, SecuritySymbolProvider, SecuritySymbolRequest} from './core/securitySymbol';
+export type {AllowedGestures} from './core/symbology';
+export {bridgeLabelPaint, envelopmentGraphicPaint, infiltrationGraphicPaint, mobileDefenseGraphicPaint} from './symbology/movementPaints';
+export {PAINTABLE_GRAPHICS, getPaintFunction, isPaintable} from './symbology/registry';
+export type {GraphicPainters} from './symbology/registry';
+
+export {amplifierText, withFadedPaints, withHiddenAmplifiers, withLegibleText, withUnobscuredNames} from './symbology/paintFunctions';
+
+/**
+ * ## Building a graphic's paint input, for any renderer
+ *
+ * A saved base and its description in, a {@link PaintedGraphic} out: the geometry in
+ * projected meters, the completed amplifier bag, and what the paint functions read. Every
+ * renderer that draws from the shared paint layer builds through here, so they agree on
+ * sizes, defaults and old-file repairs. `restoreSnapshotGraphics` is the file door;
+ * `centerSymbolPlacement` places a host's unit symbol on the six graphics that carry one.
+ */
+export {
+    buildPaintedGraphic,
+    carryPaintFlags,
+    DEFAULT_OFFSET_PX,
+    descriptionOf,
+    paintGraphic,
+    placeAreaLabel,
+    projectToMercator,
+    rebuildPaintedGraphic,
+    withDrawingResolution,
+} from './core/paintedGraphic';
+export type {PaintedGraphic} from './core/paintedGraphic';
+export {restoreSnapshotGraphics} from './core/restoreGraphic';
+export type {RestoredGraphic} from './core/restoreGraphic';
+export {centerSymbolPlacement, followTaskCenter, securityOperationCenter} from './core/centerSymbol';
+export {lonLatToMercator, mercatorToLonLat} from './core/mercator';

@@ -1,0 +1,830 @@
+/**
+ * The public, map-agnostic entry point for the tactical graphics library.
+ *
+ * A tactical graphic is described entirely by a plain GeoJSON Feature whose
+ * `properties.tacticalGraphic` object names the graphic and carries its
+ * amplifiers:
+ *
+ * ```json
+ * {
+ *   "type": "Feature",
+ *   "geometry": {"type": "LineString", "coordinates": [[-77.0, 38.9], [-76.9, 39.0]]},
+ *   "properties": {
+ *     "tacticalGraphic": {"name": "MainAxisOfAdvance", "designation": "1-508 IN"}
+ *   }
+ * }
+ * ```
+ *
+ * `renderTacticalGraphic()` turns that into the rendered geometry (GeoJSON in,
+ * GeoJSON out). Nothing here knows about any specific map renderer — feed the
+ * output to whichever renderer you use.
+ */
+
+import {dashedPartsOf} from './dashedParts';
+import {Feature, FeatureCollection, GeoJsonProperties, Geometry, Position} from 'geojson';
+import * as turf from './turf';
+import {TacticalGraphicsRegistry} from './TacticalGraphicsRegistry';
+import {
+    GraphicOptions,
+    RangeFanConfig,
+    RouteDirection,
+    TacticalGraphicConfidence,
+    TacticalGraphicEchelon,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
+    TacticalGraphicHostility,
+    TacticalGraphicName,
+    AltitudeDatum,
+    TacticalGraphicStatus,
+} from './type';
+
+/** The reserved key under `feature.properties` that holds a graphic's config. */
+export const TACTICAL_GRAPHIC_KEY = 'tacticalGraphic' as const;
+
+/**
+ * Everything the library needs to draw one tactical graphic, stored under
+ * `feature.properties.tacticalGraphic`. Only `name` is required by the type; the 38
+ * graphics drawn from a single `Point` with no other size also need `radius`, and
+ * {@link renderTacticalGraphic} throws without it. Every graphic ignores the fields that
+ * don't apply to it.
+ */
+export interface TacticalGraphicProperties {
+    /** Which graphic to draw. The single required field. */
+    name: TacticalGraphicName;
+
+    // ── Amplifiers (text shown on the graphic) ──────────────────────────────
+    /**
+     * **Field T — unique designation.** The primary free-text designation, e.g.
+     * "1-508 IN". FM 1-02.2: *"T — Identifies a unique designation"*.
+     *
+     * Named for the field rather than for what it renders as. It was `label`, which
+     * collided with the three other senses of that word in this library — the anchor
+     * features `renderTacticalGraphic` returns, the `role: 'label'` tag, and
+     * {@link GraphicLabels}, the bag this is one member of. `readGraphicLabels(f).label`
+     * read as the label of the labels and was none of them.
+     */
+    designation?: string;
+    /**
+     * **Field T1 — the second unique designation**, rendered beneath the primary on the
+     * graphics that carry two. A boundary shows both.
+     *
+     * Doctrine numbers these T and T1, which is why they are not `identifier1` and
+     * `identifier2`: a reader holding the plate would take `identifier1` for T1.
+     */
+    secondDesignation?: string;
+    /**
+     * **Field H — additional information.** Free text a symbol carries *beside* its
+     * designation, not instead of it.
+     *
+     * Both standards name it that way, and several plates set the two at once: the area
+     * generic (APP-06 120700) reads `H  T` on one line, the PsyOps zone stacks H over T
+     * beside its loudspeaker, and human terrain sets H alone under its `HT`. The airfield
+     * zone (120400) carries only this one — "The Field 'H' for this symbol includes type
+     * of airfield, length of runway and other pertinent information" — which is why a
+     * graphic needing H cannot simply borrow `label`.
+     *
+     * Where it is drawn is each symbol's own business; several rows add that H "should be
+     * movable to avoid obscuring key geographic information", so a host is free to move it.
+     */
+    additionalInfo?: string;
+    countryCode?: string;
+    secondCountryCode?: string;
+    /** Date-time group, formatted by the caller. */
+    startDate?: string;
+    endDate?: string;
+    /**
+     * Altitude or depth, as a **number** in the host's configured {@link AltitudeUnit}.
+     *
+     * FM 1-02.2 makes fields X and X1 free text — "measurement units shall be displayed
+     * in the string", and feet, meters, a flight level and a submerged depth are all
+     * legal — so this was a string. In practice the properties dialog has only ever
+     * accepted digits, which made the freedom theoretical while costing every consumer a
+     * value it could not sort, compare or arithmetic on. The unit comes from the config
+     * instead and the renderer appends it, which is the same information in a shape a
+     * program can use.
+     *
+     * **A string still renders, and deliberately so.** `formatAltitude` passes anything
+     * non-numeric through untouched, so a `"FL150"` or a `"1500MSL"` restored from an
+     * older snapshot — or imported from a system that speaks doctrine's own notation —
+     * draws exactly as written rather than being mangled or dropped. It simply is not
+     * what the type invites you to send.
+     */
+    minAltitude?: number;
+    maxAltitude?: number;
+    /**
+     * What those altitudes are measured from. Applies to both, because a graphic quoting
+     * a floor and a ceiling against two different datums would be describing two
+     * different volumes. @see AltitudeDatum
+     */
+    altitudeDatum?: AltitudeDatum;
+
+    /**
+     * Effective time. Accepted and saved, but no graphic draws it: the airspace
+     * coordination areas build their `EFF` line from `startDate` and `endDate`.
+     */
+    eff?: string;
+    /** Grid reference. The airspace coordination areas render it. */
+    grid?: string;
+    /**
+     * Weapon designation on FinalProtectiveFire. The two convoys render it too, as field V,
+     * the equipment type.
+     */
+    weapon?: string;
+
+    // ── Symbology (affects color and dash pattern) ─────────────────────────
+    hostility?: TacticalGraphicHostility;
+    /**
+     * `hostility` was set on purpose. Default `false`.
+     *
+     * It matters for `Unknown` alone. A graphic whose affiliation nobody chose used to be saved
+     * as `Unknown`, so `Unknown` on its own still means "not set" and draws in the default line
+     * colour, as it always has. `Unknown` with `identityStated` is the unknown standard identity
+     * and draws yellow (MIL-STD-2525E L.5.1.1.1: "yellow (unknown ...)"). A graphic with no
+     * `hostility` at all is unaffiliated, whatever this says.
+     */
+    identityStated?: boolean;
+    /**
+     * The graphic belongs to an exercise: MIL-STD-2525C's exercise identities, the exercise
+     * context of 2525D and 2525E. Default `false`.
+     *
+     * An exercise graphic's `Unknown` is exercise unknown (2525C Table II, drawn yellow), so it
+     * counts as stated without `identityStated`. It also sets the exercise context in
+     * `buildGraphicSidc`.
+     */
+    exercise?: boolean;
+    /** `Planned` dashes the line work on most graphics. */
+    status?: TacticalGraphicStatus;
+    /** `Suspected` on a hostile graphic dashes its line work, as `Planned` does. */
+    confidence?: TacticalGraphicConfidence;
+    /** Field B. No echelon, or `Unknown`, draws no mark. */
+    echelon?: TacticalGraphicEchelon;
+    /**
+     * Which side a battle position, a prepared battle position or a strong point opens on:
+     * the direction from the opening toward the inside, in degrees counter-clockwise from
+     * east. 90 puts the break and the echelon on the south edge, which is also what the
+     * symbol does when this is absent.
+     *
+     * Its own field rather than `rotation`, which several paths file as 0 on an area and
+     * which would then open every such position to the west.
+     */
+    openingDirection?: number;
+    /** The route graphics: route, main supply route and alternate supply route. */
+    direction?: RouteDirection;
+    /**
+     * Which mine the three mine areas and the static-depiction minefield draw inside
+     * themselves, and the mineline along itself — APP-06 Table 8-24's Sector 1 Modifier, restricted to its seven primitive
+     * types.
+     * @see TacticalGraphicMineType
+     */
+    mineType?: TacticalGraphicMineType;
+    /**
+     * Which mobility icon the three terrain areas draw as their **Sector 1** modifier --
+     * APP-06 Table 8-24's `MOBILITY` category. Limited access area, restricted terrain and
+     * severely restricted terrain, and nothing else: the table's Remarks column says so.
+     * @see TacticalGraphicMobility
+     */
+    mobility?: TacticalGraphicMobility;
+    /**
+     * The **Sector 2** modifier of restricted and severely restricted terrain -- APP-06
+     * Table 8-25. It sets a word under the mobility icon and, optionally, the color the
+     * area is hatched in. @see TacticalGraphicTerrain
+     */
+    terrain?: TacticalGraphicTerrain;
+    /**
+     * Zone of fire (242600) only: draw the label and T without the dashed boundary.
+     * APP-06 Note 2 asks for a way to switch the boundary off. Absent or `false` draws it.
+     */
+    hideBoundary?: boolean;
+
+    // ── Geometry inputs ────────────────────────────────────────────────────
+    /**
+     * Radius in **meters**: how far the symbol reaches from its own center. The circle
+     * radius for the arc mission tasks and circular areas, and the half-length of a
+     * point-anchored arrow.
+     *
+     * **Required** on the 38 graphics drawn from a single `Point` with no other size:
+     * {@link renderTacticalGraphic} throws a {@link TacticalGraphicError} naming this field
+     * rather than inventing one. The other point graphics (range fans, the one-point boxes
+     * and ellipses, radar search doctrine) are sized by their own fields.
+     *
+     * Only for graphics that *have* a center. A line graphic's arrowhead or teeth are
+     * sized by `decorationSize`, which is a different quantity that was briefly and
+     * wrongly folded in here. Both reach the generators through one slot (`size`), so a
+     * line graphic handed a `radius` reads it as its `decorationSize`, and `radius` wins
+     * if both are set. @see toGraphicOptions
+     */
+    radius?: number;
+    /**
+     * How large to draw the decorations a line graphic carries — an arrowhead's barb
+     * length, a passage lane's teeth, the offset of a bridge's labels.
+     *
+     * Separate from `radius` because it is not a reach from anywhere:
+     * `DirectionOfSupportingAttack` is a MultiLineString of the drawn line plus an
+     * arrowhead, and there is no center to take a radius of. The two were briefly one
+     * field, which made `radius` mean two unrelated things depending on the graphic.
+     *
+     * In **meters**: `DirectionOfSupportingAttack` with `decorationSize: 400` draws barbs
+     * 400 m long.
+     */
+    decorationSize?: number;
+    /**
+     * **Full** width in meters, measured across a drawn line: rail to rail on an
+     * axis of advance, edge to edge on a corridor, across a rectangular zone. On the
+     * one-point boxes and ellipses it is the dimension across the attitude. What a
+     * width-drag handle writes, and what a properties dialog shows.
+     *
+     * Full, not half — the generators work in half-widths (the perpendicular offset
+     * from the centerline), so `toGraphicOptions` halves it on the way in and the
+     * holders double it on the way out. The doubling is kept inside the library
+     * precisely so a consumer never has to know about it: you send the width you
+     * would measure on the map.
+     */
+    width?: number;
+    /**
+     * Full length in meters, the dimension **along** the graphic rather than across it.
+     *
+     * Only the one-point boxes and ellipses carry both: the rectangular target, cued
+     * acquisition doctrine (APP-06 200600, built by the same generator) and the three
+     * maritime ellipses (200101, 200201, 200401), where it is the full major axis.
+     * FM 1-02.2 table 5-25 draws the rectangular target with `AM1` across the top and
+     * `AM` down the side; APP-06 240802 names them outright — "the target length (AM1)
+     * in metres and target width (AM) in metres". Every other rectangle takes its length
+     * from the anchor points instead, which is why this is not beside `width` on all of
+     * them.
+     */
+    length?: number;
+    /**
+     * Puts an abatis tooth on the right of its line instead of the left.
+     *
+     * Set once, when the line is drawn, so the tooth starts out pointing north whichever way
+     * the line ran (`drawnSide`); after that it turns with the line, and no gesture flips it.
+     * Files saved also carry it for the cane arrows and Mobile
+     * Defense, which state their side with a third point now; those still draw as saved.
+     */
+    mirrored?: boolean;
+    /**
+     * Rotation in degrees, counter-clockwise from east, for point-based graphics.
+     *
+     * On the arc mission tasks it is the axis the letter sits on; APP-06's point 2, where
+     * the edit handle is, lies 175° counter-clockwise from it.
+     */
+    rotation?: number;
+    /**
+     * Depth of a bowed graphic's curve, as a signed multiple of `size`. Turn, the
+     * tactical turn and Envelopment read it: larger bends the curve more sharply,
+     * negative bends it the other way. Unitless on purpose — it survives a resize.
+     *
+     * A fallback: once the base carries the anchor point that places the curve, that
+     * point decides and this is ignored.
+     */
+    bend?: number;
+    /**
+     * Half the gap left in the circle for the label, in **degrees of arc**. Only
+     * the arc-and-arrowhead mission tasks read it — Secure, Isolate, Retain,
+     * Occupy, Control, Contain, Deny, Locate, Cordon and Knock, Cordon and Search,
+     * Area Defense. Omit it for the default 15°; pass 0 if you intend to cut the gap
+     * yourself from the label as you render it, which is what both of this library's
+     * renderers do.
+     */
+    labelGapDegrees?: number;
+    /**
+     * Half the gap left in a bowed curve for its designation, in **meters**. Turn
+     * and the tactical turn are the only readers.
+     *
+     * The meters twin of `labelGapDegrees`, and it exists for the same reason: pass
+     * 0 when the renderer cuts the gap itself from the rendered glyph, which both of
+     * this library's renderers do. Omitting it leaves the generator's fallback of
+     * `0.16 * size` — right for a consumer taking the raw GeoJSON, wrong on top of a
+     * glyph-measured cut, where the two gaps add up. That is what it did: a
+     * `labelGap` the OpenLayers holder passed as a generator argument had no
+     * portable form, so MapLibre got the fallback and cut a hole three times too
+     * wide around the same "T".
+     */
+    labelGap?: number;
+    /**
+     * Multi-band range fan config. The two range fan graphics read this; radar search
+     * doctrine reads it only from a file saved in its old shape.
+     */
+    rangeFan?: RangeFanConfig;
+
+    /*
+     * ── APP-06 200700's four numbers ───────────────────────────────────────
+     *
+     * The radar search doctrine states its whole shape as values rather than places:
+     * *"requires one anchor point that defines the axis of angular rotation"*, with the
+     * size and shape *"determined by additional numeric values, a search axis azimuth, a
+     * start range, a stop range, and a stop relative bearing."*
+     *
+     * **Named for the plate, not carried as range-fan bands.** 200700 rode `rangeFan` for a
+     * day because it shares that holder — two bands for the two ranges, the axis smuggled in
+     * as `rotation`, the opening as a pair of absolute band azimuths — and the saved file
+     * then described a symbol in terms of a different symbol's amplifiers, with two of the
+     * four numbers not appearing under their own names at all. A consumer reading the GeoJSON
+     * could not find the search axis azimuth or the stop relative bearing.
+     *
+     * A graphic saved in the old shape still reads: `RadarSearchDoctrine.frame` falls back to
+     * the bands, the rotation and the drawn size when these are absent.
+     */
+    /** Degrees clockwise from north — the axis the sector is centered on. */
+    searchAxisAzimuthDeg?: number;
+    /** Meters from the radar to the near arc. */
+    startRange?: number;
+    /** Meters from the radar to the far arc. */
+    stopRange?: number;
+    /** Degrees, an equal angle **either side** of the search axis — so half the opening. */
+    stopRelativeBearingDeg?: number;
+}
+
+/**
+ * The amplifiers an operator can put on a graphic — what a properties dialog edits, and
+ * what the style and paint functions read back.
+ *
+ * Kept separate from {@link TacticalGraphicProperties} rather than aliased to it:
+ * that is the *saved* bag, which also carries the graphic's name and its geometry
+ * inputs, and a dialog that edited those by accident would resize the shape.
+ *
+ * **It lives here, beside the saved bag, because it is symbology.** It was declared
+ * in `utils/graphicLinkRegistry.ts` (which imports `ol`), then moved to
+ * `components/graphicAmplifiers.ts` when the MapLibre entry point started compiling
+ * the whole OpenLayers tree through it. That second move stopped short: a type
+ * describing what amplifiers a graphic carries is exactly the kind of fact this half
+ * of the library owns, and leaving it under `src/components/` meant the map-agnostic
+ * registries could not name it. `securitySymbolRequest.labels` is where that bit —
+ * a provider on one renderer was handed the graphic's amplifiers and on the other
+ * was not. `components/graphicAmplifiers.ts` re-exports this, so nothing that
+ * already imports it had to change.
+ */
+export interface GraphicLabels {
+    /** Field T. @see TacticalGraphicProperties.designation */
+    designation: string;
+    countryCode?: string;
+    /** Field T1. @see TacticalGraphicProperties.secondDesignation */
+    secondDesignation?: string;
+    /** Field H — additional information. @see TacticalGraphicProperties.additionalInfo */
+    additionalInfo?: string;
+    secondCountryCode?: string;
+    startDate?: string;
+    endDate?: string;
+    /** @see TacticalGraphicProperties.minAltitude — a number in the configured unit. */
+    minAltitude?: number;
+    maxAltitude?: number;
+    /** What both are measured from. @see AltitudeDatum */
+    altitudeDatum?: AltitudeDatum;
+    /**
+     * Full width in meters, edge to edge. The same field the geometry schema uses —
+     * `TacticalGraphicProperties.width` — so the dialog edits the graphic's actual
+     * width rather than a string mirror of it that has to be kept in step.
+     */
+    width?: number;
+    /** Full length in meters. @see TacticalGraphicProperties.length */
+    length?: number;
+    eff?: string;
+    grid?: string;
+    weapon?: string;
+    hostility?: TacticalGraphicHostility;
+    /** @see TacticalGraphicProperties.identityStated */
+    identityStated?: boolean;
+    /** @see TacticalGraphicProperties.exercise */
+    exercise?: boolean;
+    echelon?: TacticalGraphicEchelon;
+    /** @see TacticalGraphicProperties.openingDirection */
+    openingDirection?: number;
+    direction?: RouteDirection;
+    /** @see TacticalGraphicProperties.mineType */
+    mineType?: TacticalGraphicMineType;
+    /** @see TacticalGraphicProperties.mobility */
+    mobility?: TacticalGraphicMobility;
+    /** @see TacticalGraphicProperties.terrain */
+    terrain?: TacticalGraphicTerrain;
+    /** @see TacticalGraphicProperties.hideBoundary */
+    hideBoundary?: boolean;
+    status?: TacticalGraphicStatus;
+    confidence?: TacticalGraphicConfidence;
+    rangeFan?: RangeFanConfig;
+
+    /**
+     * 200700's four numbers, so the properties dialog can edit them.
+     *
+     * On both bags for the same reason `rangeFan` is: they are geometry inputs the operator
+     * types, so the dialog writes them and the generator reads them.
+     * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    searchAxisAzimuthDeg?: number;
+    startRange?: number;
+    stopRange?: number;
+    stopRelativeBearingDeg?: number;
+}
+
+
+/** Which part of a rendered graphic a feature represents. */
+export type TacticalGraphicRole = 'graphic' | 'label' | 'handle' | 'base';
+
+/** The output of {@link renderTacticalGraphic}. Every member is plain GeoJSON. */
+export interface TacticalGraphicRender {
+    name: TacticalGraphicName;
+    /** The feature you passed in, unchanged. */
+    base: Feature;
+    /** The drawn symbol — usually a MultiLineString. */
+    graphic: Feature;
+    /** Anchor points for label text. */
+    labels: Feature;
+    /** Vertices an editor can expose as drag handles. */
+    handles: Feature;
+}
+
+/** Thrown when a feature can't be rendered. Carries the offending graphic name. */
+export class TacticalGraphicError extends Error {
+    constructor(message: string, readonly graphicName?: string) {
+        super(message);
+        this.name = 'TacticalGraphicError';
+    }
+}
+
+/** Every graphic name this build can render. */
+export function listTacticalGraphicNames(): string[] {
+    return TacticalGraphicsRegistry.list();
+}
+
+/**
+ * Amplifier keys 3.0.0 renamed, and what a file written before it calls them.
+ *
+ * `properties.tacticalGraphic` is what a host SAVES, so renaming a key in it silently
+ * empties that amplifier on every graphic already on disk. The rename was worth making
+ * — @see TacticalGraphicProperties.designation — and it is cheap to make it survivable,
+ * which the point-order change in the same release is not.
+ *
+ * One direction only. Nothing writes the old names back, they are absent from the
+ * types, and a bag carrying both keeps the current one: an old key is evidence about a
+ * file's age, not an override.
+ */
+/**
+ * A graphic that was retired into another, and how a file naming it is read now.
+ *
+ * The sibling of {@link RENAMED_AMPLIFIERS}, one level up: those keys changed name, this is
+ * a whole symbol that did. `FightingPosition` was FM 1-02.2's name for the same open
+ * three-sided bracket APP-06 codes 291000 *fortified position* — table 5-22 draws the
+ * identical figure beside the same trench line, in the same order, with the same note about
+ * facing the enemy. Two identical pictures with two captions are one control measure, so the
+ * survivor is displayed under **both** names and is recorded as being in both publications;
+ * an operator searching for "fighting position" finds it.
+ *
+ * What does not survive on its own is the *draw model*. The retired graphic was dropped on a
+ * point and locked at 2:1 — a centre, a size and a rotation — where 291000's plate specifies
+ * the two front corners of the bracket, which is why the survivor is the one it is. So a
+ * saved file needs its geometry rewritten, not just its name, and that is the whole reason
+ * this is a function rather than a lookup table. @see migrateRetiredGraphic
+ */
+const RETIRED_GRAPHICS: Readonly<Record<string, TacticalGraphicName>> = {
+    FightingPosition: TacticalGraphicName.FortifiedPosition,
+};
+
+/**
+ * Rewrites a saved record that names a retired graphic, or returns it untouched.
+ *
+ * Applied by both renderers on restore, so the migration is stated once. One direction only:
+ * nothing writes the old name back, and a file already naming the survivor is returned as it
+ * came in.
+ *
+ * The geometry: the retired symbol filed a centre with a `radius` and a `rotation`, at a
+ * locked 2:1 — half-width `radius`, half-height `radius / 2`. Its front edge is therefore the
+ * segment of length `2 × radius` centred half a radius forward of the centre, and that edge
+ * *is* 291000's base. A record with no radius has no size to convert and is left alone rather
+ * than guessed at; it will restore as a failure the caller can report, which is better than a
+ * symbol at an invented scale.
+ */
+export function migrateRetiredGraphic(
+    properties: TacticalGraphicProperties,
+    geometry: Feature['geometry'],
+): {properties: TacticalGraphicProperties; geometry: Feature['geometry']} | undefined {
+    const survivor = RETIRED_GRAPHICS[properties.name as unknown as string];
+    if (!survivor) return undefined;
+    if (geometry?.type !== 'Point') return {properties: {...properties, name: survivor}, geometry};
+
+    const radius = properties.radius;
+    if (!(typeof radius === 'number' && radius > 0)) return undefined;
+
+    const centre = geometry.coordinates as Position;
+    const facing = properties.rotation ?? 0;
+    const forward = turf.destination(turf.point(centre), radius / 2, facing, {units: 'meters'}).geometry.coordinates as Position;
+    const corner = (side: number) =>
+        turf.destination(turf.point(forward), radius, facing + side * 90, {units: 'meters'}).geometry.coordinates as Position;
+
+    // `radius` and `rotation` described the retired box and mean nothing to the survivor,
+    // whose shape comes from the two points alone. Carrying them would leave a stale size in
+    // the file that a later width drag would appear to contradict.
+    const {radius: _radius, rotation: _rotation, ...rest} = properties;
+    return {
+        properties: {...rest, name: survivor},
+        geometry: {type: 'LineString', coordinates: [corner(-1), corner(+1)]},
+    };
+}
+
+const RENAMED_AMPLIFIERS: ReadonlyArray<readonly [legacy: string, current: keyof TacticalGraphicProperties]> = [
+    ['label', 'designation'],
+    ['secondId', 'secondDesignation'],
+];
+
+/**
+ * Fills in the current amplifier names from the ones a saved file may still use.
+ *
+ * Applied wherever a stored bag is read — here, and by both renderers — so the alias is
+ * stated once rather than once per engine. Returns the bag untouched when there is
+ * nothing to translate, which is every graphic written by this version.
+ */
+export function applyAmplifierAliases<T extends object>(bag: T): T {
+    const source = bag as Record<string, unknown>;
+    let out: Record<string, unknown> | undefined;
+    for (const [legacy, current] of RENAMED_AMPLIFIERS) {
+        if (source[legacy] === undefined || source[current] !== undefined) continue;
+        out = out ?? {...source};
+        out[current] = source[legacy];
+    }
+    for (const [field, table] of RECASED_AMPLIFIER_VALUES) {
+        const stored = (out ?? source)[field];
+        if (typeof stored !== 'string') continue;
+        const current = table[stored];
+        if (current === undefined) continue;
+        out = out ?? {...source};
+        out[field] = current;
+    }
+    return (out as T) ?? bag;
+}
+
+/**
+ * Amplifier **values** 3.0.0 recased, and what a file written before it calls them.
+ *
+ * The sibling of {@link RENAMED_AMPLIFIERS}, one level down: those keys changed name,
+ * these keys kept theirs and changed the words they hold. Four enums used to spell their
+ * values in three different ways — `'present'`, `'GENERAL'`, `'Hostile/Faker'` — and a
+ * host reading a saved bag saw all three side by side. @see TacticalGraphicStatus
+ *
+ * Only the four that moved are listed. An enum already spelled the way the operator
+ * reads it never changed, so there is nothing here to translate it from.
+ *
+ * The same one-direction rule applies: an old value is evidence about a file's age, and
+ * nothing writes one back.
+ */
+const RECASED_AMPLIFIER_VALUES: ReadonlyArray<readonly [field: keyof TacticalGraphicProperties, was: Readonly<Record<string, string>>]> = [
+    ['status', {present: TacticalGraphicStatus.present, planned: TacticalGraphicStatus.planned}],
+    ['confidence', {known: TacticalGraphicConfidence.known, suspected: TacticalGraphicConfidence.suspected}],
+    [
+        'direction',
+        {
+            GENERAL: RouteDirection.general,
+            ONE_WAY: RouteDirection.oneWay,
+            TWO_WAY: RouteDirection.twoWay,
+            ALTERNATING: RouteDirection.alternating,
+        },
+    ],
+];
+
+/** Reads a feature's tactical graphic config, or `undefined` if it has none. */
+export function readTacticalGraphicProperties(feature: Feature): TacticalGraphicProperties | undefined {
+    const props = feature.properties as GeoJsonProperties;
+    const config = props?.[TACTICAL_GRAPHIC_KEY];
+    return config && typeof config === 'object' ? applyAmplifierAliases(config as TacticalGraphicProperties) : undefined;
+}
+
+/** True when the feature carries a `properties.tacticalGraphic` object. */
+export function isTacticalGraphicFeature(feature: Feature): boolean {
+    return readTacticalGraphicProperties(feature) !== undefined;
+}
+
+/**
+ * The base geometry a graphic is drawn from — `Point`, `LineString` or `Polygon`.
+ *
+ * What a **draw tool** needs to know before it starts collecting clicks: whether
+ * this graphic wants one point, an open path, or a closed ring. Exported for that
+ * reason; without it a renderer implementing draw has to keep its own table of
+ * 292 names beside this one and watch the two drift.
+ *
+ * `undefined` for an unknown name, and for the handful of generators whose kind is
+ * not in the table below — those accept any base rather than being rejected, so a
+ * caller should treat `undefined` as "no constraint", not as an error.
+ */
+export function baseGeometryFor(name: TacticalGraphicName): 'Point' | 'LineString' | 'Polygon' | undefined {
+    const generator = TacticalGraphicsRegistry.get(name);
+    return generator
+        ? (EXPECTED_BASE_GEOMETRY[generator.type] as 'Point' | 'LineString' | 'Polygon' | undefined)
+        : undefined;
+}
+
+/**
+ * The base geometry each generator kind expects. Generators that emit a
+ * MultiLineString still take a LineString base (Bridge, Ford).
+ */
+const EXPECTED_BASE_GEOMETRY: Record<string, string> = {
+    Point: 'Point',
+    LineString: 'LineString',
+    MultiLineString: 'LineString',
+    Polygon: 'Polygon',
+};
+
+/**
+ * Maps the public property bag onto the internal generator option bag.
+ *
+ * **Exported** because a renderer sometimes has to see what the generator saw. A
+ * range fan's bands are consumed by the generator and survive only as anonymous
+ * points, so a renderer labeling them must re-resolve them from the same options —
+ * and reconstructing the mapping on its own is how the two ended up disagreeing.
+ */
+export function toGraphicOptions(props: TacticalGraphicProperties, overrides?: Partial<GraphicOptions>): GraphicOptions {
+    // Public field -> internal generator option. The two disagree on names by design:
+    // generators still speak `size` / `radius`, and renaming 200-odd call sites inside
+    // them buys nothing a consumer can see. This is the one place the mapping lives.
+    const options = {
+        hostility: props.hostility,
+        status: props.status,
+        echelon: props.echelon,
+        direction: props.direction,
+        // Both land on the generators' `size`, which is the one slot they offer; a given
+        // graphic reads it as one or the other and never sets both.
+        size: props.radius ?? props.decorationSize,
+        // Turn and Envelopment take their arrowhead length as a flat distance rather
+        // than a fraction of `size`, so it survives a resize. It reached the generator
+        // only through an OpenLayers holder override, so every other caller — a second
+        // renderer, a consumer of the public API — silently got the fallback ratio and
+        // a visibly smaller arrowhead. It is the same meters the holder stamps.
+        headSize: props.decorationSize,
+        // Public `width` is a full width; the generators' `radius` is the half-width
+        // offset from the centerline. This is the only place the factor of two lives.
+        radius: props.width !== undefined ? props.width / 2 : undefined,
+        // The rectangular target is the one graphic that files a length rather than
+        // deriving it from two anchor points, and it never reached the generator — the
+        // dialog accepted a number that changed nothing. @see RectangularTargetOptions
+        length: props.length,
+        /*
+         * **Zero, not absent.** `PointGraphicOptions.rotation` is declared as a required
+         * `number` and the generators that read it most directly spend it without a guard —
+         * `CrossedMissionTask` puts `arm.angleDeg + rotation` straight into a bearing. The
+         * public property is optional, and dropping an undefined left those generators
+         * handing turf a `NaN`, so `renderTacticalGraphic` threw `coordinates must contain
+         * numbers` out of `@turf/destination` for a bag as ordinary as `{name, radius}`. A
+         * consumer reading that has nothing to go on: the message names neither the field
+         * nor the graphic.
+         *
+         * Zero is the value every generator that *does* guard already falls back to, so this
+         * states once what a dozen of them state separately, and changes no output.
+         */
+        rotation: props.rotation ?? 0,
+        mirrored: props.mirrored,
+        bend: props.bend,
+        labelGapDegrees: props.labelGapDegrees,
+        labelGap: props.labelGap,
+        bands: props.rangeFan?.bands,
+        centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
+        searchAxisAzimuthDeg: props.searchAxisAzimuthDeg,
+        startRange: props.startRange,
+        stopRange: props.stopRange,
+        stopRelativeBearingDeg: props.stopRelativeBearingDeg,
+    };
+
+    // Drop undefined keys so each generator's own `opts?.x || default` still fires.
+    const cleaned = Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined));
+    return {...cleaned, ...overrides} as GraphicOptions;
+}
+
+/**
+ * A copy of a generated feature with the graphic config and a role stamped on it.
+ *
+ * A copy because a generator may hand back the base itself (every simple line does), and
+ * writing into that wrote `role: 'graphic'` into the caller's own feature, which `base` is
+ * documented to leave unchanged. The geometry is shared, not cloned; nothing here writes it.
+ */
+function tag(feature: Feature, props: TacticalGraphicProperties, role: TacticalGraphicRole): Feature {
+    return {
+        ...feature,
+        properties: {
+            ...(feature.properties ?? {}),
+            [TACTICAL_GRAPHIC_KEY]: props,
+            role,
+        },
+    };
+}
+
+/** True when every position in the geometry is an array of finite numbers. */
+function hasValidPositions(geometry: Geometry | null): boolean {
+    if (!geometry) return true;
+    if (geometry.type === 'GeometryCollection') return geometry.geometries.every(hasValidPositions);
+    const walk = (c: unknown): boolean =>
+        Array.isArray(c) && (typeof c[0] === 'number' ? c.length >= 2 && c.every(Number.isFinite) : c.every(walk));
+    return walk(geometry.coordinates);
+}
+
+/**
+ * Stamps `dashedParts` on a graphic whose line work is partly dashed as the symbol itself,
+ * so a consumer drawing this GeoJSON directly knows which lines to break. @see DASHED_PARTS
+ */
+function withDashedParts(feature: Feature, name: TacticalGraphicName | string): Feature {
+    const parts = dashedPartsOf(name);
+    if (parts.length) feature.properties = {...feature.properties, dashedParts: [...parts]};
+    return feature;
+}
+
+/**
+ * Renders a tactical graphic from a GeoJSON feature. GeoJSON in, GeoJSON out.
+ *
+ * The feature's `properties.tacticalGraphic.name` selects the graphic; its
+ * geometry supplies the control points the operator drew. Coordinates are treated
+ * as **EPSG:4326** (`[lon, lat]`), and the output is in the same projection.
+ *
+ * Every returned feature carries the original `properties.tacticalGraphic`
+ * plus a `role` of `graphic` | `label` | `handle`, so downstream styling can
+ * read a graphic's amplifiers straight off the feature.
+ *
+ * @param feature   A Feature with `properties.tacticalGraphic` set.
+ * @param overrides Generator options that win over the feature's properties.
+ * @throws {TacticalGraphicError} if the config is missing, names an unknown
+ *         graphic, the geometry type doesn't suit that graphic, a one-point graphic
+ *         has no `radius`, or the base cannot be drawn (every control point on one
+ *         spot, for instance). Invalid GeoJSON is never returned.
+ */
+export function renderTacticalGraphic(feature: Feature, overrides?: Partial<GraphicOptions>): TacticalGraphicRender {
+    const props = readTacticalGraphicProperties(feature);
+    if (!props) {
+        throw new TacticalGraphicError(
+            `Feature has no "properties.${TACTICAL_GRAPHIC_KEY}" object. ` +
+                `Add one naming the graphic, e.g. {"${TACTICAL_GRAPHIC_KEY}": {"name": "PhaseLine"}}.`,
+        );
+    }
+    if (!props.name) {
+        throw new TacticalGraphicError(`"properties.${TACTICAL_GRAPHIC_KEY}.name" is required.`);
+    }
+
+    const generator = TacticalGraphicsRegistry.get(props.name);
+    if (!generator) {
+        throw new TacticalGraphicError(
+            `Unknown tactical graphic "${props.name}". Call listTacticalGraphicNames() to see the ${listTacticalGraphicNames().length} supported names.`,
+            props.name,
+        );
+    }
+
+    if (!feature.geometry) {
+        throw new TacticalGraphicError(`Graphic "${props.name}" needs a geometry, but the feature has none.`, props.name);
+    }
+
+    const expected = EXPECTED_BASE_GEOMETRY[generator.type];
+    if (expected && feature.geometry.type !== expected) {
+        throw new TacticalGraphicError(
+            `Graphic "${props.name}" expects a ${expected} base geometry, got ${feature.geometry.type}.`,
+            props.name,
+        );
+    }
+
+    const options = toGraphicOptions(props, overrides);
+    // The editors always stamp a radius; a hand-built feature or an imported file may not,
+    // and turf's "coordinates must contain numbers" names neither the field nor the graphic.
+    if (generator.requiresRadius && feature.geometry.type === 'Point' && !Number.isFinite(options.size)) {
+        throw new TacticalGraphicError(
+            `Graphic "${props.name}" is drawn from one point and needs "properties.${TACTICAL_GRAPHIC_KEY}.radius" (meters) to size it.`,
+            props.name,
+        );
+    }
+
+    // A base a generator cannot draw from (every control point on one spot, most often) either
+    // throws from deep inside turf or comes back with `NaN` and `null` positions. Both leave as
+    // one error that names the graphic, and invalid GeoJSON never leaves at all.
+    const cannotDraw = (why: string) =>
+        new TacticalGraphicError(`Graphic "${props.name}" cannot be drawn from this base: ${why}. Check that its control points are distinct.`, props.name);
+    let rendered;
+    try {
+        rendered = generator.generate(feature, options);
+    } catch (e) {
+        throw cannotDraw((e as Error)?.message ?? String(e));
+    }
+    for (const part of [rendered.graphic, rendered.labels, rendered.handles]) {
+        if (!hasValidPositions(part.geometry)) throw cannotDraw('it produced positions that are not coordinates');
+    }
+
+    return {
+        name: props.name,
+        base: feature,
+        graphic: withDashedParts(tag(rendered.graphic, props, 'graphic'), props.name),
+        labels: tag(rendered.labels, props, 'label'),
+        handles: tag(rendered.handles, props, 'handle'),
+    };
+}
+
+/**
+ * Flattens a render into a FeatureCollection, ready to hand to any GeoJSON
+ * consumer (e.g. `ol/format/GeoJSON`).
+ *
+ * Filter on `properties.role` to style each part, and omit `handles` unless
+ * you're building an editor.
+ */
+export function toFeatureCollection(
+    render: TacticalGraphicRender,
+    roles: TacticalGraphicRole[] = ['graphic', 'label'],
+): FeatureCollection {
+    const byRole: Record<TacticalGraphicRole, Feature> = {
+        graphic: render.graphic,
+        label: render.labels,
+        handle: render.handles,
+        base: render.base,
+    };
+    return {
+        type: 'FeatureCollection',
+        features: roles.map(role => byRole[role]).filter(Boolean),
+    };
+}

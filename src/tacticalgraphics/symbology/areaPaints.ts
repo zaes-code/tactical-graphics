@@ -1,0 +1,358 @@
+/**
+ * # The area graphics that draw something structural
+ *
+ * `areaOutlinePaint` covers 79 of the 94 area graphics with a plain stroke. These
+ * are the rest: the ones whose *shape* carries meaning beyond the ring the operator
+ * drew — teeth, merlons, a hatch, a gap cut for a designation, an amplifier that
+ * only appears when the graphic is hostile.
+ *
+ * Split out of `paintFunctions.ts` to keep that file readable, not because they
+ * are different in kind. Everything here follows the same rules: planar Euclidean
+ * math in EPSG:3857 meters, no DOM, screen sizes as `px × resolution`.
+ */
+
+import type {HatchSpec, Paint, PaintContext, PaintFeature} from '../core/paint';
+import {paintGeometryMembers, paintLineWork} from '../core/paint';
+import {LINE_WIDTH, fontStyle, getColorByHostility, withOpacity} from '../core/symbology';
+import {TacticalGraphicHostility, TacticalGraphicStatus} from '../core/type';
+import {
+    gapFits,
+    crenellatedPath,
+    cutGapAlongPath,
+    encirclementToothSize,
+    fortifiedRing,
+    obstacleRing,
+    ringIsClockwise,
+    splitAtCorners,
+    textWidth,
+    topmostSegmentIndex,
+} from './decorations';
+import {PLANNED_DASH_PX, identityColorOf, lineColorOf, scaleOf, labelColorOf, showsEny} from './paintFunctions';
+import {labelGapPx} from './labelFit';
+import {terrainHatchColor} from './sectorModifierPaints';
+
+/** A paint function, in the shape the registry stores. */
+type AreaPaint = (feature: PaintFeature, context: PaintContext) => Paint[];
+
+/**
+ * The translucent diagonal hatch the restricted and limited-access areas are
+ * filled with.
+ *
+ * A **symbology** fact rather than a rendering one — FM 1-02.2 draws these areas
+ * hatched — so it is described here as parameters and realized by whichever
+ * renderer is drawing. A canvas builds a `CanvasPattern`; MapLibre registers a
+ * `fill-pattern` image. @see HatchSpec
+ */
+function hatch(color: string, sizePx: number, lineWidthPx: number): HatchSpec {
+    return {kind: 'diagonal', color: withOpacity(color, 0.25), sizePx, lineWidthPx};
+}
+
+/** The dash a graphic takes when its status is `planned`, or nothing. */
+function plannedDash(feature: PaintFeature): number[] | undefined {
+    return feature.properties.status === TacticalGraphicStatus.planned ? PLANNED_DASH_PX : undefined;
+}
+
+/**
+ * A feature's geometry as something strokeable — collections flattened to their
+ * line work. Several area generators emit a collection of outline plus label
+ * anchors, and only the outline is drawn.
+ */
+function strokeableGeometry(feature: PaintFeature): Paint['geometry'] {
+    if (feature.geometry.type !== 'GeometryCollection') return feature.geometry;
+    return {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)};
+}
+
+/**
+ * The obstacle areas: belt, group and zone wear their teeth **outward**, the free
+ * and restricted areas **inward**, and the restricted area alone carries a hatch.
+ *
+ * The geometry is the plain drawn ring — the crenellation is added here, in screen
+ * pixels, so it holds its size at every zoom and shrinks against the shape rather
+ * than against the resolution. @see obstacleRing for why "outward" is measured
+ * from the ring's winding rather than taken from the drawing order.
+ */
+export function obstacleAreaPaint(options: {outward: boolean; hatched?: boolean}): AreaPaint {
+    return (feature, context) => {
+        if (feature.geometry.type !== 'Polygon') return [];
+        const color = lineColorOf(feature);
+        const toothed = feature.geometry.coordinates.map(ring => obstacleRing(ring, context.resolution, options.outward));
+
+        return [{
+            geometry: {type: 'Polygon', coordinates: toothed},
+            stroke: {color, widthPx: LINE_WIDTH()},
+            fill: options.hatched ? {color: withOpacity(color, 0.25), pattern: hatch(color, 8, 1)} : undefined,
+        }];
+    };
+}
+
+/**
+ * The fortified area: square merlons standing outward off the drawn ring, in
+ * screen pixels. Same reasoning and the same winding correction as the obstacle
+ * teeth.
+ */
+export function fortifiedAreaPaint(): AreaPaint {
+    return (feature, context) => {
+        if (feature.geometry.type !== 'Polygon') return [];
+        return [{
+            geometry: {
+                type: 'Polygon',
+                coordinates: feature.geometry.coordinates.map(ring => fortifiedRing(ring, context.resolution)),
+            },
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+        }];
+    };
+}
+
+/**
+ * The limited-access family — limited access area, the three no-fire areas, and
+ * the weapons-free zone. A hatched fill under an outline that dashes when planned.
+ *
+ * **The hatch is deliberately neutral, not the affiliation color.** It reads as a
+ * texture saying "you may not fire here" rather than as line work identifying a
+ * side, so it is built from the unaffiliated default whatever the graphic's
+ * hostility. The outline still carries the affiliation.
+ */
+export function limitedAccessAreaPaint(): AreaPaint {
+    return feature => {
+        const neutral = getColorByHostility(TacticalGraphicHostility.unknown);
+        return [{
+            geometry: fillableGeometry(feature),
+            fill: {color: withOpacity(neutral, 0.25), pattern: hatch(neutral, 16, 2)},
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)},
+        }];
+    };
+}
+
+/**
+ * A feature's geometry as something that can be **filled**, closing open line work
+ * into a polygon.
+ *
+ * `CircularArea` emits its outline as a `MultiLineString` — a ring with no
+ * declared interior — so a hatch applied to it has nothing to fill and the circle
+ * comes out empty. Closing it here rather than in a renderer is what keeps
+ * OpenLayers and MapLibre identical: the OpenLayers holder used to do this
+ * coercion itself, which meant the fix existed for one renderer only.
+ *
+ * Rings shorter than three points are left alone — there is no area to fill and a
+ * degenerate polygon renders worse than a line.
+ */
+function fillableGeometry(feature: PaintFeature): Paint['geometry'] {
+    const geometry = feature.geometry;
+    if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') return geometry;
+
+    const rings = geometry.type === 'MultiLineString'
+        ? geometry.coordinates
+        : geometry.type === 'GeometryCollection'
+            ? paintLineWork(geometry)
+            : geometry.type === 'LineString'
+                ? [geometry.coordinates]
+                : [];
+
+    const closed = rings.filter(ring => ring.length >= 3);
+    return closed.length ? {type: 'Polygon', coordinates: closed} : strokeableGeometry(feature);
+}
+
+/**
+ * Group or series of targets: the drawn ring, with a gap cut in its **topmost**
+ * segment for the designation.
+ *
+ * "Topmost" is the segment with the highest midpoint northing — not the first, not
+ * the longest — so the label lands at the top of the shape wherever the operator
+ * started clicking. The gap is sized to the rendered glyph plus 6 px and is only
+ * cut when the segment is long enough to survive it; a short top edge keeps its
+ * line and lets the label overhang, which reads better than a ring with a bite
+ * out of one whole side.
+ */
+export function groupOrSeriesOfTargetsPaint(): AreaPaint {
+    return (feature, context) => {
+        if (feature.geometry.type !== 'Polygon') return [];
+        const ring = feature.geometry.coordinates[0];
+        if (!ring || ring.length < 2) return [];
+
+        const stroke = {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: plannedDash(feature)};
+
+        const bestIdx = topmostSegmentIndex(ring);
+        const text = (feature.properties.designation ?? '').trim();
+        const scale = scaleOf(feature, context);
+        const gapHalfMap = text ? (textWidth(context, text, fontStyle, scale) / 2 + labelGapPx(6, scale)) * context.resolution : 0;
+
+        /*
+         * Cut along the ring, and only where the gap fits the run between real corners the top
+         * edge belongs to: on a hard ring that is the edge itself, as it always was, and on a
+         * smoothed one the curve over the top. The ring is walked from the point opposite the
+         * top edge so the gap never straddles the walk's seam. @see cutGapAlongPath
+         */
+        const m = ring.length - 1;
+        const k = Math.floor(m / 2);
+        const walk = Array.from({length: m + 1}, (_, j) => ring[(((bestIdx - k + j) % m) + m) % m]);
+        const gapped = gapHalfMap > 0 && gapFits(ring, bestIdx, 0.5, gapHalfMap, true);
+        const cut = cutGapAlongPath(walk, k, 0.5, gapped ? gapHalfMap : 0);
+        const runs = gapped ? splitAtCorners([...cut.after, ...cut.before.slice(1)]) : splitAtCorners(walk);
+        return runs.filter(run => run.length > 1).map(run => ({geometry: {type: 'LineString', coordinates: run}, stroke}));
+    };
+}
+
+/**
+ * Encirclement: the drawn outline worn with outward teeth, plus an "ENY" amplifier
+ * at each label anchor — the amplifiers **only when the graphic is hostile**.
+ *
+ * The one area graphic whose *form* changes with affiliation rather than only its
+ * color, which is why it cannot fall through to `areaOutlinePaint`.
+ *
+ * **The teeth are drawn here, in screen pixels, not baked by the generator** — the
+ * same split the obstacle belt and the fortified area already use, and for the same
+ * reason. A baked tooth is a ground distance fixed at the resolution the graphic was
+ * drawn at, so it grew and shrank with the map while every other toothed graphic on
+ * the same screen held its size, and it had no floor to fall through: zoomed out far
+ * enough the outline became a band of sub-pixel noise instead of a line.
+ * `encirclementToothSize` sizes them so about ten fit round the ring, as every plate
+ * draws it, caps them on screen and drops them below `DECORATION_MIN_PX`.
+ *
+ * Outward is taken from the ring's winding rather than from drawing order, so a ring
+ * drawn anticlockwise does not come out with its teeth on the inside.
+ *
+ * The "ENY" stays in the label color. Hostile line work goes red; hostile text
+ * amplifiers do not — per the hostility color rule.
+ */
+export function encirclementPaint(): AreaPaint {
+    return (feature, context) => {
+        const paths = paintLineWork(feature.geometry);
+        // One ring's worth of points, whether the outline arrived whole or already cut
+        // into segments — both the winding and the tooth size belong to the ring, not
+        // to whichever piece of it is being walked.
+        const ring = paths.flat();
+        const {heightMap, baseMap, gapMap} = encirclementToothSize(ring, context.resolution);
+        const sideSign = ringIsClockwise(ring) ? 1 : -1;
+
+        const paints: Paint[] = [{
+            geometry: {
+                type: 'MultiLineString',
+                coordinates: paths.map(path => crenellatedPath(path, heightMap, baseMap, gapMap, sideSign)),
+            },
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+        }];
+
+        if (!showsEny(feature)) return paints;
+
+        for (const member of paintGeometryMembers(feature.geometry)) {
+            if (member.type !== 'MultiPoint') continue;
+            paints.push({
+                geometry: member,
+                text: {
+                    text: 'ENY',
+                    font: fontStyle,
+                    fill: labelColorOf(feature),
+                    scale: scaleOf(feature, context),
+                    placement: 'point',
+                },
+            });
+        }
+        return paints;
+    };
+}
+
+/**
+ * The four circular areas that dash and hatch when planned: free fire, restrictive
+ * fire, position area for artillery, and the circular airspace-coordination area.
+ *
+ * The hatch is the *hostility* color rather than the line color, so an unknown
+ * or pending area still washes in its own tint — the same choice
+ * {@link limitedAccessAreaPaint} makes, and the reason both take it from
+ * `identityColorOf` rather than reusing the stroke.
+ */
+export function freeFireAreaCircularPaint(): AreaPaint {
+    return feature => {
+        const isPlanned = feature.properties.status === TacticalGraphicStatus.planned;
+        const color = lineColorOf(feature);
+        return [{
+            geometry: strokeableGeometry(feature),
+            fill: isPlanned
+                ? {color: withOpacity(identityColorOf(feature), 0.25), pattern: hatch(identityColorOf(feature), 8, 1)}
+                : undefined,
+            stroke: {color, widthPx: LINE_WIDTH(), dashPx: isPlanned ? PLANNED_DASH_PX : undefined},
+        }];
+    };
+}
+
+/**
+ * A bare outline in the affiliation's color — **no planned dash**.
+ *
+ * What a holder that installs no style of its own gets, which is most of the
+ * circular areas. Distinct from {@link areaOutlinePaint} precisely in the dash:
+ * these graphics never took one, and adding it here would be a silent change to
+ * thirteen symbols rather than a port.
+ */
+export function plainOutlinePaint(): AreaPaint {
+    return feature => [{
+        geometry: strokeableGeometry(feature),
+        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+    }];
+}
+
+/**
+ * An outline that is **always** broken, whatever the graphic's status.
+ *
+ * APP-06 242600 note 1: *"The boundary, if displayed, shall be a broken line in all
+ * status depictions."* That is the distinction from `plainOutlinePaint`, whose dash is
+ * `plannedDash` and so appears only when the graphic is planned. Zone of fire is dashed
+ * because that is the symbol, not because of its status.
+ */
+export function dashedOutlinePaint(): AreaPaint {
+    return feature => [{
+        geometry: strokeableGeometry(feature),
+        stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx: PLANNED_DASH_PX},
+    }];
+}
+
+/**
+ * Zone of fire (APP-06 242600): the dashed outline, unless `hideBoundary` switches it off.
+ *
+ * Note 2: the boundary *"shall be able to be switched off leaving only the label and T
+ * visible"*. Switched off, the outline is still emitted, fully transparent, so the zone can
+ * still be clicked and selected on the engines that pick features by what they drew.
+ */
+export function zoneOfFirePaint(): AreaPaint {
+    const outline = dashedOutlinePaint();
+    return (feature, context) => {
+        if (!feature.properties.hideBoundary) return outline(feature, context);
+        return outline(feature, context).map(paint => ({...paint, stroke: {...paint.stroke!, color: 'rgba(0,0,0,0)'}}));
+    };
+}
+
+/**
+ * A hatched area under a solid outline — the restricted-terrain pair.
+ *
+ * Unlike {@link limitedAccessAreaPaint} the outline never dashes and the hatch is the
+ * affiliation color rather than a neutral: these areas say "the ground here is hard to
+ * move through", which belongs to whoever is describing it, where a no-fire hatch is a
+ * prohibition that reads the same for every side.
+ *
+ * `dense` is the severely-restricted variant. APP-06 draws it cross-hatched against the
+ * single diagonal of plain restricted terrain, so the two are told apart by texture
+ * alone and the difference has to survive into both renderers. @see HatchSpec
+ *
+ * **The Sector 2 modifier repaints the hatch, and only the hatch.** Table 8-25 remarks an
+ * optional hatching color against each terrain -- black for urban, blue for water, brown
+ * for ground, green for vegetation and obstacles -- and the plate's second example shows
+ * exactly that: the same symbol, the same outline, a brown hatch. So the outline keeps
+ * the line color and the texture takes the terrain's. @see TERRAIN_HATCH_COLORS
+ */
+export function restrictedTerrainPaint(options: {dense?: boolean} = {}): AreaPaint {
+    return feature => {
+        const color = lineColorOf(feature);
+        const hatchColor = terrainHatchColor(feature) ?? color;
+        return [{
+            geometry: fillableGeometry(feature),
+            fill: {
+                color: withOpacity(hatchColor, 0.2),
+                pattern: {
+                    kind: options.dense ? 'cross' : 'diagonal',
+                    color: withOpacity(hatchColor, 0.35),
+                    sizePx: 10,
+                    lineWidthPx: 1,
+                },
+            },
+            stroke: {color, widthPx: LINE_WIDTH()},
+        }];
+    };
+}

@@ -1,0 +1,110 @@
+import {
+    airCorridorCircleStyleFunc
+} from '../openlayerStyles';
+
+import {MovementGraphicBase} from './MovementGraphicBase';
+import openlayersAdapter from "../openlayersAdapter";
+import {TacticalGraphicName} from '@zaes/tactical-graphics';
+import {MultiPoint} from 'ol/geom';
+import {GraphicLabels} from '../../../utils/graphicLinkRegistry';
+import {readGraphicLabels, writeGraphicProperties} from '../graphicProperties';
+
+export class AirCorridor extends MovementGraphicBase {
+    constructor(name: TacticalGraphicName, offset: number, resolution: number = 0) {
+        super(name, offset, resolution);
+
+        this.graphic.setStyle(feature => {
+            return airCorridorCircleStyleFunc(feature);
+        });
+    }
+
+    /**
+     * The perpendicular distance from the corridor center-line to a width
+     * handle IS the circle radius, so the radius must track the cursor 1:1 for
+     * the handle to stay under it. The shared default halves that distance,
+     * which is right for graphics whose offset is a full width rather than a
+     * radius.
+     */
+    offsetScale = 1;
+
+    updateGeometry = () => {
+        let tacticalGraphic = openlayersAdapter.getTacticalGraphic(
+            this.graphicName,
+            this.base,
+            {radius: this.offset}
+        );
+        if (!tacticalGraphic) return;
+
+        const {graphic, handles, labels} = tacticalGraphic;
+
+        // The generator emits `[...vertices, ...tangentPoints]`. Vertices stay on
+        // `handles` (drag = move the path); the tangent points go on the offset
+        // handle, which the manager routes to setOffset (drag = change width).
+        const handleCoords = (handles as MultiPoint).getCoordinates();
+        const vertexCount = this.base.getGeometry()?.getCoordinates().length ?? handleCoords.length;
+
+        // Publish the radius so the ACP labels can size themselves against the
+        // circle instead of the zoom. Set before setGeometry, whose change event
+        // is what triggers the re-render that reads it.
+        this.labels.set('graphicSize', this.offset);
+
+        this.graphic.setGeometry(graphic);
+        this.handles.setGeometry(new MultiPoint(handleCoords.slice(0, vertexCount)));
+        this.offsetHandle.setGeometry(new MultiPoint(handleCoords.slice(vertexCount)));
+        this.labels.setGeometry(labels);
+
+        // The corridor already mirrors its half-width into the `width` amplifier, so it
+        // is the one offset graphic that would round-trip without this. Published anyway
+        // so restoring never depends on re-parsing a formatted string.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, {...readGraphicLabels(this.graphic)}, {
+            width: this.offset * 2,
+        });
+    };
+
+    /**
+     * Editing WIDTH in the Feature Properties dialog resizes the corridor, the
+     * mirror of dragging a width handle. The guard compares against the string
+     * this graphic would print for its current geometry, so the write that
+     * `setOffset` makes never loops back in here as a resize.
+     *
+     * An unparseable value (a unit we don't read, e.g. feet) is stored as typed
+     * and leaves the geometry alone — better a label we didn't act on than a
+     * corridor silently resized from a misread number.
+     */
+    setLabel = (labels: GraphicLabels) => {
+        // A width typed into the dialog resizes the corridor. Full width in, half-width
+        // offset out — the factor of two is the library's business, not the operator's.
+        const requested = labels.width;
+        if (requested !== undefined && Number.isFinite(requested) && requested > 0 && requested !== this.offset * 2) {
+            this.offset = requested / 2;
+            this.updateGeometry();
+            labels = {...labels, width: this.offset * 2};
+        }
+        this.graphicLabels = labels;
+        // Carry the geometry state through. `writeGraphicProperties` replaces the bag
+        // wholesale, so a write that omits `width` erases the width the operator dragged —
+        // and nothing recomputes it until the next `updateGeometry`, so a save taken
+        // straight after editing an amplifier would lose it.
+        writeGraphicProperties(this.getFeatures(), this.graphicName, labels, {width: this.offset * 2});
+    };
+
+    /**
+     * A width drag rewrites the WIDTH amplifier too, so the label can never
+     * contradict the drawn shape. Any value typed into the dialog is replaced —
+     * the geometry is the source of truth for this one field.
+     *
+     * Doctrinally this is amplifier **AM** ("a numeric amplifier that displays a
+     * minimum, maximum, or specific distance (including range, radius, width, or
+     * length) in meters or feet", FM 1-02.2 line 7409). It is NOT W — in this
+     * template W/W1 carry the corridor's date-time group, which is what the
+     * separate start/end date fields hold.
+     */
+    setOffset(offset: number) {
+        super.setOffset(offset);
+        // `offset` is the circle radius, so the corridor spans twice that. The
+        // generator consumes the same number as turf meters when it builds the
+        // rails, so this is the width of the shape as actually drawn.
+        this.setLabel({...this.graphicLabels, width: offset * 2});
+    }
+
+}

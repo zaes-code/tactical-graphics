@@ -1,0 +1,253 @@
+/**
+ * # The properties dialog's OpenLayers half
+ *
+ * Lifted out of `tactical-graphics-dialog.tsx` unchanged, so the dialog could stop
+ * being an OpenLayers component. Every rule here was already in that file; what is
+ * new is only that it now sits behind {@link FeaturePropertiesSource}.
+ */
+
+import {Feature, Map as OlMap} from 'ol';
+import type {FeatureLike} from 'ol/Feature';
+import {Circle, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, Point, Polygon} from 'ol/geom';
+import {Coordinate} from 'ol/coordinate';
+import {Draw} from 'ol/interaction';
+import type {Position} from 'geojson';
+import {toLonLat} from 'ol/proj';
+import {TacticalGraphicHostility, TacticalGraphicName, carriesWidthPointInBase, drawnAnchorFrame, getColorByIdentity, statesUnknownIdentity, usesDrawnAnchors, widthFromBase} from '@zaes/tactical-graphics';
+import {featuresOf, stampAmplifierVisibility} from './amplifierVisibility';
+import {graphicOpacityOf, stampGraphicOpacity} from './graphicOpacity';
+import {removeGraphic} from './persistence';
+import {applyGraphicLabels} from './applyGraphicLabels';
+import type {FeaturePropertiesSource} from '../featurePropertiesSource';
+import {readGraphicGeometryState, readGraphicLabels} from './graphicProperties';
+import type {TacticalGraphicsManager} from './TacticalGraphicsManager';
+
+/**
+ * How long to wait after a click before hit-testing, in milliseconds.
+ *
+ * Enough for `drawend` to finish. Without it the click that completes a drawing
+ * immediately re-selects the graphic it just made and opens the dialog on top of
+ * the map the operator is still working in.
+ */
+const HIT_TEST_DELAY_MS = 50;
+
+/** The anchor the connector cone points at, per geometry type. */
+function anchorCoordinate(geometry: Geometry): Coordinate | undefined {
+    switch (geometry.getType()) {
+        case 'Point':
+            return (geometry as Point).getCoordinates();
+        case 'LineString':
+            return (geometry as LineString).getCoordinates().at(-1);
+        case 'Polygon':
+            return (geometry as Polygon).getCoordinates()[0]?.at(-1);
+        case 'MultiPoint':
+            return (geometry as MultiPoint).getCoordinates().at(-1);
+        case 'MultiLineString': {
+            const lines = (geometry as MultiLineString).getCoordinates();
+            return lines.at(-1)?.at(-1);
+        }
+        case 'GeometryCollection': {
+            const geoms = (geometry as GeometryCollection).getGeometries();
+            for (const g of geoms) {
+                const coord = anchorCoordinate(g);
+                if (coord) return coord;
+            }
+            return undefined;
+        }
+        case 'Circle':
+            return (geometry as Circle).getCenter();
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * The width the **base geometry** states, for the graphics that keep it there.
+ *
+ * The panel's `measured` figures otherwise come out of `properties.tacticalGraphic`, and the
+ * eleven axis arrows deliberately file nothing there: a `width` beside a base that already
+ * describes the width is the second copy the whole change removed. So it is derived on the way
+ * to the panel instead, which is the one place that wants a number to *show* rather than to
+ * rebuild from.
+ *
+ * Read-only, and the field registry leaves `widthTyped` off for these, so it renders as the
+ * read-out this panel already draws for a dragged width — *"you can check the figure you
+ * dragged to, without a second way to set it that would have to be kept in step with the
+ * geometry."* @see widthFromBase
+ */
+function widthOfSelection(manager: TacticalGraphicsManager, symbolId: string): {width?: number} {
+    const handler = manager.graphicControllers.find(c => c.getSymbolId?.() === symbolId);
+    // The holders name the graphic differently — `graphicName` on the movement family, `name`
+    // on the block one — and only the first of them can reach here, so both are read rather
+    // than one being asserted.
+    const holder = handler?.graphic as unknown as {
+        graphicName?: TacticalGraphicName;
+        name?: TacticalGraphicName;
+        base?: {getGeometry(): {getCoordinates(): number[][]} | undefined};
+    } | undefined;
+    const name = holder?.graphicName ?? holder?.name;
+    if (!holder || !carriesWidthPointInBase(name)) return {};
+    const geometry = holder.base?.getGeometry();
+    const stored = geometry?.getCoordinates().map(c => toLonLat(c as [number, number])) as Position[] | undefined;
+    const width = widthFromBase(name, stored);
+    return width === undefined ? {} : {width};
+}
+
+/**
+ * The resolved line colour the properties dialog stamps on a feature, from its stamped hostility
+ * and its amplifier bag: a stated Unknown, or an exercise graphic's, is yellow.
+ * @see statesUnknownIdentity
+ */
+export function stampedHostilityColor(feature: FeatureLike): string {
+    const labels = readGraphicLabels(feature);
+    const hostility = (labels.hostility ?? feature.get('hostility') ?? TacticalGraphicHostility.unknown) as TacticalGraphicHostility;
+    return getColorByIdentity(hostility, statesUnknownIdentity({...labels, hostility: labels.hostility ?? feature.get('hostility')}));
+}
+
+/**
+ * Re-derives a stamped `hostilityColor` after a config or palette change, which the stamp would
+ * otherwise outlive. A feature with no stamp is left alone: its style resolves the colour live.
+ */
+export function restampHostilityColor(feature: Feature): void {
+    if (feature.get('hostility') && feature.get('hostilityColor')) feature.set('hostilityColor', stampedHostilityColor(feature));
+}
+
+/**
+ * The size and bearing a **drawn-anchor** graphic's own points state.
+ *
+ * These graphics deliberately file neither: `MissionTaskGraphicBase.writeBase` refuses to,
+ * because the anchor points already carry them and a stamped copy is a second statement of one
+ * number. So the panel derives them here, which is the same move `widthOfSelection` makes for
+ * the eleven axis arrows one field over.
+ *
+ * Without it the read-out showed whatever the *file* happened to carry — 151204 contain
+ * reported 40 km beside a symbol drawn at 29.8 — and after the restore stopped filing the
+ * stale figure it would have shown nothing at all. @see usesDrawnAnchors, drawnAnchorFrame
+ */
+function frameOfSelection(manager: TacticalGraphicsManager, symbolId: string): {radius?: number; rotation?: number} {
+    const handler = manager.graphicControllers.find(c => c.getSymbolId?.() === symbolId);
+    const holder = handler?.graphic as unknown as {
+        graphicName?: TacticalGraphicName;
+        name?: TacticalGraphicName;
+        base?: {getGeometry(): {getCoordinates(): number[][]} | undefined};
+    } | undefined;
+    const name = holder?.graphicName ?? holder?.name;
+    if (!holder || !name || !usesDrawnAnchors(name)) return {};
+
+    const stored = holder.base?.getGeometry()?.getCoordinates()?.map(c => toLonLat(c as [number, number])) as Position[] | undefined;
+    if (!stored || stored.length < 2) return {};
+    const frame = drawnAnchorFrame(name, stored);
+    return frame ? {radius: frame.size, rotation: frame.rotation} : {};
+}
+
+export function createOpenLayersPropertiesSource(
+    map: OlMap,
+    manager: TacticalGraphicsManager,
+): FeaturePropertiesSource {
+    /**
+     * The feature each selection came from.
+     *
+     * The dialog hands back only the opaque id, so the source keeps the feature it
+     * matched — anchoring needs its geometry, and re-finding it by id would be a
+     * second scan that could disagree with the first.
+     *
+     * OpenLayers' own `Map` is imported here, so the built-in one needs its global
+     * name to stay reachable.
+     */
+    const selected = new globalThis.Map<string, Feature>();
+
+    /** What the dialog needs, read off any one of the graphic's features. */
+    const selectionOf = (feature: Feature) => {
+        const id = String(feature.get('symbolId') ?? '');
+        selected.set(id, feature);
+        return {
+            id,
+            graphicName: feature.get('graphicName') as TacticalGraphicName,
+            labels: readGraphicLabels(feature),
+            echelon: (feature.get('echelon') as string) || '',
+            measured: {...readGraphicGeometryState(feature), ...widthOfSelection(manager, id), ...frameOfSelection(manager, id)},
+            graphicSize: feature.get('graphicSize') as number | undefined,
+        };
+    };
+
+    return {
+        selectionFor(id) {
+            // The line work, as a click would usually hit; every feature carries the amplifiers.
+            const features = featuresOf(map, id);
+            const feature = features.find(f => f.get('role') === 'graphic') ?? features[0];
+            return feature ? selectionOf(feature) : null;
+        },
+
+        suppressed() {
+            if (manager.isDrawing()) return true;
+            /*
+             * **Edit mode selects; it does not open a form.**
+             *
+             * A click there means "this is the graphic I am working on", and answering
+             * it with a modal over the map is answering a different question — the
+             * operator now has to dismiss a form before they can reach the affordances
+             * that click just summoned. The amplifiers stay one mode away: leave edit,
+             * click the graphic, and the dialog opens as it always has.
+             */
+            if (manager.isEditing()) return true;
+            // A `Draw` interaction that is active but has not started still owns the
+            // click; opening the dialog would fight it for the next one.
+            if (map.getInteractions().getArray().some(i => i instanceof Draw)) return true;
+            // The click that *ended* a drawing arrives here too.
+            return Date.now() < manager.lastDrawEndedAt;
+        },
+
+        onSelect(callback) {
+            const handleClick = (evt: {pixel: number[]}) => {
+                setTimeout(() => {
+                    const feature = map.forEachFeatureAtPixel(evt.pixel as Coordinate, f => f) as Feature | undefined;
+                    if (!feature) {
+                        callback(null);
+                        return;
+                    }
+
+                    callback(selectionOf(feature));
+                }, HIT_TEST_DELAY_MS);
+            };
+
+            map.on('singleclick', handleClick);
+            return () => map.un('singleclick', handleClick);
+        },
+
+        anchorPixel(selection) {
+            const feature = selected.get(selection.id);
+            const geometry = feature?.getGeometry();
+            if (!geometry) return undefined;
+
+            const coord = anchorCoordinate(geometry);
+            if (!coord) return undefined;
+
+            const pixel = map.getPixelFromCoordinate(coord);
+            if (!pixel) return undefined;
+
+            const rect = map.getTargetElement().getBoundingClientRect();
+            return [rect.left + pixel[0], rect.top + pixel[1]];
+        },
+
+        apply(selection, labels, echelon) {
+            if (selection.id) applyGraphicLabels(map, selection.id, labels, echelon);
+        },
+
+        setAmplifiersHidden(selection, hidden) {
+            // Drawn here, remembered nowhere: the choice is view state the host keeps, so
+            // the demo records it itself. @see TacticalGraphicsEngine.setAmplifiersHidden
+            if (!selection.id) return;
+            stampAmplifierVisibility(map, selection.id, hidden);
+        },
+
+        remove(selection) {
+            if (selection.id) removeGraphic(manager, selection.id);
+        },
+
+        setOpacity(selection, opacity) {
+            if (selection.id) stampGraphicOpacity(map, selection.id, opacity);
+        },
+
+        opacityOf: selection => (selection.id ? graphicOpacityOf(featuresOf(map, selection.id)[0]) : 1),
+    };
+}

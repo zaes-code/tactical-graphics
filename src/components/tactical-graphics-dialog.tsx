@@ -1,0 +1,1566 @@
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import Draggable from 'react-draggable';
+import {
+    Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    FormControl,
+    FormControlLabel,
+    InputLabel,
+    MenuItem,
+    OutlinedInput,
+    Paper,
+    Select,
+    SelectChangeEvent,
+    Slider,
+    Switch,
+    Typography,
+} from '@mui/material';
+import {formatDistance} from './openlayers/openlayerStyles';
+import {ALTITUDE_UNIT_SUFFIX, AltitudeDatum, getAltitudeUnit, targetAttitudeMils} from '@zaes/tactical-graphics';
+import {GraphicLabels, RangeFanConfig} from '../utils/graphicLinkRegistry';
+import type {GraphicGeometryState} from './openlayers/graphicProperties';
+import type {FeaturePropertiesSource, SelectedGraphic} from './featurePropertiesSource';
+import {rememberAmplifiersHidden, rememberedAmplifiersHidden} from './amplifierVisibility';
+import {dateTimeLocalToDtg, dtgToDateTimeLocal} from './dtg';
+import {onPropertiesRequest} from './propertiesRequest';
+import {
+    getDisplayName,
+    RangeFanBand,
+    RouteDirection,
+    TacticalGraphicConfidence,
+    TacticalGraphicEchelon,
+    TacticalGraphicHostility,
+    TacticalGraphicMineType,
+    TacticalGraphicMobility,
+    TacticalGraphicTerrain,
+    TacticalGraphicName,
+    TacticalGraphicStatus,
+} from '@zaes/tactical-graphics';
+import {getGraphicFields} from './openlayers/graphicFieldRegistry';
+
+/**
+ * Sensible starter config when a user opens the range-fan editor on a
+ * freshly-drawn fan (or one that doesn't yet have a stored config).
+ *
+ * Defaults: a single 1km band; for the sector, ±45° around the drawn
+ * bearing — but the dialog has no access to that bearing here, so we
+ * leave azimuths undefined and the geometry generator computes the
+ * defaults from the controller's `rotation`.
+ *
+ * Range values are stored in **kilometers** to match the dialog's UX;
+ * the geometry generator multiplies by 1000 when calling turf.
+ */
+function defaultRangeFanConfig(): RangeFanConfig {
+    // Metres, matching RangeFanBand.range as of 3.2.0 — this was 1 (km).
+    return {
+        bands: [{range: 1000}],
+    };
+}
+
+/**
+ * The amplifiers a graphic actually shows, seeded where the stored value is blank.
+ *
+ * Narrowing to the graphic's own field set is what stops a disabled input
+ * accumulating a stale value that then renders — a country code typed on one
+ * graphic and inherited by the next of a type that has no such field.
+ *
+ * Two of the defaults are load-bearing rather than cosmetic:
+ *
+ * - **`hostility` is always kept**, even when hidden, because it drives the stroke
+ *   color. Defaulting to `unknown` means editing some other property on a graphic
+ *   that never had an affiliation does not silently turn it friendly blue — and it
+ *   keeps the MUI `Select` controlled from the first render rather than flipping
+ *   uncontrolled to controlled.
+ * - **`status` defaults to `present`**, which is what `amplifierDash` already
+ *   assumed for an unset status.
+ */
+export function shownLabels(selection: SelectedGraphic): GraphicLabels {
+    const stored = selection.labels;
+    const fields = getGraphicFields(selection.graphicName);
+
+    /*
+     * **Only the fields this graphic supports, and an edit drops the rest.**
+     *
+     * `writeGraphicProperties` replaces the amplifier bag rather than merging it, so a
+     * value outside `getGraphicFields` does not survive a save. That is deliberate: the
+     * registry is what a graphic carries, so a date on a symbol that declares none is
+     * out-of-spec data, and normalising it away on the next edit is better than carrying
+     * invisible state no control manages. A stale value nobody can see is exactly what
+     * made the country code draw on four graphics whose plate has none.
+     *
+     * **Shape inputs are not at risk.** Every holder re-supplies its geometry state —
+     * `radius`, `rotation`, `width`, `length` — as the fourth argument on the same call,
+     * so replacing the label bag never touches the shape. @see writeGraphicProperties
+     */
+    const labels: GraphicLabels = {
+        designation: fields.identifier1 ? (stored.designation ?? '') : '',
+        hostility: stored.hostility ?? TacticalGraphicHostility.unknown,
+    };
+    // Kept through the rebuild, or applying the dialog would turn a stated Unknown back into an
+    // unset one and an exercise graphic into a real one. @see TacticalGraphicProperties.identityStated
+    if (stored.identityStated) labels.identityStated = true;
+    if (stored.exercise) labels.exercise = true;
+
+    if (fields.identifier2) labels.secondDesignation = stored.secondDesignation ?? '';
+    if (fields.countryCodes) {
+        labels.countryCode = stored.countryCode ?? '';
+        // The second code belongs to the second designation, so it only exists where there
+        // is one. @see the Country Code inputs below
+        if (fields.identifier2) labels.secondCountryCode = stored.secondCountryCode ?? '';
+    }
+    if (fields.additionalInfo) labels.additionalInfo = stored.additionalInfo ?? '';
+    // The three selectors that carry a stored value into the dialog rather than a string.
+    // `mineType` was missing, so a mine area reopened with its own type not selected.
+    if (fields.mineType) labels.mineType = stored.mineType;
+    if (fields.mobility) labels.mobility = stored.mobility;
+    if (fields.terrain) labels.terrain = stored.terrain;
+    if (fields.boundarySwitch) labels.hideBoundary = stored.hideBoundary;
+    if (fields.hostility) labels.confidence = stored.confidence;
+    if (fields.status) labels.status = stored.status ?? TacticalGraphicStatus.present;
+    if (fields.direction) labels.direction = stored.direction;
+    // No date stays no date. Defaulting to now put a time on every graphic whose dialog was
+    // merely opened and closed with OK.
+    if (fields.dtg1) labels.startDate = stored.startDate;
+    if (fields.dtg2) labels.endDate = stored.endDate;
+    if (fields.altitude1) labels.minAltitude = stored.minAltitude;
+    if (fields.altitude2) labels.maxAltitude = stored.maxAltitude;
+    // One datum for both, since a floor and a ceiling measured from different things
+    // would describe two different volumes. Shown whenever either altitude is.
+    if (fields.altitude1 || fields.altitude2) labels.altitudeDatum = stored.altitudeDatum;
+    // **A width the operator types has to come back when the dialog reopens.** It is the
+    // one shape input that is not derived, so unlike a radius there is nothing to
+    // recompute it from — dropping it here left the box empty every time and offered to
+    // replace a real gap with nothing. Safe lane's typed width had the same hole.
+    if (fields.width) labels.width = stored.width;
+    if (fields.weapon) labels.weapon = stored.weapon ?? '';
+    if (fields.grids) {
+        labels.secondDesignation = stored.secondDesignation ?? '';
+        labels.grid = stored.grid;
+    }
+    /*
+     * **What the graphic actually carries, before anything is invented for it.**
+     *
+     * This skipped a fixed-band graphic entirely, on the reading that 200700's ranges were
+     * the distances between three drawn anchor points and so had nothing in the selection to
+     * reconstruct them from. That stopped being true when 200700 went back to storing one
+     * anchor point and its four numbers: the ranges are `rangeFan.bands` now, they are right
+     * there in the selection, and skipping them left the editor showing its own placeholders
+     * — a start range of 1000 m against a symbol drawn at 1455 km — which pressing OK would
+     * then have written back over the real pair.
+     *
+     * The original point survives in the second branch: a fan with no typed bands still gets
+     * no invented ones, because the generator prefers a typed range to a drawn one and a bag
+     * written here would be a typed override the user never asked for.
+     */
+    /*
+     * 200700's four numbers, carried into the dialog as themselves.
+     *
+     * They have to be listed here like every other field: this bag is a **whitelist**, and
+     * `writeGraphicProperties` replaces the amplifier bag rather than merging it — so a value
+     * the dialog does not carry through is a value the next edit drops. Left out, the modal
+     * opened on its own placeholders and OK wrote them over the real four.
+     * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+     */
+    if (fields.stopRelativeBearing) {
+        labels.searchAxisAzimuthDeg = stored.searchAxisAzimuthDeg;
+        labels.startRange = stored.startRange;
+        labels.stopRange = stored.stopRange;
+        labels.stopRelativeBearingDeg = stored.stopRelativeBearingDeg;
+    }
+    if (fields.rangeFan) {
+        if (stored.rangeFan) {
+            labels.rangeFan = stored.rangeFan;
+        } else if (fields.fixedBands === undefined) {
+            // First time opening the editor on this fan: seed a single band at the drawn
+            // radius so pressing OK does not snap the geometry to the fallback. Both
+            // `graphicSize` and a band's range are metres as of 3.2.0 — this divided by a
+            // thousand, which was right while bands were kilometres and now seeds a fan a
+            // thousand times too small. @see RangeFanBand.range
+            labels.rangeFan = {
+                bands: [{range: selection.graphicSize && selection.graphicSize > 0 ? Math.round(selection.graphicSize) : 1000}],
+            };
+        }
+    }
+
+    return labels;
+}
+
+interface TacticalGraphicsDialogProps {
+    /**
+     * The map half of the dialog — selection, anchoring and applying.
+     *
+     * The dialog used to take an OpenLayers `Map` and its manager directly, which
+     * made ~580 lines of doctrinal form unreachable from any other renderer. Only
+     * three things here are actually renderer knowledge, and they are that interface.
+     * @see FeaturePropertiesSource
+     */
+    source: FeaturePropertiesSource;
+}
+
+const hostilityOptions = Object.values(TacticalGraphicHostility);
+const echelonOptions = Object.values(TacticalGraphicEchelon);
+const statusOptions = Object.values(TacticalGraphicStatus);
+const confidenceOptions = Object.values(TacticalGraphicConfidence);
+
+/** What the dialog is editing: the amplifier bag plus the echelon beside it. */
+interface TacticalGraphicProperties {
+    echelon: TacticalGraphicEchelon | string;
+    labels: GraphicLabels;
+}
+
+/**
+ * What to call the altitude input, given the datum it is measured from.
+ *
+ * **A flight level is not an altitude in the configured unit**, so offering "(FT)" beside
+ * it would invite the wrong number: a user thinking in feet types 1500, and `FL1500`
+ * means 150,000 ft. Under `FL` the field *is* the level — 150 — and the label says so.
+ */
+function altitudeFieldLabel(which: 'Minimum' | 'Maximum', datum: AltitudeDatum | undefined): string {
+    if (datum === AltitudeDatum.flightLevel) return `${which} Flight Level`;
+    return `${which} Altitude (${ALTITUDE_UNIT_SUFFIX[getAltitudeUnit()]})`;
+}
+
+const TacticalGraphicsDialog: React.FC<TacticalGraphicsDialogProps> = ({source}) => {
+    /** Geometry read-outs (meters) for the selected graphic. @see readGraphicGeometryState */
+    const [measured, setMeasured] = useState<GraphicGeometryState>({});
+    const [selection, setSelection] = useState<SelectedGraphic | null>(null);
+    const [dialogPosition, setDialogPosition] = useState({x: 0, y: 0});
+    const [isDragging, setIsDragging] = useState(false);
+    const defaultProperties = {
+        echelon: TacticalGraphicEchelon.brigade,
+        identifier: '',
+        labels: {designation: '', hostility: TacticalGraphicHostility.unknown},
+    };
+    const [pendingChanges, setPendingChanges] = useState<TacticalGraphicProperties>(defaultProperties);
+    /**
+     * Whether the selected graphic is drawn name-only.
+     *
+     * Held apart from `pendingChanges` because it is not one of the amplifiers `OK` writes
+     * back — the library keeps it off the graphic entirely, so this app owns it and applies
+     * it the moment it is switched. @see amplifierVisibility
+     */
+    const [nameOnly, setNameOnly] = useState(false);
+    /**
+     * What it was when the dialog opened, so the toggle counts as a change.
+     *
+     * `nameOnly` is applied the moment it is switched, so comparing it against the store
+     * says nothing — the store already agrees with it. Without this, flipping the toggle and
+     * nothing else left `OK` disabled: the only way out of the dialog was Cancel, which
+     * looks like it should undo the very thing that had already happened.
+     */
+    const [openedNameOnly, setOpenedNameOnly] = useState(false);
+    /**
+     * Draws the graphic name-only, or stops, and remembers it.
+     *
+     * Two halves because the library holds the choice only while the graphic is drawn: the
+     * source puts it on the map, and this app's own store is what re-applies it after a
+     * restore or an engine switch. @see amplifierVisibility
+     */
+    const applyNameOnly = (target: SelectedGraphic, hidden: boolean) => {
+        rememberAmplifiersHidden(target.id, hidden);
+        source.setAmplifiersHidden(target, hidden);
+    };
+    /**
+     * How opaque the selected graphic is drawn, and what it was when the dialog opened. View
+     * state like `nameOnly`, applied the moment the slider moves, so Cancel puts it back.
+     */
+    const [opacity, setOpacity] = useState(1);
+    const [openedOpacity, setOpenedOpacity] = useState(1);
+    const [currentProperties, setCurrentProperties] = useState<TacticalGraphicProperties>(defaultProperties);
+    const paperRef = useRef<HTMLDivElement | null>(null);
+    const lineRef = useRef<SVGLineElement | null>(null);
+
+    /** Opens the dialog on `next`. */
+    const open = (next: SelectedGraphic) => {
+        setSelection(next);
+        // Read-only: the geometry inputs the user set by dragging. Kept out of
+        // `pendingChanges` because nothing in this dialog can change them.
+        setMeasured(next.measured);
+
+        const curr = {
+            echelon: next.echelon,
+            labels: shownLabels(next),
+        };
+        setCurrentProperties(curr);
+        setPendingChanges(curr);
+        // View state, not an amplifier: it comes from this app's store rather than
+        // from the graphic. @see amplifierVisibility
+        setNameOnly(rememberedAmplifiersHidden(next.id));
+        setOpenedNameOnly(rememberedAmplifiersHidden(next.id));
+        setOpacity(source.opacityOf(next));
+        setOpenedOpacity(source.opacityOf(next));
+        setDialogPosition({x: 0, y: 0});
+    };
+
+    // A click on a graphic opens the dialog where the engine does not take that click to
+    // select; in edit mode it is the Properties button on the selection box. @see requestProperties
+    useEffect(() => {
+        const stopClicks = source.onSelect(next => {
+            if (!next) {
+                setSelection(null);
+                return;
+            }
+            if (source.suppressed?.()) return;
+            open(next);
+        });
+        const stopRequests = onPropertiesRequest(id => {
+            const next = source.selectionFor(id);
+            if (next) open(next);
+        });
+        return () => {
+            stopClicks();
+            stopRequests();
+        };
+        // `open` only calls state setters and reads `source`.
+        // eslint-disable-next-line
+    }, [source]);
+
+    /**
+     * Redraws the cone joining the dialog to the graphic it is editing.
+     *
+     * Page coordinates throughout: the cone is a viewport-level SVG, not a map
+     * overlay, so it has to work in the space `getBoundingClientRect` reports in.
+     * The source supplies the map end; everything after that is geometry.
+     */
+    const updateLine = () => {
+        if (!selection || !lineRef.current || !paperRef.current) return;
+
+        const anchor = source.anchorPixel(selection);
+        if (!anchor) return;
+
+        const dialogRect = paperRef.current.getBoundingClientRect();
+        const [x1, y1] = anchor;
+        const x2 = dialogRect.left + dialogRect.width / 2;
+        const y2 = dialogRect.top + dialogRect.height / 2;
+
+        // The cone's mouth, spread either side of the line at the dialog end.
+        const spread = 30;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const leftX = x2 + Math.cos(angle + Math.PI / 2) * spread;
+        const leftY = y2 + Math.sin(angle + Math.PI / 2) * spread;
+        const rightX = x2 + Math.cos(angle - Math.PI / 2) * spread;
+        const rightY = y2 + Math.sin(angle - Math.PI / 2) * spread;
+
+        lineRef.current.setAttribute('points', `${x1},${y1} ${leftX},${leftY} ${rightX},${rightY}`);
+    };
+
+    /**
+     * Draws the cone when a graphic is selected, and keeps it attached while the
+     * window is resized.
+     *
+     * A frame is skipped first: the dialog has to be laid out before its center can
+     * be measured, and on the first render `getBoundingClientRect` reports zeroes.
+     */
+    useEffect(() => {
+        if (!selection) return;
+        requestAnimationFrame(updateLine);
+        window.addEventListener('resize', updateLine);
+        return () => window.removeEventListener('resize', updateLine);
+        // eslint-disable-next-line
+    }, [selection]);
+
+    /**
+     * While the dialog is being dragged, redraw every frame.
+     *
+     * `Draggable` reports its position only on drag *stop*, so nothing else would
+     * move the cone until the user let go — and the line would visibly detach from
+     * the dialog for the whole gesture.
+     */
+    useEffect(() => {
+        if (!isDragging) return;
+        const id = setInterval(() => requestAnimationFrame(updateLine), 16);
+        return () => clearInterval(id);
+        // eslint-disable-next-line
+    }, [isDragging]);
+
+    const applyChanges = () => {
+        if (!selection) return;
+        source.apply(selection, pendingChanges.labels, pendingChanges.echelon);
+        setCurrentProperties(prev => ({
+            ...prev,
+            labels: pendingChanges.labels,
+            echelon: pendingChanges.echelon,
+        }));
+        setSelection(null);
+    };
+
+    const cancelChanges = () => {
+        setPendingChanges({...currentProperties});
+        // The toggle took effect immediately, so cancelling has to undo it — otherwise the
+        // one control that applied on the spot is also the one Cancel cannot take back.
+        if (selection && nameOnly !== openedNameOnly) {
+            applyNameOnly(selection, openedNameOnly);
+            setNameOnly(openedNameOnly);
+        }
+        if (selection && opacity !== openedOpacity) {
+            source.setOpacity(selection, openedOpacity);
+            setOpacity(openedOpacity);
+        }
+        setSelection(null);
+    };
+
+    /** Takes the graphic off the map and forgets its "name only" choice with it. */
+    const deleteGraphic = () => {
+        if (!selection) return;
+        source.remove(selection);
+        rememberAmplifiersHidden(selection.id, false);
+        setSelection(null);
+    };
+
+    const DraggablePaper = useMemo(
+        () => (props: any) => (
+            <Draggable
+                nodeRef={paperRef}
+                handle="#draggable-dialog-title"
+                position={dialogPosition}
+                onStart={() => setIsDragging(true)}
+                onStop={(e, data) => {
+                    setIsDragging(false);
+                    setDialogPosition({x: data.x, y: data.y});
+                    requestAnimationFrame(updateLine);
+                }}
+            >
+                <Paper ref={paperRef} {...props} />
+            </Draggable>
+        ),
+        [dialogPosition],
+    );
+
+    if (!selection) return null;
+
+    // The toggle is a change like any other, even though it applies on the spot: `OK` has to
+    // be reachable after switching it, and `Cancel` has to put it back.
+    const hasChanges =
+        JSON.stringify(pendingChanges) !== JSON.stringify(currentProperties) || nameOnly !== openedNameOnly || opacity !== openedOpacity;
+
+    return (
+        <>
+            {/* Red line connecting feature to modal */}
+            <svg
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    pointerEvents: 'none',
+                    zIndex: 1000,
+                }}
+            >
+                <defs>
+                    <linearGradient id="coneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="gray" stopOpacity="0.6" />
+                        <stop offset="100%" stopColor="gray" stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+
+                <polygon ref={lineRef as any} fill="url(#coneGradient)" />
+            </svg>
+
+            {/*
+             * **The container must not eat the map.**
+             *
+             * `hideBackdrop` hides the scrim but not the full-viewport
+             * `.MuiDialog-container` behind it, which keeps `pointer-events: auto` and
+             * sits at z-index 1300 — over everything. So while this dialog was open the
+             * map underneath took no clicks at all: no drawing, no selecting, and none
+             * of the edit affordances, which is how this surfaced. A non-modal dialog
+             * that deliberately leaves its host usable has to say so; the paper opts
+             * back in so the form itself still works.
+             *
+             * **The root too.** `.MuiDialog-root` is itself a full-viewport layer at z-index
+             * 1300 with `pointer-events: auto`, so with only the container let through, a
+             * click on a second graphic still never reached the map: the dialog stayed on
+             * the first one, and its "Name only" switch read as if carried to the second.
+             */}
+            <Dialog
+                open
+                hideBackdrop
+                keepMounted
+                PaperComponent={DraggablePaper}
+                disableEnforceFocus
+                sx={{
+                    pointerEvents: 'none',
+                    '& .MuiDialog-container': {pointerEvents: 'none'},
+                    '& .MuiDialog-paper': {pointerEvents: 'auto'},
+                }}
+                onClose={cancelChanges}
+            >
+                <DialogTitle id="draggable-dialog-title" sx={{cursor: 'move'}}>
+                    Feature Properties
+                    {selection.graphicName && (
+                        <Box
+                            component="span"
+                            sx={{
+                                display: 'block',
+                                fontSize: '0.75rem',
+                                fontWeight: 400,
+                                color: 'text.secondary',
+                                mt: 0.25,
+                                textTransform: 'capitalize',
+                            }}
+                        >
+                            {getDisplayName(selection.graphicName)}
+                        </Box>
+                    )}
+                </DialogTitle>
+
+                <DialogContent>
+                    {(() => {
+                        const fields = getGraphicFields(selection.graphicName);
+                        return (
+                            <>
+                                {/* Every flag, or the message contradicts a control rendered right below it.
+                                    `hostility` and `status` were missing here while almost no graphic set
+                                    them; now that hostility follows FM 1-02.2 Field N and is on for every
+                                    control measure, leaving them out would print "no editable fields"
+                                    above a hostility dropdown on most of the catalog. */}
+                                {!fields.identifier1 &&
+                                    !fields.identifier2 &&
+                                    !fields.additionalInfo &&
+                                    !fields.dtg1 &&
+                                    !fields.dtg2 &&
+                                    !fields.hostility &&
+                                    !fields.status &&
+                                    !fields.echelon &&
+                                    !fields.direction &&
+                                    !fields.width &&
+                                    !fields.altitude1 &&
+                                    !fields.altitude2 &&
+                                    !fields.grids &&
+                                    !fields.weapon &&
+                                    !fields.rangeFan &&
+                                    !fields.mineType &&
+                                    !fields.mobility &&
+                                    !fields.terrain && (
+                                        <Box sx={{minWidth: 180, mt: 1}}>
+                                            <InputLabel>No editable fields for this graphic type.</InputLabel>
+                                        </Box>
+                                    )}
+
+                                {fields.identifier1 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="name-input">Name</InputLabel>
+                                            <OutlinedInput
+                                                id="name-input"
+                                                label="Name"
+                                                value={pendingChanges.labels.designation}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, designation: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/* Field H. Several plates set it beside the designation rather than
+                                    instead of it — the area generic reads `H  T` on one line — so it is
+                                    its own control. @see TacticalGraphicProperties.additionalInfo */}
+                                {fields.additionalInfo && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="additional-info-input">Additional Information</InputLabel>
+                                            <OutlinedInput
+                                                id="additional-info-input"
+                                                label="Additional Information"
+                                                value={pendingChanges.labels.additionalInfo ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, additionalInfo: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/*
+                                 * **Two flags, not one, and the second code follows the second designation.**
+                                 *
+                                 * The country codes are their own field because they do not travel with
+                                 * `identifier2`: final protective fire takes a second designation and no code at
+                                 * all, and while the two shared a flag it was offered two boxes nothing would draw.
+                                 *
+                                 * But a code still *pairs* with a designation — `designation + countryCode` on the
+                                 * top line, `secondDesignation + secondCountryCode` on the bottom — so a graphic
+                                 * with one designation has one code. The fire-support areas are the case that
+                                 * proves it: they carry `T2 ( AS )` and no second name, and rendering both boxes
+                                 * put an "Other Country Code" on them that nothing would ever draw. Which is the
+                                 * same defect the country-code split was made to fix, one level down.
+                                 */}
+                                {fields.countryCodes && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="country-code-input">Country Code</InputLabel>
+                                            <OutlinedInput
+                                                id="country-code-input"
+                                                label="Country Code"
+                                                value={pendingChanges.labels.countryCode ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, countryCode: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+                                {fields.identifier2 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="second-id-input">Second ID</InputLabel>
+                                            <OutlinedInput
+                                                id="second-id-input"
+                                                label="Second ID"
+                                                value={pendingChanges.labels.secondDesignation ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, secondDesignation: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+                                {fields.countryCodes && fields.identifier2 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="second-country-code-input">Other Country Code</InputLabel>
+                                            <OutlinedInput
+                                                id="second-country-code-input"
+                                                label="Other Country Code"
+                                                value={pendingChanges.labels.secondCountryCode ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, secondCountryCode: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/*
+                                 * **Only where there is a name to fall back to.**
+                                 *
+                                 * The switch reads "name only", and for 140 of the 319
+                                 * graphics there is no name: their plates letter no
+                                 * designation at all — the wire obstacles, the bearing
+                                 * lines, the anti-tank ditches. Flipping it there hides
+                                 * whatever amplifiers the graphic does carry and leaves
+                                 * nothing in their place, which is not what the control
+                                 * says it does.
+                                 *
+                                 * It was offered on every graphic on the argument that
+                                 * amplifier visibility is a choice about the map rather
+                                 * than a property of the symbol. That is still true; it is
+                                 * just not a choice worth offering when the answer can
+                                 * only be "show nothing". @see GraphicFieldSet.identifier1
+                                 */}
+                                {fields.identifier1 && (
+                                <Box sx={{mt: 1}}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={nameOnly}
+                                                onChange={(_e, checked) => {
+                                                    // Applied immediately, and to this app's
+                                                    // own store — it is not one of the
+                                                    // amplifiers `OK` writes back.
+                                                    setNameOnly(checked);
+                                                    if (selection) applyNameOnly(selection, checked);
+                                                }}
+                                            />
+                                        }
+                                        label="Name only — hide other amplifiers"
+                                    />
+                                </Box>
+                                )}
+
+                                {/* Every graphic can be drawn fainter: it is a choice about the map, not the symbol. */}
+                                <Box sx={{mt: 1, px: 1}}>
+                                    <Typography variant="body2" id="graphic-opacity-label">
+                                        Opacity {Math.round(opacity * 100)}%
+                                    </Typography>
+                                    <Slider
+                                        aria-labelledby="graphic-opacity-label"
+                                        value={opacity}
+                                        min={0.1}
+                                        max={1}
+                                        step={0.05}
+                                        onChange={(_e, value) => {
+                                            const next = value as number;
+                                            setOpacity(next);
+                                            if (selection) source.setOpacity(selection, next);
+                                        }}
+                                    />
+                                </Box>
+
+                                {/* APP-06 242600 Note 2: the zone of fire's boundary can be switched off. */}
+                                {fields.boundarySwitch && (
+                                    <Box sx={{mt: 1}}>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    checked={pendingChanges.labels.hideBoundary ?? false}
+                                                    onChange={(_e, checked) =>
+                                                        setPendingChanges(prev => ({
+                                                            ...prev,
+                                                            labels: {...prev.labels, hideBoundary: checked || undefined},
+                                                        }))
+                                                    }
+                                                />
+                                            }
+                                            label="Hide boundary"
+                                        />
+                                    </Box>
+                                )}
+
+                                {fields.hostility && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Hostility</InputLabel>
+                                            <Select
+                                                value={pendingChanges.labels.hostility}
+                                                label="Hostility"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicHostility>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        // Picking a value states it, so a chosen Unknown is the
+                                                        // unknown identity rather than the default.
+                                                        labels: {...prev.labels, hostility: e.target.value, identityStated: true},
+                                                    }))
+                                                }
+                                            >
+                                                {hostilityOptions.map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.hostility && pendingChanges.labels.hostility === TacticalGraphicHostility.hostileFaker && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Confidence</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render.
+                                                Confidence stays undefined in the data — dashStyle() only
+                                                dashes when it is explicitly `suspected`. */}
+                                            <Select
+                                                value={pendingChanges.labels.confidence ?? ''}
+                                                label="Confidence"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicConfidence>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {
+                                                            ...prev.labels,
+                                                            confidence: e.target.value as TacticalGraphicConfidence,
+                                                        },
+                                                    }))
+                                                }
+                                            >
+                                                {confidenceOptions.map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.status && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Status</InputLabel>
+                                            <Select
+                                                value={pendingChanges.labels.status}
+                                                label="Status"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicStatus>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, status: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {statusOptions.map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.echelon && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Echelon</InputLabel>
+                                            <Select
+                                                value={pendingChanges.echelon}
+                                                label="Echelon"
+                                                onChange={(e: SelectChangeEvent<string>) =>
+                                                    setPendingChanges(prev => ({...prev, echelon: e.target.value}))
+                                                }
+                                            >
+                                                {echelonOptions.map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.direction && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Direction</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.direction ?? ''}
+                                                label="Direction"
+                                                onChange={(e: SelectChangeEvent<RouteDirection>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, direction: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {Object.values(RouteDirection).map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.mineType && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Mine type</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.mineType ?? ''}
+                                                label="Mine type"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicMineType>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, mineType: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicMineType) as TacticalGraphicMineType[]).map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/* APP-06 Table 8-24, the MOBILITY half. Offered on the three graphics
+                                    its Remarks column names and nowhere else. */}
+                                {fields.mobility && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Sector 1 mobility</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.mobility ?? ''}
+                                                label="Sector 1 mobility"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicMobility>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, mobility: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicMobility) as TacticalGraphicMobility[]).map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/* APP-06 Table 8-25. Sets a word under the icon and, with it, the
+                                    color the area is hatched in. */}
+                                {fields.terrain && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth>
+                                            <InputLabel>Sector 2 terrain</InputLabel>
+                                            {/* `?? ''` keeps the Select controlled from the first render. */}
+                                            <Select
+                                                value={pendingChanges.labels.terrain ?? ''}
+                                                label="Sector 2 terrain"
+                                                onChange={(e: SelectChangeEvent<TacticalGraphicTerrain>) =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, terrain: e.target.value},
+                                                    }))
+                                                }
+                                            >
+                                                {(Object.values(TacticalGraphicTerrain) as TacticalGraphicTerrain[]).map(h => (
+                                                    <MenuItem key={h} value={h}>
+                                                        {h}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.dtg1 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="starttime-input" shrink>
+                                                Start Time (UTC)
+                                            </InputLabel>
+                                            <OutlinedInput
+                                                id="starttime-input"
+                                                label="Start Time (UTC)"
+                                                type="datetime-local"
+                                                notched
+                                                value={dtgToDateTimeLocal(pendingChanges.labels.startDate ?? '')}
+                                                onChange={e => {
+                                                    const dtg = dateTimeLocalToDtg(e.target.value);
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, startDate: dtg || undefined},
+                                                    }));
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.dtg2 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="endtime-input" shrink>
+                                                End Time (UTC)
+                                            </InputLabel>
+                                            <OutlinedInput
+                                                id="endtime-input"
+                                                label="End Time (UTC)"
+                                                type="datetime-local"
+                                                notched
+                                                value={dtgToDateTimeLocal(pendingChanges.labels.endDate ?? '')}
+                                                onChange={e => {
+                                                    const dtg = dateTimeLocalToDtg(e.target.value);
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, endDate: dtg || undefined},
+                                                    }));
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/*
+                                 * Width and radius are read-outs, not inputs: the user
+                                 * sizes a graphic by dragging it, and the hashed measure
+                                 * line reports the number live while they do. Showing
+                                 * them here as text closes the loop — you can check the
+                                 * figure you dragged to — without a second way to set it
+                                 * that would have to be kept in step with the geometry.
+                                 */}
+                                {fields.width && measured.width !== undefined && !fields.widthTyped && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Width
+                                        </Typography>
+                                        <Typography id="width-readout" variant="body2">
+                                            {formatDistance(measured.width)}
+                                        </Typography>
+                                    </Box>
+                                )}
+
+                                {/*
+                                 * **A width the geometry cannot supply is typed instead.**
+                                 * The read-out above exists because width is normally
+                                 * derived — the corridor is that wide on the map, and a
+                                 * second way to set it would have to be kept in step. The
+                                 * safe lane is the exception the rule did not anticipate:
+                                 * APP-06 290600 letters `AM`, the symbol is a single line,
+                                 * and the plate's Example prints `4.5M` beside a lane with
+                                 * no drawn width at all. Nothing measures it, so the
+                                 * read-out never rendered and the field the plate asks for
+                                 * could not be filled in.
+                                 *
+                                 * Gated on the measurement being absent rather than on a
+                                 * graphic name, so it stays one control: a graphic that
+                                 * measures its width still shows the read-out and no input,
+                                 * and the two can never both appear.
+                                 *
+                                 * **`widthTyped` is the third case that gate could not see.**
+                                 * The multiple-strike safe distance zone files a width — so
+                                 * a measurement is present — but that width is the standoff
+                                 * its outer ring is derived FROM, not something read off the
+                                 * map. It rendered as a label the operator could read and
+                                 * not change. The field set now says which kind of width a
+                                 * graphic has, because presence alone cannot tell them apart.
+                                 */}
+                                {fields.width && (measured.width === undefined || fields.widthTyped) && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="width-input">Width (m)</InputLabel>
+                                            <OutlinedInput
+                                                id="width-input"
+                                                label="Width (m)"
+                                                inputProps={{inputMode: 'decimal'}}
+                                                value={pendingChanges.labels.width ?? ''}
+                                                onChange={e => {
+                                                    // A width may be fractional -- the plate
+                                                    // writes 4.5M -- so this keeps one
+                                                    // decimal point rather than digits only.
+                                                    const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+                                                    const [whole, ...rest] = cleaned.split('.');
+                                                    const text = rest.length ? `${whole}.${rest.join('')}` : whole;
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {
+                                                            ...prev.labels,
+                                                            width: text === '' || text === '.' ? undefined : Number(text),
+                                                        },
+                                                    }));
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.length && measured.length !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Length
+                                        </Typography>
+                                        <Typography id="length-readout" variant="body2">
+                                            {formatDistance(measured.length)}
+                                        </Typography>
+                                    </Box>
+                                )}
+
+                                {/*
+                                  * Amplifier AN. Shown alongside the other shape read-outs
+                                  * and for the same reason: the attitude is what the edge
+                                  * handle swings, so a typed box here would need keeping in
+                                  * step with the gesture. In mils, as the plate quotes it.
+                                  */}
+                                {fields.attitude && measured.rotation !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Attitude
+                                        </Typography>
+                                        <Typography id="attitude-readout" variant="body2">
+                                            {`${targetAttitudeMils(measured.rotation)} mils`}
+                                        </Typography>
+                                    </Box>
+                                )}
+
+                                {fields.radius && measured.radius !== undefined && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Radius
+                                        </Typography>
+                                        <Typography id="radius-readout" variant="body2">
+                                            {formatDistance(measured.radius)}
+                                        </Typography>
+                                    </Box>
+                                )}
+
+                                {fields.altitude1 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="min-altitude-input">
+                                                {altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}
+                                            </InputLabel>
+                                            <OutlinedInput
+                                                id="min-altitude-input"
+                                                label={altitudeFieldLabel('Minimum', pendingChanges.labels.altitudeDatum)}
+                                                inputProps={{inputMode: 'numeric'}}
+                                                value={pendingChanges.labels.minAltitude ?? ''}
+                                                onChange={e => {
+                                                    // Digits in, a number out: the field is
+                                                    // numeric and so is the property, so the
+                                                    // conversion belongs at this one edge
+                                                    // rather than everywhere downstream.
+                                                    // Empty clears it rather than storing 0.
+                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, minAltitude: digits === '' ? undefined : Number(digits)},
+                                                    }));
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.altitude2 && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="max-altitude-input">
+                                                {altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}
+                                            </InputLabel>
+                                            <OutlinedInput
+                                                id="max-altitude-input"
+                                                label={altitudeFieldLabel('Maximum', pendingChanges.labels.altitudeDatum)}
+                                                inputProps={{inputMode: 'numeric'}}
+                                                value={pendingChanges.labels.maxAltitude ?? ''}
+                                                onChange={e => {
+                                                    // Digits in, a number out: the field is
+                                                    // numeric and so is the property, so the
+                                                    // conversion belongs at this one edge
+                                                    // rather than everywhere downstream.
+                                                    // Empty clears it rather than storing 0.
+                                                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, maxAltitude: digits === '' ? undefined : Number(digits)},
+                                                    }));
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {(fields.altitude1 || fields.altitude2) && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel id="altitude-datum-label">Measured from</InputLabel>
+                                            <Select
+                                                labelId="altitude-datum-label"
+                                                label="Measured from"
+                                                value={pendingChanges.labels.altitudeDatum ?? ''}
+                                                onChange={e => {
+                                                    const v = e.target.value as AltitudeDatum | '';
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, altitudeDatum: v === '' ? undefined : v},
+                                                    }));
+                                                }}
+                                            >
+                                                {/* Unset renders the bare number and its unit, which is what a
+                                                    graphic that does not care about a datum should show. */}
+                                                <MenuItem value="">(none)</MenuItem>
+                                                <MenuItem value={AltitudeDatum.meanSeaLevel}>MSL — above mean sea level</MenuItem>
+                                                <MenuItem value={AltitudeDatum.aboveGroundLevel}>AGL — above ground level</MenuItem>
+                                                <MenuItem value={AltitudeDatum.flightLevel}>FL — flight level</MenuItem>
+                                            </Select>
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {fields.weapon && (
+                                    <Box sx={{minWidth: 180, mt: 1}}>
+                                        <FormControl fullWidth variant="outlined">
+                                            <InputLabel htmlFor="weapon-input">Weapon</InputLabel>
+                                            <OutlinedInput
+                                                id="weapon-input"
+                                                label="Weapon"
+                                                value={pendingChanges.labels.weapon ?? ''}
+                                                onChange={e =>
+                                                    setPendingChanges(prev => ({
+                                                        ...prev,
+                                                        labels: {...prev.labels, weapon: e.target.value},
+                                                    }))
+                                                }
+                                            />
+                                        </FormControl>
+                                    </Box>
+                                )}
+
+                                {/*
+                                  * **Grids only.** This block used to carry a "Unit Name" box as well,
+                                  * bound to `secondDesignation` — the airspace coordination areas were
+                                  * the only graphics with grids, and that was the sole way to type their
+                                  * second name.
+                                  *
+                                  * They now declare `identifier2` outright, because both publications
+                                  * give them two name fields and merely letter it differently (APP-06
+                                  * `T2`, FM `T1`). Keeping this one would put the same value on screen
+                                  * twice under two labels, each overwriting the other.
+                                  */}
+                                {fields.grids && (
+                                    <>
+                                        <Box sx={{minWidth: 180, mt: 1}}>
+                                            <FormControl fullWidth variant="outlined">
+                                                <InputLabel htmlFor="grid-input">Grids</InputLabel>
+                                                <OutlinedInput
+                                                    id="grid-input"
+                                                    label="Grids"
+                                                    value={pendingChanges.labels.grid ?? ''}
+                                                    onChange={e =>
+                                                        setPendingChanges(prev => ({
+                                                            ...prev,
+                                                            labels: {...prev.labels, grid: e.target.value},
+                                                        }))
+                                                    }
+                                                />
+                                            </FormControl>
+                                        </Box>
+                                    </>
+                                )}
+
+                                {fields.rangeFan &&
+                                    (() => {
+                                        const config = pendingChanges.labels.rangeFan ?? defaultRangeFanConfig();
+                                        /*
+                                         * **A sector is a shape, and two graphics have it.** This asked the name
+                                         * and got the weapon fan alone, so 200700 — which is a sector by every
+                                         * reading of its plate — was offered neither an axis nor an opening, and
+                                         * its modal carried two of the four numbers the standard names.
+                                         * @see stopRelativeBearing
+                                         */
+                                        const relativeBearing = !!fields.stopRelativeBearing;
+                                        /*
+                                         * **200700 is edited as its own four numbers.** It rode the fans'
+                                         * bands at first; the saved file now names them the way the
+                                         * plate does, and this reads and writes those directly rather than
+                                         * translating in and out of a different symbol's amplifiers.
+                                         * @see TacticalGraphicProperties.searchAxisAzimuthDeg
+                                         */
+                                        const radar = pendingChanges.labels as {
+                                            searchAxisAzimuthDeg?: number;
+                                            startRange?: number;
+                                            stopRange?: number;
+                                            stopRelativeBearingDeg?: number;
+                                        };
+                                        const setRadar = (patch: Record<string, number | undefined>) =>
+                                            setPendingChanges(prev => ({...prev, labels: {...prev.labels, ...patch}}));
+                                        const isSector =
+                                            selection.graphicName === TacticalGraphicName.WeaponSensorRangeFanSector || relativeBearing;
+                                        const axisLabel = relativeBearing ? 'Search Axis Azimuth (° from N)' : 'Center Azimuth (° from N)';
+                                        /*
+                                         * **A plate that names its ranges gets one row each, and no list.**
+                                         *
+                                         * 200700 states four numbers, two of them ranges, so "+ Add Band"
+                                         * offered a third ring the standard cannot read. `fixedBands` says
+                                         * how many the plate names; the fans leave it unset and keep the
+                                         * list they have always had. @see GraphicFieldSet.fixedBands
+                                         */
+                                        const fixedBands = fields.fixedBands;
+                                        const storedBands = config.bands ?? [];
+                                        /*
+                                         * The rows a fixed-band graphic shows when nothing is stored: the
+                                         * outermost at the size it was drawn, the rest stepped in evenly.
+                                         * These are what the user sees before typing, so they have to be
+                                         * the drawn shape rather than a flat 1 km ladder -- and they are
+                                         * not written anywhere until an edit commits the pair.
+                                         */
+                                        const drawnRange = selection.graphicSize && selection.graphicSize > 0 ? Math.round(selection.graphicSize) : 1000;
+                                        const bands =
+                                            fixedBands === undefined
+                                                ? storedBands
+                                                : Array.from(
+                                                      {length: fixedBands},
+                                                      (_, i) => storedBands[i] ?? {range: Math.round((drawnRange * (i + 1)) / fixedBands)},
+                                                  );
+                                        const bandLabel = (i: number) =>
+                                            fixedBands === 2 ? ['Start Range (m)', 'Stop Range (m)'][i] : 'Range (m)';
+
+                                        const updateConfig = (next: RangeFanConfig) => {
+                                            setPendingChanges(prev => ({
+                                                ...prev,
+                                                labels: {...prev.labels, rangeFan: next},
+                                            }));
+                                        };
+                                        const updateBand = (index: number, patch: Partial<RangeFanBand>) => {
+                                            const nextBands = bands.map((b, i) => (i === index ? {...b, ...patch} : b));
+                                            updateConfig({...config, bands: nextBands});
+                                        };
+                                        const addBand = () => {
+                                            const last = bands.length > 0 ? bands[bands.length - 1] : undefined;
+                                            // Step up by 1 km from the last band so the new ring
+                                            // is visibly outside the existing one. Carry over the
+                                            // last band's azimuths (sector) so the typical
+                                            // "extend the same wedge to a longer range" flow
+                                            // needs zero typing.
+                                            const nextBand: RangeFanBand = {
+                                                // A kilometre step, in metres — bands are metres as of 3.2.0.
+                                                range: Math.max(1000, (last?.range ?? 0) + 1000),
+                                                ...(isSector && last
+                                                    ? {
+                                                          leftAzimuthDeg: last.leftAzimuthDeg,
+                                                          rightAzimuthDeg: last.rightAzimuthDeg,
+                                                      }
+                                                    : {}),
+                                            };
+                                            updateConfig({...config, bands: [...bands, nextBand]});
+                                        };
+                                        const removeBand = (index: number) => {
+                                            if (bands.length <= 1) return; // keep at least one band
+                                            updateConfig({...config, bands: bands.filter((_, i) => i !== index)});
+                                        };
+                                        /*
+                                         * The opening, as the half-angle either side of the axis.
+                                         *
+                                         * Read off the outermost band, because that is the one 200700's *stop*
+                                         * relative bearing belongs to, and defaulted to the same 45 degrees the
+                                         * generator opens an untouched wedge at. Only the angle *between* the
+                                         * two stored bearings is meaningful — the generator re-centres the pair
+                                         * on the search axis — so it is written about zero and the axis field
+                                         * stays the only thing that aims the symbol.
+                                         */
+                                        const normAz = (deg: number) => ((deg % 360) + 360) % 360;
+                                        /*
+                                         * **The axis in force, which is not always the typed one.**
+                                         *
+                                         * `resolveCenterAzimuth` reads `centerAzimuthDeg ?? 90 - rotation`, so a
+                                         * sector that has only ever been drawn and turned has no typed azimuth at
+                                         * all — and the field sat empty while the symbol plainly pointed
+                                         * somewhere. Showing the same fallback the
+                                         * generator uses is what makes the box agree with the picture.
+                                         *
+                                         * Typing into it still writes `centerAzimuthDeg` and still wins; a rotate
+                                         * afterwards drops that value and the reading falls back here again.
+                                         * @see RangeFanGraphicBase.handleRotate
+                                         */
+                                        const axisInForce =
+                                            radar.searchAxisAzimuthDeg !== undefined
+                                                // A tenth of a degree in the box. The stored value keeps its
+                                                // precision; a drag produces a float and 17 digits in a 90px
+                                                // field reads as noise, exactly as it did for the ranges.
+                                                ? Math.round(radar.searchAxisAzimuthDeg * 10) / 10
+                                                : config.centerAzimuthDeg !== undefined
+                                                  ? config.centerAzimuthDeg
+                                                  : measured.rotation !== undefined
+                                                    ? Math.round(normAz(90 - measured.rotation) * 10) / 10
+                                                    : undefined;
+                                        const outerBand = bands[bands.length - 1];
+                                        const halfAngle =
+                                            outerBand?.leftAzimuthDeg !== undefined && outerBand?.rightAzimuthDeg !== undefined
+                                                ? Math.round((normAz(outerBand.rightAzimuthDeg - outerBand.leftAzimuthDeg) / 2) * 10) / 10
+                                                : 45;
+
+                                        const parseAzimuthInput = (raw: string): number | undefined => {
+                                            const v = raw.replace(/[^0-9.\-]/g, '');
+                                            if (v === '' || v === '-' || v === '.') return undefined;
+                                            const n = parseFloat(v);
+                                            return Number.isFinite(n) ? n : undefined;
+                                        };
+
+                                        return (
+                                            <>
+                                                <Box sx={{minWidth: 180, mt: 2, mb: 1, fontWeight: 'bold'}}>
+                                                    {fixedBands === undefined ? 'Range Bands' : 'Search Ranges'}
+                                                </Box>
+                                                {bands.map((band, i) => (
+                                                    <Box
+                                                        key={i}
+                                                        sx={{
+                                                            mt: 1,
+                                                            p: 1,
+                                                            border: '1px solid rgba(255,255,255,0.12)',
+                                                            borderRadius: 1,
+                                                        }}
+                                                    >
+                                                        <Box sx={{display: 'flex', gap: 1, alignItems: 'flex-start'}}>
+                                                            <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                <InputLabel htmlFor={`band-range-${i}`}>{bandLabel(i)}</InputLabel>
+                                                                <OutlinedInput
+                                                                    id={`band-range-${i}`}
+                                                                    label={bandLabel(i)}
+                                                                    type="number"
+                                                                    inputProps={{step: 100, min: 0, inputMode: 'numeric'}}
+                                                                    // Whole metres in the box. A range measured off a drag is a
+                                                                    // float, and a 17-digit number in a 90px field reads as noise;
+                                                                    // the stored value keeps its precision until someone types.
+                                                                    value={
+                                                                        relativeBearing
+                                                                            ? Math.round(
+                                                                                  (i === 0 ? radar.startRange : radar.stopRange) ??
+                                                                                      band.range ??
+                                                                                      0,
+                                                                              )
+                                                                            : band.range !== undefined
+                                                                              ? Math.round(band.range)
+                                                                              : ''
+                                                                    }
+                                                                    onChange={e => {
+                                                                        const v = e.target.value;
+                                                                        const metres = v === '' ? 0 : parseFloat(v);
+                                                                        if (!Number.isFinite(metres)) return;
+                                                                        // 200700 writes the plate's own field; a fan writes its band.
+                                                                        if (relativeBearing) {
+                                                                            setRadar(i === 0 ? {startRange: metres} : {stopRange: metres});
+                                                                            return;
+                                                                        }
+                                                                        updateBand(i, {range: metres});
+                                                                    }}
+                                                                />
+                                                            </FormControl>
+                                                            {fixedBands === undefined && (
+                                                            <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                <InputLabel htmlFor={`band-alt-${i}`}>Altitude</InputLabel>
+                                                                <OutlinedInput
+                                                                    id={`band-alt-${i}`}
+                                                                    label="Altitude"
+                                                                    value={band.altitude ?? ''}
+                                                                    onChange={e => {
+                                                                        // Digits in, a number out — the same edge
+                                                                        // conversion the graphic's own altitudes get.
+                                                                        const digits = e.target.value.replace(/[^0-9]/g, '');
+                                                                        updateBand(i, {altitude: digits === '' ? undefined : Number(digits)});
+                                                                    }}
+                                                                />
+                                                            </FormControl>
+                                                            )}
+                                                            {fixedBands === undefined && (
+                                                            <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                <InputLabel htmlFor={`band-label-${i}`}>Label</InputLabel>
+                                                                <OutlinedInput
+                                                                    id={`band-label-${i}`}
+                                                                    label="Label"
+                                                                    value={band.label ?? ''}
+                                                                    onChange={e => updateBand(i, {label: e.target.value})}
+                                                                />
+                                                            </FormControl>
+                                                            )}
+                                                            {fixedBands === undefined && (
+                                                            <Button
+                                                                size="small"
+                                                                color="inherit"
+                                                                onClick={() => removeBand(i)}
+                                                                disabled={bands.length <= 1}
+                                                                sx={{minWidth: 40, mt: 1}}
+                                                            >
+                                                                ×
+                                                            </Button>
+                                                            )}
+                                                        </Box>
+                                                        {isSector && !relativeBearing && (
+                                                            <Box sx={{display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start'}}>
+                                                                <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                    <InputLabel htmlFor={`band-left-az-${i}`}>Left Az (° from N)</InputLabel>
+                                                                    <OutlinedInput
+                                                                        id={`band-left-az-${i}`}
+                                                                        label="Left Az (° from N)"
+                                                                        inputProps={{inputMode: 'decimal'}}
+                                                                        value={band.leftAzimuthDeg !== undefined ? String(band.leftAzimuthDeg) : ''}
+                                                                        onChange={e =>
+                                                                            updateBand(i, {leftAzimuthDeg: parseAzimuthInput(e.target.value)})
+                                                                        }
+                                                                    />
+                                                                </FormControl>
+                                                                <FormControl variant="outlined" sx={{flex: 1, minWidth: 90}}>
+                                                                    <InputLabel htmlFor={`band-right-az-${i}`}>Right Az (° from N)</InputLabel>
+                                                                    <OutlinedInput
+                                                                        id={`band-right-az-${i}`}
+                                                                        label="Right Az (° from N)"
+                                                                        inputProps={{inputMode: 'decimal'}}
+                                                                        value={band.rightAzimuthDeg !== undefined ? String(band.rightAzimuthDeg) : ''}
+                                                                        onChange={e =>
+                                                                            updateBand(i, {rightAzimuthDeg: parseAzimuthInput(e.target.value)})
+                                                                        }
+                                                                    />
+                                                                </FormControl>
+                                                            </Box>
+                                                        )}
+                                                    </Box>
+                                                ))}
+                                                {fixedBands === undefined && (
+                                                    <Box sx={{mt: 1}}>
+                                                        <Button size="small" variant="outlined" onClick={addBand}>
+                                                            + Add Band
+                                                        </Button>
+                                                    </Box>
+                                                )}
+
+                                                {isSector && (
+                                                    <Box sx={{minWidth: 180, mt: 2}}>
+                                                        <FormControl fullWidth variant="outlined">
+                                                            <InputLabel htmlFor="center-azimuth-input">{axisLabel}</InputLabel>
+                                                            <OutlinedInput
+                                                                id="center-azimuth-input"
+                                                                label={axisLabel}
+                                                                inputProps={{inputMode: 'decimal'}}
+                                                                value={axisInForce !== undefined ? String(axisInForce) : ''}
+                                                                onChange={e => {
+                                                                    const az = parseAzimuthInput(e.target.value);
+                                                                    if (relativeBearing) {
+                                                                        setRadar({searchAxisAzimuthDeg: az});
+                                                                        return;
+                                                                    }
+                                                                    updateConfig({...config, centerAzimuthDeg: az});
+                                                                }}
+                                                            />
+                                                        </FormControl>
+                                                    </Box>
+                                                )}
+
+                                                {/*
+                                                  * **The fourth of 200700's four numbers.** The plate states one
+                                                  * *stop relative bearing* — "an equal angle either side of the
+                                                  * search axis" — so it is typed once and written onto every band
+                                                  * as a symmetric pair. @see stopRelativeBearing
+                                                  */}
+                                                {relativeBearing && (
+                                                    <Box sx={{minWidth: 180, mt: 2}}>
+                                                        <FormControl fullWidth variant="outlined">
+                                                            <InputLabel htmlFor="relative-bearing-input">Stop Relative Bearing (°)</InputLabel>
+                                                            <OutlinedInput
+                                                                id="relative-bearing-input"
+                                                                label="Stop Relative Bearing (°)"
+                                                                type="number"
+                                                                inputProps={{step: 1, min: 1, max: 179, inputMode: 'decimal'}}
+                                                                value={String(radar.stopRelativeBearingDeg ?? halfAngle)}
+                                                                onChange={e => {
+                                                                    const half = parseFloat(e.target.value);
+                                                                    if (!Number.isFinite(half)) return;
+                                                                    setRadar({stopRelativeBearingDeg: Math.min(179, Math.max(1, half))});
+                                                                }}
+                                                            />
+                                                        </FormControl>
+                                                    </Box>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                            </>
+                        );
+                    })()}
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={deleteGraphic} color="error" sx={{mr: 'auto'}}>
+                        Delete
+                    </Button>
+                    <Button onClick={applyChanges} variant="contained" disabled={!hasChanges}>
+                        OK
+                    </Button>
+                    <Button onClick={cancelChanges} color="inherit">
+                        Cancel
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
+    );
+};
+
+export default TacticalGraphicsDialog;

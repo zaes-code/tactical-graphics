@@ -1,0 +1,62 @@
+# Saving and restoring a whole map
+
+`snapshot()` writes every graphic to GeoJSON and `restore()` rebuilds them **editable**
+— not a picture of the symbols, the same objects, ready to rotate, resize and modify.
+Both come from [`createTacticalGraphics`](/guide/rendering), so this is the same code whichever
+engine drew the map:
+
+```ts
+const snapshot = graphics.snapshot();          // one feature per graphic
+await db.save(JSON.stringify(snapshot));
+
+// later, in a fresh session — or in the other engine
+graphics.restore(JSON.parse(await db.load()));
+```
+
+The snapshot is a `FeatureCollection` stamped with `tacticalGraphicsVersion`
+(`SNAPSHOT_VERSION`, currently 3). **Stamp it on any collection you build yourself**, or
+wrap your features with `toSnapshot(features)`, which does it for you. A file that
+declares no version is read as version 1 and migrated on the way in: an axis arrow's own
+geometry says whether it already carries its width point, but a direction-of-attack
+arrow is reversed, since version 3 stores its arrowhead first as APP-06 numbers it.
+
+| Version | What changed |
+|---|---|
+| 1 | The eleven axis arrows file their width as a `width` amplifier. |
+| 2 | Their width is the base's last coordinate instead. |
+| 3 | The four direction-of-attack arrows (140601, 140602, 140603, 140605) store the arrowhead as point 1. |
+
+**A snapshot taken in one engine restores in the other.** Nothing renderer-specific
+travels with it, which is what makes that true rather than merely likely; the demo's
+engine picker hands the map across on every switch.
+
+A snapshot holds **one feature per graphic** — the base geometry the user drew.
+Everything else is derived and regenerates on load. A record is the same
+`tacticalGraphic` object described in [The `tacticalGraphic` object](/guide/tactical-graphic-object),
+plus three bookkeeping fields (`role`, `symbolId`, `graphicName`):
+
+```jsonc
+"properties": {
+    // The portable description of the symbol — what renderTacticalGraphic consumes.
+    // Meters, degrees and text: meaningful to any renderer, in any language.
+    "tacticalGraphic": {"name": "MovementToContact", "radius": 30600, "rotation": 45,
+                        "designation": "", "hostility": "Pending"},
+
+    "role": "base", "symbolId": "45e2e470-…", "graphicName": "MovementToContact"
+}
+```
+
+**That is the whole record.** Transform it, store it in PostGIS, write it by hand —
+as long as `tacticalGraphic` survives, the graphic rebuilds exactly. There is no
+companion object to keep, and no viewport state to lose.
+
+A base short of what its graphic needs is completed on the way in, so a record written
+by hand — or by an older version — arrives fully editable rather than half-drawn.
+
+**One graphic files more than the user drew.** The multiple-strike safe distance zone
+(APP-06 272101) is drawn as zone 1 and a `width`, and zone 2 is that ring held `width`
+meters outward. Its base is filed as APP-06 lists the points: zone 1's, then zone 2's, the
+same number of each. On the way in, zone 2 is read off and recomputed from `width`, so the
+two rings cannot disagree. A record holding zone 1 alone, written before this, still opens,
+and so does the older form with two rings and no `width`. `filedStrikeBase` and
+`editableStrikeBase` convert between the two if you build records yourself.

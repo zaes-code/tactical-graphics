@@ -1,0 +1,1593 @@
+/**
+ * # The paint layer's core — what a symbol looks like, as data
+ *
+ * Both shipping renderers draw through here. A paint is a plain object: geometry, stroke,
+ * fill, text. No `ol`, no `maplibre-gl`, no canvas — the inputs arrive as
+ * `feature.properties` and `context.measureText`, so the same description can be realised
+ * as an OpenLayers `Style` or as MapLibre layers without either engine owning a symbology
+ * fact of its own.
+ *
+ * This file holds the general rules and the shared helpers: label sizing ({@link scaleOf}),
+ * the label colour and halo, dash patterns for a planned or suspected graphic, the
+ * screen-pixel decoration cap, and the default line and area paints that most graphics
+ * fall back to. A family with a shape of its own has its own module beside this one.
+ *
+ * **It began as a three-graphic spike** — one plain line, one screen-pixel decoration, one
+ * point-anchored letter with a glyph-measured gap — chosen because they are the three
+ * *kinds* of work the style functions are made of. The finding that spike existed to
+ * produce still holds and is the reason this layer is a data description rather than a set
+ * of MapLibre expressions: none of the three could be expressed as a paint/layout
+ * expression, because all three build geometry that is not in the source and two of them
+ * size it from a text measurement.
+ *
+ * **Coordinates here are projected metres (EPSG:3857), never degrees.** turf and
+ * `GeometryService` expect geographic coordinates and will quietly give wrong answers;
+ * use plain Euclidean vector maths. Anything that wants a bearing belongs in a generator.
+ */
+
+import type {Paint, PaintContext, PaintFeature, ProjectedPosition} from '../core/paint';
+import {NAME_TEXT_Z_INDEX, paintFilledRings, paintLineWork} from '../core/paint';
+import {
+    CAP_HEIGHT_FRACTION,
+    HALO_WIDTH,
+    LINE_WIDTH,
+    RATIO_LOCKED_LABEL_FONT,
+    RATIO_LOCKED_LABEL_FONT_PX,
+    RATIO_LOCKED_MISSION_TASKS,
+    configuredLabelScale,
+    fadeColor,
+    fontStyle,
+    getColorByHostility,
+    getColorByIdentity,
+    statesUnknownIdentity,
+    getObstacleColor,
+    getLabelFillColor,
+    getLabelHaloColor,
+    getLabelUsesHostilityColor,
+    maxGraphicLabelScale,
+    ratioLockedLabelScale,
+    supportsHostility,
+} from '../core/symbology';
+import {BASE_FONT_SIZE_PX, MIN_LEGIBLE_TEXT_PX, getEnemyLabels} from '../core/config';
+import {latitudeFromMercatorY, projectedLength} from '../core/mercator';
+import {TacticalGraphicConfidence, TacticalGraphicHostility, TacticalGraphicName, TacticalGraphicStatus, getLabel} from '../core/type';
+import {drawsAsObstacle} from '../core/obstacles';
+import {capLabelToGraphic, heldTextScale, labelGapPx, letterGapClearance, letterInGapScale} from './labelFit';
+// A cycle (movementPaints imports this file), safe because it is only called inside a paint.
+import {approachLetterScale} from './movementPaints';
+import {PLANNED_DASH_PX, strokeParts} from './dashFit';
+import {
+    centerSegmentIndex,
+    crenellatedPath,
+    cutArcAtLabel,
+    obstacleToothSize,
+    offsetAbove,
+    offsetBelow,
+    pathLength,
+    splitPathAroundAll,
+    textWidth,
+    uprightFlipped,
+    uprightRotation,
+} from './decorations';
+import {distanceAlongPath} from './curvedText';
+import {endAnchorInView, inView, insetView, isTaken, midSegmentInView, pointAlong, visibleStretch} from './viewFollow';
+
+/**
+ * Blanks one amplifier line when the graphic is hiding them.
+ *
+ * The multi-line stacks — an area's name over its date-time group, a corridor's block, the
+ * sector modifiers — draw one mark from an array of lines, so dropping the *mark* would
+ * take the designation with it. Every one of those arrays is filtered for empty strings
+ * before it is joined, so returning `''` removes the line and nothing else moves.
+ *
+ * @see withHiddenAmplifiers for the marks that can be dropped whole.
+ */
+export function amplifierText(feature: PaintFeature, value: string): string {
+    return feature.hideAmplifiers ? '' : value;
+}
+
+/**
+ * Drops the text a graphic has been told to hide, leaving everything else untouched.
+ *
+ * **One statement of the rule, applied by each renderer at the point where paints become
+ * marks.** OpenLayers runs every paint through `asStyleFunction` and MapLibre through
+ * `paintTacticalGraphic`; both call this, so a graphic hides the same text on either
+ * engine and a new paint inherits the behaviour without knowing the toggle exists.
+ *
+ * Only `amplifier` text goes. A mark that never said what it is counts as doctrinal and
+ * stays — the safe direction, since a stray date is noise and a missing letter is a
+ * different symbol. @see TextKind
+ */
+export function withHiddenAmplifiers(paints: Paint[], hidden: boolean | undefined): Paint[] {
+    if (!hidden) return paints;
+    return paints.filter(paint => !paint.text || (paint.text.kind ?? 'doctrinal') !== 'amplifier');
+}
+
+/**
+ * Every color in a paint list faded by `opacity`, 0 to 1: strokes, fills, hatches, circles,
+ * text and halos together, each keeping its own translucency relative to the others.
+ *
+ * For a renderer that styles per mark rather than per layer. MapLibre fades a graphic
+ * through its layers' opacity instead, so it does not need this.
+ * @see NativeLayerRenderer.setOpacity
+ */
+export function withFadedPaints(paints: Paint[], opacity: number | undefined): Paint[] {
+    if (opacity === undefined || opacity >= 1) return paints;
+    const stroke = (s: Paint['stroke']) => s && {...s, color: fadeColor(s.color, opacity)};
+    const fill = (f: Paint['fill']) => f && {
+        ...f,
+        color: fadeColor(f.color, opacity),
+        ...(f.pattern ? {pattern: {...f.pattern, color: fadeColor(f.pattern.color, opacity)}} : {}),
+    };
+    return paints.map(paint => ({
+        ...paint,
+        ...(paint.stroke ? {stroke: stroke(paint.stroke)} : {}),
+        ...(paint.fill ? {fill: fill(paint.fill)} : {}),
+        ...(paint.circle ? {circle: {...paint.circle, fill: fill(paint.circle.fill), stroke: stroke(paint.circle.stroke)}} : {}),
+        ...(paint.text
+            ? {
+                  text: {
+                      ...paint.text,
+                      fill: fadeColor(paint.text.fill, opacity),
+                      ...(paint.text.halo ? {halo: {...paint.text.halo, color: fadeColor(paint.text.halo.color, opacity)}} : {}),
+                  },
+              }
+            : {}),
+    }));
+}
+
+/**
+ * The same mark, with its text marked as an amplifier: something the operator typed or set
+ * that is not the graphic's name (dates, altitudes, field H). @see TextKind
+ */
+export function asAmplifier(paint: Paint): Paint {
+    return paint.text ? {...paint, text: {...paint.text, kind: 'amplifier'}} : paint;
+}
+
+/**
+ * Takes away text too small to read, leaving the rest of its mark.
+ *
+ * Labels sized to their graphic shrink with it, and a label a few pixels tall is a smudge,
+ * not an amplifier: zoomed out, every name on the map became a grey dot, and an "ACP"
+ * fitted to a circle under a pixel across came out with a negative size, which MapLibre drew
+ * across the whole world. Under `MIN_LEGIBLE_TEXT_PX` the text goes.
+ *
+ * Applied where `withHiddenAmplifiers` is, so every engine drops the same text. The size is
+ * the font's own pixel size times the mark's scale, as both renderers draw it.
+ */
+export function withLegibleText(paints: Paint[]): Paint[] {
+    const out: Paint[] = [];
+    for (const paint of withProportionateAmplifiers(paints)) {
+        if (!paint.text || renderedTextPx(paint.text.font, paint.text.scale ?? 1) >= MIN_LEGIBLE_TEXT_PX) {
+            out.push(paint);
+            continue;
+        }
+        const {text: _hidden, ...rest} = paint;
+        if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    }
+    return out;
+}
+
+/**
+ * Holds a graphic's amplifiers (dates, altitudes, field H) to the size of its main label, and
+ * takes them away when the main label is too small to read.
+ *
+ * Main labels are fitted to their graphic and shrink with it; amplifiers hung outside the
+ * shape or below a line were not, so zoomed out a zone's dates stood twice the height of the
+ * name they belong to, and stayed after the name had gone. The main label
+ * is every text in the same set of paints that is not an amplifier, so this is asked once per
+ * half, as the legibility floor is: OpenLayers styles a graphic and its labels as two
+ * features. A half with no main label is left as it is. Applied by `withLegibleText`, so every
+ * engine gets it from the call it already makes. @see TextKind
+ */
+export function withProportionateAmplifiers(paints: Paint[]): Paint[] {
+    let mainPx = 0;
+    let amplifiers = false;
+    let main = false;
+    for (const paint of paints) {
+        const text = paint.text;
+        if (!text || !text.text.trim()) continue;
+        if (text.kind === 'amplifier') {
+            amplifiers = true;
+            continue;
+        }
+        main = true;
+        mainPx = Math.max(mainPx, renderedTextPx(text.font, text.scale ?? 1));
+    }
+    if (!amplifiers || !main) return paints;
+    const legible = mainPx >= MIN_LEGIBLE_TEXT_PX;
+    const out: Paint[] = [];
+    for (const paint of paints) {
+        const text = paint.text;
+        if (!text || text.kind !== 'amplifier') {
+            out.push(paint);
+            continue;
+        }
+        if (!legible) {
+            const {text: _hidden, ...rest} = paint;
+            if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+            continue;
+        }
+        const scale = text.scale ?? 1;
+        const px = renderedTextPx(text.font, scale);
+        if (px <= mainPx) {
+            out.push(paint);
+            continue;
+        }
+        // The offset was measured for the text at its old size, so it shrinks with it. @see labelGapPx
+        const ratio = mainPx / px;
+        out.push({
+            ...paint,
+            text: {
+                ...text,
+                scale: scale * ratio,
+                ...(text.offsetXPx !== undefined ? {offsetXPx: text.offsetXPx * ratio} : {}),
+                ...(text.offsetYPx !== undefined ? {offsetYPx: text.offsetYPx * ratio} : {}),
+            },
+        });
+    }
+    return out;
+}
+
+/**
+ * Lets a graphic's name win over amplifier text: it takes away an amplifier whose text would
+ * lie over the main label, and draws every other text above amplifiers (`NAME_TEXT_Z_INDEX`),
+ * so where two graphics overlap, one's dates go under the other's name.
+ *
+ * No engine resolves overlapping text here (OpenLayers is not decluttered, MapLibre allows
+ * overlap), so text overlaps as laid out, and a mark painted later covers an earlier one with
+ * its halo. A zone's dates hang from its upper-left corner, which on a small or pointed shape
+ * is inside it, over the name; the dates' halo then hid the name. The
+ * boxes are measured in screen pixels from the same measurements the engines draw with, and
+ * compared within one half, as the other text rules are. @see withProportionateAmplifiers
+ */
+export function withUnobscuredNames(paints: Paint[], context: PaintContext): Paint[] {
+    return namesOnTop(withoutCoveringAmplifiers(paints, context));
+}
+
+/** Names and doctrinal text above amplifiers. A mark that sets its own order keeps it. */
+function namesOnTop(paints: Paint[]): Paint[] {
+    let changed = false;
+    const out = paints.map(paint => {
+        if (!paint.text || paint.text.kind === 'amplifier' || paint.zIndex !== undefined) return paint;
+        changed = true;
+        return {...paint, zIndex: NAME_TEXT_Z_INDEX};
+    });
+    return changed ? out : paints;
+}
+
+function withoutCoveringAmplifiers(paints: Paint[], context: PaintContext): Paint[] {
+    // Nothing to measure with, nothing to compare: a hand-built context may leave it out.
+    if (typeof context.measureText !== 'function') return paints;
+    const boxes = paints.map(paint => textBox(paint, context));
+    const names = boxes.filter((box, i) => box && paints[i].text!.kind !== 'amplifier') as TextBox[];
+    if (!names.length) return paints;
+    let changed = false;
+    const out: Paint[] = [];
+    paints.forEach((paint, i) => {
+        const box = boxes[i];
+        if (!box || paint.text!.kind !== 'amplifier' || !names.some(name => overlaps(box, name))) {
+            out.push(paint);
+            return;
+        }
+        changed = true;
+        const {text: _hidden, ...rest} = paint;
+        if (rest.stroke || rest.fill || rest.circle) out.push(rest);
+    });
+    return changed ? out : paints;
+}
+
+/**
+ * The four corners of a label's glyphs on screen, in order round the box.
+ *
+ * **Turned with the text, not squared to the screen.** An axis-aligned box round a label laid
+ * along a diagonal line is half as tall as it is wide, so the dates under such a line always
+ * met the name's box over it and were taken away, on every diagonal.
+ */
+type TextBox = readonly (readonly [number, number])[];
+
+/** How far into each other two boxes must reach to count as overlapping, in pixels. */
+const OVERLAP_TOLERANCE_PX = 1;
+
+/** Separating axes: two convex boxes overlap unless some edge's normal parts them. */
+function overlaps(a: TextBox, b: TextBox): boolean {
+    for (const box of [a, b]) {
+        for (let i = 0; i < box.length; i++) {
+            const [x0, y0] = box[i];
+            const [x1, y1] = box[(i + 1) % box.length];
+            const len = Math.hypot(x1 - x0, y1 - y0);
+            if (!len) continue;
+            const [nx, ny] = [-(y1 - y0) / len, (x1 - x0) / len];
+            const project = (p: readonly (readonly [number, number])[]) => p.map(([x, y]) => x * nx + y * ny);
+            const [pa, pb] = [project(a), project(b)];
+            if (Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb)) <= OVERLAP_TOLERANCE_PX) return false;
+        }
+    }
+    return true;
+}
+
+/** Line spacing of a multi-line label, as a share of the font size. */
+const TEXT_LINE_HEIGHT = 1.32;
+
+/**
+ * The screen box a point label's glyphs cover, in pixels with y down. Undefined for a
+ * mark that is not a drawn point label: line-placed text, and the letters of a curved run.
+ */
+function textBox(paint: Paint, context: PaintContext): TextBox | undefined {
+    const text = paint.text;
+    if (!text || !text.text.trim() || text.placement === 'line' || text.glyph || paint.geometry.type !== 'Point') return undefined;
+    const scale = text.scale ?? 1;
+    const lines = text.text.split('\n');
+    const width = Math.max(...lines.map(line => context.measureText(line, text.font))) * scale;
+    // The glyphs, not the line box or the halo: text stacked a line apart touches at its halos
+    // by design, and is not covering anything.
+    const fontPx = renderedTextPx(text.font, scale);
+    const height = fontPx + (lines.length - 1) * fontPx * TEXT_LINE_HEIGHT;
+    if (!(width > 0) || !(height > 0)) return undefined;
+
+    const align = text.align ?? 'center';
+    const x0 = align === 'left' ? 0 : align === 'right' ? -width : -width / 2;
+    const baseline = text.baseline ?? 'middle';
+    const y0 = baseline === 'top' || baseline === 'hanging' ? 0 : baseline === 'middle' ? -height / 2 : -height;
+
+    const rotation = text.rotation ?? 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const [ax, ay] = paint.geometry.coordinates;
+    const cx = ax / context.resolution + (text.offsetXPx ?? 0);
+    const cy = -ay / context.resolution + (text.offsetYPx ?? 0);
+
+    const corner = (x: number, y: number): [number, number] => [cx + x * cos - y * sin, cy + x * sin + y * cos];
+    return [corner(x0, y0), corner(x0 + width, y0), corner(x0 + width, y0 + height), corner(x0, y0 + height)];
+}
+
+/** The pixel size text is drawn at: the font shorthand's size times the mark's scale. */
+function renderedTextPx(font: string, scale: number): number {
+    const match = font.match(/(\d*\.?\d+)px/);
+    const px = (match ? parseFloat(match[1]) : BASE_FONT_SIZE_PX) * scale;
+    return Number.isFinite(px) ? px : 0;
+}
+
+/**
+ * A representative latitude for the feature, in degrees.
+ *
+ * Any point on the graphic will do: the scale factor changes slowly enough over a symbol's
+ * own extent that which one is picked cannot matter, and the alternative — reprojecting
+ * through a map library — is exactly what the paint layer exists not to do.
+ * @see latitudeFromMercatorY
+ */
+export function featureLatitude(feature: PaintFeature): number {
+    if (feature.bounds) return latitudeFromMercatorY((feature.bounds.minY + feature.bounds.maxY) / 2);
+    const firstY = (function find(node: unknown): number | undefined {
+        if (Array.isArray(node)) {
+            if (typeof node[0] === 'number') return node[1] as number;
+            for (const child of node) {
+                const y = find(child);
+                if (y !== undefined) return y;
+            }
+            return undefined;
+        }
+        const geometry = node as {coordinates?: unknown; geometries?: unknown[]};
+        if (geometry?.geometries) return find(geometry.geometries);
+        return geometry?.coordinates === undefined ? undefined : find(geometry.coordinates);
+    })(feature.geometry);
+    return firstY === undefined ? 0 : latitudeFromMercatorY(firstY);
+}
+
+/**
+ * How many screen pixels a **ground** distance covers where this graphic is drawn.
+ *
+ * `metres / resolution` is the answer only on the equator. The portable description states
+ * real distances — a radius, a width, a corridor's half-width — while the resolution is
+ * projected metres per pixel, and Web Mercator inflates those by `1 / cos(latitude)`. So
+ * dividing one by the other under-reports the symbol's on-screen size by that factor:
+ * 1.6x at 50 degrees, 5.8x at 80.
+ *
+ * That is not a rounding error where the result feeds a cap. A corridor 40 px wide at 80
+ * degrees north measured as 7 px, and its designation was shrunk to fit the 7 — a
+ * four-pixel label on a corridor with room for a legible one. `mercator.ts` already states
+ * this rule for the generators, which convert the other way when a symbol is drawn; this
+ * is the same rule on the way back out.
+ */
+export function groundPixels(metres: number, feature: PaintFeature, context: PaintContext): number {
+    return projectedLength(metres, featureLatitude(feature)) / context.resolution;
+}
+
+/** A graphic's static prefix joined to the operator's free text — "PL", "PL BLUE". */
+export function formatFullLabel(prefix: string, name: string): string {
+    return prefix ? `${prefix} ${name}`.trim() : name;
+}
+
+export function getFullLabel(graphicName: TacticalGraphicName, customName: string): string {
+    return formatFullLabel(getLabel(graphicName), customName);
+}
+
+/**
+ * What a designation is drawn as at this size: the whole of it (`PL BLUE`), or, once that would
+ * be too small to read, its doctrinal prefix alone (`PL`).
+ *
+ * The prefix is part of the symbol, the name is the operator's, so when there is no longer room
+ * for both the name goes and the prefix stays: never under
+ * `MIN_LEGIBLE_TEXT_PX`, and gone only once the graphic is smaller than twice it, by the same
+ * rule as a letter in a gap. @see letterInGapScale
+ *
+ * `prefix` is the doctrinal part of `text`, which must start with it (`getLabel(name)`, or
+ * `ENY PL` on a hostile line); `scale` is what the whole would be drawn at; `graphicPx` is the
+ * graphic's own size on screen. Text with no prefix comes back as given, for the legibility
+ * floor to keep or drop. A caller lays out what comes back, so offsets measured from the text
+ * fit the text actually drawn.
+ */
+export function legibleDesignation(
+    text: string,
+    prefix: string,
+    scale: number,
+    font: string,
+    context: PaintContext,
+    graphicPx: number,
+): {text: string; scale: number} {
+    const fontPx = parseFloat(font.match(/(\d*\.?\d+)px/)?.[1] ?? String(BASE_FONT_SIZE_PX));
+    const trimmed = prefix.trim();
+    if (!trimmed || fontPx * scale >= MIN_LEGIBLE_TEXT_PX) return {text, scale};
+    const prefixScale = heldTextScale(scale, context.measureText(trimmed, font), fontPx, graphicPx);
+    return prefixScale > 0 ? {text: trimmed, scale: prefixScale} : {text: '', scale: 0};
+}
+
+/**
+ * A designation followed by its country code in parentheses — "326 EN BN (USA)".
+ *
+ * APP-06 draws the brackets as part of the *template*: the box holds field AS and the
+ * bracket glyphs sit outside it, so they are the standard's punctuation rather than
+ * something the operator types. Four plates agree — 110300 `326 EN BN (USA)`, 240203
+ * `2AD (DEU)`, 240303 `52ID (GBR)`, 240403 `1ID (FRA)`.
+ *
+ * The brackets are therefore added here, not required of the input. A code that already
+ * carries them is passed through untouched, so an operator who types `(USA)` out of habit
+ * does not get `((USA))`. An absent code contributes nothing at all — no stray brackets,
+ * no trailing space.
+ *
+ * Deliberately *not* `formatFullLabel`, which joins a graphic's static prefix to free text
+ * ("PL" + "BLUE") and has no business bracketing anything. Boundary was calling it for this
+ * and getting a bare space.
+ */
+export function formatDesignationWithCountry(designation?: string, countryCode?: string): string {
+    const name = designation?.trim() ?? '';
+    const code = countryCode?.trim() ?? '';
+    if (!code) return name;
+    const bracketed = code.startsWith('(') && code.endsWith(')') ? code : `(${code})`;
+    return name ? `${name} ${bracketed}` : bracketed;
+}
+
+/**
+ * The affiliation a feature draws in. `unknown` resolves to the default line color.
+ *
+ * **A graphic whose symbol does not take a standard identity always reads
+ * `unknown`**, whatever its properties say. @see supportsHostility
+ */
+export function hostilityOf(feature: PaintFeature): TacticalGraphicHostility {
+    if (feature.properties.name && !supportsHostility(feature.properties.name)) {
+        return TacticalGraphicHostility.unknown;
+    }
+    return feature.properties.hostility ?? TacticalGraphicHostility.unknown;
+}
+
+/**
+ * The color a graphic's line work draws in: a host's already-resolved override if
+ * there is one, otherwise the affiliation's. `getColorByHostility` resolves
+ * `unknown` to the default line color, so the unaffiliated case is covered too.
+ *
+ * ## Why the exemption is enforced here and not only in the UI
+ *
+ * FM 1-02.2 gives the Chapter 6 tactical mission tasks no amplifier fields, so a
+ * hostile Seize is drawn exactly like any other Seize. The demo enforced that by
+ * **hiding the input** — which stops an operator picking an identity and does nothing
+ * about one that arrives in an imported file, from a host writing the bag
+ * directly, or from a sweep that colors everything. MapLibre's sample sweep did
+ * exactly that last thing and drew every mission task red.
+ *
+ * Hiding a control is a UI convenience; this is the rule. Both halves are kept,
+ * because a field an operator can set and the renderer then ignores is its own kind of
+ * wrong.
+ *
+ * `hostilityColor` is skipped for the same reason: it is a *resolved* affiliation
+ * color, so honoring it would let the same value back in through the other door.
+ */
+export function lineColorOf(feature: PaintFeature): string {
+    const name = feature.properties.name;
+
+    /*
+     * **Obstacles first, because 8.1.4.3 beats affiliation and nothing else here does.**
+     *
+     * > Obstacles and obstructions … (friendly, hostile, neutral, unknown, or factional)
+     * > are to be drawn using the colour green.
+     *
+     * The parenthesis is exhaustive, and the paragraph says plainly that this "is in
+     * contradiction to the Standard Identities". So a hostile obstacle is green, and the
+     * affiliation is carried beside the symbol on a red enemy diamond, the way the plates
+     * draw it. Placed above the exemption below and above `hostilityColor` for the same
+     * reason that clause skips it: a resolved affiliation colour must not get back in
+     * through the other door.
+     *
+     * `getObstacleColor()` returns `undefined` when the host has set `obstacleColors:
+     * false`, and the affiliation colour resumes — which is 8.1.4.3's own fallback, not a
+     * compromise. @see OBSTACLE_GRAPHICS
+     */
+    if (drawsAsObstacle(name)) {
+        const green = getObstacleColor();
+        if (green) return green;
+    }
+
+    return affiliationColorOf(feature);
+}
+
+/**
+ * The colour a graphic's affiliation gives it, with the obstacle rule **not** applied.
+ *
+ * This is what `lineColorOf` was before 8.1.4.3's green went in, and it is still what a
+ * mark wants when the mark is not part of the symbol. The planned-status ring is the case:
+ * 290400's own plate draws a green mine cluster inside a **black** dash-dot circle, because
+ * the circle says *planned* rather than *obstacle*. Colouring it green with the symbol
+ * would make a status indicator look like line work. @see ringMark, plannedStatusRing
+ */
+export function affiliationColorOf(feature: PaintFeature): string {
+    const name = feature.properties.name;
+    if (name && !supportsHostility(name)) return getColorByHostility(TacticalGraphicHostility.unknown);
+    return feature.hostilityColor || identityColorOf(feature);
+}
+
+/**
+ * The colour of the feature's standard identity, with no resolved `hostilityColor` and no
+ * obstacle rule. A stated Unknown is yellow; an unset one, the default line colour.
+ * @see getColorByIdentity, statesUnknownIdentity
+ */
+export function identityColorOf(feature: PaintFeature): string {
+    return getColorByIdentity(hostilityOf(feature), statesUnknownIdentity(feature.properties));
+}
+
+/**
+ * The colour a graphic's **text amplifiers** take.
+ *
+ * `getLabelFillColor()` by default, which is doctrine: FM 1-02.2 colours line work by
+ * affiliation and leaves text black. A host may opt the whole library into affiliation-
+ * coloured text with `labelUsesHostilityColor`, and then a label follows exactly the rule
+ * its line work follows — `lineColorOf`, including its exemptions, so a graphic that does
+ * not take a hostility colour does not take one on its text either.
+ *
+ * Takes the feature rather than a hostility so the two can never disagree about which
+ * affiliation a label belongs to. @see lineColorOf
+ */
+export function labelColorOf(feature: PaintFeature): string {
+    return getLabelUsesHostilityColor() ? lineColorOf(feature) : getLabelFillColor();
+}
+
+/** The halo every label carries, so it stays legible over the basemap. */
+export function halo(): {color: string; widthPx: number} {
+    return {color: getLabelHaloColor(), widthPx: HALO_WIDTH};
+}
+
+/**
+ * The screen rotation of a point graphic's own axis, kept upright — for a letter
+ * that lies along its graphic rather than standing upright on screen.
+ *
+ * **`properties.rotation` is a maths angle, not a compass bearing.** The point
+ * generators pass `toRadians(rotation)` straight to `translateCoordinates`, which
+ * measures anticlockwise from **east**, so the drawn axis runs along
+ * `(cos θ, sin θ)`. Reading it as a bearing puts the label a quarter turn out — and
+ * a quarter turn on a single capital letter is nearly invisible in a pixel diff,
+ * which is how the first version of this survived a visual comparison.
+ *
+ * The upright flip is not reimplemented here: the axis is handed to
+ * `uprightRotation`, the same function the segment-based labels use, so the two can
+ * never disagree about which way up a letter goes.
+ */
+export function axisRotation(feature: PaintFeature): number {
+    // Preferred: the axis as *drawn*. A point-anchored label sits on the graphic's own
+    // axis, so the anchor and the center give the direction directly — in projected
+    // meters, which is what the letter is drawn in. `MissionTaskGraphicBase` measures
+    // the same two points for the same reason: EPSG:3857's y is not linear in
+    // latitude, so an axis reconstructed from the angle drifts off the drawn line.
+    const center = feature.graphicCenter;
+    const anchor = feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined;
+    if (center && anchor && (center[0] !== anchor[0] || center[1] !== anchor[1])) {
+        return uprightRotation(anchor, center);
+    }
+
+    // Fallback for a feature that carries neither: the angle the generator was given.
+    const theta = ((feature.properties.rotation ?? 0) * Math.PI) / 180;
+    return uprightRotation([0, 0], [Math.cos(theta), Math.sin(theta)]);
+}
+
+/** The size the host configured, capped by the graphic the label belongs to. */
+export function scaleOf(feature: PaintFeature, context: PaintContext, fontPx: number = BASE_FONT_SIZE_PX): number {
+    /*
+     * **The one place the general size rule is applied.**
+     *
+     * Nearly every label paint asks here for the scale it should draw at, so capping the
+     * answer here is what makes "a label may not outgrow its own symbol" a rule rather
+     * than something each family remembers. Families with a tighter constraint — a letter
+     * inside an arrowhead, a designation between a corridor's rails — narrow it further
+     * from their own paint; nothing has to widen it.
+     *
+     * It costs nothing where a graphic's extent is not stamped: no bounds, no cap.
+     */
+    /*
+     * **The configured size, capped by the graphic.** The host says how big a label should
+     * be and the symbol says how big it may be; the zoom the operator happened to be at
+     * when they drew it is neither, and it is not saved with the graphic, so it made a
+     * label that could not be reproduced. @see configuredLabelScale
+     *
+     * **No bounds means no cap, not a different rule.** This used to fall back to the zoom
+     * anchor whenever the graphic's extent was missing, which quietly made the size depend
+     * on *who built the feature*. A holder-backed feature has bounds — the renderer finds
+     * them through its registry — while a host that builds its own features has none, so
+     * the same corridor at the same zoom drew its designation at 1.00 in this library's own
+     * app and 0.55 in a consuming one. The anchor is the thing this function was changed to
+     * stop using; keeping it as the fallback kept it in use for exactly the consumers who
+     * could not see why.
+     */
+    return capLabelToGraphic(configuredLabelScale(), feature, context, fontPx);
+}
+
+// ── 1. Phase line — the plain case, which still needs a glyph measurement ─────
+
+/** True for a graphic drawn as the enemy's, by its affiliation rather than its color. */
+export function isHostile(feature: PaintFeature): boolean {
+    return hostilityOf(feature) === TacticalGraphicHostility.hostileFaker;
+}
+
+/**
+ * Whether a graphic writes `ENY`: hostile, and the host asked for the word as well as the
+ * color. Every `ENY` the library draws asks this. @see TacticalGraphicsConfigOptions.enemyLabels
+ */
+export function showsEny(feature: PaintFeature): boolean {
+    return isHostile(feature) && getEnemyLabels();
+}
+
+/**
+ * A line label with its `ENY` moved to the outer side of the line's end.
+ *
+ * FM 1-02.2 Figure 5-9 sets field N at the far left and the far right of a line control
+ * measure, `N PL T ... PL T N`, so the marker leads a label that sits left of its end and
+ * trails one that sits right of it. `leftOfEnd` says which. Text without a leading `ENY`
+ * comes back as given.
+ */
+export function enyOutside(text: string, leftOfEnd: boolean): string {
+    if (leftOfEnd || !text.startsWith('ENY')) return text;
+    const rest = text.slice(3).trim();
+    return rest ? `${rest} ENY` : text;
+}
+
+
+/** Screen-pixel gap between the end of the line and the nearest edge of its label, at full size. @see labelGapPx */
+const PHASE_LINE_GAP_PX = 8;
+
+/** How many places in from its edge a phase line label tries before keeping the first. */
+const PHASE_LINE_SLIDES = 8;
+
+/**
+ * A line with its designation repeated outside each end, laid along the line's
+ * own bearing and kept upright.
+ *
+ * The "plain line" of the spike, and it is already not expressible declaratively:
+ * `offsetXPx` has to clear the label's own rendered width, which is a text
+ * measurement, and the side it is pushed to depends on which way the segment
+ * runs on screen.
+ *
+ * **Hostile lines prefix their label with "ENY", and the test is the affiliation,
+ * not the color string.** A color is resolved at stamp time, so a string
+ * compare would both miss a feature stamped under a different palette and be one
+ * refactor away from matching some unrelated red.
+ */
+export function phaseLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return (feature, context) => {
+        if (feature.geometry.type !== 'LineString') return [];
+        const coords = feature.geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const hostile = showsEny(feature);
+        const prefix = [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' ');
+        const full = (hostile ? 'ENY ' : '') + getFullLabel(name, feature.properties.designation ?? '');
+
+        const start = coords[0];
+        const startNext = coords[1];
+        const end = coords[coords.length - 1];
+        const endPrev = coords[coords.length - 2];
+
+        // The name goes before `PL` does, once the label is too small to read. @see legibleDesignation
+        const {text, scale} = legibleDesignation(full, prefix, scaleOf(feature, context), fontStyle, context, pathLength(coords) / context.resolution);
+        const lineWork: Paint = {
+            geometry: feature.geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), cap: 'butt', join: 'round'},
+        };
+        if (!text) return [lineWork];
+        const width = textWidth(context, text, fontStyle, scale);
+        const gapPx = labelGapPx(PHASE_LINE_GAP_PX, scale);
+
+        // Which screen-x side is "outside" each endpoint. `offsetXPx` is in screen
+        // pixels and is NOT rotated with the text, so the actual x-component of each
+        // segment has to be checked — the "keep upright" flip makes the rotation
+        // identical for both directions, and without this the label lands on the line.
+        // Asked of the rotation rather than of x, so an exactly vertical line agrees with it.
+        const startOutsideRight = !uprightFlipped(startNext, start);
+        const endOutsideRight = !uprightFlipped(endPrev, end);
+
+        // `ENY` goes on the outer side of each end, `ENY PL T ... PL T ENY`, so it is the first
+        // word of a label left of its end and the last of one to the right. @see enyOutside
+        const endLabel = (at: ProjectedPosition, rotation: number, align: 'left' | 'center' | 'right', offsetXPx: number): Paint => ({
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                text: enyOutside(text, offsetXPx + (align === 'right' ? -width : 0) < 0),
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: halo(),
+                rotation,
+                align,
+                baseline: 'middle',
+                offsetXPx,
+                scale,
+            },
+        });
+
+        const atStart = () =>
+            endLabel(start, uprightRotation(start, startNext), 'left', startOutsideRight ? gapPx : -gapPx - width);
+        const atEnd = () => endLabel(end, uprightRotation(endPrev, end), 'right', endOutsideRight ? gapPx + width : -gapPx);
+
+        // An end that is off screen takes its label to where the line leaves the view.
+        // @see PaintContext.view
+        // An end counts as shown only when its whole label, which runs on past it, is.
+        const view = insetView(context);
+        const labelFits = (at: ProjectedPosition, from: ProjectedPosition) => {
+            const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
+            if (!view || run === 0) return !view || inView(at, view);
+            const reach = (gapPx + width) * context.resolution;
+            const far: ProjectedPosition = [at[0] + ((at[0] - from[0]) / run) * reach, at[1] + ((at[1] - from[1]) / run) * reach];
+            return inView(at, view) && inView(far, view);
+        };
+        const startShown = labelFits(start, startNext);
+        const endShown = labelFits(end, endPrev);
+        // A label outside a shown end stays there unless another label or line holds the spot.
+        // @see PaintContext.avoid
+        const acrossPx = (BASE_FONT_SIZE_PX * scale) / 2;
+        const outsideClear = (at: ProjectedPosition, from: ProjectedPosition) => {
+            const run = Math.hypot(at[0] - from[0], at[1] - from[1]);
+            if (run === 0) return true;
+            const [ux, uy] = [(at[0] - from[0]) / run, (at[1] - from[1]) / run];
+            const reach = (gapPx + width / 2) * context.resolution;
+            return !isTaken([at[0] + ux * reach, at[1] + uy * reach], {alongPx: width / 2, acrossPx}, ux, uy, context);
+        };
+        const startOut = startShown && outsideClear(start, startNext);
+        const endOut = endShown && outsideClear(end, endPrev);
+        if (startOut && endOut) return [lineWork, atStart(), atEnd()];
+
+        // Nothing of the line inside the inset view: it is off screen or hugging an edge, and
+        // either way the labels are best left where the symbol puts them.
+        const stretch = view ? visibleStretch(coords, view) : undefined;
+        if (!stretch) return [lineWork, atStart(), atEnd()];
+
+        // In the line just inside the view's edge (or the end whose outside is held), reading
+        // along it, with the line work cut around it: the label keeps to the line rather than
+        // sitting over or under it, and slides on in toward the middle past anything in its way.
+        const halfGap = (width / 2 + gapPx / 2) * context.resolution;
+        const gaps: {at: number; halfGap: number}[] = [];
+        const middle = distanceAlongPath(coords, stretch[0]) + pathLength(stretch) / 2;
+        const inLine = (edge: ProjectedPosition, inward: 1 | -1): Paint => {
+            const first = distanceAlongPath(coords, edge) + inward * (width / 2) * context.resolution;
+            const step = (width / 2 + gapPx) * context.resolution;
+            let s = first;
+            for (let k = 0; k < PHASE_LINE_SLIDES; k++) {
+                const candidate = first + inward * k * step;
+                if (k > 0 && inward * (candidate - middle) > 0) break;
+                const {from, to, at} = pointAlong(coords, candidate);
+                if (!isTaken(at, {alongPx: width / 2 + gapPx / 2, acrossPx}, to[0] - from[0], to[1] - from[1], context)) {
+                    s = candidate;
+                    break;
+                }
+            }
+            const {at, from, to} = pointAlong(coords, s);
+            gaps.push({at: s, halfGap});
+            return endLabel(at, uprightRotation(from, to), 'center', 0);
+        };
+
+        const labels = [startOut ? atStart() : inLine(startShown ? start : stretch[0], 1)];
+        // Two labels need room for both and the gap between them; short of it, one is enough.
+        const roomPx = pathLength(stretch) / context.resolution;
+        if (startShown || endShown || roomPx >= 2 * width + 3 * gapPx) {
+            labels.push(endOut ? atEnd() : inLine(endShown ? end : stretch[stretch.length - 1], -1));
+        }
+        const runs = splitPathAroundAll(coords, gaps);
+        const cutLine: Paint = runs.length ? {...lineWork, geometry: {type: 'MultiLineString', coordinates: runs}} : lineWork;
+        return [cutLine, ...labels];
+    };
+}
+
+// ── 2. Obstacle line — geometry that does not exist until it is drawn ─────────
+
+/** Screen-pixel gap between an obstacle line's teeth and the nearest edge of its label. */
+const OBSTACLE_LABEL_GAP_PX = 8;
+
+/** `crenellatedPath`'s side sign for the left of the direction of travel. */
+const LEFT_OF_TRAVEL = 1;
+
+/**
+ * A line wearing triangular teeth, with its designation below.
+ *
+ * The teeth are **not in the geometry**. They are built here, at this frame's
+ * resolution, by {@link crenellatedPath} — which is the whole difficulty of a
+ * second renderer in one function. A MapLibre `line` layer renders what its
+ * source holds; there is no expression that can add a tooth.
+ *
+ * The teeth take the left of the direction of travel and the label the right, so the
+ * two never compete. APP-06 290100's plate draws PT 1 to PT 2 left to right with the
+ * teeth up and says orientation "is determined by the order in which the anchor points
+ * are entered", so drawing the line the other way puts both on the other side. They
+ * used to be pinned to the map's up and down whichever way the line was drawn;
+ * that kept them still and ignored the plate. @see antiTankWallPaint, the
+ * same line with its teeth on the right.
+ */
+export function obstacleLinePaint(name: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return (feature, context) => {
+        if (feature.geometry.type !== 'LineString') return [];
+        const coords = feature.geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const text = getFullLabel(name, feature.properties.designation ?? '');
+        const paints: Paint[] = [];
+
+        // The middle segment, or the part of the line in view when its middle is off screen.
+        // @see midSegmentInView
+        const {index: segIdx, t: along} = midSegmentInView(coords, {index: centerSegmentIndex(coords), t: 0.5}, context);
+        const p1 = coords[segIdx];
+        const p2 = coords[segIdx + 1];
+
+        const segDx = p2[0] - p1[0];
+        const segDy = p2[1] - p1[1];
+        const segLength = Math.hypot(segDx, segDy);
+        if (segLength === 0) return paints;
+
+        const dir: ProjectedPosition = [segDx / segLength, segDy / segLength];
+        const mid: ProjectedPosition = [p1[0] + (p2[0] - p1[0]) * along, p1[1] + (p2[1] - p1[1]) * along];
+
+        // The right of travel, opposite the teeth.
+        const normal: ProjectedPosition = [dir[1], -dir[0]];
+
+        // Stand off the line by a constant number of pixels. Both terms are
+        // screen-sized, because text does not scale with the map — this used to be a
+        // scan of the rendered geometry to discover how far metric teeth happened to
+        // reach, which sent the label a screen away on a line that doubled back.
+        const scale = scaleOf(feature, context);
+        const halfTextHeightPx = (BASE_FONT_SIZE_PX / 2) * scale;
+        const offsetMap = (halfTextHeightPx + labelGapPx(OBSTACLE_LABEL_GAP_PX, scale)) * context.resolution;
+
+        paints.push({
+            geometry: {
+                type: 'Point',
+                coordinates: [mid[0] + normal[0] * offsetMap, mid[1] + normal[1] * offsetMap],
+            },
+            text: {
+                text,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: halo(),
+                rotation: uprightRotation(p1, p2),
+                align: 'center',
+                baseline: 'middle',
+                scale,
+            },
+        });
+
+        const {heightMap, baseMap, gapMap} = obstacleToothSize(coords, false, context.resolution);
+        paints.push({
+            geometry: {type: 'LineString', coordinates: crenellatedPath(coords, heightMap, baseMap, gapMap, LEFT_OF_TRAVEL)},
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH()},
+        });
+
+        return paints;
+    };
+}
+
+// ── 3. Arc mission tasks — a hole cut to fit the letter that actually renders ─
+
+/** Clearance between the label's glyph box and each arc end, in screen pixels. */
+const ARC_LABEL_CLEARANCE_PX = 5;
+
+/**
+ * Widest the label gap may open, in degrees of arc either side of the label. Only
+ * reached when the circle is small enough that the letter genuinely spans that
+ * much of it; past this the arcs would stop reading as a circle at all, so the
+ * letter is allowed to overhang instead.
+ */
+const ARC_LABEL_MAX_HALF_GAP_RAD = (40 * Math.PI) / 180;
+
+/**
+ * Which dimension of a point-anchored mission task its letter has to fit in, for the tasks
+ * that cut a gap in their own line work for it: a circle's diameter for the rim letter, the
+ * drawn extent for the letter on pursuit's run and in turn's curve. Absent, the task's letter
+ * cuts no gap and takes no part in the gap rule. @see missionTaskLetterInGapScale
+ */
+export type MissionTaskLetterGap = 'ring' | 'extent';
+
+const MISSION_TASK_LETTER_GAPS: Partial<Record<TacticalGraphicName, MissionTaskLetterGap>> = {
+    [TacticalGraphicName.AreaDefense]: 'ring',
+    [TacticalGraphicName.Contain]: 'ring',
+    [TacticalGraphicName.Control]: 'ring',
+    [TacticalGraphicName.CordonAndKnock]: 'ring',
+    [TacticalGraphicName.CordonAndSearch]: 'ring',
+    [TacticalGraphicName.Deny]: 'ring',
+    [TacticalGraphicName.Locate]: 'ring',
+    [TacticalGraphicName.Isolate]: 'ring',
+    [TacticalGraphicName.Occupy]: 'ring',
+    [TacticalGraphicName.Retain]: 'ring',
+    [TacticalGraphicName.Secure]: 'ring',
+    [TacticalGraphicName.Pursuit]: 'extent',
+    [TacticalGraphicName.Turn]: 'extent',
+    [TacticalGraphicName.TacticalTurn]: 'extent',
+};
+
+/** The font a mission task's letter is drawn in, and that font's pixel size. */
+function missionTaskLetterFont(ratioLocked: boolean): {font: string; fontPx: number} {
+    return ratioLocked
+        ? {font: RATIO_LOCKED_LABEL_FONT, fontPx: RATIO_LOCKED_LABEL_FONT_PX}
+        : {font: fontStyle, fontPx: BASE_FONT_SIZE_PX};
+}
+
+/**
+ * The scale of a mission task's letter when it is drawn **from the symbol's own size on
+ * screen**: a quarter of the symbol (`capLabelToGraphic`'s share), never more than the
+ * ceiling every size-proportional label stops at. The letter is part of the symbol, so it
+ * shrinks as the symbol does and holds once the symbol is large.
+ *
+ * **No drawing zoom and no `graphicSize` in it**. The block family and the
+ * zoom-anchored tasks used to take their letter from the zoom the task was drawn or restored
+ * at, through `graphicSize` when one was stamped. OpenLayers never stamps one for them and
+ * MapLibre filed any stored `radius` there, so the same breach drew a 24 px letter on
+ * OpenLayers and a 36 px one on MapLibre, and zoomed three times out OpenLayers took it to
+ * 8 px while the other engines held 26-33 px over a symbol a third the size. The bounds both
+ * engines carry are the one input they agree on.
+ */
+export function symbolLetterScale(feature: PaintFeature, context: PaintContext, fontPx: number): number {
+    return capLabelToGraphic(maxGraphicLabelScale(), feature, context, fontPx);
+}
+
+/** The scale a mission task's letter wants before the gap rule: ratio-locked to its circle, or the symbol's share. */
+function missionTaskLetterDesiredScale(feature: PaintFeature, context: PaintContext, ratioLocked: boolean): number {
+    return ratioLocked
+        ? capLabelToGraphic(ratioLockedLabelScale(feature.graphicSize, feature.drawingResolution, context.resolution), feature, context, RATIO_LOCKED_LABEL_FONT_PX)
+        : symbolLetterScale(feature, context, BASE_FONT_SIZE_PX);
+}
+
+/**
+ * The task's size on screen, from what its line-work feature and its label feature both
+ * carry: the stamped radius and the drawn extent. Unknown means unbounded, so the letter is
+ * dropped only under the legibility floor, never for size.
+ */
+function missionTaskGraphicPx(feature: PaintFeature, context: PaintContext, gap: MissionTaskLetterGap): number {
+    const size = feature.graphicSize;
+    const diameterPx = size && size > 0 ? 2 * groundPixels(size, feature, context) : 0;
+    const b = feature.bounds;
+    const extentPx = b ? Math.max(b.maxX - b.minX, b.maxY - b.minY) / context.resolution : 0;
+    const px = gap === 'ring' ? diameterPx || extentPx : extentPx || diameterPx;
+    return px > 0 ? px : Infinity;
+}
+
+/**
+ * The scale a mission task's letter is drawn at when it sits in a gap of the task's own line
+ * work, or `0` once the task is too small to carry it, when no gap is cut either.
+ *
+ * Asked by the line work and by the label alike, from the same feature fields, because
+ * OpenLayers styles them as two features and neither sees what the other drew.
+ * @see letterInGapScale
+ */
+export function missionTaskLetterInGapScale(
+    feature: PaintFeature,
+    context: PaintContext,
+    label: string,
+    ratioLocked: boolean,
+    gap: MissionTaskLetterGap,
+): number {
+    const {font, fontPx} = missionTaskLetterFont(ratioLocked);
+    const desired = missionTaskLetterDesiredScale(feature, context, ratioLocked);
+    return letterInGapScale(desired, textWidth(context, label, font, 1), fontPx, missionTaskGraphicPx(feature, context, gap));
+}
+
+/**
+ * {@link missionTaskLetterInGapScale} for a named task, with its family's font and its own
+ * gap. For a task that cuts no gap, the letter's ordinary scale.
+ */
+export function missionTaskLetterScale(name: TacticalGraphicName, feature: PaintFeature, context: PaintContext): number {
+    const ratioLocked = RATIO_LOCKED_MISSION_TASKS.has(name);
+    const gap = MISSION_TASK_LETTER_GAPS[name];
+    return gap
+        ? missionTaskLetterInGapScale(feature, context, getLabel(name), ratioLocked, gap)
+        : missionTaskLetterDesiredScale(feature, context, ratioLocked);
+}
+
+/**
+ * The clear space round a mission task's letter, in pixels, shrinking with the letter below
+ * the host's configured label size. @see letterGapClearance
+ */
+export function missionTaskLetterClearance(clearancePx: number, scale: number): number {
+    return letterGapClearance(clearancePx, scale, configuredLabelScale());
+}
+
+/**
+ * The arc-and-arrowhead mission tasks — Secure, Isolate, Retain, Occupy, Control,
+ * Contain, Cordon and Search — with the gap for their one-letter label **cut from
+ * the rendered glyph** rather than left as a fixed slice of the circle.
+ *
+ * The generator is asked for no gap at all (`labelGapDegrees: 0`), so its two
+ * arcs run right up to the label axis and this takes back exactly what the letter
+ * needs. A fixed angular gap cannot do that: 30° of a 100 px circle is a
+ * comfortable hole around a 22 px letter, and 30° of a 400 px circle is a hole
+ * four times too big around the *same* letter, because the label scale is capped.
+ *
+ * **The gap is tangential, so it comes off the glyph's height as much as its
+ * width.** The label is drawn horizontally wherever it sits on the circle: due
+ * east, the letter's *height* runs along the arc; due north, its width.
+ * Projecting the glyph box onto the tangent covers both and everything between.
+ *
+ * This is the known weakness in its purest form — the gap is a
+ * function of a text measurement, and MapLibre sizes text through zoom
+ * expressions it evaluates itself, so a declarative port would have the hole and
+ * the letter drift apart.
+ *
+ * Sub-lines `[0]` and `[1]` are the two arcs; everything after them — arrowheads,
+ * teeth, radials — is drawn untouched.
+ *
+ * **The letter's size is asked of {@link missionTaskLetterScale}, the same as the label
+ * paint asks it.** So the font comes from the name, and `_ratioLocked` is no longer read:
+ * area defense was passed `false` here while its letter was drawn ratio-locked, so its gap
+ * was cut for a 16 px letter round a 24 px one. When that scale is `0` the task is too small
+ * to carry its letter and the arcs are drawn whole.
+ */
+export function arcMissionTaskPaint(name: TacticalGraphicName, _ratioLocked?: boolean): (f: PaintFeature, c: PaintContext) => Paint[] {
+    const label = getLabel(name);
+    const {font, fontPx} = missionTaskLetterFont(RATIO_LOCKED_MISSION_TASKS.has(name));
+    return (feature, context) => {
+        const lines = paintLineWork(feature.geometry);
+        if (!lines.length) return [];
+
+        const center = feature.graphicCenter;
+        const labelPoint = feature.graphicLabelPoint;
+        const radius = center && labelPoint ? Math.hypot(labelPoint[0] - center[0], labelPoint[1] - center[1]) : 0;
+        const scale = label ? missionTaskLetterScale(name, feature, context) : 0;
+
+        if (center && labelPoint && radius > 0 && scale > 0) {
+            const axis = Math.atan2(labelPoint[1] - center[1], labelPoint[0] - center[0]);
+
+            const halfWidthPx = textWidth(context, label, font, scale) / 2;
+            const halfHeightPx = (fontPx * scale * CAP_HEIGHT_FRACTION) / 2;
+            const tangentHalfPx =
+                halfWidthPx * Math.abs(Math.sin(axis)) +
+                halfHeightPx * Math.abs(Math.cos(axis)) +
+                missionTaskLetterClearance(ARC_LABEL_CLEARANCE_PX, scale);
+            const halfGap = Math.min(ARC_LABEL_MAX_HALF_GAP_RAD, (tangentHalfPx * context.resolution) / radius);
+
+            for (const i of [0, 1]) {
+                if (lines[i]) lines[i] = cutArcAtLabel(lines[i], center, axis, halfGap);
+            }
+        }
+
+        const color = lineColorOf(feature);
+        const stroke = {color, widthPx: LINE_WIDTH()};
+        const paints: Paint[] = [];
+
+        const drawn = lines.filter(line => line.length >= 2);
+        if (drawn.length) paints.push({geometry: {type: 'MultiLineString', coordinates: drawn}, stroke});
+
+        // AreaDefense's teeth are solid polygons rather than open outlines; every
+        // other member of the family has none, so this costs them nothing.
+        const rings = paintFilledRings(feature.geometry);
+        if (rings.length) {
+            paints.push({
+                geometry: {type: 'MultiPolygon', coordinates: rings},
+                fill: {color},
+                stroke,
+            });
+        }
+
+        return paints;
+    };
+}
+
+/**
+ * The label a point-anchored mission task carries, at its own anchor.
+ *
+ * Separate from {@link arcMissionTaskPaint} because the two are separate features
+ * in every renderer: the graphic owns the line work, the label feature owns the
+ * text, and they are stamped and invalidated independently.
+ *
+ * **Two sizings, and the name picks between them.** A ratio-locked task's letter is
+ * 24 px scaled from the circle it sits in; every other mission task takes the
+ * ordinary 16 px zoom-anchored label. Drawing the whole family ratio-locked — which
+ * is what this did — makes a turn's "T" half again too large and gives it the wrong
+ * response to a resize. @see RATIO_LOCKED_MISSION_TASKS
+ *
+ * `rotation` is for the tasks whose letter lies along the graphic rather than
+ * standing upright on screen: Envelopment's "E" follows its approach. It has to be
+ * passed per render, not baked in, because it changes on every handle drag.
+ *
+ * A task whose line work cuts a gap for its letter (the arc tasks, pursuit, turn) keeps the
+ * letter at 6 px at least, and draws none once the task is too small for it, exactly when
+ * its line work stops cutting the gap. @see missionTaskLetterScale
+ */
+export function missionTaskLabelPaint(
+    name: TacticalGraphicName,
+    rotation: number | ((f: PaintFeature) => number) = 0,
+): (f: PaintFeature, c: PaintContext) => Paint[] {
+    const label = getLabel(name);
+    const {font} = missionTaskLetterFont(RATIO_LOCKED_MISSION_TASKS.has(name));
+    return (feature, context) => {
+        if (!label || feature.geometry.type !== 'Point') return [];
+        // Envelopment's "E" sits in a gap `approachPaint` cuts, so on OpenLayers, where this
+        // paint draws it, it asks the same function that paint does. @see approachLetterScale
+        const scale =
+            name === TacticalGraphicName.Envelopment
+                ? approachLetterScale(feature, context, 'E', 0)
+                : missionTaskLetterScale(name, feature, context);
+        if (!(scale > 0)) return [];
+        return [{
+            geometry: feature.geometry,
+            text: {
+                text: label,
+                font,
+                fill: labelColorOf(feature),
+                halo: halo(),
+                scale,
+                rotation: typeof rotation === 'function' ? rotation(feature) : rotation,
+                align: 'center',
+                baseline: 'middle',
+            },
+        }];
+    };
+}
+
+
+// ── 4. The default line — the fallback for most Lines-category graphics ───────
+
+/** Screen-pixel standoff between a default line and the labels above and below it. */
+const DEFAULT_LINE_LABEL_GAP_PX = 8;
+
+/**
+ * Clear space, in screen pixels, two end labels must keep between them before a line draws
+ * one label at its middle instead. @see endLabelsCollide
+ */
+const END_LABEL_SEPARATION_PX = 12;
+
+/**
+ * Whether a line's two end labels, each set inward from its end, would run into each other.
+ *
+ * APP-06 puts the name at both ends of a line. Zoomed out far enough the line is shorter than
+ * the two names, and each name was drawn over the other at every engine.
+ * Measured end to end rather than along the path: the labels sit at the ends, so a line that
+ * doubles back brings them together whatever its length.
+ */
+export function endLabelsCollide(start: ProjectedPosition, end: ProjectedPosition, widestPx: number, resolution: number): boolean {
+    const endsPx = Math.hypot(end[0] - start[0], end[1] - start[1]) / resolution;
+    return 2 * widestPx + END_LABEL_SEPARATION_PX > endsPx;
+}
+
+/** Declared beside the rule that fits every dash to its graphic. @see withFittedDashes */
+export {PLANNED_DASH_PX};
+
+/**
+ * The dash-dot a **circled** control measure's planned ring is drawn with.
+ *
+ * Long dash, gap, dot, gap — measured off 290400's Planned Example, and visibly not the
+ * plain `PLANNED_DASH_PX`: the ring has to read as a different thing from a symbol that
+ * merely dashes when planned, because for these it is the *only* difference between the
+ * two statuses. @see plannedStatusRing
+ */
+export const CIRCLED_STATUS_DASH_PX = [18, 6, 3, 6];
+
+/**
+ * Padding on the ring, as a multiple of the half-diagonal it encloses.
+ *
+ * Enough that the ring clears the symbol's corners rather than grazing them.
+ */
+const CIRCLED_STATUS_PADDING = 1.06;
+
+/** How many segments the ring is drawn with. Smooth at any size a symbol is read at. */
+const CIRCLED_STATUS_STEPS = 64;
+
+/**
+ * The dash-dot ring a *"CM Status Type: Circled"* symbol wears when it is planned.
+ *
+ * 56 rows of APP-06 carry that line, and it means the same thing on every one: planned is
+ * shown by enclosing the symbol in a circle rather than by changing the symbol. The
+ * mechanism is here, in the half both renderers read, because it is a fact about the
+ * symbology and not about a canvas. @see CIRCLED_STATUS_GRAPHICS for which names use it
+ *
+ * **Centred on the bounding box, not on an anchor point.** The rule has to hold for a
+ * symbol at any rotation and of any shape — the family runs from a two-point chord to a
+ * whole area — and the box's centre is the only point every one of them has. 290400's own
+ * illustration draws its ring a little low of that; it is a drawing, and centring is the
+ * defensible reading.
+ *
+ * Returns nothing when the marks enclose no area, which is a symbol not yet drawn.
+ *
+ * A caller that knows better may hand in the **path** outright — the mine cluster's ring is
+ * its own dome pushed outward, which no bounding box can express, and which is a circle
+ * only where the projection makes the dome one. @see mineClusterPaint
+ */
+export function plannedStatusRing(
+    marks: readonly Paint[],
+    feature: PaintFeature,
+    context: PaintContext,
+    ring?: ProjectedPosition[],
+): Paint | undefined {
+    if (feature.properties.status !== TacticalGraphicStatus.planned) return undefined;
+    if (ring) return ring.length >= 3 ? ringMark(ring, feature) : undefined;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const visit = (value: unknown): void => {
+        if (!Array.isArray(value)) return;
+        if (typeof value[0] === 'number') {
+            const [x, y] = value as ProjectedPosition;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            return;
+        }
+        value.forEach(visit);
+    };
+    // The line work only: a text mark's anchor is a point somewhere off the symbol, and
+    // letting one into the box would drag the ring toward whichever amplifier is set.
+    marks.filter(mark => mark.stroke || mark.fill).forEach(mark => visit(mark.geometry.coordinates));
+    if (!isFinite(minX) || !isFinite(minY)) return undefined;
+
+    const radius = Math.hypot(maxX - minX, maxY - minY) / 2 * CIRCLED_STATUS_PADDING;
+    if (!(radius > 0)) return undefined;
+
+    return circleMark([(minX + maxX) / 2, (minY + maxY) / 2], radius, feature);
+}
+
+/** One dash-dot ring, as a closed polyline. @see plannedStatusRing */
+function circleMark(center: ProjectedPosition, radius: number, feature: PaintFeature): Paint | undefined {
+    if (!(radius > 0)) return undefined;
+    const ring: ProjectedPosition[] = [];
+    for (let i = 0; i <= CIRCLED_STATUS_STEPS; i++) {
+        const t = (i / CIRCLED_STATUS_STEPS) * 2 * Math.PI;
+        ring.push([center[0] + Math.cos(t) * radius, center[1] + Math.sin(t) * radius]);
+    }
+    return ringMark(ring, feature);
+}
+
+/** The dash-dot stroke every planned ring wears, whoever worked out its path. */
+function ringMark(ring: ProjectedPosition[], feature: PaintFeature): Paint {
+    return {
+        geometry: {type: 'LineString', coordinates: ring},
+        // `affiliationColorOf`, not `lineColorOf`: the ring is status, not symbol, and
+        // 290400's Planned Example draws it black around a green mine cluster.
+        stroke: {color: affiliationColorOf(feature), widthPx: LINE_WIDTH(), dashPx: CIRCLED_STATUS_DASH_PX},
+    };
+}
+
+/**
+ * The dash a graphic takes from its amplifiers, or nothing.
+ *
+ * **Two conditions, not one.** A `planned` status dashes, and so does a *suspected*
+ * hostile — an affiliation the operator is not sure of is drawn broken, which is a
+ * doctrinal distinction rather than a status one. Reading only `status` silently
+ * loses the second, and the two look identical on the map, so nothing would flag it.
+ */
+export function amplifierDash(feature: PaintFeature): number[] | undefined {
+    const {status, hostility, confidence} = feature.properties;
+    const planned = status === TacticalGraphicStatus.planned;
+    const suspectedHostile =
+        hostility === TacticalGraphicHostility.hostileFaker
+        && confidence === TacticalGraphicConfidence.suspected;
+    return planned || suspectedHostile ? PLANNED_DASH_PX : undefined;
+}
+
+/**
+ * A line with its designation above each end and its date-time group below.
+ *
+ * The fallback every `line()`-routed graphic falls through to when it has no
+ * bespoke style — the largest single family in the registry.
+ *
+ * Two things it gets right that are easy to lose:
+ *
+ * - **Each endpoint picks its own alignment.** The first and last segments can run
+ *   in different directions — a line drawn left-to-right overall may turn back on
+ *   its final leg — so the side each label is pushed to is decided per endpoint,
+ *   not once for the whole line.
+ * - **"Above" is the map's up, not the segment's left.** `offsetAbove` normalizes
+ *   against north; a plain counter-clockwise perpendicular flips when the same
+ *   line is drawn the other way and puts every label underneath.
+ *
+ * The date-time group renders only when *both* ends of the range are present —
+ * a lone start date reads as an error rather than as information.
+ */
+export interface DefaultLineOptions {
+    /**
+     * Dash the line whatever its status. Only ProbableLineOfDeployment sets it:
+     * it is dashed in both the present and the anticipated form, so the dash carries
+     * no status meaning there and must not be conditional on one.
+     */
+    alwaysDashed?: boolean;
+    /**
+     * Render the date-time group below the line. Off for graphics whose doctrinal
+     * form has no DTG — again ProbableLineOfDeployment, which would otherwise start
+     * showing dates the moment an operator filled the field in.
+     */
+    showDates?: boolean;
+    /**
+     * How this line sets its country code beside the designation, if it takes one.
+     *
+     * `'parentheses'` is the fire-support family's — APP-06 letters them `T2 ( AS )` and the
+     * example reads `FSCL MND(USA)`. `'slash'` is the decision line's, whose plate writes
+     * `T/AS`. Absent means the line takes no country code, which is most of them.
+     */
+    countryCode?: 'parentheses' | 'slash';
+}
+
+/**
+ * The lines that set a country code beside their designation, and how.
+ *
+ * **This lives here, beside the paint, and not in the registry.** It started in
+ * `registry.ts`, which meant MapLibre -- which builds its styles from the registry -- drew
+ * `FSCL ALPHA (GBR)` while OpenLayers, whose line style calls `defaultLinePaint(name)` with
+ * no options at all, drew `FSCL ALPHA` and dropped the code on the floor. Nothing failed:
+ * the country code round-tripped through save and restore, the dialog offered it, and one
+ * of the two engines simply never painted it. Making it the paint's own default is what
+ * stops an engine having an opinion about a symbology fact.
+ */
+const DEFAULT_LINE_COUNTRY_CODES: Partial<Record<TacticalGraphicName, 'parentheses' | 'slash'>> = {
+    // `T2 ( AS )` on the plate, `FSCL MND(USA)` in the worked example.
+    [TacticalGraphicName.FireSupportCoordinationLine]: 'parentheses',
+    [TacticalGraphicName.BattlefieldCoordinationLine]: 'parentheses',
+    [TacticalGraphicName.BattlefieldHandoverLine]: 'parentheses',
+    [TacticalGraphicName.DelayLine]: 'parentheses',
+    // The no fire line and the restrictive fire line carry the same `T2 ( AS )` plate as the
+    // four above; they were left out of the first ruling and swept in by the second.
+    [TacticalGraphicName.NoFireLine]: 'parentheses',
+    [TacticalGraphicName.RestrictiveFireLine]: 'parentheses',
+    // 142000 writes `NAI T/AS` -- the slash form. (The *area* named area of interest,
+    // 120200, letters no country code at all and is not here.)
+    [TacticalGraphicName.NamedAreaOfInterestLine]: 'slash',
+    // The decision line writes `T/AS` too, but it has its own paint -- the star at each end
+    // -- and never reaches this one, so listing it would be a second statement of a fact
+    // that lives in `decisionLinePaint`.
+};
+
+/**
+ * The default lines whose plate boxes `H` beside `T` at each end.
+ *
+ * Only `line, generic` so far. 110400's Template sets `H` and `T` side by side above each
+ * end with `W - W1` below, and its Example reads `IDR METH` — two boxes, one line of text.
+ * Everything else in this family has no `H` box, so this is a list rather than a default.
+ */
+const DEFAULT_LINE_ADDITIONAL_INFO: ReadonlySet<TacticalGraphicName> = new Set([TacticalGraphicName.LineGeneric]);
+
+/**
+ * The default lines that carry their literal and nothing else.
+ *
+ * IFF off and IFF on: FM 1-02.2 says symbols without amplifier fields "must be used as
+ * depicted", and the plate prints `IFF OFF` / `IFF ON` at each end alone. The dialog offers
+ * no field, but a designation or a date arriving on an imported graphic used to draw.
+ */
+const DEFAULT_LINE_LITERAL_ONLY: ReadonlySet<TacticalGraphicName> = new Set([
+    TacticalGraphicName.IdentificationFriendOrFoeOff,
+    TacticalGraphicName.IdentificationFriendOrFoeOn,
+]);
+
+/**
+ * How a line sets its country code, if it takes one at all.
+ *
+ * Exported so a renderer that assembles its own options can start from the same answer
+ * rather than restating it -- and so a test can assert the two engines agree.
+ */
+export function defaultLineCountryCodeStyle(name: TacticalGraphicName): 'parentheses' | 'slash' | undefined {
+    return DEFAULT_LINE_COUNTRY_CODES[name];
+}
+
+export function defaultLinePaint(
+    name: TacticalGraphicName,
+    options: DefaultLineOptions = {},
+): (f: PaintFeature, c: PaintContext) => Paint[] {
+    const literalOnly = DEFAULT_LINE_LITERAL_ONLY.has(name);
+    const {alwaysDashed = false, countryCode = defaultLineCountryCodeStyle(name)} = options;
+    const showDates = !literalOnly && (options.showDates ?? true);
+    return (feature, context) => {
+        if (feature.geometry.type !== 'LineString' && feature.geometry.type !== 'MultiPoint') return [];
+        const coords = feature.geometry.coordinates;
+        if (coords.length < 2) return [];
+
+        const designation = literalOnly ? '' : feature.properties.designation ?? '';
+        const country = (feature.properties.countryCode ?? '').trim();
+        const named =
+            countryCode === undefined || !country
+                ? designation.trim()
+                : countryCode === 'slash'
+                  ? [designation.trim(), country].filter(Boolean).join('/')
+                  : formatDesignationWithCountry(designation, country);
+        /*
+         * **Field H leads the line, ahead of the designation.** 110400 boxes them in that
+         * order, `H` then `T`, and the Example runs them together as one line of text with
+         * a space between. It is free text the operator typed, so "name only" takes it away
+         * and leaves the designation standing.
+         */
+        const free = DEFAULT_LINE_ADDITIONAL_INFO.has(name)
+            ? amplifierText(feature, (feature.properties.additionalInfo ?? '').trim())
+            : '';
+        /*
+         * **A hostile line says so in words at both ends, `ENY`**, on the outer side of each
+         * (FM 1-02.2 Figure 5-9, APP-06 8.1.4). Only phase line used to; every other line here
+         * drew red line work and nothing a monochrome print could read.
+         */
+        const hostile = showsEny(feature);
+        const identifier = [hostile ? 'ENY' : '', free, getFullLabel(name, named)].filter(Boolean).join(' ');
+        const startDate = amplifierText(feature, showDates ? feature.properties.startDate ?? '' : '');
+        const endDate = amplifierText(feature, showDates ? feature.properties.endDate ?? '' : '');
+        const dateLabel = startDate.trim() && endDate.trim() ? `${startDate} - ${endDate}` : '';
+
+        const start = coords[0];
+        const afterStart = coords[1];
+        const end = coords[coords.length - 1];
+        const beforeEnd = coords[coords.length - 2];
+
+        const scale = scaleOf(feature, context);
+        // The name goes before the prefix does (`FSCL`, `NFL`), once the identifier is too small
+        // to read. Field H leads only on the generic line, which has no prefix, so it is never
+        // cut here. The dates are capped at the name's size. @see withProportionateAmplifiers
+        // @see legibleDesignation
+        const shown = legibleDesignation(
+            identifier,
+            [hostile ? 'ENY' : '', getLabel(name)].filter(Boolean).join(' '),
+            scale,
+            fontStyle,
+            context,
+            pathLength(coords) / context.resolution,
+        );
+        const gap = labelGapPx(DEFAULT_LINE_LABEL_GAP_PX, scale);
+        const res = context.resolution;
+
+        const label = (
+            at: ProjectedPosition,
+            text: string,
+            rotation: number,
+            align: 'left' | 'right',
+            baseline: 'top' | 'bottom',
+            textScale = scale,
+        ): Paint => ({
+            geometry: {type: 'Point', coordinates: at},
+            text: {
+                text,
+                font: fontStyle,
+                fill: labelColorOf(feature),
+                halo: halo(),
+                rotation,
+                align,
+                baseline,
+                scale: textScale,
+            },
+        });
+
+        const dashPx = alwaysDashed || feature.properties.status === TacticalGraphicStatus.planned
+            ? PLANNED_DASH_PX
+            : undefined;
+
+        const stroke: Paint = {
+            geometry: feature.geometry,
+            stroke: {color: lineColorOf(feature), widthPx: LINE_WIDTH(), dashPx},
+        };
+        // Only a designation the size rule took away is left out; an empty one stays as it was.
+        // The dates go with it. @see withProportionateAmplifiers
+        if (!(shown.text || !identifier)) return [stroke];
+
+        /*
+         * **One label at the middle once the two ends would collide**, rather than two names
+         * printed over each other. The same rule on every engine, because it is decided here.
+         * @see endLabelsCollide
+         */
+        const widestPx = Math.max(
+            shown.text ? textWidth(context, shown.text, fontStyle, shown.scale) : 0,
+            dateLabel ? textWidth(context, dateLabel, fontStyle, scale) : 0,
+        );
+        /*
+         * **An end off screen takes its labels to where the line comes into the view**, slid on
+         * inward past anything already there; they stay over and under the line as at the end.
+         * @see endAnchorInView
+         */
+        const footprint = {alongPx: widestPx / 2, acrossPx: gap + BASE_FONT_SIZE_PX * scale};
+        const movedStart = endAnchorInView(coords, 'start', footprint, context);
+        const movedEnd = endAnchorInView(coords, 'end', footprint, context);
+        const [startAt, startFrom, startTo] = movedStart ? [movedStart.at, movedStart.from, movedStart.to] : [start, start, afterStart];
+        const [endAt, endFrom, endTo] = movedEnd ? [movedEnd.at, movedEnd.from, movedEnd.to] : [end, beforeEnd, end];
+
+        const startAlign: 'left' | 'right' = !uprightFlipped(startFrom, startTo) ? 'left' : 'right';
+        const endAlign: 'left' | 'right' = !uprightFlipped(endFrom, endTo) ? 'right' : 'left';
+        const startRotation = uprightRotation(startFrom, startTo);
+        const endRotation = uprightRotation(endTo, endFrom);
+
+        if (endLabelsCollide(startAt, endAt, widestPx, res)) {
+            // The middle of what is in view, when the line's own middle is off it. @see midSegmentInView
+            const {index: i, t} = midSegmentInView(coords, {index: centerSegmentIndex(coords), t: 0.5}, context, footprint);
+            const [a, b] = [coords[i], coords[i + 1]];
+            const middle: ProjectedPosition = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+            const rotation = uprightRotation(a, b);
+            const centered = (paint: Paint): Paint => ({...paint, text: {...paint.text!, align: 'center'}});
+            return [
+                centered(label(offsetAbove(middle, a, b, res, gap), shown.text, rotation, 'left', 'bottom', shown.scale)),
+                asAmplifier(centered(label(offsetBelow(middle, a, b, res, gap), dateLabel, rotation, 'left', 'top'))),
+                stroke,
+            ];
+        }
+
+        return [
+            // A label aligned left runs inward from its end, so its first word is the outer one.
+            label(offsetAbove(startAt, startFrom, startTo, res, gap), enyOutside(shown.text, startAlign === 'left'), startRotation, startAlign, 'bottom', shown.scale),
+            label(offsetAbove(endAt, endFrom, endTo, res, gap), enyOutside(shown.text, endAlign === 'left'), endRotation, endAlign, 'bottom', shown.scale),
+            asAmplifier(label(offsetBelow(startAt, startFrom, startTo, res, gap), dateLabel, startRotation, startAlign, 'top')),
+            asAmplifier(label(offsetBelow(endAt, endFrom, endTo, res, gap), dateLabel, endRotation, endAlign, 'top')),
+            stroke,
+        ];
+    };
+}
+
+// ── 5. Areas — the plain outline behind 79 of the 94 area graphics ────────────
+
+/**
+ * An area's outline: one stroke in the affiliation's color, dashed when the
+ * status is `planned`.
+ *
+ * Unremarkable, and the highest-coverage paint function in the library — 60 of
+ * the 94 `polygon` / `polygonRect` registry entries have no bespoke style and
+ * reach this. The other 15 draw something structural (StrongPoint's cross ties,
+ * an obstacle belt's teeth, Encirclement's hostility-dependent form) and are
+ * ported separately.
+ *
+ * **Stroke only, no fill.** There used to be a translucent blue fill here, left
+ * over from a selection highlight that never tracked selection; it painted every
+ * default-styled area all the time, which is neither what FM 1-02.2 draws nor what
+ * any of the bespoke area styles do. @see areaFillPaint for the one that does fill.
+ */
+export function areaOutlinePaint(_name?: TacticalGraphicName): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return feature => [{
+        geometry: feature.geometry.type === 'GeometryCollection'
+            ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
+            : feature.geometry,
+        stroke: {
+            color: lineColorOf(feature),
+            widthPx: LINE_WIDTH(),
+            dashPx: feature.properties.status === TacticalGraphicStatus.planned ? PLANNED_DASH_PX : undefined,
+        },
+    }];
+}
+
+/**
+ * A filled shape in the affiliation's color, outlined in the same.
+ *
+ * The fallback for holders that install no dedicated style of their own. Distinct
+ * from {@link areaOutlinePaint} because the fill is deliberate here — this is what
+ * a solid symbol uses, not a control-measure boundary.
+ *
+ * **The fill is only emitted for a geometry that can hold one.** This is the
+ * fallback for a whole family, and several of its members are paths rather than
+ * areas — exploitation's zigzag among them. OpenLayers drops a fill on a line
+ * silently, so asking for one looked harmless; MapLibre honors it, filling the
+ * zigzag in as a solid blob. A mark that means nothing to one renderer and
+ * something to another is a mark that should not be emitted.
+ */
+export function areaFillPaint(): (f: PaintFeature, c: PaintContext) => Paint[] {
+    return feature => {
+        const color = lineColorOf(feature);
+        const geometry: Paint['geometry'] = feature.geometry.type === 'GeometryCollection'
+            ? {type: 'MultiLineString', coordinates: paintLineWork(feature.geometry)}
+            : feature.geometry;
+        const areal = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
+        const stroke = {color, widthPx: LINE_WIDTH()};
+
+        // Exploitation's tail is dashed, and it reaches this painter through the block
+        // holder's default. @see DASHED_PARTS
+        if (geometry.type === 'MultiLineString') return strokeParts(feature.properties.name, geometry.coordinates, stroke);
+        return [{
+            geometry,
+            ...(areal ? {fill: {color}} : {}),
+            stroke,
+        }];
+    };
+}

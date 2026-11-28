@@ -1,0 +1,1192 @@
+/**
+ * # Decoration geometry — the shapes that only exist at render time
+ *
+ * Obstacle teeth, fortified merlons, FLOT scallops, the gap cut around a mission
+ * task's letter. None of these are in the GeoJSON `renderTacticalGraphic`
+ * returns; all of them are synthesized, per frame, from the current view scale.
+ * That synthesis happens in 128 places inside `openlayerStyles.ts` today, which
+ * is what makes it unreachable from any other renderer — and what leaves a
+ * raw-GeoJSON consumer holding a skeleton.
+ *
+ * This module is the first of those 128 moved out. Everything here is:
+ *
+ * - **Planar.** Coordinates are EPSG:3857 meters and the math is plain Euclidean
+ *   vector work — `Math.hypot`, `Math.atan2`, unit vectors. No turf, no
+ *   `GeometryService`: both expect geographic degrees, and mixing the two is the
+ *   mistake the repo's coordinate rules exist to prevent.
+ * - **Pure.** No DOM, no canvas, no renderer. Text widths arrive through
+ *   {@link PaintContext.measureText}.
+ * - **Screen-aware.** A decoration's size is a pixel count times the resolution,
+ *   computed here rather than baked into geometry, because `n * resolution` is a
+ *   constant number of screen pixels at every zoom and a metric offset is not.
+ */
+
+import type {PaintContext, ProjectedPosition} from '../core/paint';
+import {getFullSizeDecorations} from '../core/config';
+
+/** Total length of a path, in projected meters. */
+export function pathLength(path: ProjectedPosition[]): number {
+    let total = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+        total += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+    }
+    return total;
+}
+
+/**
+ * Index of the segment containing the path's halfway point. Where a line
+ * graphic's label goes, so it lands on the middle of the *drawn* line rather than
+ * on whichever vertex happens to be central in the array.
+ */
+/**
+ * A path cut into two runs, with a gap of `halfGap` metres either side of `at` metres
+ * along it.
+ *
+ * The primitive behind every amplifier that sits **in** a line rather than beside one.
+ * `cutArcAtLabel` does the same job for an arc described as a centre and an angle; this is
+ * the free-polyline form, for a curve the operator's own anchor points defined.
+ *
+ * Returns whichever runs survive: a gap that swallows an end returns one run, and a gap
+ * wider than the path returns none, which a caller should read as "no room, draw it whole".
+ */
+export function splitPathAround(
+    path: readonly ProjectedPosition[],
+    at: number,
+    halfGap: number,
+): ProjectedPosition[][] {
+    if (path.length < 2) return [];
+    const from = at - halfGap;
+    const to = at + halfGap;
+
+    const before: ProjectedPosition[] = [];
+    const after: ProjectedPosition[] = [];
+    let walked = 0;
+
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        const end = walked + seg;
+        const cut = (d: number): ProjectedPosition => {
+            const t = (d - walked) / seg;
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+
+        if (walked < from) {
+            if (!before.length) before.push(a);
+            before.push(end <= from ? b : cut(from));
+        }
+        if (end > to) {
+            if (!after.length) after.push(walked >= to ? a : cut(to));
+            after.push(b);
+        }
+        walked = end;
+    }
+
+    return [before, after].filter(run => run.length >= 2);
+}
+
+/**
+ * The runs of a path that survive **several** gaps, in order.
+ *
+ * `splitPathAround` is the one-gap case and the shape most amplifiers need. A line strung
+ * with a repeating symbol needs one gap per symbol: without them a hollow glyph has the
+ * line drawn straight through it and stops reading as hollow, which for the mineline is
+ * the difference between an unspecified mine and an antitank one.
+ *
+ * Gaps are given as distances along the path with a half-width each; overlapping ones
+ * merge. A gap that swallows an end simply shortens the run there.
+ */
+export function splitPathAroundAll(
+    path: readonly ProjectedPosition[],
+    gaps: readonly {at: number; halfGap: number}[],
+): ProjectedPosition[][] {
+    if (path.length < 2) return [];
+    const total = pathLength(path as ProjectedPosition[]);
+    const cuts = gaps
+        .map(g => [Math.max(0, g.at - g.halfGap), Math.min(total, g.at + g.halfGap)] as const)
+        .filter(([from, to]) => to > from)
+        .sort((a, b) => a[0] - b[0]);
+    if (!cuts.length) return [path as ProjectedPosition[]];
+
+    // Merge overlaps, then keep what is left over.
+    const merged: [number, number][] = [[cuts[0][0], cuts[0][1]]];
+    for (const [from, to] of cuts.slice(1)) {
+        const last = merged[merged.length - 1];
+        if (from <= last[1]) last[1] = Math.max(last[1], to);
+        else merged.push([from, to]);
+    }
+
+    const runs: ProjectedPosition[][] = [];
+    let cursor = 0;
+    for (const [from, to] of merged) {
+        if (from > cursor) runs.push(pathBetween(path as ProjectedPosition[], cursor, from));
+        cursor = to;
+    }
+    if (cursor < total) runs.push(pathBetween(path as ProjectedPosition[], cursor, total));
+    return runs.filter(run => run.length >= 2);
+}
+
+/** The polyline between two distances along a path, ends interpolated. */
+function pathBetween(path: ProjectedPosition[], from: number, to: number): ProjectedPosition[] {
+    const out: ProjectedPosition[] = [];
+    let walked = 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        const end = walked + seg;
+        const at = (d: number): ProjectedPosition => {
+            const t = (d - walked) / seg;
+            return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        };
+        if (end > from && walked < to) {
+            if (!out.length) out.push(walked >= from ? a : at(from));
+            out.push(end <= to ? b : at(to));
+        }
+        walked = end;
+    }
+    return out;
+}
+
+export function centerSegmentIndex(coords: ProjectedPosition[]): number {
+    const lengths: number[] = [];
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const len = Math.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1]);
+        lengths.push(len);
+        total += len;
+    }
+    let traveled = 0;
+    for (let i = 0; i < lengths.length; i++) {
+        traveled += lengths[i];
+        if (traveled >= total / 2) return i;
+    }
+    return Math.max(0, lengths.length - 1);
+}
+
+/** Width of `text` in screen pixels at `font`, scaled. @see PaintContext.measureText */
+export function textWidth(context: PaintContext, text: string, font: string, scale: number): number {
+    return context.measureText(text, font) * scale;
+}
+
+/**
+ * The share of a shape's own on-screen size its decoration may occupy before it
+ * starts shrinking.
+ *
+ * The open share is much the smaller of the two because it is measured against
+ * the path's whole length while the decoration repeats along it — a tooth a
+ * twentieth of the line long is already prominent. A closed ring is measured
+ * against its smaller side, which the decoration spans only once.
+ */
+const DECORATION_MAX_SHARE_CLOSED = 0.1;
+const DECORATION_MAX_SHARE_OPEN = 0.05;
+
+/** Below this many screen pixels a decoration is dropped rather than drawn. */
+export const DECORATION_MIN_PX = 3;
+
+/**
+ * How much to shrink a decoration so it still fits the symbol it decorates, 0–1.
+ * Zero means "draw the plain line or ring" — every decoration builder returns its
+ * input path unchanged when the pattern comes out non-positive.
+ *
+ * A constant pixel size is right in the middle of the range and wrong at both
+ * ends. Too small a shape cannot carry its own decoration — the sample gallery
+ * draws areas 15 px across — and the same is true of a full-size graphic seen
+ * from far enough out, which is the case this exists for.
+ *
+ * The rule is deliberately about the *shape*, not the zoom. A graphic 120 px
+ * across needs the same treatment whether it got that way by being drawn small or
+ * by the operator zooming out, and a resolution threshold would only catch the second.
+ */
+export function decorationScale(
+    path: ProjectedPosition[],
+    closed: boolean,
+    resolution: number,
+    heightPx: number,
+    footprintPx = heightPx,
+    minPx = DECORATION_MIN_PX,
+): number {
+    let availablePx: number;
+    if (closed) {
+        const xs = path.map(p => p[0]);
+        const ys = path.map(p => p[1]);
+        availablePx = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / resolution;
+    } else {
+        availablePx = pathLength(path) / resolution;
+    }
+    const share = closed ? DECORATION_MAX_SHARE_CLOSED : DECORATION_MAX_SHARE_OPEN;
+    // `footprintPx` is what the decoration spends *along* the path, and it is what decides
+    // how crowded a shape looks. Height alone under-caps anything wider than it is tall: the
+    // fortified merlon stands 11 px proud and is 15 wide, so a cap read off its height let
+    // it stay full size on a shape half as big as it should have, and it looked huge however
+    // far the map zoomed out.
+    //
+    // The **item**, not the whole repeat. Capping on merlon-plus-crenel was tried and is too
+    // strict — the crenel is empty space, so counting it shrank the merlons until a
+    // fortified area read as texture rather than as battlements.
+    //
+    // Defaults to `heightPx`, so a caller that has not said otherwise is unchanged.
+    // A host that wants every glyph legible keeps them whole. @see getFullSizeDecorations
+    if (getFullSizeDecorations()) return 1;
+    const scale = Math.max(0, Math.min(1, (availablePx * share) / Math.max(heightPx, footprintPx)));
+
+    // Below a few pixels a tooth, merlon or wave crest is not a symbol any more, it is
+    // texture on the stroke — and a row of 2 px bumps reads as a fuzzy line rather than
+    // as an obstacle. Drop it and let the plain geometry stand.
+    //
+    // `minPx` is adjustable because legibility is not height alone: a merlon is a *step*
+    // 15 px wide, still readable as a square notch at a height a 10 px triangle would have
+    // vanished at. Capping the fortified family on its width made it disappear at a shape
+    // of 41 px where it used to hold to 30, and the shrinking was wanted but the vanishing
+    // was too early. Everything else keeps the default.
+    return heightPx * scale < minPx ? 0 : scale;
+}
+
+/** Share of a path's on-screen length a single end mark may span before it shrinks. */
+const END_MARK_MAX_SHARE = 0.3;
+
+/**
+ * How much to shrink a **one-off** end mark so it still fits the line it sits on, 0-1.
+ *
+ * `decorationScale` is the wrong cap here. It allows 5% of an open path's length, which is
+ * right for a pattern repeating twenty times along it and puts a single arrowhead under
+ * the visibility floor on all but a very long shaft. Same idea, share that suits one mark,
+ * same floor: zero means "do not draw it", because below `DECORATION_MIN_PX` a mark is a
+ * thickening of the stroke rather than a symbol.
+ */
+export function endMarkScale(path: ProjectedPosition[], resolution: number, markPx: number): number {
+    const availablePx = pathLength(path) / resolution;
+    const scale = Math.max(0, Math.min(1, (availablePx * END_MARK_MAX_SHARE) / markPx));
+    return markPx * scale < DECORATION_MIN_PX ? 0 : scale;
+}
+
+/**
+ * A frame at one end of a path: the unit vector **into** the line and the unit normal to
+ * its left, so an end mark can be written in the standard's own terms — `along` toward the
+ * far anchor point, `left` at ninety degrees to it.
+ */
+export function endFrame(path: ProjectedPosition[], atStart: boolean) {
+    if (path.length < 2) return null;
+    const p = atStart ? path[0] : path[path.length - 1];
+    const q = atStart ? path[1] : path[path.length - 2];
+    const dx = q[0] - p[0];
+    const dy = q[1] - p[1];
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return null;
+    const u: ProjectedPosition = [dx / len, dy / len];
+    return {origin: p, u, v: [-u[1], u[0]] as ProjectedPosition};
+}
+
+/**
+ * A **solid** arrowhead as a closed ring: two barbs meeting at `tip`, opening back along
+ * `tip → from`, with the base closed between them.
+ *
+ * Filled rather than stroked, because that is what the plates draw — an open V reads as a
+ * lighter mark than the line it terminates, and the two forms are not interchangeable in a
+ * symbology where some arrowheads are deliberately open. Returns nothing for a zero-length
+ * direction, which is a graphic still being drawn.
+ *
+ * @param sizeMap barb length in projected meters
+ * @param halfAngleDeg half the angle between the barbs
+ */
+export function solidArrowHead(
+    from: ProjectedPosition,
+    tip: ProjectedPosition,
+    sizeMap: number,
+    halfAngleDeg: number,
+): ProjectedPosition[] | null {
+    const dx = tip[0] - from[0];
+    const dy = tip[1] - from[1];
+    const len = Math.hypot(dx, dy);
+    if (len === 0 || sizeMap <= 0) return null;
+
+    const theta = (halfAngleDeg * Math.PI) / 180;
+    const barb = (sign: number): ProjectedPosition => {
+        const cos = Math.cos(sign * theta);
+        const sin = Math.sin(sign * theta);
+        const bx = (-dx / len) * cos - (-dy / len) * sin;
+        const by = (-dx / len) * sin + (-dy / len) * cos;
+        return [tip[0] + bx * sizeMap, tip[1] + by * sizeMap];
+    };
+    const left = barb(-1);
+    const right = barb(1);
+    return [tip, left, right, tip];
+}
+
+/** Obstacle-line tooth dimensions, in screen pixels before `decorationScale`. */
+export const OBSTACLE_TOOTH_HEIGHT_PX = 10;
+export const OBSTACLE_TOOTH_BASE_PX = 10;
+export const OBSTACLE_TOOTH_GAP_PX = 10;
+
+/** An obstacle line's tooth size, in projected meters, at the current resolution. */
+export function obstacleToothSize(path: ProjectedPosition[], closed: boolean, resolution: number) {
+    const scale = decorationScale(path, closed, resolution, OBSTACLE_TOOTH_HEIGHT_PX);
+    return {
+        heightMap: OBSTACLE_TOOTH_HEIGHT_PX * scale * resolution,
+        baseMap: OBSTACLE_TOOTH_BASE_PX * scale * resolution,
+        gapMap: OBSTACLE_TOOTH_GAP_PX * scale * resolution,
+        heightPx: OBSTACLE_TOOTH_HEIGHT_PX * scale,
+    };
+}
+
+/**
+ * How many teeth an encirclement wears round its ring, at the size the plate draws them.
+ *
+ * APP-06 151800, FM 1-02.2 Table 5-5 and MIL-STD-2525E Table L-VII all draw about ten large,
+ * separate open triangles. It used to wear the obstacle belt's 10 px tooth with a 10 px gap,
+ * which on any real ring is forty-odd small teeth fused into a sawtooth.
+ */
+export const ENCIRCLEMENT_TOOTH_COUNT = 10;
+/** A tooth's base, as a share of its period round the ring; the rest is the gap. */
+export const ENCIRCLEMENT_TOOTH_BASE_SHARE = 0.4;
+/** A tooth's height against its base: near-equilateral, as drawn. */
+const ENCIRCLEMENT_TOOTH_HEIGHT_SHARE = 0.9;
+/**
+ * The widest base a tooth takes on screen. A ring zoomed to fill the screen keeps teeth
+ * this size and wears more of them, rather than ten triangles the size of a hand.
+ */
+export const ENCIRCLEMENT_TOOTH_MAX_BASE_PX = 60;
+
+/**
+ * An encirclement's tooth size, in projected meters, at the current resolution.
+ *
+ * `ring` is the **whole** outline even when the teeth are then laid along its
+ * pieces: a hostile encirclement's outline is cut into segments to clear the "ENY"
+ * amplifiers, and sizing each segment against its own length would give one ring
+ * several different tooth sizes and make the hostile symbol disagree with the
+ * friendly one drawn over the same area.
+ *
+ * Sized so the ring carries `ENCIRCLEMENT_TOOTH_COUNT` of them, capped at
+ * `ENCIRCLEMENT_TOOTH_MAX_BASE_PX`, and dropped below `DECORATION_MIN_PX`.
+ */
+export function encirclementToothSize(ring: ProjectedPosition[], resolution: number) {
+    const perimeterPx = pathLength(ring) / resolution;
+    const basePx = Math.min(ENCIRCLEMENT_TOOTH_MAX_BASE_PX, (perimeterPx / ENCIRCLEMENT_TOOTH_COUNT) * ENCIRCLEMENT_TOOTH_BASE_SHARE);
+    const shown = basePx >= DECORATION_MIN_PX ? basePx : 0;
+    const gapPx = (shown * (1 - ENCIRCLEMENT_TOOTH_BASE_SHARE)) / ENCIRCLEMENT_TOOTH_BASE_SHARE;
+    return {
+        heightMap: shown * ENCIRCLEMENT_TOOTH_HEIGHT_SHARE * resolution,
+        baseMap: shown * resolution,
+        gapMap: gapPx * resolution,
+    };
+}
+
+/**
+ * How sharp a bend counts as a **corner** rather than a sampled curve, in degrees.
+ *
+ * A traced ellipse is one smooth run recorded as fifty short chords, not fifty segments
+ * with fifty corners between them. Treating each chord as its own run is what left a
+ * fortified area with no merlons at all: its median chord measured 11 screen pixels against
+ * the 30 a merlon and its crenel need, so every single one was "too short for one" and the
+ * symbol came out a plain outline.
+ *
+ * 30 degrees keeps a drawn rectangle's four right angles as corners and a traced curve as
+ * one run. @see splitAtCorners
+ */
+const CORNER_DEGREES = 30;
+
+/**
+ * A path cut into runs at its real corners, each run kept whole.
+ *
+ * This is the unit a decoration is laid out along: complete items, centred, never straddling
+ * a corner — but free to follow a curve through as many sampled chords as it takes.
+ */
+export function splitAtCorners(path: ProjectedPosition[], cornerDegrees = CORNER_DEGREES): ProjectedPosition[][] {
+    if (path.length < 3) return [path];
+    const limit = Math.cos((cornerDegrees * Math.PI) / 180);
+    const runs: ProjectedPosition[][] = [];
+    let run: ProjectedPosition[] = [path[0]];
+
+    const dir = (a: ProjectedPosition, b: ProjectedPosition): ProjectedPosition | undefined => {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const n = Math.hypot(dx, dy);
+        return n === 0 ? undefined : [dx / n, dy / n];
+    };
+
+    for (let i = 1; i < path.length - 1; i++) {
+        run.push(path[i]);
+        const before = dir(path[i - 1], path[i]);
+        const after = dir(path[i], path[i + 1]);
+        // A zero-length chord carries no direction and cannot be a corner.
+        if (before && after && before[0] * after[0] + before[1] * after[1] < limit) {
+            runs.push(run);
+            run = [path[i]];
+        }
+    }
+    run.push(path[path.length - 1]);
+    runs.push(run);
+    return runs;
+}
+
+/** A path with a gap cut out of it for a glyph or a label. @see cutGapAlongPath */
+export interface PathGap {
+    /** What is left of the path, as one stroke per run between real corners. @see splitAtCorners */
+    outline: ProjectedPosition[][];
+    /** The path from its start to the gap. */
+    before: ProjectedPosition[];
+    /** The path from the gap to its end. */
+    after: ProjectedPosition[];
+    gapA: ProjectedPosition;
+    gapB: ProjectedPosition;
+    /** The gap's middle, on the path. */
+    center: ProjectedPosition;
+}
+
+/**
+ * `path` with a gap `halfGap` either side of a point on it, measured **along the path**.
+ *
+ * The point is given as segment `index` and fraction `t`, which is what `projectedMidSegment`
+ * and `centerSegmentIndex` answer. The gap used to be cut inside that one segment, which is
+ * right for a line drawn as a few long segments and wrong for a smoothed one, where the segment
+ * is a short chord of the curve and a glyph's gap runs off both ends of it. Measured along the
+ * path the two agree whenever the gap fits its segment, and the curve gets the same gap.
+ *
+ * The remaining line is returned as runs rather than one piece per segment, so a dash carries
+ * on along a curve instead of restarting at every chord.
+ */
+export function cutGapAlongPath(path: ProjectedPosition[], index: number, t: number, halfGap: number): PathGap {
+    const middle = pathLength(path.slice(0, index + 1)) + Math.hypot(path[index + 1][0] - path[index][0], path[index + 1][1] - path[index][1]) * t;
+    const total = pathLength(path);
+    const a = Math.max(0, middle - halfGap);
+    const b = Math.min(total, middle + halfGap);
+    const before = a > 0 ? pathBetween(path, 0, a) : [path[0]];
+    const after = b < total ? pathBetween(path, b, total) : [path[path.length - 1]];
+    const centerRun = pathBetween(path, 0, middle);
+    return {
+        outline: [...splitAtCorners(before), ...splitAtCorners(after)].filter(run => run.length > 1 && pathLength(run) > 0),
+        before,
+        after,
+        gapA: before[before.length - 1],
+        gapB: after[0],
+        center: centerRun.length ? centerRun[centerRun.length - 1] : path[0],
+    };
+}
+
+/**
+ * How far `path` runs either side of a point on it before turning more than `maxTurnDegrees`
+ * away from its direction there: **the edge a label or glyph at that point sits on**.
+ *
+ * The point is segment `index` at fraction `t`. On a hard line every corner turns past the
+ * limit, so the answer is the segment itself, split at the point, which is what the marks
+ * placed "in a segment" were always measured against. On a smoothed line that segment is a
+ * short chord and the answer is the nearly straight stretch of curve around it instead,
+ * which is the same thing the operator sees. `closed` walks a ring round its seam.
+ * @see CORNER_DEGREES
+ */
+export function straightStretch(
+    path: readonly ProjectedPosition[],
+    index: number,
+    t = 0.5,
+    closed = false,
+    maxTurnDegrees = CORNER_DEGREES,
+): {before: number; after: number} {
+    const m = path.length - 1;
+    const seg = (j: number) => {
+        const k = closed ? ((j % m) + m) % m : j;
+        if (k < 0 || k >= m) return undefined;
+        const [a, b] = [path[k], path[k + 1]];
+        return {dx: b[0] - a[0], dy: b[1] - a[1], length: Math.hypot(b[0] - a[0], b[1] - a[1])};
+    };
+    const here = seg(index);
+    if (!here || !here.length) return {before: 0, after: 0};
+    const limit = Math.cos((maxTurnDegrees * Math.PI) / 180);
+    const walk = (step: 1 | -1) => {
+        let total = 0;
+        for (let n = 1; n < m; n++) {
+            const next = seg(index + step * n);
+            if (!next) break;
+            if (!next.length) continue;
+            if ((next.dx * here.dx + next.dy * here.dy) / (next.length * here.length) < limit) break;
+            total += next.length;
+        }
+        return total;
+    };
+    return {before: here.length * t + walk(-1), after: here.length * (1 - t) + walk(1)};
+}
+
+/**
+ * The runs of a ring walked from `walk[0]`, with the two that meet at the walk's seam joined back
+ * into one, so a closed outline cut by gaps comes back as one stroke per stretch between gaps.
+ *
+ * **Only when both really reach the seam.** A gap that runs past the walk's start leaves the
+ * first run starting partway round, and joining it to the last would draw a chord across that
+ * gap. Points are compared exactly, since `pathBetween` copies the walk's own point at either end.
+ */
+export function joinedAtSeam<P extends readonly number[]>(runs: P[][], walk: readonly P[]): P[][] {
+    if (runs.length < 2) return runs;
+    const [first, last] = [runs[0], runs[runs.length - 1]];
+    const same = (a: P | undefined, b: P | undefined) => !!a && !!b && a[0] === b[0] && a[1] === b[1];
+    if (!same(first[0], walk[0]) || !same(last[last.length - 1], walk[walk.length - 1])) return runs;
+    return [[...last, ...first.slice(1)], ...runs.slice(1, -1)];
+}
+
+/**
+ * Segment `index`'s direction, as long as the edge it belongs to.
+ *
+ * What a mark capped against "its segment" should be handed. On a hard line it is the segment
+ * itself; on a smoothed one the segment is a short chord and a glyph capped against it shrank
+ * to a dot. @see straightStretch
+ */
+export function runVector(path: readonly ProjectedPosition[], index: number, t = 0.5, closed = false): [number, number] {
+    const [a, b] = [path[index], path[index + 1]];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (!length) return [0, 0];
+    const {before, after} = straightStretch(path, index, t, closed);
+    const run = Math.max(length, before + after);
+    return [((b[0] - a[0]) / length) * run, ((b[1] - a[1]) / length) * run];
+}
+
+/**
+ * How far a smoothed outline may turn either side of a label gap and still count as the one
+ * edge it sits on. A hexagon's edge spans 60 degrees of turning and a square's 90, so 45 either
+ * side judges a curve the way a generous four-sided outline would be judged: a gap that would
+ * fit a side of the box it was drawn as fits the curve too. A hard outline's corners turn
+ * further than this almost always, so there the edge is still the segment. @see gapFits
+ */
+const GAP_EDGE_DEGREES = 45;
+
+/** Whether a gap `halfGap` either side of a point on `path` fits the edge it sits on. @see straightStretch */
+export function gapFits(path: readonly ProjectedPosition[], index: number, t: number, halfGap: number, closed = false): boolean {
+    const {before, after} = straightStretch(path, index, t, closed, GAP_EDGE_DEGREES);
+    return halfGap < Math.min(before, after);
+}
+
+/**
+ * The index of a ring's **topmost** segment: the one whose midpoint has the highest northing.
+ *
+ * Where group or series of targets writes its designation, cutting the ring for it. One
+ * statement for the gap, for each engine's label anchor and for the label's rotation, all
+ * read off the ring as drawn, smoothed or not, so the three cannot land on different edges.
+ */
+export function topmostSegmentIndex(ring: readonly ProjectedPosition[]): number {
+    let best = 0;
+    let bestY = -Infinity;
+    for (let i = 0; i < ring.length - 1; i++) {
+        const y = (ring[i][1] + ring[i + 1][1]) / 2;
+        if (y > bestY) {
+            bestY = y;
+            best = i;
+        }
+    }
+    return best;
+}
+
+/**
+ * Where a whole number of items of `itemLength` sit along a run of `total`, centred.
+ *
+ * `n` items occupy `n * item + (n - 1) * gap` — gaps between them, not outside — so the
+ * count that fits is `floor((total + gap) / unit)` and the leftover splits evenly at the
+ * two ends. Returns the distance along the run at which each item starts.
+ */
+export function centredRun(total: number, itemLength: number, gap: number): number[] {
+    const unit = itemLength + gap;
+    if (unit <= 0 || itemLength <= 0) return [];
+    const count = Math.floor((total + gap) / unit);
+    if (count < 1) return [];
+    const startAt = (total - (count * itemLength + (count - 1) * gap)) / 2;
+    return Array.from({length: count}, (_, i) => startAt + i * unit);
+}
+
+/**
+ * Lays decorations along one run, **interleaved with the run's own vertices in order**.
+ *
+ * The ordering is the whole point. Emitting every decoration and then the run's vertices
+ * produces a polyline that walks forward to the last item and then jumps back to the run's
+ * second vertex to retrace it — a straight chord across the curve, which on a fortified line
+ * drawn round a bend showed as a bare line cutting the corner. Measured on a quarter-circle
+ * of 48 chords: a 412-unit jump where the longest real chord was 9.8.
+ *
+ * Vertices falling *inside* an item's span are dropped, because the item's own two feet
+ * already carry the baseline across it.
+ */
+function alongRun(
+    run: ProjectedPosition[],
+    itemLength: number,
+    gap: number,
+    item: (from: number, to: number) => ProjectedPosition[],
+): ProjectedPosition[] {
+    const cumulative = [0];
+    for (let i = 1; i < run.length; i++) {
+        cumulative.push(cumulative[i - 1] + Math.hypot(run[i][0] - run[i - 1][0], run[i][1] - run[i - 1][1]));
+    }
+    const total = cumulative[cumulative.length - 1];
+
+    const out: ProjectedPosition[] = [];
+    let next = 1;
+    for (const from of centredRun(total, itemLength, gap)) {
+        while (next < run.length && cumulative[next] <= from) out.push(run[next++]);
+        out.push(...item(from, from + itemLength));
+        while (next < run.length && cumulative[next] <= from + itemLength) next++;
+    }
+    while (next < run.length) out.push(run[next++]);
+    return out;
+}
+
+/**
+ * Walks a path adding triangular teeth along it, returning one continuous
+ * polyline that includes both the baseline and the teeth.
+ *
+ * **Each segment is laid out on its own**, with a whole number of teeth centred along it
+ * and nothing carried across the join. A running offset used to be carried from one
+ * segment to the next, which spent the leftover immediately after each corner: teeth
+ * crowded one side of a join and left a gap on the other, and on a closed ring the last
+ * segment met the first mid-pattern. @see castellatedPath, which solves the same problem
+ * the other way — one count over the whole path, with the spacing stretched to fit.
+ *
+ * `side` is `'up'`, or ±1 to force a side. **`'up'` is decided per segment from
+ * the segment's own x-direction, not from its direction of travel.** A closed
+ * ring has an inside and an outside; an open line has neither, so the only stable
+ * choice is the one the map defines. Picking a side of travel is what made the
+ * same line drawn right-to-left come out with its teeth on the other side.
+ */
+export function crenellatedPath(
+    path: ProjectedPosition[],
+    heightMap: number,
+    baseMap: number,
+    gapMap: number,
+    side: number | 'up',
+): ProjectedPosition[] {
+    if (path.length < 2 || baseMap <= 0) return path;
+    const out: ProjectedPosition[] = [path[0]];
+
+    for (const run of splitAtCorners(path)) {
+        out.push(...alongRun(run, baseMap, gapMap, (from, to) => {
+            const left = pathPointAt(run, from);
+            const right = pathPointAt(run, to);
+            const sideSign = side === 'up' ? upSign(left.dir) : side;
+            const dx = right.point[0] - left.point[0];
+            const dy = right.point[1] - left.point[1];
+            const n = Math.hypot(dx, dy) || 1;
+            return [
+                left.point,
+                [
+                    (left.point[0] + right.point[0]) / 2 + (-dy / n) * sideSign * heightMap,
+                    (left.point[1] + right.point[1]) / 2 + (dx / n) * sideSign * heightMap,
+                ],
+                right.point,
+            ];
+        }));
+    }
+    return out;
+}
+
+/** Smallest angle between two directions, in radians — always in [0, π]. */
+export function angleBetween(a: number, b: number): number {
+    const d = Math.abs(a - b) % (2 * Math.PI);
+    return d > Math.PI ? 2 * Math.PI - d : d;
+}
+
+/**
+ * Trims the end of one arc that runs into a label, back to `halfGap` radians
+ * clear of the label axis. Whichever end is nearer the axis is the one cut, so
+ * this works for an arc that approaches the label from either side.
+ *
+ * The cut lands **exactly** on the gap edge rather than on the nearest sample:
+ * the generator's arcs are 100 points over 160°, and at a large radius one 1.6°
+ * step is several pixels — enough for the two sides of the gap to look uneven.
+ *
+ * Angles are measured about the projected center, and radii are never assumed: a
+ * geodesic circle is not quite a circle in EPSG:3857, so anything that
+ * reconstructed a point from the graphic's size would drift off the drawn arc.
+ */
+export function cutArcAtLabel(
+    points: ProjectedPosition[],
+    center: ProjectedPosition,
+    axis: number,
+    halfGap: number,
+): ProjectedPosition[] {
+    if (points.length < 2) return points;
+    const angleAt = (p: ProjectedPosition) => Math.atan2(p[1] - center[1], p[0] - center[0]);
+    const clearance = (p: ProjectedPosition) => angleBetween(angleAt(p), axis);
+
+    const fromStart = clearance(points[0]) <= clearance(points[points.length - 1]);
+    const seq = fromStart ? points : [...points].reverse();
+
+    let i = 0;
+    while (i < seq.length && clearance(seq[i]) < halfGap) i++;
+    if (i === 0) return points;        // already clear of the label
+    if (i >= seq.length) return [];    // the whole arc is inside the gap
+
+    const before = clearance(seq[i - 1]);
+    const after = clearance(seq[i]);
+    const t = after > before ? (halfGap - before) / (after - before) : 0;
+    const edge: ProjectedPosition = [
+        seq[i - 1][0] + t * (seq[i][0] - seq[i - 1][0]),
+        seq[i - 1][1] + t * (seq[i][1] - seq[i - 1][1]),
+    ];
+    const kept: ProjectedPosition[] = [edge, ...seq.slice(i)];
+    return fromStart ? kept : kept.reverse();
+}
+
+/**
+ * Screen rotation for text laid along a segment, kept upright.
+ *
+ * Two frames meet here and the sign is easy to get wrong: map-space angles run
+ * counter-clockwise from east, screen rotations run clockwise because the y-axis
+ * is flipped. Hence the negation, and then the π flip that stops a label reading
+ * upside down on a westward segment.
+ */
+export function uprightRotation(from: ProjectedPosition, to: ProjectedPosition): number {
+    let rotation = -Math.atan2(to[1] - from[1], to[0] - from[0]);
+    if (uprightFlipped(from, to)) rotation += Math.PI;
+    if (rotation > Math.PI) rotation -= 2 * Math.PI;
+    return rotation;
+}
+
+/**
+ * Whether {@link uprightRotation} turned the text through half a turn to keep it readable.
+ *
+ * **An exactly vertical segment reads bottom to top whichever way it was drawn**, so its
+ * half-turn is taken at `+π/2` and not at `-π/2`. Without that tie the two ends of one vertical
+ * line read in opposite directions, and one of them sat on the line, because
+ * {@link offsetAbove} can only match one of them. Two clicks in the same pixel column draw it.
+ */
+export function uprightFlipped(from: ProjectedPosition, to: ProjectedPosition): boolean {
+    const raw = -Math.atan2(to[1] - from[1], to[0] - from[0]);
+    return raw >= Math.PI / 2 || raw < -Math.PI / 2;
+}
+
+/**
+ * The alignment to pair with {@link uprightRotation}, so a label grows **along the
+ * segment** rather than back down it.
+ *
+ * The two are halves of one decision and were only ever half made. `uprightRotation`
+ * turns a westward label through half a turn so it reads the right way up — and that
+ * reverses which way the glyphs run on screen. A `left` alignment held against the same
+ * anchor therefore lays the text out in the *opposite* ground direction: measured on a
+ * counter-attack by fire, the far edge of `CATK ALPHA` sat 294 km from the arrow tip
+ * pointing east and 306 km pointing west, the difference being exactly the label's own
+ * width. It reads as the label drifting away from the arrowhead on west-facing arrows.
+ *
+ * `center` is unaffected, which is why the members that use it never showed the fault.
+ * The axis-of-advance family had already worked this out and open-codes it as
+ * `c1[0] >= c0[0] ? 'right' : 'left'`; this is the same test, derived from the rotation
+ * itself so the two cannot drift apart.
+ */
+export function alignAlong(
+    align: 'left' | 'center' | 'right',
+    from: ProjectedPosition,
+    to: ProjectedPosition,
+): 'left' | 'center' | 'right' {
+    if (align === 'center' || !uprightFlipped(from, to)) return align;
+    return align === 'left' ? 'right' : 'left';
+}
+
+/**
+ * Offsets an anchor perpendicular to a segment, on the side that is **up on
+ * screen**, by a constant number of pixels.
+ *
+ * "Up" is normalized against the map's north rather than taken from the
+ * segment's direction of travel: a counter-clockwise perpendicular flips when the
+ * same line is drawn right-to-left, which put every label below the line instead
+ * of above it. A vertical segment has no up side, so the tie breaks west: that is where the
+ * top of the text is, since {@link uprightRotation} reads a vertical segment bottom to top.
+ *
+ * The offset is `px × resolution`, so it is a constant screen distance at every
+ * zoom — the house rule for anything that has to clear a glyph.
+ */
+export function offsetAbove(
+    anchor: ProjectedPosition,
+    a: ProjectedPosition,
+    b: ProjectedPosition,
+    resolution: number,
+    offsetPx: number,
+): ProjectedPosition {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return anchor;
+
+    let nx = -dy / len;
+    let ny = dx / len;
+    if (ny < 0 || (ny === 0 && nx > 0)) {
+        nx = -nx;
+        ny = -ny;
+    }
+    const offsetMap = offsetPx * Math.abs(resolution);
+    return [anchor[0] + nx * offsetMap, anchor[1] + ny * offsetMap];
+}
+
+/** The mirror of {@link offsetAbove} through the anchor — the same distance, below. */
+export function offsetBelow(
+    anchor: ProjectedPosition,
+    a: ProjectedPosition,
+    b: ProjectedPosition,
+    resolution: number,
+    offsetPx: number,
+): ProjectedPosition {
+    const [x, y] = offsetAbove(anchor, a, b, resolution, offsetPx);
+    return [2 * anchor[0] - x, 2 * anchor[1] - y];
+}
+
+/** Which way a ring winds. Decides which perpendicular points out of it. */
+export function ringIsClockwise(ring: ProjectedPosition[]): boolean {
+    let sum = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+        sum += (ring[i + 1][0] - ring[i][0]) * (ring[i + 1][1] + ring[i][1]);
+    }
+    return sum > 0;
+}
+
+/** The point and unit direction `distance` along a path. */
+export function pathPointAt(path: ProjectedPosition[], distance: number): {point: ProjectedPosition; dir: ProjectedPosition} {
+    let remaining = Math.max(0, distance);
+    for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (length === 0) continue;
+        const dir: ProjectedPosition = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+        if (remaining <= length) {
+            return {point: [a[0] + dir[0] * remaining, a[1] + dir[1] * remaining], dir};
+        }
+        remaining -= length;
+    }
+    const a = path[path.length - 2];
+    const b = path[path.length - 1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return {point: b, dir: [(b[0] - a[0]) / length, (b[1] - a[1]) / length]};
+}
+
+/** Which perpendicular of a direction reads as "up" on screen. */
+export function upSign(dir: ProjectedPosition): number {
+    return dir[0] >= 0 ? 1 : -1;
+}
+
+/**
+ * Teeth around a closed ring, on the side asked for.
+ *
+ * **`outward` is a property of the ring, not of the order its corners were
+ * clicked.** A ring drawn anticlockwise has its outside on the other hand from one
+ * drawn clockwise, so the winding is measured and the side sign derived from it —
+ * without that, the same area drawn the other way round grows its teeth inward.
+ */
+export function obstacleRing(ring: ProjectedPosition[], resolution: number, outward: boolean): ProjectedPosition[] {
+    const {heightMap, baseMap, gapMap} = obstacleToothSize(ring, true, resolution);
+    if (heightMap <= 0) return ring;
+    const outwardIsLeft = ringIsClockwise(ring);
+    const sideSign = outward === outwardIsLeft ? 1 : -1;
+    return crenellatedPath(ring, heightMap, baseMap, gapMap, sideSign);
+}
+
+/** Square merlon dimensions, in screen pixels before `decorationScale`. */
+export const FORTIFIED_MERLON_PX = 15;
+export const FORTIFIED_CRENEL_PX = 15;
+export const FORTIFIED_HEIGHT_PX = 11;
+
+/**
+ * The height below which a merlon stops being drawn — lower than the general floor.
+ *
+ * A merlon is a 15 px wide step, and a step reads as a notch at a height where a triangle
+ * of the same height would be a dot. Half the usual floor roughly doubles the range of
+ * shape sizes over which the fortified graphics keep their battlements.
+ * @see DECORATION_MIN_PX
+ */
+export const FORTIFIED_MIN_PX = 1.5;
+
+/**
+ * Square battlements standing off a path — the fortified line and area.
+ *
+ * **Laid out per segment, like {@link crenellatedPath}, and for the same reason.** This
+ * used to distribute one whole count over the path's *total* length and stretch the spacing
+ * to fit, on the grounds that a closed ring has to come back to where it started. It did
+ * solve the seam, at two costs that showed on any shape with corners: it walked the path
+ * with `pathPointAt`, so a merlon whose left point fell on one segment and its right on the
+ * next bent around the corner; and the stretch applied to the merlon *width* as well as the
+ * gap, so one outline could carry several merlon sizes.
+ *
+ * A whole number centred on each segment settles the seam too — every segment is
+ * self-contained, so there is no pattern left running when the ring closes — and it keeps
+ * the merlon the size it is meant to be. A segment too short for one draws bare.
+ */
+export function castellatedPath(
+    path: ProjectedPosition[],
+    merlonMap: number,
+    crenelMap: number,
+    heightMap: number,
+    side: number | 'up',
+): ProjectedPosition[] {
+    if (path.length < 2 || merlonMap <= 0) return path;
+    const out: ProjectedPosition[] = [path[0]];
+
+    for (const run of splitAtCorners(path)) {
+        out.push(...alongRun(run, merlonMap, crenelMap, (from, to) => {
+            const left = pathPointAt(run, from);
+            const right = pathPointAt(run, to);
+            const sign = side === 'up' ? upSign(left.dir) : side;
+            const ln: ProjectedPosition = [-left.dir[1] * sign, left.dir[0] * sign];
+            const rn: ProjectedPosition = [-right.dir[1] * sign, right.dir[0] * sign];
+            return [
+                left.point,
+                [left.point[0] + ln[0] * heightMap, left.point[1] + ln[1] * heightMap],
+                [right.point[0] + rn[0] * heightMap, right.point[1] + rn[1] * heightMap],
+                right.point,
+            ];
+        }));
+    }
+    return out;
+}
+
+/** A fortified ring's merlons, sized against the shape at this resolution. */
+export function fortifiedRing(ring: ProjectedPosition[], resolution: number): ProjectedPosition[] {
+    const scale = decorationScale(ring, true, resolution, FORTIFIED_HEIGHT_PX, FORTIFIED_MERLON_PX, FORTIFIED_MIN_PX);
+    if (scale <= 0) return ring;
+    return castellatedPath(
+        ring,
+        FORTIFIED_MERLON_PX * scale * resolution,
+        FORTIFIED_CRENEL_PX * scale * resolution,
+        FORTIFIED_HEIGHT_PX * scale * resolution,
+        ringIsClockwise(ring) ? 1 : -1,
+    );
+}
+
+/** Miter ceiling, so a hairpin bend pinches rather than growing a spike. */
+const MAX_MITER = 4;
+
+/**
+ * A true parallel of `path`, `d` meters to its left (negative for its right).
+ *
+ * Offsets each vertex along the **bisector** of its two segments, lengthened by
+ * `1 / cos(half-angle)` — the standard miter. Taking the direction *at* the vertex
+ * instead (which is one of the two adjoining segments) makes the two sides stop
+ * being parallel on a bend: the under-wire and over-wire of a high wire fence
+ * visibly splay apart.
+ *
+ * The miter is capped because at a hairpin `1 / cos(half-angle)` runs away to
+ * infinity, and an uncapped spike looks worse than a slightly pinched corner.
+ */
+export function parallelPath(path: ProjectedPosition[], d: number): ProjectedPosition[] {
+    if (!d || path.length < 2) return path;
+
+    const normals: ProjectedPosition[] = [];
+    for (let i = 0; i + 1 < path.length; i++) {
+        const dx = path[i + 1][0] - path[i][0];
+        const dy = path[i + 1][1] - path[i][1];
+        const len = Math.hypot(dx, dy) || 1;
+        normals.push([-dy / len, dx / len]);
+    }
+
+    return path.map((p, i) => {
+        const a = normals[Math.max(i - 1, 0)];
+        const b = normals[Math.min(i, normals.length - 1)];
+        const mx = a[0] + b[0];
+        const my = a[1] + b[1];
+        const m = Math.hypot(mx, my);
+        // Doubling back on itself: no bisector to speak of, so take the segment normal.
+        if (m < 1e-9) return [p[0] + a[0] * d, p[1] + a[1] * d] as ProjectedPosition;
+        // |a| = |b| = 1, so |a + b| = 2 cos(half-angle) and the miter factor is 2 / |a + b|.
+        const miter = Math.min(2 / m, MAX_MITER);
+        return [p[0] + (mx / m) * d * miter, p[1] + (my / m) * d * miter] as ProjectedPosition;
+    });
+}
+
+/**
+ * The point `dist` meters along `path`, with the unit tangent there.
+ *
+ * `null` past the end, rather than clamping to the last vertex — a caller walking a
+ * repeating pattern uses that to know when to stop, and a clamped point would stack
+ * every remaining mark on the final vertex.
+ */
+export function walkPath(path: ProjectedPosition[], dist: number): {point: ProjectedPosition; tangent: ProjectedPosition} | null {
+    let acc = 0;
+    for (let i = 0; i + 1 < path.length; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (seg === 0) continue;
+        if (acc + seg >= dist) {
+            const t = (dist - acc) / seg;
+            return {
+                point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+                tangent: [(b[0] - a[0]) / seg, (b[1] - a[1]) / seg],
+            };
+        }
+        acc += seg;
+    }
+    return null;
+}
+
+/**
+ * The segment of a path that crosses the shape's **projected** midpoint.
+ *
+ * Each vertex is projected onto the straight line from the first to the last, so
+ * "middle" is measured along the graphic's own axis rather than along its drawn
+ * path. A line that doubles back would otherwise put its label at the midpoint of
+ * the *path*, which is not where the eye reads the middle of the symbol.
+ *
+ * Returns the segment's index and the fraction `t` along it — enough to
+ * interpolate the point, cut a gap, or split the path in two.
+ */
+export function projectedMidSegment(coords: ProjectedPosition[]): {index: number; t: number} {
+    const start = coords[0];
+    const end = coords[coords.length - 1];
+    const baseDx = end[0] - start[0];
+    const baseDy = end[1] - start[1];
+    const baseLen = Math.hypot(baseDx, baseDy);
+    if (baseLen === 0) return {index: 0, t: 0.5};
+
+    const projected = coords.map(([x, y]) => ((x - start[0]) * baseDx + (y - start[1]) * baseDy) / baseLen);
+    const min = Math.min(...projected);
+    const max = Math.max(...projected);
+    const span = max - min;
+    const normalized = projected.map(d => (span === 0 ? 0 : (d - min) / span));
+
+    let index = 0;
+    for (let i = 0; i < normalized.length - 1; i++) {
+        if (normalized[i] <= 0.5 && normalized[i + 1] >= 0.5) {
+            index = i;
+            break;
+        }
+    }
+    const denom = normalized[index + 1] - normalized[index];
+    return {index, t: denom === 0 ? 0.5 : (0.5 - normalized[index]) / denom};
+}
+
+/** Scallop dimensions, in screen pixels before {@link decorationScale}. */
+export const WAVE_WAVELENGTH_PX = 15;
+export const WAVE_AMPLITUDE_PX = 8;
+/** How far apart the line of contact's two identities sit, in screen pixels. */
+export const LINE_OF_CONTACT_OFFSET_PX = 16;
+/** Points per half-wave. Enough that a scallop reads as a curve, not a tent. */
+const WAVE_STEPS = 12;
+
+/**
+ * Slides a path sideways by `offsetMap`, on the side `sideSign` selects.
+ *
+ * Per vertex, using the direction at that point along the path, so a bend keeps
+ * both halves of a pair the same distance apart rather than pinching on the inside.
+ */
+export function offsetPath(path: ProjectedPosition[], sideSign: number, offsetMap: number): ProjectedPosition[] {
+    if (!offsetMap || path.length < 2) return path;
+    const total = pathLength(path);
+    if (total === 0) return path;
+
+    let traveled = 0;
+    return path.map((point, i) => {
+        if (i > 0) traveled += Math.hypot(point[0] - path[i - 1][0], point[1] - path[i - 1][1]);
+        const {dir} = pathPointAt(path, Math.min(traveled, total));
+        return [point[0] - dir[1] * sideSign * offsetMap, point[1] + dir[0] * sideSign * offsetMap] as ProjectedPosition;
+    });
+}
+
+/**
+ * A scalloped path — the forward line of own troops, and each half of the line of
+ * contact.
+ *
+ * `offsetMap` shifts the whole wave sideways off the drawn line, which is what
+ * separates the line of contact's two identities. When there is no wave left to
+ * draw the offset still applies: the line of contact is a *pair*, and handing back
+ * the undisplaced path put its two halves on top of each other the moment the
+ * waves were dropped.
+ */
+export function wavePath(
+    path: ProjectedPosition[],
+    wavelengthMap: number,
+    amplitudeMap: number,
+    sideSign: number,
+    offsetMap = 0,
+): ProjectedPosition[] {
+    const total = pathLength(path);
+    if (path.length < 2 || wavelengthMap <= 0 || total === 0) return offsetPath(path, sideSign, offsetMap);
+
+    const count = Math.max(1, Math.round(total / wavelengthMap));
+    const wavelength = total / count;
+    const out: ProjectedPosition[] = [];
+
+    const shifted = (at: {point: ProjectedPosition; dir: ProjectedPosition}): ProjectedPosition => {
+        const n: ProjectedPosition = [-at.dir[1] * sideSign, at.dir[0] * sideSign];
+        return [at.point[0] + n[0] * offsetMap, at.point[1] + n[1] * offsetMap];
+    };
+
+    for (let i = 0; i < count; i++) {
+        const from = pathPointAt(path, i * wavelength);
+        const to = pathPointAt(path, (i + 1) * wavelength);
+        const a = shifted(from);
+        const b = shifted(to);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const chord = Math.hypot(dx, dy) || 1;
+        const nx = -(dy / chord) * sideSign;
+        const ny = (dx / chord) * sideSign;
+
+        for (let step = 0; step <= WAVE_STEPS; step++) {
+            if (i > 0 && step === 0) continue; // the previous bump ended here
+            const t = step / WAVE_STEPS;
+            const bump = Math.sin(Math.PI * t) * amplitudeMap;
+            out.push([a[0] + dx * t + nx * bump, a[1] + dy * t + ny * bump]);
+        }
+    }
+    return out;
+}
+
+/** Screen size of a generator-emitted solid arrowhead, tip to base. */
+export const SOLID_ARROWHEAD_PX = 15;
+
+/**
+ * Half the angle between the barbs of that arrowhead, in degrees.
+ *
+ * **Not chosen here — derived from the head the generators already build.**
+ * `GeometryService.createArrowHeadPolygon` sets its base one `arrowSize` back from the tip
+ * and half an `arrowSize` to either side, so the half-angle is `atan(0.5)` and every solid
+ * head in this library that goes through it — Fix, tactical fix, ferry crossing — is that
+ * shape. A paint that builds its own head with `solidArrowHead` has to be told the number,
+ * and the number is this one: a head at some other angle reads as a different family of
+ * symbol, which is what the search area's first version did at 46 degrees.
+ */
+export const SOLID_ARROWHEAD_HALF_ANGLE_DEG = 26.565;
+/** Ceiling on that head as a share of the path it terminates. */
+export const ARROWHEAD_MAX_SHARE = 0.25;
+
+/**
+ * Redraws a generator-emitted solid arrowhead at a fixed screen size.
+ *
+ * The generators build their heads in meters — Fix's off the drawn line's length,
+ * Ferry crossing's off the dragged `size`, Turn's off the resolution at draw time
+ * — so resizing the graphic resized the head, and Turn's swelled on screen as you
+ * zoomed in. The head is a symbol, not part of the shape: it should hold one size.
+ *
+ * Scaled **about the tip**, because the tip is the meaningful point: it is where
+ * the arrow lands, and the generator has already put it in the right place.
+ *
+ * Returns null when the head would fall under `DECORATION_MIN_PX`, letting the
+ * plain geometry stand rather than drawing a smudge.
+ */
+export function screenSizedArrowHead(
+    ring: ProjectedPosition[],
+    path: ProjectedPosition[],
+    resolution: number,
+    measure: 'traversed' | 'reach' = 'traversed',
+): ProjectedPosition[] | null {
+    if (!ring || ring.length < 3) return null;
+    const [tip, left, right] = ring;
+    const baseMid: ProjectedPosition = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+    const currentLength = Math.hypot(tip[0] - baseMid[0], tip[1] - baseMid[1]);
+    if (currentLength === 0) return null;
+
+    /*
+     * **Which length the head is allowed a share of.**
+     *
+     * `traversed` is how far the pen travels — right for a route, where the drawn path is
+     * the symbol and a long winding one really does have room for a full-size head.
+     *
+     * `reach` is end to end, and it is what a symbol wants when its line is a *texture*
+     * rather than a route. Fix's zigzag traverses roughly twice its own run, so a share of
+     * the traversal let its head reach the 15 px ceiling on a symbol only 50 px across —
+     * a triangle a third the width of the graphic, which is what the sweep showed. Ferry
+     * crossing was always right and looks unchanged here, because its line is straight and
+     * the two measures are the same number for it.
+     */
+    const span = measure === 'reach' && path.length >= 2
+        ? Math.hypot(path[path.length - 1][0] - path[0][0], path[path.length - 1][1] - path[0][1])
+        : pathLength(path);
+    const availablePx = path.length >= 2 ? span / resolution : Infinity;
+    const wantedPx = Math.min(SOLID_ARROWHEAD_PX, availablePx * ARROWHEAD_MAX_SHARE);
+    if (wantedPx < DECORATION_MIN_PX) return null;
+
+    const factor = (wantedPx * resolution) / currentLength;
+    return ring.map(p => [tip[0] + (p[0] - tip[0]) * factor, tip[1] + (p[1] - tip[1]) * factor] as ProjectedPosition);
+}

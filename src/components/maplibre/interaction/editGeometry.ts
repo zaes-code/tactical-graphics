@@ -1,0 +1,990 @@
+/**
+ * # Editing a graphic by editing its description
+ *
+ * Every gesture here changes the **base geometry** or the **property bag** and
+ * lets the generator redraw. Nothing touches the drawn output.
+ *
+ * That is the difference from the OpenLayers controllers, which transform the
+ * rendered features in place and keep the numbers that produced them on the holder
+ * instance. It works there because those features are live objects a style
+ * function re-reads every frame. Here the drawn geometry is derived and thrown
+ * away on the next realization, so the only thing worth editing is the thing that
+ * survives: `base` plus `properties.tacticalGraphic`, which is also exactly what
+ * gets saved.
+ *
+ * The upshot is that these are pure functions of a portable description, so they
+ * need no holder, no controller and no map — which is what makes them testable and
+ * what would let a third renderer reuse them unchanged.
+ *
+ * ## Everything is done in projected meters
+ *
+ * A drag arrives as two lon/lat points, and lon/lat is not a metric space: moving
+ * a graphic "one degree east" moves it a different distance at 60° north than at
+ * the equator, and rotating in degrees is meaningless. So each operation projects,
+ * does planar arithmetic, and unprojects — the same frame every paint function
+ * works in.
+ */
+
+import type {Geometry, Position} from 'geojson';
+import {TacticalGraphicName, type ProjectedPosition, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import {latitudeFromMercatorY, setsWidthFromAnchor, BAND_SEPARATION_FRACTION, DEFAULT_OFFSET_SCALE, MIN_OFFSET_METERS, MIN_SECTOR_ARC_DEG, MIRROR_FLIP_MIN_PX, halfWidthFromBase, geodesicBearingDeg, geodesicDistanceM, resolveBandAzimuths, resolveBands, type RangeFanBand, type RangeFanOptions} from '@zaes/tactical-graphics';
+import {axisOf, axisWithWidthPoint, carriesWidthPointInBase, drawnAnchorFrame, generatorOrder, rotationToAzimuth, groundLength, mercatorScale, radarSectorOpening, rotationAnchor, rotationPivot} from '@zaes/tactical-graphics';
+import {toLonLat, toMercator} from '../projection';
+
+/** A graphic's editable state: what it was drawn from, and what shapes it. */
+export interface GraphicDescription {
+    geometry: Geometry;
+    properties: TacticalGraphicProperties;
+}
+
+/**
+ * Applies `fn` to every position of a geometry, whatever its nesting.
+ *
+ * **An empty array is nothing, not a position.** Recursing on `node[0]` alone reads
+ * `[]` as a coordinate pair, hands it to `fn`, and every downstream number becomes
+ * NaN — which then travels all the way to a rendered geometry that draws nothing,
+ * with no error anywhere. An empty `coordinates` is what a geometry mid-draw or a
+ * malformed import actually looks like, so this is reachable rather than
+ * theoretical.
+ *
+ * The test is on the *first element*: a position is an array of numbers, so a node
+ * whose first element is a number is one, and anything else is a level of nesting.
+ */
+function mapPositions(geometry: Geometry, fn: (position: Position) => Position): Geometry {
+    if (geometry.type === 'GeometryCollection') {
+        return {type: 'GeometryCollection', geometries: geometry.geometries.map(g => mapPositions(g, fn))};
+    }
+    const walk = (node: unknown): unknown => {
+        if (!Array.isArray(node) || !node.length) return node;
+        return typeof node[0] === 'number' ? fn(node as Position) : node.map(walk);
+    };
+    return {...geometry, coordinates: walk((geometry as {coordinates: unknown}).coordinates)} as Geometry;
+}
+
+/** Every position of a geometry, in order. */
+export function positionsOf(geometry: Geometry): Position[] {
+    const out: Position[] = [];
+    mapPositions(geometry, position => {
+        out.push(position);
+        return position;
+    });
+    return out;
+}
+
+/**
+ * The point a rotate or a resize is measured about.
+ *
+ * **The rule is the library's, not this renderer's.** It differs per base shape —
+ * a point turns about itself, a drawn line about its first vertex, a polygon about
+ * a point inside itself — and choosing here rather than asking is what made the two
+ * engines edit differently from the same drag. @see rotationAnchor
+ */
+export function centerOf(geometry: Geometry, name?: TacticalGraphicName): Position {
+    return rotationAnchor(geometry as {type: string; coordinates: unknown}, name);
+}
+
+/**
+ * The pivot for a whole description — the same point, with the graphic's name supplied.
+ *
+ * Every gesture here has the name to hand, and one family needs it: a symbol described by
+ * anchor points turns about its own centre rather than about its first vertex, which for
+ * a Turn is the tip of the arrow. @see rotationAnchor
+ */
+function pivotOf(description: GraphicDescription): Position {
+    return centerOf(description.geometry, description.properties.name);
+}
+
+/**
+ * The point a **rotate** turns about, which is the frame origin for all but a couple of
+ * graphics. @see rotationPivot for why it is a separate question.
+ */
+function turningPointOf(description: GraphicDescription): Position {
+    return rotationPivot(
+        description.geometry as {type: string; coordinates: unknown},
+        description.properties.name,
+    );
+}
+
+/** Moves a graphic by the metric offset between two lon/lat points. */
+export function translate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
+    const [fromX, fromY] = toMercator([from[0], from[1]]);
+    const [toX, toY] = toMercator([to[0], to[1]]);
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+
+    return {
+        ...description,
+        geometry: mapPositions(description.geometry, position => {
+            const [x, y] = toMercator([position[0], position[1]]);
+            return toLonLat([x + dx, y + dy]);
+        }),
+    };
+}
+
+/**
+ * Turns a graphic about its center by the angle the cursor swept.
+ *
+ * Two graphics rotate two different ways and the difference is not cosmetic:
+ *
+ * - A **point-anchored** graphic keeps its base — a single point has no
+ *   orientation to change — and carries its bearing in `properties.rotation`,
+ *   which the generator reads. Rotating its geometry would do nothing at all.
+ * - A **drawn** graphic has no such property; its orientation *is* its vertices,
+ *   so they are the thing that turns.
+ *
+ * Getting this backwards is silent: the rotate appears to do nothing on half the
+ * catalog, which reads as a broken gesture rather than a wrong branch.
+ */
+export function rotate(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
+    // **`turningPointOf`, not `pivotOf`.** Every other gesture in this file measures from
+    // the symbol's frame origin — a resize scales from it, `setBend` and `setReach` read
+    // their cursor offsets against it — so that point cannot also carry "but this symbol
+    // turns about somewhere else". Turn is where the two differ. @see rotationPivot
+    const center = toMercator(turningPointOf(description) as [number, number]);
+    // **A grab on the pivot rotates by the direction of the drag**, which is what
+    // OpenLayers does: its start angle there is `atan2(0, 0)` = 0, so the graphic turns
+    // to face wherever the cursor went. Reproduced explicitly rather than left to
+    // `atan2` of a sub-meter vector, which is the direction of a rounding error.
+    // @see PIVOT_GRAB_SHARE
+    const [fromX, fromY] = toMercator([from[0], from[1]]);
+    const onPivot = Math.hypot(fromX - center[0], fromY - center[1]) <= PIVOT_GRAB_SHARE * spanOf(description.geometry);
+    const angleTo = (position: Position) => {
+        const [x, y] = toMercator([position[0], position[1]]);
+        return Math.atan2(y - center[1], x - center[0]);
+    };
+    // Zero when the grab was on the pivot, matching OpenLayers' `atan2(0, 0)`.
+    const delta = angleTo(to) - (onPivot ? 0 : angleTo(from));
+    if (!isFinite(delta) || delta === 0) return description;
+
+    if (description.geometry.type === 'Point') {
+        // Degrees, and **counter-clockwise from east** — the frame the generators
+        // build their local axes in, not a compass bearing.
+        const current = description.properties.rotation ?? 0;
+        const turned = current + (delta * 180) / Math.PI;
+        /*
+         * **A stated azimuth has to turn with it.** 200700 files its search axis as a
+         * bearing of its own, and the generator prefers that field over `rotation` — so a
+         * rotate that advanced only `rotation` turned nothing at all here, while the same
+         * gesture on OpenLayers restated the azimuth and the symbol swung. Measured: the
+         * bag came away carrying a rotation of -14° and an axis still reading 045°, which
+         * also hands the other engine a graphic that draws where it started.
+         * `RangeFanGraphicBase.syncRadarState` is the same identity on that side.
+         */
+        const azimuth = description.properties.searchAxisAzimuthDeg;
+        /*
+         * Advanced by the same turn, not rebuilt from `rotation`: the two are the same
+         * bearing read opposite ways round — `azimuth = 90 - rotation`, so a turn that adds
+         * to one subtracts from the other — and a graphic that filed an axis without ever
+         * filing a rotation has no rotation to rebuild from. Deriving it from a `rotation`
+         * of 0 put a symbol aimed at 045 on a bearing of 104.
+         */
+        const degrees = (delta * 180) / Math.PI;
+        return {
+            ...description,
+            properties: {
+                ...description.properties,
+                rotation: turned,
+                ...(azimuth === undefined ? {} : {searchAxisAzimuthDeg: rotationToAzimuth(90 - azimuth + degrees)}),
+            },
+        };
+    }
+
+    const cos = Math.cos(delta);
+    const sin = Math.sin(delta);
+    return {
+        ...description,
+        geometry: mapPositions(description.geometry, position => {
+            const [x, y] = toMercator([position[0], position[1]]);
+            const dx = x - center[0];
+            const dy = y - center[1];
+            return toLonLat([center[0] + dx * cos - dy * sin, center[1] + dx * sin + dy * cos]);
+        }),
+    };
+}
+
+/** Smallest a graphic may be scaled to in one drag, as a ratio. */
+const MIN_SCALE_STEP = 0.05;
+/**
+ * How close to the pivot a grab has to be before it is treated as *on* it, as a
+ * share of the graphic's own diagonal. Below this a rotate or a resize is refused
+ * rather than amplified. @see resize
+ */
+const PIVOT_GRAB_SHARE = 0.02;
+
+/** The graphic's diagonal in projected meters — its own scale, for relative tests. */
+function spanOf(geometry: Geometry): number {
+    const positions = positionsOf(geometry).map(p => toMercator([p[0], p[1]]));
+    if (positions.length < 2) return 0;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of positions) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    return Math.hypot(maxX - minX, maxY - minY);
+}
+
+/** Smallest radius a point-anchored graphic may be dragged to, in meters. */
+const MIN_RADIUS_METERS = 100;
+
+/**
+ * Grows or shrinks a graphic by the ratio of the cursor's distance from its
+ * center, before and after.
+ *
+ * A ratio rather than a delta, so the gesture feels the same whether the graphic
+ * is a hundred meters or a hundred kilometers across — and so a drag toward the
+ * center never flips the shape inside out, which a subtractive delta does the
+ * moment it passes zero.
+ *
+ * Point-anchored graphics scale their stored `radius`; drawn ones scale their
+ * vertices about the center, which is the same operation one level down.
+ */
+export function resize(description: GraphicDescription, from: Position, to: Position): GraphicDescription {
+    const center = toMercator(pivotOf(description) as [number, number]);
+    const distance = (position: Position) => {
+        const [x, y] = toMercator([position[0], position[1]]);
+        return Math.hypot(x - center[0], y - center[1]);
+    };
+
+    // A grab that starts **at the pivot** carries no scale: the ratio is a tiny
+    // number divided by a tiny number. Testing for exactly zero was not enough,
+    // because the grab point is a handle's rounded screen position converted back to
+    // lon/lat and lands a fraction of a meter off — which scaled a fields-of-fire to
+    // 1384 degrees across from one drag. Measured against the graphic's own size, so
+    // it needs no resolution.
+    const before = distance(from);
+    if (before <= PIVOT_GRAB_SHARE * spanOf(description.geometry)) return description;
+    const ratio = Math.max(MIN_SCALE_STEP, distance(to) / before);
+    if (!isFinite(ratio) || ratio === 1) return description;
+
+    if (description.geometry.type === 'Point') {
+        /*
+         * **A radius is not the only thing a centred graphic can be sized by.** 200700 is
+         * described by two ranges and files no radius at all — measured on the sweep, its bag
+         * carries `startRange` and `stopRange` and nothing else — so bailing out when there is
+         * no radius left it the one graphic of the six this scaling was written for that a
+         * resize still did not touch.
+         */
+        const scaled = scaleStatedDimensions(description.properties, ratio);
+        const current = description.properties.radius;
+        if (current === undefined) {
+            return scaled === description.properties ? description : {...description, properties: scaled};
+        }
+        return {
+            ...description,
+            properties: {...scaled, radius: Math.max(MIN_RADIUS_METERS, current * ratio)},
+        };
+    }
+
+    return {
+        ...description,
+        // **The sizes the drawn geometry does not carry scale with it.**
+        //
+        // A corridor's width and a line graphic's decoration are filed as their own
+        // distances in metres, beside the vertices rather than in them, so scaling only
+        // the vertices made the graphic longer while its rails and its chevrons stayed
+        // where they were: an air corridor resized 1.5x came out 420 x 40 px here against
+        // OpenLayers' 431 x 51. "Resize the whole graphic as is" is review, and
+        // the OpenLayers controller states it in the same words.
+        // @see LineGraphicController.handleResize
+        properties: scaleDrawnSizes(description.geometry, description.properties, ratio),
+        geometry: mapPositions(description.geometry, position => {
+            const [x, y] = toMercator([position[0], position[1]]);
+            return toLonLat([center[0] + (x - center[0]) * ratio, center[1] + (y - center[1]) * ratio]);
+        }),
+    };
+}
+
+/**
+ * The size properties a drawn graphic carries beside its vertices, scaled by `ratio`.
+ *
+ * `width` is the rails' separation and `decorationSize` the chevron, tooth or arrowhead —
+ * both real distances, and both meaningless to a graphic that does not carry them, which
+ * is why each is scaled only where it is already present. `radius` is deliberately absent:
+ * on this family it is the *same* number as the half-width, replayed by `setOffset` on
+ * restore, and scaling both would compound. @see toGraphicOptions
+ *
+ * **A polygon's `decorationSize` does not scale, and that is not an inconsistency.**
+ * OpenLayers splits this by controller family and so does this: `LineGraphicController`
+ * scales the size along with the line, `PolygonGraphicController` transforms the base and
+ * nothing else. The base's geometry type is the same split stated in the data.
+ *
+ * It matters for exactly one graphic. A hostile Encirclement's `decorationSize` is the
+ * width of the gaps its outline is *cut* into for the `ENY` amplifiers — a hole sized to
+ * hold text, not a decoration sized to match the shape. Scaling it with a 1.5x resize
+ * opened the gaps to 293 km against OpenLayers' 196 while the text in them stayed the
+ * size it was. @see EncirclementArea.generateGraphics
+ */
+function scaleDrawnSizes(
+    geometry: GraphicDescription['geometry'],
+    properties: TacticalGraphicProperties,
+    ratio: number,
+): TacticalGraphicProperties {
+    const scaled = (value: number | undefined): number | undefined =>
+        value !== undefined && value > 0 ? value * ratio : value;
+    const isArea = geometry.type === 'Polygon' || geometry.type === 'MultiPolygon';
+
+    return {
+        ...properties,
+        ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
+        ...(isArea || properties.decorationSize === undefined ? {} : {decorationSize: scaled(properties.decorationSize)}),
+    };
+}
+
+/**
+ * The dimensions a point-anchored graphic **states** rather than derives, scaled by `ratio`.
+ *
+ * `radius` is not the whole size of every centred symbol. Five plates give a length *and* a
+ * width to one anchor point — the three maritime ellipses, 240802 and 200600 — and 200700 is
+ * described by two ranges; the rectangular target files a length of its own. A resize that
+ * moved only `radius` scaled half of each of those and left the other half at whatever it was
+ * seeded with, so the symbol changed shape as it changed size.
+ *
+ * Measured on `compare:engines` before this: a 1.5x resize of 200101 took its length to
+ * 540,241 m on OpenLayers and left it at the seeded 360,000 here, and 200700's two ranges the
+ * same way.
+ *
+ * A sibling of {@link scaleDrawnSizes}, which does the same job for a drawn base and
+ * deliberately leaves `radius` alone because there it is the same number as the half-width.
+ * These are the fields that one does not touch. @see hasAxisAndWidth, statesShapeAsRangeBands
+ */
+function scaleStatedDimensions(properties: TacticalGraphicProperties, ratio: number): TacticalGraphicProperties {
+    const scaled = (value: number | undefined): number | undefined =>
+        value !== undefined && value > 0 ? value * ratio : value;
+
+    const touches = ['length', 'width', 'startRange', 'stopRange'] as const;
+    // The same object back when there was nothing to scale, so a caller can tell a no-op
+    // from a change by identity — which is what `dragTo` does to decide whether to rebuild.
+    if (!touches.some(key => properties[key] !== undefined)) return properties;
+
+    return {
+        ...properties,
+        ...(properties.length === undefined ? {} : {length: scaled(properties.length)}),
+        ...(properties.width === undefined ? {} : {width: scaled(properties.width)}),
+        ...(properties.startRange === undefined ? {} : {startRange: scaled(properties.startRange)}),
+        ...(properties.stopRange === undefined ? {} : {stopRange: scaled(properties.stopRange)}),
+    };
+}
+
+/**
+ * Moves one vertex of the base — the reshape gesture.
+ *
+ * Indexed against `positionsOf`, which walks the geometry in the order it is
+ * stored, so the caller's index and this one agree by construction. A ring's
+ * closing vertex is the same point as its first, so both move together or the
+ * polygon comes apart.
+ */
+export function moveVertex(description: GraphicDescription, index: number, to: Position): GraphicDescription {
+    const positions = positionsOf(description.geometry);
+    if (index < 0 || index >= positions.length) return description;
+
+    const isRing = description.geometry.type === 'Polygon' || description.geometry.type === 'MultiPolygon';
+    const first = 0;
+    const last = positions.length - 1;
+    const alsoMove = isRing && (index === first || index === last) ? (index === first ? last : first) : -1;
+
+    let seen = -1;
+    return {
+        ...description,
+        geometry: mapPositions(description.geometry, position => {
+            seen++;
+            return seen === index || seen === alsoMove ? [to[0], to[1]] : position;
+        }),
+    };
+}
+
+/**
+ * Adds a vertex to the base, at `index` — the reshape gesture that OpenLayers gives
+ * you by dragging a segment rather than a corner.
+ *
+ * Indexed like {@link moveVertex}, against `positionsOf`, so the caller's index means
+ * the same thing to both: the new vertex lands *before* the position currently at
+ * `index`, which is what "insert into this segment" means when the segment is the one
+ * ending there.
+ *
+ * **A ring's closing vertex is not an insertion point.** A polygon repeats its first
+ * position last; inserting at 0 or at the end would put a vertex outside the ring's
+ * closure and open the shape. Those two indices are refused, and every segment between
+ * them is available — which is every segment an operator can actually see.
+ *
+ * **One past the end appends, on a line.** That is the edge back from the last point to the
+ * first on a base that is a ring stored as a line, which the caller only offers where
+ * `hasClosingEdge` says the edge is real. @see hasClosingEdge
+ */
+export function insertVertex(description: GraphicDescription, index: number, at: Position): GraphicDescription {
+    const positions = positionsOf(description.geometry);
+    const appends = index === positions.length && description.geometry.type === 'LineString';
+    if (index <= 0 || (index > positions.length - 1 && !appends)) return description;
+
+    const isRing = description.geometry.type === 'Polygon' || description.geometry.type === 'MultiPolygon';
+    if (isRing && index === positions.length - 1) return description;
+
+    const inserted = [...positions.slice(0, index), [at[0], at[1]] as Position, ...positions.slice(index)];
+
+    let seen = -1;
+    return {
+        ...description,
+        // Rebuilt by walking the *new* list in the same order `mapPositions` walks the
+        // old one. The geometry has one more position than the walker will visit, so the
+        // tail is appended by the structure rather than by the callback — which is why
+        // this rewrites coordinates directly instead of mapping in place.
+        geometry: rebuildWithPositions(description.geometry, () => inserted[++seen]),
+    };
+}
+
+/**
+ * A geometry of the same type carrying `next()`'s positions, however many there are.
+ *
+ * `mapPositions` cannot grow a geometry — it visits each existing position once — so
+ * an insertion needs a builder that reads its length from the new list.
+ */
+function rebuildWithPositions(geometry: Geometry, next: () => Position): Geometry {
+    const positions: Position[] = [];
+    let candidate = next();
+    while (candidate) {
+        positions.push(candidate);
+        candidate = next();
+    }
+
+    if (geometry.type === 'LineString') return {...geometry, coordinates: positions};
+    if (geometry.type === 'Polygon') return {...geometry, coordinates: [positions]};
+    return geometry;
+}
+
+// ── the per-handle gestures ─────────────────────────────────────────────────
+
+/**
+ * How far off the base a drag must reach before it counts as a decision to flip
+ * the graphic to the other side, in projected meters per unit of resolution.
+ *
+ * Crossing the line is easy to do by accident; going a long way past it is not. So
+ * the magnitude of the drag sets the width and the *sign* sets the side, read
+ * separately — using the signed number for both would make a flip jump the width
+ * at the same moment.
+ */
+// The flip threshold is the library's, shared with OpenLayers. @see MIRROR_FLIP_MIN_PX
+
+/** The squared distance from a point to a segment, all in projected meters. */
+function distanceToSegmentSq(point: ProjectedPosition, a: ProjectedPosition, b: ProjectedPosition): number {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq === 0) return (point[0] - a[0]) ** 2 + (point[1] - a[1]) ** 2;
+
+    const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / lengthSq));
+    return (point[0] - (a[0] + t * dx)) ** 2 + (point[1] - (a[1] + t * dy)) ** 2;
+}
+
+/**
+ * Sets a graphic's **width** from how far the cursor sits off its base — the
+ * offset handle.
+ *
+ * Measured against the base segment the cursor is *nearest*, not always the first:
+ * a movement graphic drawn with several bends has a width that means the same
+ * thing at every one of them, and measuring from the first segment makes the
+ * handle fight the cursor as soon as the path turns. A two-point base has one
+ * segment, so this picks the same one either way.
+ *
+ * The stored field is a **full width**, edge to edge, while the generator takes a
+ * half-width offset — the factor of two lives in `toGraphicOptions` and must not
+ * be applied twice.
+ *
+ * One handle, two jobs: the magnitude sets the width and the sign sets the side.
+ */
+export function setOffset(
+    description: GraphicDescription,
+    cursor: Position,
+    options: {offsetScale?: number; resolution: number; grab?: Position},
+): GraphicDescription {
+    // A point-anchored graphic has no line in its base to measure across. @see setOffsetFromPoint
+    if (description.geometry.type === 'Point') {
+        return setsWidthFromAnchor(description.properties.name) ? setOffsetFromPoint(description, cursor) : description;
+    }
+
+    // **Measured along the line the *generator* saw, not the line as stored.** Which
+    // side is "the mirrored one" is decided by a segment's left normal, and thirty-four
+    // graphics store their points tip-first now, so their stored line runs the opposite
+    // way from the one their symbol was built along. Reading the stored order would
+    // invert the sign for exactly those graphics: a corridor would flip the instant it
+    // was dragged along the side it already hung on. @see drawOrder.ts
+    const name = description.properties.name;
+    // **The axis, not the whole base.** Eleven of these carry the width itself as their last
+    // coordinate, and it is a point off to one side: left in, it is a segment for the loop below
+    // to measure against and it reverses into the *front* of the line. @see carriesWidthPointInBase
+    const stored = axisOf(name, positionsOf(description.geometry));
+    const drawn = generatorOrder(name, stored);
+    const coords = drawn.map(p => toMercator([p[0], p[1]]));
+    if (coords.length < 2) return description;
+
+    // The segment nearest a point, and the point's signed distance off it along the left normal.
+    const across = (point: ProjectedPosition): {perpendicular: number; segment: [ProjectedPosition, ProjectedPosition]} => {
+        let segment: [ProjectedPosition, ProjectedPosition] = [coords[0], coords[1]];
+        let nearest = Infinity;
+        for (let i = 0; i < coords.length - 1; i++) {
+            const distance = distanceToSegmentSq(point, coords[i], coords[i + 1]);
+            if (distance < nearest) {
+                nearest = distance;
+                segment = [coords[i], coords[i + 1]];
+            }
+        }
+        const angle = Math.atan2(segment[1][1] - segment[0][1], segment[1][0] - segment[0][0]);
+        const perpendicular = (point[0] - segment[0][0]) * Math.cos(angle + Math.PI / 2) + (point[1] - segment[0][1]) * Math.sin(angle + Math.PI / 2);
+        return {perpendicular, segment};
+    };
+    const {perpendicular, segment} = across(toMercator([cursor[0], cursor[1]]));
+    const scale = options.offsetScale ?? DEFAULT_OFFSET_SCALE;
+    const latitude = latitudeFromMercatorY(segment[0][1]);
+
+    /*
+     * **A width drag is a change from where it started, never an absolute reading**, which is
+     * what OpenLayers' `handleOffset` does. Read absolutely, the width snapped the instant a
+     * grip was grabbed on any graphic whose grip is not drawn at exactly width / scale off the
+     * nearest segment: a corridor's grips sit on mitered tangent points, and an axis arrow's on
+     * its arrowhead. The grab is the press, and the width at the press is the description's.
+     * The change is converted to a ground distance, because the width is one. @see mercator.ts
+     */
+    const grab = options.grab ? across(toMercator([options.grab[0], options.grab[1]])).perpendicular : perpendicular;
+    const startHalf = carriesWidthPointInBase(name)
+        // The whole base: the width point is its last coordinate, and `stored` is the axis alone.
+        ? halfWidthFromBase(name, positionsOf(description.geometry))
+        : description.properties.width !== undefined && description.properties.width > 0 ? description.properties.width / 2 : undefined;
+    const half = options.grab && startHalf !== undefined
+        ? Math.max(MIN_OFFSET_METERS, startHalf + groundLength((Math.abs(perpendicular) - Math.abs(grab)) * scale, latitude))
+        : groundLength(Math.abs(perpendicular), latitude) * scale;
+    const width = half * 2;
+
+    /*
+     * **For the eleven axis arrows the answer is a coordinate, not an amplifier.**
+     *
+     * Their width lives at the end of the base, so a `width` written here would
+     * be a second copy that the generator ignores and a save carries anyway. The same number is
+     * spent by moving the stored point instead, which is where `halfWidthFromBase` reads it back
+     * from — and `mirrored` goes with it, because these arrows have no side to fall on and the
+     * point is republished square however the grip was dragged. @see axisWithWidthPoint
+     */
+    if (carriesWidthPointInBase(name)) {
+        const moved = axisWithWidthPoint(name, stored, width / 2);
+        return {...description, geometry: {type: 'LineString', coordinates: moved}};
+    }
+
+    const properties = {...description.properties, width};
+
+    // **Negative, not positive.** The axis above is the left normal and an
+    // unmirrored graphic already hangs on that side, so reading a positive
+    // perpendicular as "mirrored" flips it the moment the operator drags along the side
+    // it is already on.
+    /*
+     * **The side changes only on a crossing**: the cursor has to end on the other side of the
+     * line from where the drag began, and a little way past it. Reading "which side is the
+     * cursor on" instead flipped a graphic whose grip is drawn on the negative side the moment
+     * it was grabbed. Without a grab (a caller outside a drag), the side is read directly.
+     */
+    const crossed = options.grab ? (perpendicular < 0) !== (grab < 0) : true;
+    if (crossed && Math.abs(perpendicular) > MIRROR_FLIP_MIN_PX * options.resolution) {
+        properties.mirrored = perpendicular < 0;
+    }
+
+    return {...description, properties};
+}
+
+/**
+ * A width drag on a graphic anchored at one point: the rectangular target, the three maritime
+ * ellipses and the cued acquisition doctrine. The width is twice the cursor's distance from the
+ * centre **across** the symbol's attitude, so a drag that wanders along the long axis widens it
+ * by what it moved sideways and no more. `rotation` here is planar (0 east, counter-clockwise).
+ * The twin of `RectangularTargetGraphicBase.setOffsetFromPoint`, and the numbers have to agree.
+ */
+function setOffsetFromPoint(description: GraphicDescription, cursor: Position): GraphicDescription {
+    const center = toMercator(pivotOf(description) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    const radians = ((description.properties.rotation ?? 0) * Math.PI) / 180;
+    const projected = Math.abs((at[0] - center[0]) * -Math.sin(radians) + (at[1] - center[1]) * Math.cos(radians));
+    const ground = groundLength(projected, latitudeFromMercatorY(center[1]));
+    if (!Number.isFinite(ground) || ground <= 0) return description;
+    return {...description, properties: {...description.properties, width: ground * 2}};
+}
+
+/**
+ * Flips the graphic to the other side of its own line, and changes nothing else.
+ *
+ * The retrograde tasks' second handle. Unlike an offset drag it carries no width: in
+ * OpenLayers, dragging a retirement's handle 170 px either way leaves `width` exactly
+ * where it was and moves no vertex — the only thing that changes is which side the cane
+ * hangs on. So this reads the *sign* of the perpendicular and discards the magnitude.
+ *
+ * **Negative is the mirrored side**, matching `setOffset`: the axis is the segment's
+ * left normal and an unmirrored symbol already hangs on that side, so treating a
+ * positive perpendicular as mirrored would flip it the moment the operator dragged along
+ * the side it was already on.
+ *
+ * The threshold is the same one, and for the same reason — crossing the line is easy to
+ * do by accident, going a little way past it is not.
+ */
+export function setMirror(
+    description: GraphicDescription,
+    cursor: Position,
+    resolution: number,
+    mirrorAxis: 'across' | 'along' = 'across',
+): GraphicDescription {
+    // The generator's orientation, for the reason `setOffset` gives. @see drawOrder.ts
+    const coords = generatorOrder(description.properties.name, positionsOf(description.geometry))
+        .map(p => toMercator([p[0], p[1]]));
+    const at = toMercator([cursor[0], cursor[1]]);
+
+    // **A point-anchored graphic has no drawn axis to measure against.** Its orientation
+    // lives in `properties.rotation`, so the axis comes from there and the origin is the
+    // point itself — which is what OpenLayers' `mirrorIfDraggedPastAxis` does for the
+    // same family. Without this branch abatis and pursuit could not be flipped at all:
+    // one position is not a line, and the segment loop below had nothing to run on.
+    if (coords.length < 2) {
+        if (!coords.length) return description;
+        const axis = ((description.properties.rotation ?? 0) * Math.PI) / 180;
+        const dx = at[0] - coords[0][0];
+        const dy = at[1] - coords[0][1];
+        // Which component decides the flip is the graphic's own business: a chevron
+        // swaps sides *across* its route, a pursuit's semicircle bulges east or west
+        // *along* the same axis. @see HandleContract.mirrorAxis
+        const across = mirrorAxis === 'along'
+            ? dx * Math.cos(axis) + dy * Math.sin(axis)
+            : -dx * Math.sin(axis) + dy * Math.cos(axis);
+        // A far more generous threshold than the line families': on these graphics a
+        // handle drag normally means rotate, so the flip has to be a deliberate
+        // excursion rather than anything a rotation could brush past.
+        if (Math.abs(across) < MIRROR_PAST_AXIS_MIN_PX * resolution) return description;
+        const flipped = across < 0;
+        if (flipped === !!description.properties.mirrored) return description;
+        return {...description, properties: {...description.properties, mirrored: flipped}};
+    }
+
+    let segment: [ProjectedPosition, ProjectedPosition] = [coords[0], coords[1]];
+    let nearest = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const distance = distanceToSegmentSq(at, coords[i], coords[i + 1]);
+        if (distance < nearest) {
+            nearest = distance;
+            segment = [coords[i], coords[i + 1]];
+        }
+    }
+
+    const angle = Math.atan2(segment[1][1] - segment[0][1], segment[1][0] - segment[0][0]);
+    const axisX = Math.cos(angle + Math.PI / 2);
+    const axisY = Math.sin(angle + Math.PI / 2);
+    const perpendicular = (at[0] - segment[0][0]) * axisX + (at[1] - segment[0][1]) * axisY;
+
+    if (Math.abs(perpendicular) < MIRROR_FLIP_MIN_PX * resolution) return description;
+
+    const mirrored = perpendicular < 0;
+    if (mirrored === !!description.properties.mirrored) return description;
+    return {...description, properties: {...description.properties, mirrored}};
+}
+
+/**
+ * How far past its own axis, in screen pixels, a handle has to be dragged before a
+ * point-anchored graphic flips. Much larger than `MIRROR_FLIP_MIN_PX`, and matching
+ * OpenLayers' constant of the same name. @see setMirror
+ */
+const MIRROR_PAST_AXIS_MIN_PX = 40;
+
+// The default sensitivity is the library's, shared with OpenLayers. @see DEFAULT_OFFSET_SCALE
+
+/**
+ * Sets a curve's `bend` from the cursor's signed perpendicular distance to the
+ * chord, over the graphic's own size.
+ *
+ * Over the size, so the handle tracks the pointer exactly at any scale, and
+ * dragging across the chord flips which way the curve bows. The chord's direction
+ * comes from `rotation` — planar degrees, 0 = east — and then its *clockwise*
+ * perpendicular, which is the side the generator bows toward.
+ */
+export function setBend(
+    description: GraphicDescription,
+    cursor: Position,
+    clamp: (bend: number) => number,
+    /**
+     * Reads the bend from the cursor's own frame instead of the perpendicular offset.
+     * Envelopment needs it: its tip sits **along** the axis, so the perpendicular
+     * carries no radius and the default rule collapses the hook. @see envelopmentBendFrom
+     */
+    fromFrame?: (along: number, perpendicular: number, size: number, currentBend: number) => number,
+): GraphicDescription {
+    const size = description.properties.radius;
+    if (!size || size <= 0) return description;
+
+    const center = toMercator(pivotOf(description) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    const theta = ((description.properties.rotation ?? 0) * Math.PI) / 180;
+    // **On the ground, because `size` is.** `bend` is a ratio of the two, and mercator
+    // metres are 1.56x too long at 50 degrees north — so the same drag produced a
+    // sharper curve the further from the equator it was made, and a different one from
+    // OpenLayers, which takes its bend geodesically off the anchor points. @see mercator.ts
+    const scale = mercatorScale(pivotOf(description)[1]);
+    const dx = (at[0] - center[0]) / scale;
+    const dy = (at[1] - center[1]) / scale;
+
+    const bend = fromFrame
+        ? fromFrame(
+            dx * Math.cos(theta) + dy * Math.sin(theta),
+            -dx * Math.sin(theta) + dy * Math.cos(theta),
+            size,
+            description.properties.bend ?? 0,
+        )
+        : clamp((dx * Math.sin(theta) + dy * -Math.cos(theta)) / size);
+
+
+    return {...description, properties: {...description.properties, bend}};
+}
+
+/**
+ * Moves **one end of a chord to the cursor and leaves the other where it is** — the rear
+ * handle. The twin of `setReach`, and the difference between them is the whole point of the
+ * two roles existing: `setReach` measures from the centre, so it moves both ends at once,
+ * while this pins the far end and lengthens the symbol from it.
+ *
+ * 270504's point 2 is the rear of the arrow, and grabbing the back of an arrow to make it
+ * longer should not also drag its head backwards.
+ *
+ * Rebuilt through `drawnAnchorFrame` rather than by hand, so the centre, the half-length and
+ * the bearing are the same three numbers the library would read back off the new chord —
+ * geodesically, which is what `bowFromAnchors` does and what the anchors were written with.
+ * Computing a Mercator midpoint here instead would put the centre metres away from where
+ * every other reader thinks it is. `withAnchorGeometry` then expands the two ends back into
+ * the plate's three points, so `bend` has to survive the round trip explicitly.
+ */
+export function setExtend(
+    description: GraphicDescription,
+    cursor: Position,
+    anchoredIndex = 0,
+): GraphicDescription {
+    const name = description.properties.name;
+    const geometry = description.geometry as {type: string; coordinates?: Position[]};
+    if (geometry.type !== 'LineString' || !geometry.coordinates?.length) return description;
+
+    const current = drawnAnchorFrame(name, geometry.coordinates);
+    /*
+     * **Which end stays put depends on how the symbol numbers its points**, so it is the
+     * library's answer rather than this file's. Turn stores `[tip, rear, …]` and its grip is
+     * the rear, so index 0 holds; Envelopment stores `[point 1, point 2, …]` and its grip
+     * *is* point 1, so index 1 holds. The chord is rebuilt with each end back in its own
+     * slot, or the two points would swap meaning on the way out. @see HandleContract.extendAnchor
+     */
+    const anchored = geometry.coordinates[anchoredIndex];
+    if (!anchored) return description;
+    const chord: Position[] = [];
+    chord[anchoredIndex] = anchored;
+    chord[anchoredIndex === 0 ? 1 : 0] = [cursor[0], cursor[1]];
+
+    const next = drawnAnchorFrame(name, chord);
+    if (!next || !(next.size > 0)) return description;
+
+    return {
+        ...description,
+        geometry: {type: 'LineString', coordinates: chord},
+        properties: {
+            ...description.properties,
+            radius: next.size,
+            rotation: next.rotation,
+            // The two-point chord carries no bow, so the depth has to be carried over or
+            // the curve would snap to its default the moment the rear was touched.
+            bend: description.properties.bend ?? current?.bend,
+        },
+    };
+}
+
+/**
+ * Sets both size and bearing from one cursor position — the tip handle.
+ *
+ * The far end of a chord carries both of its inputs: how long it is and which way
+ * it points. `bend` is unitless and rides along unchanged, so the curve keeps its
+ * proportion through a resize.
+ */
+export function setReach(description: GraphicDescription, cursor: Position): GraphicDescription {
+    const center = toMercator(pivotOf(description) as [number, number]);
+    const at = toMercator([cursor[0], cursor[1]]);
+    const dx = at[0] - center[0];
+    const dy = at[1] - center[1];
+    const reach = Math.hypot(dx, dy);
+    if (reach <= 0) return description;
+
+    return {
+        ...description,
+        properties: {
+            ...description.properties,
+            // A real distance, not the projected one this was measured in: `radius` is
+            // what the generator builds from and what the dialog states. @see mercator.ts
+            radius: groundLength(reach, pivotOf(description)[1]),
+            rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+        },
+    };
+}
+
+// The ring gap is the library's, shared with OpenLayers. @see BAND_SEPARATION_FRACTION
+
+/**
+ * Sets one range-fan band's range from the cursor's distance to the center.
+ *
+ * Clamped between its neighbors, so a band can never be dragged through the one
+ * inside or outside it — which would reorder the rings and leave the handle the
+ * user is holding attached to a different band.
+ *
+ * A fan with no user-entered bands is rendering the fallback single band derived
+ * from `radius`, so the drag drives `radius` and leaves the amplifiers alone
+ * rather than inventing a band the operator never typed.
+ */
+/**
+ * Opens or closes a sector **symmetrically about its axis** — 200700's stop relative bearing.
+ *
+ * One grip states one number, because the plate does: "an equal angle either side of the
+ * search axis". The half-angle is the turn from the axis to the cursor, taken either way
+ * round so the grip may be dragged past the axis and out the other side, and it is written
+ * onto every band as a symmetric pair of absolute bearings — the field the band editor and
+ * the saved amplifiers already carry. `RadarSearchDoctrine.frame` re-centres that pair on
+ * the axis on every render, so only the angle between them survives and a rotate still turns
+ * the symbol.
+ *
+ * The twin of `RangeFanGraphicBase.setRadarHalfAngle`, and the numbers have to agree: both
+ * engines take the axis from the same `rotation`, and the clamp is the same.
+ */
+export function setSectorOpening(description: GraphicDescription, cursor: Position): GraphicDescription {
+    const norm = (deg: number): number => ((deg % 360) + 360) % 360;
+    // The stated axis, with the legacy `rotation` as the fallback a snapshot written before
+    // still needs. @see RadarSearchDoctrine.frame
+    const axis = norm(description.properties.searchAxisAzimuthDeg ?? 90 - (description.properties.rotation ?? 0));
+    const edges = radarSectorOpening(pivotOf(description), axis, [cursor[0], cursor[1]]);
+    if (!edges) return description;
+
+    /*
+     * **Written as the stop relative bearing**, which is the field 200700 is described by.
+     * The pair of absolute band azimuths this used to write was a range
+     * fan's way of saying the same thing, and it left the plate's own value out of the file
+     * entirely. The pair comes back symmetric about the axis, so either edge states the angle.
+     * @see TacticalGraphicProperties.stopRelativeBearingDeg
+     */
+    const half = norm(edges.rightAzimuthDeg - axis);
+    return {
+        ...description,
+        properties: {...description.properties, stopRelativeBearingDeg: half > 180 ? 360 - half : half},
+    };
+}
+
+/**
+ * Drags 200700's start or stop arc, in the fields its plate names.
+ *
+ * Only the *distance* from the radar counts: the axis is the symbol's own and is moved by the
+ * rotate gesture, so a grip dragged off it states a range and not a new bearing — the same
+ * discipline the third click is read with. The two are kept a proportional gap apart, or the
+ * near arc could be pushed through the far one and leave the sector inside out, with no arc
+ * under the cursor to drag back with. The twin of `RangeFanGraphicBase.setRadarRange`, and
+ * the numbers have to agree.
+ */
+function setRadarRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
+    /*
+     * **A ground distance, because that is what a range is**, and great-circle, as OpenLayers
+     * measures it (turf) and as 200700's clicks are read by `radarSearchFromClicks`: a scale
+     * factor taken at the centre drifts a few percent over a long range, and the arc would
+     * jump the moment it was grabbed.
+     */
+    const metres = geodesicDistanceM(pivotOf(description) as [number, number], [cursor[0], cursor[1]]);
+    if (!isFinite(metres) || metres <= 0) return description;
+
+    const props = description.properties;
+    const stop = props.stopRange ?? props.radius ?? metres;
+    const start = props.startRange ?? 0;
+    const gap = stop * BAND_SEPARATION_FRACTION;
+
+    const next =
+        index === 0
+            ? {startRange: Math.min(Math.max(metres, gap), Math.max(gap, stop - gap))}
+            : {stopRange: Math.max(metres, start + gap)};
+    return {...description, properties: {...props, ...next}};
+}
+
+export function setBandRange(description: GraphicDescription, index: number, cursor: Position): GraphicDescription {
+    /*
+     * **By name, never by which fields the bag happens to hold**, as OpenLayers decides it
+     * (`RangeFanGraphicBase.isRadarSearch`). The graphic builder filled `startRange` and
+     * `stopRange` in from a radius, and a weapon fan that had been through it looked like a
+     * 200700 here: its band grips wrote two fields it never draws from, and the rings stayed
+     * put. The operator found the grips dead on MapLibre and ArcGIS, live on OpenLayers.
+     */
+    if (description.properties.name === TacticalGraphicName.RadarSearchDoctrine) {
+        return setRadarRange(description, index, cursor);
+    }
+    const props = description.properties;
+    const options: RangeFanOptions = {
+        size: props.radius,
+        rotation: props.rotation,
+        bands: props.rangeFan?.bands,
+        centerAzimuthDeg: props.rangeFan?.centerAzimuthDeg,
+    };
+    const sorted = resolveBands(options);
+    const configBands = props.rangeFan?.bands;
+
+    /*
+     * **Past the rims, a sector's grips are its arc ends**: `[rim x N, then left, right per
+     * band]`, the generator's documented order. They swing a bearing, not a range. This branch
+     * was missing, so a sector's edge grips fell off the end of the band list and did nothing
+     * here while they turned the edge on OpenLayers. The twin of `setBandAzimuth` there.
+     */
+    if (index >= sorted.length) {
+        // The circular fan publishes rims only, so an index past them is simply not there.
+        if (props.name !== TacticalGraphicName.WeaponSensorRangeFanSector) return description;
+        const arc = index - sorted.length;
+        return setBandAzimuth(description, options, sorted, arc >> 1, arc % 2 === 0 ? 'left' : 'right', cursor);
+    }
+    if (index < 0) return description;
+
+    // Great-circle meters, as OpenLayers measures it (turf): a projected distance is only a
+    // range near the equator, and at 52° it put the ring 1.6 times past the cursor.
+    const metres = geodesicDistanceM(pivotOf(description) as [number, number], [cursor[0], cursor[1]]);
+    if (!isFinite(metres) || metres <= 0) return description;
+
+    const gap = sorted[sorted.length - 1].range * BAND_SEPARATION_FRACTION;
+    const min = index === 0 ? gap : sorted[index - 1].range + gap;
+    const max = index === sorted.length - 1 ? Number.POSITIVE_INFINITY : sorted[index + 1].range - gap;
+    const clamped = Math.min(Math.max(metres, min), Math.max(min, max));
+
+    // No bands written down: the fan draws `resolveBands`' single fallback band off the radius,
+    // so the radius is what moves, clamped as OpenLayers clamps its `size`.
+    if (!configBands || !configBands.length) {
+        return {...description, properties: {...props, radius: clamped}};
+    }
+    // `resolveBands` sorts a copy but keeps the band objects, so the sorted entry is one of the
+    // rows the operator wrote, and only that row changes.
+    const target = configBands.indexOf(sorted[index]);
+    if (target < 0) return description;
+    const bands = configBands.map((band, i) => (i === target ? {...band, range: clamped} : band));
+    return {...description, properties: {...props, rangeFan: {...props.rangeFan, bands}}};
+}
+
+/**
+ * Swings one edge of a sector band to the cursor's bearing from the fan's center. Refused when
+ * the wedge would close past {@link MIN_SECTOR_ARC_DEG} or turn inside out. The twin of
+ * `RangeFanGraphicBase.setBandAzimuth`, and the numbers have to agree.
+ */
+function setBandAzimuth(
+    description: GraphicDescription,
+    options: RangeFanOptions,
+    sorted: RangeFanBand[],
+    bandIndex: number,
+    side: 'left' | 'right',
+    cursor: Position,
+): GraphicDescription {
+    if (bandIndex < 0 || bandIndex >= sorted.length) return description;
+    const bearing = geodesicBearingDeg(pivotOf(description) as [number, number], [cursor[0], cursor[1]]);
+    if (!Number.isFinite(bearing)) return description;
+    const current = resolveBandAzimuths(sorted[bandIndex], options);
+    const other = side === 'left' ? current.rightAz : current.leftAz;
+    const norm = (deg: number) => ((deg % 360) + 360) % 360;
+    const width = side === 'left' ? norm(other - bearing) : norm(bearing - other);
+    if (width < MIN_SECTOR_ARC_DEG || width > 360 - MIN_SECTOR_ARC_DEG) return description;
+
+    const stated = side === 'left' ? {leftAzimuthDeg: bearing, rightAzimuthDeg: current.rightAz} : {leftAzimuthDeg: current.leftAz, rightAzimuthDeg: bearing};
+    const props = description.properties;
+    const configBands = props.rangeFan?.bands;
+    const bands = configBands && configBands.length
+        ? configBands.map(band => (band === sorted[bandIndex] ? {...band, ...stated} : band))
+        : sorted.map((band, i) => (i === bandIndex ? {...band, ...stated} : {...band}));
+    return {...description, properties: {...props, rangeFan: {...props.rangeFan, bands}}};
+}
+

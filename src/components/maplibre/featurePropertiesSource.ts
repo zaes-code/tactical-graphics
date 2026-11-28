@@ -1,0 +1,199 @@
+/**
+ * # The properties dialog's MapLibre half
+ *
+ * The first piece of interaction this renderer has. Everything the OpenLayers
+ * source gets from its feature graph has to be built here instead:
+ *
+ * | | OpenLayers | MapLibre |
+ * |---|---|---|
+ * | selection | `forEachFeatureAtPixel` | `queryRenderedFeatures` over the renderer's own layers |
+ * | identity | a `symbolId` on the feature | `GRAPHIC_ID_PROPERTY`, stamped on every emitted mark |
+ * | applying | mutate the feature, re-style | rebuild the graphic from its base and swap it in |
+ *
+ * The third row is the real difference. OpenLayers keeps live feature objects a
+ * style function reads on every frame, so writing an amplifier and calling
+ * `changed()` is enough. Here the drawn output is derived — realized into GeoJSON
+ * sources — so an edit means running the graphic through the generator again.
+ * That is also why this needs no equivalent of the OpenLayers style-patching: the
+ * new color comes out of the paint functions on the rebuild.
+ */
+
+import type {Position} from 'geojson';
+import type {Map as MapLibreMap} from 'maplibre-gl';
+import {TacticalGraphicName, widthFromBase, type TacticalGraphicProperties} from '@zaes/tactical-graphics';
+import {stampAmplifierVisibility} from './amplifierVisibility';
+import type {GraphicLabels} from '../graphicAmplifiers';
+import type {FeaturePropertiesSource, SelectedGraphic} from '../featurePropertiesSource';
+import {buildTacticalGraphic, carryPaintFlags, descriptionOf} from './maplibreAdapter';
+import type {NativeLayerRenderer} from './native/NativeLayerRenderer';
+import {resolutionOf} from './projection';
+
+/** How far off a symbol a click may land and still select it, in screen pixels. */
+const HIT_RADIUS_PX = 6;
+
+export function createMapLibrePropertiesSource(
+    map: MapLibreMap,
+    renderer: NativeLayerRenderer,
+    /**
+     * Whether a click should be ignored right now.
+     *
+     * Supplied by the caller rather than read off an interaction layer this module does
+     * not hold. The demo passes "am I in edit mode", which is the same rule the
+     * OpenLayers source states through `manager.isEditing()`: a click in edit mode picks
+     * the graphic to work on, and answering it with a modal over the map answers a
+     * different question. @see FeaturePropertiesSource.suppressed
+     */
+    isSuppressed: () => boolean = () => false,
+): FeaturePropertiesSource {
+    /** What the dialog needs from one realized graphic. */
+    const selectionOf = (graphic: NonNullable<ReturnType<NativeLayerRenderer['find']>>): SelectedGraphic => {
+        const props = graphic.properties;
+        return {
+            id: graphic.id,
+            graphicName: graphic.name,
+            labels: props as GraphicLabels,
+            // The bag is the only place MapLibre keeps it — there is no feature
+            // to stamp it on the way the OpenLayers dialog does.
+            echelon: (props.echelon as string) ?? '',
+            measured: {
+                radius: props.radius,
+                decorationSize: props.decorationSize,
+                /*
+                 * **The eleven axis arrows state their width in the base**, so the bag
+                 * holds none and this has to be derived — exactly as the OpenLayers
+                 * source derives it. Without that the panel had no measured figure for
+                 * them and drew the *typed input* instead, which is an empty box on a
+                 * number the operator sets by dragging.
+                 *
+                 * The field registry leaves `widthTyped` off for these, so a measured
+                 * value renders as the read-out the other engine shows.
+                 * @see widthFromBase, carriesWidthPointInBase
+                 */
+                width: widthFromBase(graphic.name, basePositions(graphic.base.geometry)) ?? props.width,
+                /*
+                 * **`length` is a read-out this half never reported**, so the five plates
+                 * that state a length and a width about one anchor point showed the figure
+                 * on OpenLayers and nothing at all here. Both engines file the same number
+                 * — measured, 80,000 m for 200101 on each — so the panel's silence was
+                 * this line missing rather than anything about the graphic.
+                 * @see GraphicGeometryState, hasAxisAndWidth
+                 */
+                length: props.length,
+                rotation: props.rotation,
+                bend: props.bend,
+                mirrored: props.mirrored,
+            },
+            graphicSize: props.radius,
+        };
+    };
+
+    return {
+        selectionFor(id) {
+            const graphic = renderer.find(id);
+            return graphic ? selectionOf(graphic) : null;
+        },
+
+        suppressed: () => isSuppressed(),
+
+        onSelect(callback) {
+            const handleClick = (event: {point: {x: number; y: number}}) => {
+                const graphic = renderer.hitTest(event.point, HIT_RADIUS_PX);
+                callback(graphic ? selectionOf(graphic) : null);
+            };
+
+            map.on('click', handleClick);
+            return () => map.off('click', handleClick);
+        },
+
+        anchorPixel(selection) {
+            const graphic = renderer.find(selection.id);
+            const geometry = graphic?.base.geometry;
+            if (!geometry) return undefined;
+
+            // The base is a point, a line or a ring in lon/lat. Any vertex would do as
+            // an anchor; the last one is what the OpenLayers source uses, so the cone
+            // lands in the same place in both engines.
+            const lonLat = lastPosition(geometry);
+            if (!lonLat) return undefined;
+
+            const point = map.project(lonLat as [number, number]);
+            const rect = map.getCanvas().getBoundingClientRect();
+            return [rect.left + point.x, rect.top + point.y];
+        },
+
+        apply(selection, labels, echelon) {
+            const graphic = renderer.find(selection.id);
+            if (!graphic) return;
+
+            // The whole edit, as one bag. `name` is re-asserted rather than spread from
+            // `labels`, which is the amplifier half and does not carry it.
+            const properties: TacticalGraphicProperties = {
+                // **The description, not the bag it was drawn with.** Spreading the completed
+                // bag made every value this adapter derived look like one the caller stated,
+                // so an amplifier edit put them all back into the file. @see descriptionOf
+                ...descriptionOf(graphic),
+                ...(labels as Partial<TacticalGraphicProperties>),
+                name: graphic.name as TacticalGraphicName,
+                ...(echelon ? {echelon: echelon as TacticalGraphicProperties['echelon']} : {}),
+            };
+
+            const rebuilt = buildTacticalGraphic(
+                graphic.name,
+                graphic.base.geometry,
+                properties,
+                resolutionOf(map),
+            );
+            // A rebuild can fail the same way the first build could — a generator that
+            // refuses the new amplifiers. Leaving the old graphic up is better than
+            // removing it, since the operator has just been told the edit applied.
+            // **Through `carryPaintFlags`.** A rebuild reads the portable bag, so anything
+            // living on the paint features — `hideAmplifiers`, the label's drawing
+            // resolution — is dropped unless it is carried. Pressing OK after switching
+            // "name only" on put every amplifier straight back.
+            if (rebuilt) renderer.replace(selection.id, carryPaintFlags(graphic, {...rebuilt, id: selection.id}));
+        },
+
+        setAmplifiersHidden(selection, hidden) {
+            // Drawn here, remembered nowhere: the choice is view state the host keeps, so
+            // the demo records it itself. The OpenLayers half stamps the OL features
+            // instead; both end up handing the same `PaintFeature.hideAmplifiers` to the
+            // same paint function. @see TacticalGraphicsEngine.setAmplifiersHidden
+            if (!selection.id) return;
+            stampAmplifierVisibility(renderer, selection.id, hidden);
+        },
+
+        // Straight to the renderer, as `apply` is. The Cesium and ArcGIS demos hand this
+        // source their own renderers, which answer the same three calls.
+        remove(selection) {
+            if (selection.id) renderer.remove(selection.id);
+        },
+
+        setOpacity(selection, opacity) {
+            if (selection.id) renderer.setOpacity(selection.id, opacity);
+        },
+
+        opacityOf: selection => (selection.id ? renderer.opacityOf(selection.id) : 1),
+    };
+}
+
+/**
+ * A base geometry's own coordinates, in stored order, or nothing if it has none.
+ *
+ * Only a `LineString` answers, which is the shape every graphic that states a width in its
+ * base has. A ring's coordinates are nested one level deeper and mean something else, so
+ * flattening them here would hand `widthFromBase` a list it would read positionally.
+ */
+function basePositions(geometry: {type: string; coordinates?: unknown}): Position[] | undefined {
+    return geometry.type === 'LineString' ? (geometry.coordinates as Position[]) : undefined;
+}
+
+/** The last vertex of a GeoJSON geometry, whatever its depth. */
+function lastPosition(geometry: {type: string; coordinates?: unknown}): number[] | undefined {
+    let node: unknown = geometry.coordinates;
+    if (!Array.isArray(node)) return undefined;
+
+    while (Array.isArray(node) && Array.isArray(node[node.length - 1])) {
+        node = node[node.length - 1];
+    }
+    return Array.isArray(node) && typeof node[0] === 'number' ? (node as number[]) : undefined;
+}
